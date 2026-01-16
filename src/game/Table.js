@@ -4,6 +4,7 @@
 
 const Deck = require('./Deck');
 const HandEvaluator = require('./HandEvaluator');
+const SidePot = require('./SidePot');
 
 const GAME_PHASES = {
     WAITING: 'waiting',
@@ -66,6 +67,10 @@ class Table {
         // Track if game has started (for spectator-only joins)
         this.gameStarted = false;
         this.handsPlayed = 0;
+        
+        // Item side pot (optional gambling)
+        this.itemSidePot = new SidePot(this.id, this.creatorId);
+        this.sidePotCollectionTime = options.sidePotCollectionTime || 60000; // 60 seconds default
 
         // Position tracking
         this.dealerIndex = -1;
@@ -151,6 +156,12 @@ class Table {
         }
 
         console.log(`[Table ${this.name}] Starting new hand`);
+        
+        // Lock side pot if it was collecting (first hand only)
+        if (!this.gameStarted) {
+            this.gameStarted = true;
+            this.lockSidePot();
+        }
 
         // Reset state
         this.deck.shuffle();
@@ -427,8 +438,19 @@ class Table {
         // Award pot (simplified - doesn't handle split pots/side pots fully)
         const winner = activePlayers[0];
         this.awardPot(winner);
+        
+        // Award item side pot if active and winner is participating
+        let sidePotResult = null;
+        if (this.itemSidePot.status === SidePot.STATUS.LOCKED) {
+            if (this.itemSidePot.isParticipating(winner.playerId)) {
+                sidePotResult = this.itemSidePot.award(winner.playerId);
+            }
+        }
 
         console.log(`[Table ${this.name}] ${winner.name} wins with ${winner.handResult.name}`);
+        if (sidePotResult?.success) {
+            console.log(`[Table ${this.name}] ${winner.name} also wins ${sidePotResult.items.length} items from side pot!`);
+        }
 
         setTimeout(() => this.startNewHand(), 5000);
     }
@@ -489,6 +511,73 @@ class Table {
         this.pendingInvites.delete(userId);
     }
 
+    // ============ Item Side Pot ============
+
+    /**
+     * Creator starts the item side pot with their item
+     */
+    startSidePot(creatorId, item) {
+        if (creatorId !== this.creatorId) {
+            return { success: false, error: 'Only table creator can start side pot' };
+        }
+        if (this.gameStarted) {
+            return { success: false, error: 'Game already started' };
+        }
+        return this.itemSidePot.start(item, this.sidePotCollectionTime);
+    }
+
+    /**
+     * Player submits item to side pot for approval
+     */
+    submitToSidePot(userId, item) {
+        return this.itemSidePot.submitItem(userId, item);
+    }
+
+    /**
+     * Player opts out of side pot
+     */
+    optOutOfSidePot(userId) {
+        return this.itemSidePot.optOut(userId);
+    }
+
+    /**
+     * Creator approves a player's item
+     */
+    approveSidePotItem(creatorId, userId) {
+        return this.itemSidePot.approveItem(creatorId, userId);
+    }
+
+    /**
+     * Creator declines a player's item
+     */
+    declineSidePotItem(creatorId, userId) {
+        return this.itemSidePot.declineItem(creatorId, userId);
+    }
+
+    /**
+     * Get side pot state for a user
+     */
+    getSidePotState(forUserId = null) {
+        return this.itemSidePot.getState(forUserId);
+    }
+
+    /**
+     * Lock side pot when game starts
+     */
+    lockSidePot() {
+        if (this.itemSidePot.status === SidePot.STATUS.COLLECTING) {
+            return this.itemSidePot.lock();
+        }
+        return { success: true };
+    }
+
+    /**
+     * Cancel side pot (return items)
+     */
+    cancelSidePot() {
+        return this.itemSidePot.cancel();
+    }
+
     // ============ State ============
 
     getPublicInfo() {
@@ -505,6 +594,8 @@ class Table {
             gameStarted: this.gameStarted,
             allowSpectators: this.allowSpectators,
             houseRulesPreset: this.houseRules?.bettingType || 'standard',
+            hasSidePot: this.itemSidePot.status !== SidePot.STATUS.INACTIVE,
+            sidePotItemCount: this.itemSidePot.approvedItems.length,
             createdAt: this.createdAt
         };
     }
@@ -524,7 +615,9 @@ class Table {
             handsPlayed: this.handsPlayed,
             spectatorCount: this.getSpectatorCount(),
             isSpectating: isSpectating,
+            creatorId: this.creatorId,
             houseRules: this.houseRules?.toJSON?.() || null,
+            sidePot: this.getSidePotState(forPlayerId),
             seats: this.seats.map((seat, index) => {
                 if (!seat) return null;
                 
@@ -542,6 +635,7 @@ class Table {
                     isFolded: seat.isFolded,
                     isAllIn: seat.isAllIn,
                     isConnected: seat.isConnected,
+                    inSidePot: this.itemSidePot.isParticipating(seat.playerId),
                     cards: canSeeCards ? seat.cards : seat.cards.map(() => null)
                 };
             })

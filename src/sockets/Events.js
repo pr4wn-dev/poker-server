@@ -110,14 +110,25 @@
 
 // Export event names as constants for consistency
 module.exports = {
-    // Client -> Server
+    // Client -> Server: Auth
     REGISTER: 'register',
+    LOGIN: 'login',
+    LOGOUT: 'logout',
+    
+    // Client -> Server: Lobby
     GET_TABLES: 'get_tables',
     CREATE_TABLE: 'create_table',
     JOIN_TABLE: 'join_table',
     LEAVE_TABLE: 'leave_table',
     ACTION: 'action',
     CHAT: 'chat',
+    
+    // Client -> Server: Side Pot
+    START_SIDE_POT: 'start_side_pot',
+    SUBMIT_TO_SIDE_POT: 'submit_to_side_pot',
+    OPT_OUT_SIDE_POT: 'opt_out_side_pot',
+    APPROVE_SIDE_POT_ITEM: 'approve_side_pot_item',
+    DECLINE_SIDE_POT_ITEM: 'decline_side_pot_item',
 
     // Server -> Client
     TABLE_CREATED: 'table_created',
@@ -127,6 +138,15 @@ module.exports = {
     PLAYER_ACTION: 'player_action',
     TABLE_STATE: 'table_state',
     CHAT_MESSAGE: 'chat',
+    
+    // Server -> Client: Side Pot
+    SIDE_POT_STARTED: 'side_pot_started',
+    SIDE_POT_SUBMISSION: 'side_pot_submission',
+    SIDE_POT_ITEM_APPROVED: 'side_pot_item_approved',
+    SIDE_POT_ITEM_DECLINED: 'side_pot_item_declined',
+    YOUR_SIDE_POT_APPROVED: 'your_side_pot_approved',
+    YOUR_SIDE_POT_DECLINED: 'your_side_pot_declined',
+    SIDE_POT_AWARDED: 'side_pot_awarded',
 
     // Game Actions
     ACTIONS: {

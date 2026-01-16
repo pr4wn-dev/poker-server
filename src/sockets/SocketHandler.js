@@ -369,6 +369,175 @@ class SocketHandler {
                 callback({ success: true });
             });
 
+            // ============ Side Pot (Item Gambling) ============
+
+            socket.on('start_side_pot', async (data, callback) => {
+                const user = this.getAuthenticatedUser(socket);
+                if (!user) {
+                    return callback({ success: false, error: 'Not authenticated' });
+                }
+
+                const player = this.gameManager.players.get(user.userId);
+                if (!player?.currentTableId) {
+                    return callback({ success: false, error: 'Not at a table' });
+                }
+
+                const table = this.gameManager.getTable(player.currentTableId);
+                if (!table) {
+                    return callback({ success: false, error: 'Table not found' });
+                }
+
+                // Get item from user's inventory
+                const profile = await userRepo.getFullProfile(user.userId);
+                const item = profile.inventory.find(i => i.id === data.itemId);
+                
+                if (!item) {
+                    return callback({ success: false, error: 'Item not found in inventory' });
+                }
+
+                const result = table.startSidePot(user.userId, item);
+                
+                if (result.success) {
+                    // Broadcast side pot started to all players
+                    this.io.to(`table:${player.currentTableId}`).emit('side_pot_started', {
+                        creatorId: user.userId,
+                        creatorItem: result.sidePot.creatorItem,
+                        collectionEndTime: result.sidePot.collectionEndTime
+                    });
+                }
+
+                callback(result);
+            });
+
+            socket.on('submit_to_side_pot', async (data, callback) => {
+                const user = this.getAuthenticatedUser(socket);
+                if (!user) {
+                    return callback({ success: false, error: 'Not authenticated' });
+                }
+
+                const player = this.gameManager.players.get(user.userId);
+                if (!player?.currentTableId) {
+                    return callback({ success: false, error: 'Not at a table' });
+                }
+
+                const table = this.gameManager.getTable(player.currentTableId);
+                if (!table) {
+                    return callback({ success: false, error: 'Table not found' });
+                }
+
+                // Get item from user's inventory
+                const profile = await userRepo.getFullProfile(user.userId);
+                const item = profile.inventory.find(i => i.id === data.itemId);
+                
+                if (!item) {
+                    return callback({ success: false, error: 'Item not found in inventory' });
+                }
+
+                const result = table.submitToSidePot(user.userId, item);
+                
+                if (result.success) {
+                    // Notify table creator of new submission
+                    const creatorAuth = this.authenticatedUsers.get(table.creatorId);
+                    if (creatorAuth) {
+                        this.io.to(creatorAuth.socketId).emit('side_pot_submission', {
+                            userId: user.userId,
+                            username: user.profile.username,
+                            item: {
+                                id: item.id,
+                                name: item.name,
+                                rarity: item.rarity,
+                                type: item.type,
+                                icon: item.icon,
+                                baseValue: item.baseValue
+                            }
+                        });
+                    }
+                }
+
+                callback(result);
+            });
+
+            socket.on('opt_out_side_pot', (callback) => {
+                const user = this.getAuthenticatedUser(socket);
+                if (!user) {
+                    return callback({ success: false, error: 'Not authenticated' });
+                }
+
+                const player = this.gameManager.players.get(user.userId);
+                const table = player?.currentTableId 
+                    ? this.gameManager.getTable(player.currentTableId) 
+                    : null;
+
+                if (!table) {
+                    return callback({ success: false, error: 'Not at a table' });
+                }
+
+                const result = table.optOutOfSidePot(user.userId);
+                callback(result);
+            });
+
+            socket.on('approve_side_pot_item', (data, callback) => {
+                const user = this.getAuthenticatedUser(socket);
+                if (!user) {
+                    return callback({ success: false, error: 'Not authenticated' });
+                }
+
+                const player = this.gameManager.players.get(user.userId);
+                const table = player?.currentTableId 
+                    ? this.gameManager.getTable(player.currentTableId) 
+                    : null;
+
+                if (!table) {
+                    return callback({ success: false, error: 'Not at a table' });
+                }
+
+                const result = table.approveSidePotItem(user.userId, data.userId);
+                
+                if (result.success) {
+                    // Notify all players of approval
+                    this.io.to(`table:${player.currentTableId}`).emit('side_pot_item_approved', {
+                        userId: data.userId,
+                        approvedCount: result.approvedItems
+                    });
+                    
+                    // Notify the approved player
+                    const approvedAuth = this.authenticatedUsers.get(data.userId);
+                    if (approvedAuth) {
+                        this.io.to(approvedAuth.socketId).emit('your_side_pot_approved');
+                    }
+                }
+
+                callback(result);
+            });
+
+            socket.on('decline_side_pot_item', (data, callback) => {
+                const user = this.getAuthenticatedUser(socket);
+                if (!user) {
+                    return callback({ success: false, error: 'Not authenticated' });
+                }
+
+                const player = this.gameManager.players.get(user.userId);
+                const table = player?.currentTableId 
+                    ? this.gameManager.getTable(player.currentTableId) 
+                    : null;
+
+                if (!table) {
+                    return callback({ success: false, error: 'Not at a table' });
+                }
+
+                const result = table.declineSidePotItem(user.userId, data.userId);
+                
+                if (result.success) {
+                    // Notify the declined player
+                    const declinedAuth = this.authenticatedUsers.get(data.userId);
+                    if (declinedAuth) {
+                        this.io.to(declinedAuth.socketId).emit('your_side_pot_declined');
+                    }
+                }
+
+                callback(result);
+            });
+
             // ============ Chat ============
             
             socket.on('chat', (data) => {
