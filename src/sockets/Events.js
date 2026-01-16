@@ -129,6 +129,15 @@ module.exports = {
     OPT_OUT_SIDE_POT: 'opt_out_side_pot',
     APPROVE_SIDE_POT_ITEM: 'approve_side_pot_item',
     DECLINE_SIDE_POT_ITEM: 'decline_side_pot_item',
+    
+    // Client -> Server: Adventure
+    GET_WORLD_MAP: 'get_world_map',
+    GET_AREA_BOSSES: 'get_area_bosses',
+    START_ADVENTURE: 'start_adventure',
+    ADVENTURE_ACTION: 'adventure_action',
+    FORFEIT_ADVENTURE: 'forfeit_adventure',
+    GET_ACTIVE_SESSION: 'get_active_session',
+    USE_XP_ITEM: 'use_xp_item',
 
     // Server -> Client
     TABLE_CREATED: 'table_created',
@@ -147,6 +156,16 @@ module.exports = {
     YOUR_SIDE_POT_APPROVED: 'your_side_pot_approved',
     YOUR_SIDE_POT_DECLINED: 'your_side_pot_declined',
     SIDE_POT_AWARDED: 'side_pot_awarded',
+    
+    // Server -> Client: Adventure
+    WORLD_MAP_STATE: 'world_map_state',
+    AREA_BOSSES: 'area_bosses',
+    ADVENTURE_STATE: 'adventure_state',
+    ADVENTURE_RESULT: 'adventure_result',
+    BOSS_TAUNT: 'boss_taunt',
+    XP_GAINED: 'xp_gained',
+    LEVEL_UP: 'level_up',
+    RARE_DROP_OBTAINED: 'rare_drop_obtained',
 
     // Game Actions
     ACTIONS: {

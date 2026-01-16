@@ -1,7 +1,7 @@
 # Poker Game Project Status
 
 > **Last Updated:** January 16, 2026
-> **Session:** 2 - Database & Authentication
+> **Session:** 3 - XP System & World Map
 
 ---
 
@@ -9,7 +9,7 @@
 
 Building a **Texas Hold'em Poker Game** with two modes:
 1. **Multiplayer** - Real-time online poker with friends
-2. **Adventure** - Single-player progression with poker bosses
+2. **Adventure** - Single-player progression with XP, world map, and poker bosses
 
 **Tech Stack:**
 - **Server:** Node.js + Socket.IO (WebSockets) + MySQL
@@ -40,7 +40,13 @@ Building a **Texas Hold'em Poker Game** with two modes:
 | Item system (rarities, types) | ✅ Done | `src/models/Item.js` |
 | House rules (betting types, variants) | ✅ Done | `src/models/HouseRules.js` |
 | Friends system | ✅ Done | `src/social/FriendsManager.js` |
-| Adventure bosses (6 defined) | ✅ Done | `src/adventure/Boss.js` |
+| **XP System** | ✅ Done | `src/adventure/WorldMap.js`, `UserRepository.js` |
+| **World Map with Areas** | ✅ Done | `src/adventure/WorldMap.js` |
+| **12 Bosses across 8 areas** | ✅ Done | `src/adventure/Boss.js` |
+| **Entry Requirements (XP + Chips)** | ✅ Done | `Boss.js`, `AdventureManager.js` |
+| **Boss defeat tracking** | ✅ Done | `UserRepository.js` |
+| **Ultra-rare drops (1/1000+)** | ✅ Done | Drop tables with `minDefeats` |
+| **Special location items** | ✅ Done | Yacht Invitation, Island Key, Mystery Token |
 | Adventure session manager | ✅ Done | `src/adventure/AdventureManager.js` |
 | Table passwords & privacy | ✅ Done | Updated in `Table.js` |
 | Spectator mode | ✅ Done | Updated in `Table.js` |
@@ -62,22 +68,112 @@ Building a **Texas Hold'em Poker Game** with two modes:
 | Table controller | ✅ Done | `Scripts/Game/TableController.cs` |
 | Game controller | ✅ Done | `Scripts/Game/GameController.cs` |
 | Adventure controller | ✅ Done | `Scripts/Adventure/AdventureController.cs` |
+| **XP & World Map Models** | ✅ Done | `NetworkModels.cs` |
+| **Adventure Events** | ✅ Done | `PokerEvents.cs` |
+
+---
+
+## 🎮 Adventure Mode Design
+
+### XP System
+
+| Level | XP Required | Cumulative |
+|-------|-------------|------------|
+| 1 | 0 | 0 |
+| 2 | 100 | 100 |
+| 3 | 250 | 250 |
+| 5 | 1,000 | 1,000 |
+| 10 | 12,000 | 12,000 |
+| 15 | 52,000 | 52,000 |
+| 20 | 170,000 | 170,000 |
+| 25 (MAX) | 550,000 | 550,000 |
+
+### World Map Areas
+
+| Area | Type | Requirements | Bosses |
+|------|------|--------------|--------|
+| Poker Academy | Starter | None | Dealer Dan |
+| Downtown Casino | Casino | Level 2 | Slick Sally, Iron Mike |
+| The Highrise | City | Level 5, Defeat Iron Mike | The Countess, The Cipher |
+| The Underground | Underground | Level 8, 50k chips | Shadow, Viper |
+| Golden Yacht | Yacht | **Yacht Invitation item** | Captain Goldhand, The Heiress |
+| Private Island | Island | **Island Key item**, Level 15 | The Mogul, The Oracle |
+| The Penthouse | Final | Level 20, Defeat Oracle | **The House** (final boss) |
+| ??? Lounge | Secret | **Mystery Token item** | ??? |
+
+### Ultra-Rare Drops
+
+These items unlock special areas. **NO ACCOUNT BOUND** - all tradeable/gambleable!
+
+| Item | Drop Source | Drop Rate | Min Defeats |
+|------|-------------|-----------|-------------|
+| Yacht Invitation | Iron Mike, Countess, Cipher, Shadow | 0.1-0.3% | 150-500 |
+| Island Key | Viper, Captain, Heiress | 0.08-0.15% | 300-800 |
+| Mystery Token | The Mogul, The Oracle, The House | 0.01-0.1% | 100-1000 |
+
+### Boss Progression
+
+| Boss | Area | Level Req | Entry Fee | XP Reward | Chip Reward |
+|------|------|-----------|-----------|-----------|-------------|
+| Dealer Dan | Academy | 1 | 0 | 50 | 500 |
+| Slick Sally | Downtown | 2 | 500 | 100 | 1,000 |
+| Iron Mike | Downtown | 3 | 1,000 | 200 | 2,000 |
+| The Countess | Highrise | 5 | 2,500 | 350 | 3,500 |
+| The Cipher | Highrise | 7 | 5,000 | 500 | 5,000 |
+| Shadow | Underground | 8 | 10,000 | 800 | 8,000 |
+| Viper | Underground | 10 | 20,000 | 1,200 | 15,000 |
+| Captain Goldhand | Yacht | 10 | 25,000 | 1,500 | 20,000 |
+| The Heiress | Yacht | 12 | 50,000 | 2,500 | 40,000 |
+| The Mogul | Island | 15 | 100,000 | 5,000 | 80,000 |
+| The Oracle | Island | 18 | 200,000 | 10,000 | 150,000 |
+| **The House** | Penthouse | 20 | 500,000 | 50,000 | 500,000 |
+| ??? | Secret | 22 | 1,000,000 | 100,000 | 1,000,000 |
+
+---
+
+## 📦 Item System
+
+### Item Types
+
+| Type | Description |
+|------|-------------|
+| `card_back` | Custom card designs |
+| `table_skin` | Custom table appearance |
+| `avatar` | Player avatars |
+| `chip_style` | Custom chip designs |
+| `trophy` | Boss defeat trophies |
+| `location_key` | **Unlocks special map areas** |
+| `vehicle` | Yacht, jet (cosmetic + status) |
+| `xp_boost` | Consumable XP items |
+
+### Rarities & Drop Weights
+
+| Rarity | Color | Base Weight |
+|--------|-------|-------------|
+| Common | Gray | 50% |
+| Uncommon | Green | 30% |
+| Rare | Blue | 15% |
+| Epic | Purple | 4% |
+| Legendary | Gold | 1% |
+
+**ALL ITEMS ARE TRADEABLE/GAMBLEABLE** - Nothing is account bound!
 
 ---
 
 ## 🚧 In Progress / Not Started
 
 ### Server
-- [ ] Bosses for levels 6-19 (only 1-5 and 20 defined)
 - [ ] Adventure AI (boss decision-making during hands)
 - [ ] Side pot calculations for all-in scenarios
-- [ ] Item trading/gambling between players
 - [ ] Tournament mode
 
 ### Unity Client  
 - [ ] Actual Unity project setup (scenes, prefabs)
 - [ ] Card visuals and animations
 - [ ] Table layout and seat positions
+- [ ] **World Map UI with tile-based areas**
+- [ ] **Boss battle scene**
+- [ ] **XP bar and level display**
 - [ ] Chip animations
 - [ ] Sound effects
 - [ ] Android build configuration
@@ -99,159 +195,110 @@ The server is now fully plug-and-play:
 3. Start WAMP/XAMPP (for MySQL)
 4. Run `npm start`
 
-**Database tables are created automatically on first run!**
-
-See `INSTALL.md` for detailed instructions.
-
----
-
-## 🗄️ Database Tables
-
-| Table | Purpose |
-|-------|---------|
-| `users` | Player accounts, chips, coins |
-| `user_stats` | Game statistics |
-| `adventure_progress` | Level progression |
-| `bosses_defeated` | Defeated boss tracking |
-| `inventory` | Player items |
-| `friends` | Friend relationships |
-| `friend_requests` | Pending requests |
-| `blocked_users` | Blocked players |
-| `game_sessions` | Game history |
-| `hand_history` | Hand records |
+The server will:
+- Connect to MySQL
+- Create database if it doesn't exist
+- Create all tables automatically
+- Be ready for connections
 
 ---
 
-## 🎮 Game Design Details
+## 📡 Socket Events
 
-### Multiplayer Mode
-- Players create/join tables from lobby
-- Tables can be public or private (password protected)
-- House rules: No Limit, Pot Limit, Fixed Limit, Short Deck, Bomb Pot, Straddle
-- 2-9 players per table
-- Spectator mode for full/in-progress games
-- Friends can be invited before game starts
-- Chat at tables
+### Adventure Mode Events
 
-### Adventure Mode
-- 20 levels with unique bosses
-- Each boss has personality, difficulty, and play style
-- Defeat bosses to progress and earn rewards
-- Item drops based on rarity (Common → Legendary)
-- Coin rewards for victories
-- Items can be used cosmetically or gambled
+**Client -> Server:**
+- `get_world_map` - Get full map state with unlocked areas
+- `get_area_bosses` - Get bosses in an area with requirements
+- `start_adventure` - Start a boss battle
+- `adventure_action` - Send hand result during battle
+- `forfeit_adventure` - Give up current battle
+- `use_xp_item` - Use an XP boost item
 
-### Item Types
-- Card Backs
-- Table Skins  
-- Avatars
-- Emotes
-- Chip Styles
-- Trophies (boss-specific, non-tradeable)
-- Consumables
-- Special items
-
-### Defined Bosses
-1. **Dealer Dan** (Lv.1) - Tutorial, passive, easy
-2. **Slick Sally** (Lv.2) - Tricky hustler
-3. **Iron Mike** (Lv.3) - Aggressive boxer
-4. **The Countess** (Lv.4) - Tight aristocrat
-5. **The Cipher** (Lv.5) - Mysterious, balanced
-6-19. **[Not yet defined]**
-20. **The House** (Lv.20) - Final boss, legendary difficulty
+**Server -> Client:**
+- `world_map_state` - Full map state
+- `area_bosses` - List of bosses in area
+- `adventure_state` - Current battle state
+- `adventure_result` - Battle result with rewards
+- `xp_gained` - XP earned notification
+- `level_up` - Level up notification
+- `rare_drop_obtained` - Special drop notification
 
 ---
 
-## 📁 Project Structure
+## 📁 Key File Locations
 
+### Server
 ```
-C:\Projects\
-├── poker-server\               # Node.js server
-│   ├── src\
-│   │   ├── server.js           # Entry point
-│   │   ├── setup.js            # Database setup wizard
-│   │   ├── database\           # MySQL connection & repos
-│   │   │   ├── Database.js     # Connection & migrations
-│   │   │   └── UserRepository.js # User CRUD operations
-│   │   ├── game\               # Poker game logic
-│   │   ├── sockets\            # WebSocket handlers
-│   │   ├── models\             # User, Item, HouseRules
-│   │   ├── adventure\          # Boss, AdventureManager
-│   │   └── social\             # FriendsManager
-│   ├── package.json
-│   ├── env.example             # Environment template
-│   ├── INSTALL.md              # Setup instructions
-│   └── PROJECT_STATUS.md       # This file
-│
-└── poker-client-unity\         # Unity client
-    └── Assets\Scripts\
-        ├── Networking\         # Socket.IO, models
-        ├── Game\               # Table, Game controllers
-        ├── Adventure\          # Adventure mode
-        └── UI\                 # Menu, Lobby, Friends
+poker-server/
+├── src/
+│   ├── server.js              # Entry point
+│   ├── database/
+│   │   ├── Database.js        # MySQL connection + migrations
+│   │   └── UserRepository.js  # All user DB operations
+│   ├── adventure/
+│   │   ├── AdventureManager.js # Session management
+│   │   ├── Boss.js            # All 12 bosses defined
+│   │   └── WorldMap.js        # XP levels & map areas
+│   ├── game/
+│   │   ├── Table.js           # Poker table logic
+│   │   ├── Deck.js            # Card deck
+│   │   ├── HandEvaluator.js   # Hand rankings
+│   │   └── SidePot.js         # Item gambling
+│   ├── models/
+│   │   ├── User.js            # User model
+│   │   ├── Item.js            # Item templates & rarities
+│   │   └── HouseRules.js      # Game rules
+│   └── sockets/
+│       ├── SocketHandler.js   # All socket events
+│       └── Events.js          # Event constants
+```
+
+### Unity Client
+```
+poker-client-unity/
+├── Assets/Scripts/
+│   ├── Networking/
+│   │   ├── NetworkModels.cs   # All data models
+│   │   ├── PokerEvents.cs     # Event constants
+│   │   └── PokerNetworkManager.cs
+│   ├── Game/
+│   │   ├── GameController.cs
+│   │   └── TableController.cs
+│   └── Adventure/
+│       └── AdventureController.cs
 ```
 
 ---
 
-## 📝 Session Notes
+## 🎯 Next Steps
 
-### Session 1 (Jan 16, 2026)
-- Created both projects from scratch
-- Set up GitHub repos and pushed initial code
-- Built complete server architecture
-- Built Unity C# networking layer
-- Defined game modes, features, and boss system
-- Server PC not yet available (user will set up in a few days)
-
-### Session 2 (Jan 16, 2026)
-- Added MySQL database with auto-table creation
-- Implemented user authentication (register/login)
-- Added password hashing with bcrypt
-- Updated all socket handlers for authenticated users
-- Created UserRepository for all user/friend/inventory operations
-- Made server plug-and-play (just clone, npm install, npm start)
-- Created INSTALL.md with detailed setup instructions
-- Server now shows local IP for easy Unity connection
-- **Added item side pot gambling system:**
-  - Table creator can start side pot with their item
-  - Other players submit items for approval
-  - Creator approves/declines each item
-  - Winner takes all items in side pot
-  - Players can opt out and just play for chips
+1. **Build World Map UI in Unity** - Tile-based map showing areas
+2. **Boss Battle Scene** - The actual poker game against AI
+3. **XP Bar & Level Display** - Show progression
+4. **Adventure AI** - Boss decision-making
+5. **Item Inventory UI** - View and use items
 
 ---
 
-## 🎯 Next Steps (Priority Order)
+## 💡 Game Design Notes
 
-1. **Add remaining bosses** (levels 6-19)
-2. **Build Unity scenes** (main menu, lobby, game table)
-3. **Implement boss AI** (decision making during adventure hands)
-4. **Server PC setup** (when available)
-5. **Card/chip visuals** in Unity
+### Item Economy
+- All items tradeable/gambleable (NO account bound)
+- Location keys are ultra-rare (1 in 500-2000)
+- Some drops require defeating a boss many times (minDefeats)
+- Items can be put in side pot in multiplayer
 
----
+### Progression Flow
+1. Start at Poker Academy (Level 1)
+2. Beat bosses to earn XP and chips
+3. Level up to unlock new areas
+4. Find rare location keys to access secret areas
+5. Beat The House to complete the game
+6. Find Mystery Token for secret final challenge
 
-## ⚙️ Configuration (.env)
-
-```ini
-# Database (MySQL - WAMP/XAMPP)
-DB_HOST=localhost
-DB_PORT=3306
-DB_NAME=poker_game
-DB_USER=root
-DB_PASSWORD=
-
-# Server
-PORT=3000
-NODE_ENV=development
-
-# Game
-DEFAULT_STARTING_CHIPS=10000
-DEFAULT_SMALL_BLIND=50
-DEFAULT_BIG_BLIND=100
-MAX_PLAYERS=9
-```
-
----
-
-*This file should be read at the start of each session to understand project state.*
+### Drop Rate Examples
+- Common XP chip: 20-30% per boss
+- Rare avatar: 5-10% per boss
+- Yacht Invitation: 0.1% after 500 defeats
+- Mystery Token: 0.01% after 1000 defeats

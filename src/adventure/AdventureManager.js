@@ -1,41 +1,134 @@
 /**
- * AdventureManager - Handles single-player Adventure mode
+ * AdventureManager - Handles single-player Adventure mode with XP progression
  */
 
 const Boss = require('./Boss');
+const WorldMap = require('./WorldMap');
 const Item = require('../models/Item');
 
 class AdventureManager {
-    constructor() {
-        this.activeSessions = new Map();  // oderId -> AdventureSession
+    constructor(userRepository) {
+        this.userRepo = userRepository;
+        this.activeSessions = new Map();  // userId -> AdventureSession
+        this.worldMap = new WorldMap();
+    }
+    
+    /**
+     * Get the world map state for a player
+     */
+    async getMapState(userId) {
+        const xpInfo = await this.userRepo.getXPInfo(userId);
+        const bossesDefeated = await this.userRepo.getBossesDefeated(userId);
+        const inventory = await this.userRepo.getInventory(userId);
+        const user = await this.userRepo.getById(userId);
+        
+        if (!user) return null;
+        
+        const userProgress = {
+            level: xpInfo?.level || 1,
+            chips: user.chips,
+            bossesDefeated,
+            inventory: inventory.map(i => ({ templateId: i.template_id }))
+        };
+        
+        return {
+            playerLevel: xpInfo?.level || 1,
+            playerXP: xpInfo?.xp || 0,
+            xpProgress: xpInfo?.xpProgress || 0,
+            xpForNextLevel: xpInfo?.xpForNextLevel,
+            maxLevel: WorldMap.MAX_LEVEL,
+            areas: this.worldMap.getMapState(userProgress)
+        };
+    }
+    
+    /**
+     * Get bosses available in an area
+     */
+    async getBossesInArea(userId, areaId) {
+        const xpInfo = await this.userRepo.getXPInfo(userId);
+        const user = await this.userRepo.getById(userId);
+        const defeatCounts = await this.userRepo.getAllBossDefeatCounts(userId);
+        
+        const bosses = Boss.getByArea(areaId);
+        const playerLevel = xpInfo?.level || 1;
+        const playerChips = user?.chips || 0;
+        
+        return bosses.map(boss => {
+            const canChallenge = boss.canChallenge(playerLevel, playerChips);
+            const defeatCount = defeatCounts[boss.id] || 0;
+            
+            return {
+                id: boss.id,
+                name: boss.name,
+                avatar: boss.avatar,
+                description: boss.description,
+                difficulty: boss.difficulty,
+                minLevel: boss.minLevel,
+                entryFee: boss.entryFee,
+                canChallenge: canChallenge.canChallenge,
+                challengeBlockedReason: canChallenge.reason,
+                defeatCount: defeatCount,
+                rewards: boss.getRewardPreview()
+            };
+        });
     }
     
     /**
      * Start a new adventure session for a player
      */
-    startSession(user, level = null) {
-        const targetLevel = level || user.adventureProgress.currentLevel;
-        const boss = Boss.getForLevel(targetLevel);
-        
-        if (!boss) {
-            return { success: false, error: 'Invalid level' };
+    async startSession(userId, bossId) {
+        // Check if already in session
+        if (this.activeSessions.has(userId)) {
+            return { success: false, error: 'Already in a session. Forfeit first.' };
         }
         
+        const boss = Boss.getById(bossId);
+        if (!boss) {
+            return { success: false, error: 'Boss not found' };
+        }
+        
+        // Check requirements
+        const xpInfo = await this.userRepo.getXPInfo(userId);
+        const user = await this.userRepo.getById(userId);
+        
+        if (!user) {
+            return { success: false, error: 'User not found' };
+        }
+        
+        const playerLevel = xpInfo?.level || 1;
+        const canChallenge = boss.canChallenge(playerLevel, user.chips);
+        
+        if (!canChallenge.canChallenge) {
+            return { success: false, error: canChallenge.reason };
+        }
+        
+        // Deduct entry fee
+        if (boss.entryFee > 0) {
+            await this.userRepo.updateChips(userId, -boss.entryFee);
+        }
+        
+        // Get defeat count for drop calculations
+        const defeatCount = await this.userRepo.getBossDefeatCount(userId, bossId);
+        
         const session = {
-            oderId: user.id,
+            userId: userId,
             boss: boss,
-            level: targetLevel,
+            bossId: bossId,
+            defeatCount: defeatCount,
             userChips: 10000,  // Starting stack for adventure
             bossChips: boss.chips,
+            entryFee: boss.entryFee,
             handsPlayed: 0,
             startedAt: Date.now()
         };
         
-        this.activeSessions.set(user.id, session);
+        this.activeSessions.set(userId, session);
+        
+        console.log(`[Adventure] ${userId} started battle with ${boss.name} (defeat count: ${defeatCount})`);
         
         return {
             success: true,
-            session: this.getSessionState(user.id)
+            session: this.getSessionState(userId)
         };
     }
     
@@ -47,8 +140,7 @@ class AdventureManager {
         if (!session) return null;
         
         return {
-            oderId: session.userId,
-            level: session.level,
+            userId: session.userId,
             boss: {
                 id: session.boss.id,
                 name: session.boss.name,
@@ -59,7 +151,8 @@ class AdventureManager {
                 taunt: session.boss.getRandomTaunt()
             },
             userChips: session.userChips,
-            handsPlayed: session.handsPlayed
+            handsPlayed: session.handsPlayed,
+            entryFee: session.entryFee
         };
     }
     
@@ -100,25 +193,81 @@ class AdventureManager {
     /**
      * Handle boss defeat
      */
-    handleVictory(userId) {
+    async handleVictory(userId) {
         const session = this.activeSessions.get(userId);
         if (!session) return null;
         
-        // Calculate rewards
-        const drops = session.boss.rollDrops();
-        const coinReward = session.boss.coinReward;
+        const boss = session.boss;
+        
+        // Record the defeat and get new count
+        const newDefeatCount = await this.userRepo.recordBossDefeat(userId, boss.id);
+        
+        // Check if this is first defeat (for guaranteed drops)
+        const isFirstDefeat = newDefeatCount === 1;
+        
+        // Roll for drops based on defeat count
+        const drops = boss.rollDrops(newDefeatCount);
+        
+        // Add guaranteed drops if first time
+        if (isFirstDefeat && boss.guaranteedDrops.length > 0) {
+            for (const templateId of boss.guaranteedDrops) {
+                const template = Item.TEMPLATES[templateId];
+                if (template) {
+                    const item = new Item({
+                        ...template,
+                        obtainedFrom: boss.name
+                    });
+                    drops.push(item);
+                }
+            }
+        }
+        
+        // Award XP
+        const newXP = await this.userRepo.addXP(userId, boss.xpReward);
+        const xpInfo = await this.userRepo.getXPInfo(userId);
+        
+        // Award coins
+        await this.userRepo.updateAdventureCoins(userId, boss.coinReward);
+        
+        // Award bonus chips
+        if (boss.chipReward > 0) {
+            await this.userRepo.updateChips(userId, boss.chipReward);
+        }
+        
+        // Add dropped items to inventory
+        for (const item of drops) {
+            await this.userRepo.addItem(userId, item);
+        }
+        
+        // Update adventure stats
+        await this.userRepo.updateAdventureProgress(userId, {
+            won: true,
+            bossId: boss.id
+        });
         
         // Clean up
         this.activeSessions.delete(userId);
         
+        console.log(`[Adventure] ${userId} defeated ${boss.name}! +${boss.xpReward}XP, ${drops.length} drops`);
+        
         return {
             status: 'victory',
-            level: session.level,
-            boss: session.boss.name,
-            rewards: {
-                coins: coinReward,
-                items: drops
+            boss: {
+                id: boss.id,
+                name: boss.name,
+                loseQuote: boss.getLoseQuote()
             },
+            rewards: {
+                xp: boss.xpReward,
+                coins: boss.coinReward,
+                chips: boss.chipReward,
+                items: drops.map(d => d.getPublicInfo())
+            },
+            playerXP: newXP,
+            playerLevel: xpInfo?.level || 1,
+            xpProgress: xpInfo?.xpProgress || 0,
+            defeatCount: newDefeatCount,
+            isFirstDefeat: isFirstDefeat,
             handsPlayed: session.handsPlayed
         };
     }
@@ -126,56 +275,65 @@ class AdventureManager {
     /**
      * Handle player defeat
      */
-    handleDefeat(userId) {
+    async handleDefeat(userId) {
         const session = this.activeSessions.get(userId);
         if (!session) return null;
         
+        // Still give some XP for trying (10% of normal)
+        const consolationXP = Math.floor(session.boss.xpReward * 0.1);
+        if (consolationXP > 0) {
+            await this.userRepo.addXP(userId, consolationXP);
+        }
+        
+        // Update adventure stats
+        await this.userRepo.updateAdventureProgress(userId, {
+            lost: true,
+            bossId: session.boss.id
+        });
+        
         this.activeSessions.delete(userId);
+        
+        console.log(`[Adventure] ${userId} was defeated by ${session.boss.name}`);
         
         return {
             status: 'defeat',
-            level: session.level,
-            boss: session.boss.name,
+            boss: {
+                id: session.boss.id,
+                name: session.boss.name,
+                winQuote: session.boss.getWinQuote()
+            },
+            consolationXP: consolationXP,
+            entryFeeLost: session.entryFee,
             handsPlayed: session.handsPlayed,
             message: session.boss.getWinQuote()
         };
     }
     
     /**
-     * Get level select info
+     * Forfeit current session
      */
-    static getLevelList(userProgress) {
-        const levels = [];
-        const maxAvailable = userProgress.highestLevel + 1;
-        
-        for (let i = 1; i <= Math.min(maxAvailable, Boss.MAX_LEVEL); i++) {
-            const boss = Boss.getForLevel(i);
-            const isDefeated = userProgress.bossesDefeated.includes(boss.id);
-            
-            levels.push({
-                level: i,
-                bossId: boss.id,
-                bossName: boss.name,
-                bossAvatar: boss.avatar,
-                difficulty: boss.difficulty,
-                isUnlocked: i <= maxAvailable,
-                isDefeated: isDefeated,
-                rewards: boss.getRewardPreview()
-            });
+    async forfeit(userId) {
+        const session = this.activeSessions.get(userId);
+        if (!session) {
+            return { success: false, error: 'No active session' };
         }
         
-        return levels;
+        // Entry fee is not refunded
+        this.activeSessions.delete(userId);
+        
+        console.log(`[Adventure] ${userId} forfeited battle with ${session.boss.name}`);
+        
+        return { 
+            success: true,
+            entryFeeLost: session.entryFee
+        };
     }
     
     /**
-     * Forfeit current session
+     * Get active session if any
      */
-    forfeit(userId) {
-        if (this.activeSessions.has(userId)) {
-            this.activeSessions.delete(userId);
-            return { success: true };
-        }
-        return { success: false, error: 'No active session' };
+    getActiveSession(userId) {
+        return this.activeSessions.has(userId) ? this.getSessionState(userId) : null;
     }
 }
 

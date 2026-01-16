@@ -243,6 +243,112 @@ class UserRepository {
         );
     }
     
+    // ============ XP System ============
+    
+    /**
+     * Add XP to user
+     */
+    async addXP(userId, amount) {
+        await db.query(
+            'UPDATE users SET xp = xp + ? WHERE id = ?',
+            [amount, userId]
+        );
+        
+        // Return new XP total
+        const user = await db.queryOne('SELECT xp FROM users WHERE id = ?', [userId]);
+        return user?.xp || 0;
+    }
+    
+    /**
+     * Get user's XP and calculated level
+     */
+    async getXPInfo(userId) {
+        const user = await db.queryOne('SELECT xp FROM users WHERE id = ?', [userId]);
+        if (!user) return null;
+        
+        const WorldMap = require('../adventure/WorldMap');
+        const xp = user.xp || 0;
+        const level = WorldMap.getLevelFromXP(xp);
+        const xpForNextLevel = WorldMap.getXPForNextLevel(level);
+        const xpProgress = WorldMap.getXPProgress(xp);
+        
+        return {
+            xp,
+            level,
+            xpForNextLevel,
+            xpProgress
+        };
+    }
+    
+    // ============ Boss Defeat Tracking ============
+    
+    /**
+     * Record a boss defeat and return the new count
+     */
+    async recordBossDefeat(userId, bossId) {
+        // Upsert boss defeat count
+        await db.query(
+            `INSERT INTO boss_defeat_counts (user_id, boss_id, defeat_count, last_defeated)
+             VALUES (?, ?, 1, NOW())
+             ON DUPLICATE KEY UPDATE 
+             defeat_count = defeat_count + 1,
+             last_defeated = NOW()`,
+            [userId, bossId]
+        );
+        
+        // Also record first-time defeat
+        await db.query(
+            'INSERT IGNORE INTO bosses_defeated (user_id, boss_id) VALUES (?, ?)',
+            [userId, bossId]
+        );
+        
+        // Return updated count
+        const result = await db.queryOne(
+            'SELECT defeat_count FROM boss_defeat_counts WHERE user_id = ? AND boss_id = ?',
+            [userId, bossId]
+        );
+        
+        return result?.defeat_count || 1;
+    }
+    
+    /**
+     * Get boss defeat count for a user
+     */
+    async getBossDefeatCount(userId, bossId) {
+        const result = await db.queryOne(
+            'SELECT defeat_count FROM boss_defeat_counts WHERE user_id = ? AND boss_id = ?',
+            [userId, bossId]
+        );
+        return result?.defeat_count || 0;
+    }
+    
+    /**
+     * Get all boss defeat counts for a user
+     */
+    async getAllBossDefeatCounts(userId) {
+        const results = await db.query(
+            'SELECT boss_id, defeat_count FROM boss_defeat_counts WHERE user_id = ?',
+            [userId]
+        );
+        
+        const counts = {};
+        for (const row of results) {
+            counts[row.boss_id] = row.defeat_count;
+        }
+        return counts;
+    }
+    
+    /**
+     * Check if this is first-time boss defeat
+     */
+    async isFirstDefeat(userId, bossId) {
+        const existing = await db.queryOne(
+            'SELECT 1 FROM bosses_defeated WHERE user_id = ? AND boss_id = ?',
+            [userId, bossId]
+        );
+        return !existing;
+    }
+    
     /**
      * Update user stats
      */
@@ -276,29 +382,28 @@ class UserRepository {
      * Update adventure progress
      */
     async updateAdventureProgress(userId, progress) {
-        if (progress.levelComplete) {
+        if (progress.won) {
             await db.query(
-                `UPDATE adventure_progress 
-                 SET current_level = GREATEST(current_level, ?),
-                     highest_level = GREATEST(highest_level, ?),
-                     total_wins = total_wins + 1
-                 WHERE user_id = ?`,
-                [progress.level + 1, progress.level, userId]
+                `UPDATE adventure_progress SET total_wins = total_wins + 1 WHERE user_id = ?`,
+                [userId]
             );
-            
-            // Record boss defeat
-            if (progress.bossId) {
-                await db.query(
-                    `INSERT IGNORE INTO bosses_defeated (user_id, boss_id) VALUES (?, ?)`,
-                    [userId, progress.bossId]
-                );
-            }
         } else if (progress.lost) {
             await db.query(
                 'UPDATE adventure_progress SET total_losses = total_losses + 1 WHERE user_id = ?',
                 [userId]
             );
         }
+    }
+    
+    /**
+     * Get list of defeated boss IDs
+     */
+    async getBossesDefeated(userId) {
+        const results = await db.query(
+            'SELECT boss_id FROM bosses_defeated WHERE user_id = ?',
+            [userId]
+        );
+        return results.map(r => r.boss_id);
     }
     
     // ============ Inventory ============

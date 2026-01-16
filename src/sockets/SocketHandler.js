@@ -5,11 +5,13 @@
 
 const userRepo = require('../database/UserRepository');
 const db = require('../database/Database');
+const AdventureManager = require('../adventure/AdventureManager');
 
 class SocketHandler {
     constructor(io, gameManager) {
         this.io = io;
         this.gameManager = gameManager;
+        this.adventureManager = new AdventureManager(userRepo);
         
         // Track authenticated users: userId -> { userId, socketId, profile }
         this.authenticatedUsers = new Map();
@@ -536,6 +538,131 @@ class SocketHandler {
                 }
 
                 callback(result);
+            });
+
+            // ============ Adventure Mode ============
+            
+            socket.on('get_world_map', async (callback) => {
+                const user = this.getAuthenticatedUser(socket);
+                if (!user) return callback({ success: false, error: 'Not authenticated' });
+                
+                const mapState = await this.adventureManager.getMapState(user.userId);
+                callback({ success: true, mapState });
+            });
+            
+            socket.on('get_area_bosses', async (data, callback) => {
+                const user = this.getAuthenticatedUser(socket);
+                if (!user) return callback({ success: false, error: 'Not authenticated' });
+                
+                const { areaId } = data;
+                const bosses = await this.adventureManager.getBossesInArea(user.userId, areaId);
+                callback({ success: true, areaId, bosses });
+            });
+            
+            socket.on('start_adventure', async (data, callback) => {
+                const user = this.getAuthenticatedUser(socket);
+                if (!user) return callback({ success: false, error: 'Not authenticated' });
+                
+                const { bossId } = data;
+                const result = await this.adventureManager.startSession(user.userId, bossId);
+                callback(result);
+            });
+            
+            socket.on('get_active_session', async (callback) => {
+                const user = this.getAuthenticatedUser(socket);
+                if (!user) return callback({ success: false, error: 'Not authenticated' });
+                
+                const session = this.adventureManager.getActiveSession(user.userId);
+                callback({ 
+                    success: true, 
+                    hasActiveSession: !!session,
+                    session 
+                });
+            });
+            
+            socket.on('adventure_action', async (data, callback) => {
+                const user = this.getAuthenticatedUser(socket);
+                if (!user) return callback({ success: false, error: 'Not authenticated' });
+                
+                const session = this.adventureManager.getActiveSession(user.userId);
+                if (!session) {
+                    return callback({ success: false, error: 'No active adventure session' });
+                }
+                
+                // Process hand result (this would come from game logic)
+                const result = this.adventureManager.processHandResult(user.userId, data.handResult);
+                
+                if (result.status === 'victory') {
+                    // Send victory result with rewards
+                    const victoryResult = await this.adventureManager.handleVictory(user.userId);
+                    socket.emit('adventure_result', victoryResult);
+                    
+                    // Check for rare drops
+                    if (victoryResult.rewards?.items?.some(i => 
+                        ['legendary', 'epic'].includes(i.rarity?.toLowerCase())
+                    )) {
+                        socket.emit('rare_drop_obtained', {
+                            items: victoryResult.rewards.items.filter(i => 
+                                ['legendary', 'epic'].includes(i.rarity?.toLowerCase())
+                            )
+                        });
+                    }
+                } else if (result.status === 'defeat') {
+                    socket.emit('adventure_result', result);
+                }
+                
+                callback({ success: true, result });
+            });
+            
+            socket.on('forfeit_adventure', async (callback) => {
+                const user = this.getAuthenticatedUser(socket);
+                if (!user) return callback({ success: false, error: 'Not authenticated' });
+                
+                const result = await this.adventureManager.forfeit(user.userId);
+                callback(result);
+            });
+            
+            socket.on('use_xp_item', async (data, callback) => {
+                const user = this.getAuthenticatedUser(socket);
+                if (!user) return callback({ success: false, error: 'Not authenticated' });
+                
+                const { itemId } = data;
+                const inventory = await userRepo.getInventory(user.userId);
+                const item = inventory.find(i => i.id === itemId);
+                
+                if (!item) {
+                    return callback({ success: false, error: 'Item not found' });
+                }
+                
+                if (item.type !== 'xp_boost') {
+                    return callback({ success: false, error: 'Item is not an XP boost' });
+                }
+                
+                // Get XP amount from item template
+                const Item = require('../models/Item');
+                const template = Object.values(Item.TEMPLATES).find(t => t.templateId === item.templateId);
+                const xpAmount = template?.xpAmount || 100;
+                
+                // Remove item from inventory
+                await userRepo.removeItem(user.userId, itemId);
+                
+                // Add XP
+                const newXP = await userRepo.addXP(user.userId, xpAmount);
+                const xpInfo = await userRepo.getXPInfo(user.userId);
+                
+                socket.emit('xp_gained', {
+                    amount: xpAmount,
+                    totalXP: newXP,
+                    level: xpInfo?.level || 1,
+                    xpProgress: xpInfo?.xpProgress || 0
+                });
+                
+                callback({ 
+                    success: true, 
+                    xpGained: xpAmount,
+                    newXP,
+                    level: xpInfo?.level || 1
+                });
             });
 
             // ============ Chat ============

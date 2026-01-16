@@ -71,6 +71,7 @@ class Database {
                 password_hash VARCHAR(255) NOT NULL,
                 chips INT DEFAULT 10000,
                 adventure_coins INT DEFAULT 0,
+                xp INT DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 last_login TIMESTAMP NULL,
                 is_banned BOOLEAN DEFAULT FALSE,
@@ -78,6 +79,13 @@ class Database {
                 INDEX idx_email (email)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         `);
+        
+        // Add XP column if it doesn't exist (migration for existing DBs)
+        try {
+            await this.query('ALTER TABLE users ADD COLUMN xp INT DEFAULT 0');
+        } catch (e) {
+            // Column already exists, ignore
+        }
 
         // User stats table
         await this.query(`
@@ -98,10 +106,22 @@ class Database {
         await this.query(`
             CREATE TABLE IF NOT EXISTS adventure_progress (
                 user_id VARCHAR(36) PRIMARY KEY,
-                current_level INT DEFAULT 1,
-                highest_level INT DEFAULT 1,
+                current_area VARCHAR(50) DEFAULT 'area_tutorial',
                 total_wins INT DEFAULT 0,
                 total_losses INT DEFAULT 0,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        `);
+        
+        // Boss defeat counts (for rare drop tracking)
+        await this.query(`
+            CREATE TABLE IF NOT EXISTS boss_defeat_counts (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id VARCHAR(36) NOT NULL,
+                boss_id VARCHAR(50) NOT NULL,
+                defeat_count INT DEFAULT 0,
+                last_defeated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY unique_user_boss_count (user_id, boss_id),
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         `);

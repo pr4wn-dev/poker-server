@@ -15,6 +15,7 @@ class User {
         // Currency & Stats
         this.chips = data.chips || 10000;           // Multiplayer chips
         this.adventureCoins = data.adventureCoins || 0;  // Adventure mode currency
+        this.xp = data.xp || 0;                     // Experience points
         
         // Social
         this.friends = data.friends || [];           // Array of user IDs
@@ -23,9 +24,9 @@ class User {
         
         // Adventure Progress
         this.adventureProgress = data.adventureProgress || {
-            currentLevel: 1,
-            highestLevel: 1,
-            bossesDefeated: [],
+            currentArea: 'area_tutorial',    // Current map area
+            bossesDefeated: [],              // Array of boss IDs
+            bossDefeatCounts: {},            // boss_id -> defeat count (for rare drops)
             totalWins: 0,
             totalLosses: 0
         };
