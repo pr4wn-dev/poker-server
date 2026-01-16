@@ -44,7 +44,7 @@ class Table {
         this.houseRules = options.houseRules || null;
         
         // New: Spectators
-        this.spectators = new Map();  // oderId -> { oderId, name, oderId }
+        this.spectators = new Map();  // oderId -> { oderId, name, socketId }
         this.maxSpectators = options.maxSpectators || 20;
         this.allowSpectators = options.allowSpectators !== false;
         

@@ -5,7 +5,7 @@
 class FriendsManager {
     constructor(userStore) {
         this.userStore = userStore;  // Reference to user data store
-        this.pendingInvites = new Map();  // oderId -> [{ oderId, tableId, sentAt }]
+        this.pendingInvites = new Map();  // oderId -> [{ fromUserId, tableId, sentAt }]
     }
     
     /**

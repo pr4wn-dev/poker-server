@@ -14,8 +14,22 @@ class GameManager {
 
     // ============ Player Management ============
 
-    registerPlayer(socketId, playerName) {
-        const playerId = uuidv4();
+    /**
+     * Register a player (with existing userId from database or generate new)
+     */
+    registerPlayer(socketId, playerName, userId = null) {
+        const playerId = userId || uuidv4();
+        
+        // Check if player already exists (reconnecting)
+        if (this.players.has(playerId)) {
+            const existing = this.players.get(playerId);
+            existing.socketId = socketId;
+            existing.name = playerName;
+            this.socketToPlayer.set(socketId, playerId);
+            console.log(`[GameManager] Player reconnected: ${playerName} (${playerId})`);
+            return playerId;
+        }
+        
         this.players.set(playerId, {
             socketId,
             name: playerName,
@@ -34,8 +48,22 @@ class GameManager {
         return { playerId, ...this.players.get(playerId) };
     }
 
-    removePlayer(socketId) {
-        const playerId = this.socketToPlayer.get(socketId);
+    /**
+     * Remove player (can pass userId directly or socketId)
+     */
+    removePlayer(userIdOrSocketId, socketId = null) {
+        let playerId;
+        
+        if (socketId) {
+            // Called with (userId, socketId)
+            playerId = userIdOrSocketId;
+            this.socketToPlayer.delete(socketId);
+        } else {
+            // Called with just socketId
+            playerId = this.socketToPlayer.get(userIdOrSocketId);
+            this.socketToPlayer.delete(userIdOrSocketId);
+        }
+        
         if (!playerId) return;
 
         const player = this.players.get(playerId);
@@ -44,7 +72,6 @@ class GameManager {
         }
 
         this.players.delete(playerId);
-        this.socketToPlayer.delete(socketId);
         console.log(`[GameManager] Player removed: ${playerId}`);
     }
 

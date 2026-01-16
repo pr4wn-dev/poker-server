@@ -1,7 +1,7 @@
 # Poker Game Project Status
 
 > **Last Updated:** January 16, 2026
-> **Session:** Initial Setup & Architecture
+> **Session:** 2 - Database & Authentication
 
 ---
 
@@ -12,8 +12,9 @@ Building a **Texas Hold'em Poker Game** with two modes:
 2. **Adventure** - Single-player progression with poker bosses
 
 **Tech Stack:**
-- **Server:** Node.js + Socket.IO (WebSockets)
+- **Server:** Node.js + Socket.IO (WebSockets) + MySQL
 - **Client:** Unity C# (Android target)
+- **Database:** MySQL (included with WAMP/XAMPP)
 - **Hosting:** WAMP/XAMPP on separate PC (not yet set up)
 
 **Repositories:**
@@ -31,6 +32,10 @@ Building a **Texas Hold'em Poker Game** with two modes:
 | Core poker game logic | ✅ Done | `src/game/Table.js`, `Deck.js`, `HandEvaluator.js` |
 | WebSocket communication | ✅ Done | `src/sockets/SocketHandler.js`, `Events.js` |
 | Game/Table management | ✅ Done | `src/game/GameManager.js` |
+| **MySQL Database** | ✅ Done | `src/database/Database.js` |
+| **Auto-table creation** | ✅ Done | Tables created on startup if missing |
+| **User authentication** | ✅ Done | `src/database/UserRepository.js` |
+| **Password hashing (bcrypt)** | ✅ Done | Secure login/register |
 | User model (accounts, chips, inventory) | ✅ Done | `src/models/User.js` |
 | Item system (rarities, types) | ✅ Done | `src/models/Item.js` |
 | House rules (betting types, variants) | ✅ Done | `src/models/HouseRules.js` |
@@ -40,6 +45,8 @@ Building a **Texas Hold'em Poker Game** with two modes:
 | Table passwords & privacy | ✅ Done | Updated in `Table.js` |
 | Spectator mode | ✅ Done | Updated in `Table.js` |
 | Table invites | ✅ Done | Updated in `Table.js` |
+| **Setup script** | ✅ Done | `npm run setup` |
+| **Install documentation** | ✅ Done | `INSTALL.md` |
 
 ### Unity Client (poker-client-unity)
 
@@ -60,8 +67,6 @@ Building a **Texas Hold'em Poker Game** with two modes:
 ## 🚧 In Progress / Not Started
 
 ### Server
-- [ ] Database persistence (users, items, progress) - currently in-memory only
-- [ ] User authentication (login/register with passwords)
 - [ ] Bosses for levels 6-19 (only 1-5 and 20 defined)
 - [ ] Adventure AI (boss decision-making during hands)
 - [ ] Side pot calculations for all-in scenarios
@@ -81,6 +86,38 @@ Building a **Texas Hold'em Poker Game** with two modes:
 - [ ] Server PC setup (WAMP/XAMPP + Node.js)
 - [ ] Production deployment
 - [ ] SSL/HTTPS for WebSocket security
+
+---
+
+## 🔌 Plug & Play Setup
+
+The server is now fully plug-and-play:
+
+1. Clone repo on server PC
+2. Run `npm install`
+3. Start WAMP/XAMPP (for MySQL)
+4. Run `npm start`
+
+**Database tables are created automatically on first run!**
+
+See `INSTALL.md` for detailed instructions.
+
+---
+
+## 🗄️ Database Tables
+
+| Table | Purpose |
+|-------|---------|
+| `users` | Player accounts, chips, coins |
+| `user_stats` | Game statistics |
+| `adventure_progress` | Level progression |
+| `bosses_defeated` | Defeated boss tracking |
+| `inventory` | Player items |
+| `friends` | Friend relationships |
+| `friend_requests` | Pending requests |
+| `blocked_users` | Blocked players |
+| `game_sessions` | Game history |
+| `hand_history` | Hand records |
 
 ---
 
@@ -128,23 +165,29 @@ Building a **Texas Hold'em Poker Game** with two modes:
 
 ```
 C:\Projects\
-├── poker-server\           # Node.js server
+├── poker-server\               # Node.js server
 │   ├── src\
-│   │   ├── server.js       # Entry point
-│   │   ├── game\           # Poker game logic
-│   │   ├── sockets\        # WebSocket handlers
-│   │   ├── models\         # User, Item, HouseRules
-│   │   ├── adventure\      # Boss, AdventureManager
-│   │   └── social\         # FriendsManager
+│   │   ├── server.js           # Entry point
+│   │   ├── setup.js            # Database setup wizard
+│   │   ├── database\           # MySQL connection & repos
+│   │   │   ├── Database.js     # Connection & migrations
+│   │   │   └── UserRepository.js # User CRUD operations
+│   │   ├── game\               # Poker game logic
+│   │   ├── sockets\            # WebSocket handlers
+│   │   ├── models\             # User, Item, HouseRules
+│   │   ├── adventure\          # Boss, AdventureManager
+│   │   └── social\             # FriendsManager
 │   ├── package.json
-│   └── PROJECT_STATUS.md   # This file
+│   ├── env.example             # Environment template
+│   ├── INSTALL.md              # Setup instructions
+│   └── PROJECT_STATUS.md       # This file
 │
-└── poker-client-unity\     # Unity client
+└── poker-client-unity\         # Unity client
     └── Assets\Scripts\
-        ├── Networking\     # Socket.IO, models
-        ├── Game\           # Table, Game controllers
-        ├── Adventure\      # Adventure mode
-        └── UI\             # Menu, Lobby, Friends
+        ├── Networking\         # Socket.IO, models
+        ├── Game\               # Table, Game controllers
+        ├── Adventure\          # Adventure mode
+        └── UI\                 # Menu, Lobby, Friends
 ```
 
 ---
@@ -159,28 +202,49 @@ C:\Projects\
 - Defined game modes, features, and boss system
 - Server PC not yet available (user will set up in a few days)
 
+### Session 2 (Jan 16, 2026)
+- Added MySQL database with auto-table creation
+- Implemented user authentication (register/login)
+- Added password hashing with bcrypt
+- Updated all socket handlers for authenticated users
+- Created UserRepository for all user/friend/inventory operations
+- Made server plug-and-play (just clone, npm install, npm start)
+- Created INSTALL.md with detailed setup instructions
+- Server now shows local IP for easy Unity connection
+
 ---
 
 ## 🎯 Next Steps (Priority Order)
 
 1. **Add remaining bosses** (levels 6-19)
 2. **Build Unity scenes** (main menu, lobby, game table)
-3. **Add database** (SQLite or MongoDB for persistence)
-4. **Implement boss AI** (decision making during adventure hands)
-5. **Server PC setup** (when available)
+3. **Implement boss AI** (decision making during adventure hands)
+4. **Server PC setup** (when available)
+5. **Card/chip visuals** in Unity
 
 ---
 
-## ⚙️ Configuration Notes
+## ⚙️ Configuration (.env)
 
-- Default server port: 3000
-- Default starting chips: 10,000
-- Default blinds: 50/100
-- Max players per table: 9
-- Max spectators: 20
-- Turn time: 30 seconds
+```ini
+# Database (MySQL - WAMP/XAMPP)
+DB_HOST=localhost
+DB_PORT=3306
+DB_NAME=poker_game
+DB_USER=root
+DB_PASSWORD=
+
+# Server
+PORT=3000
+NODE_ENV=development
+
+# Game
+DEFAULT_STARTING_CHIPS=10000
+DEFAULT_SMALL_BLIND=50
+DEFAULT_BIG_BLIND=100
+MAX_PLAYERS=9
+```
 
 ---
 
 *This file should be read at the start of each session to understand project state.*
-

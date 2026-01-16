@@ -1,6 +1,9 @@
 /**
  * Poker Server - Main Entry Point
  * Real-time multiplayer poker server using Socket.IO
+ * 
+ * PLUG AND PLAY: Just drop on WAMP/XAMPP server, run npm install, npm start
+ * Database tables are created automatically on first run.
  */
 
 require('dotenv').config();
@@ -9,16 +12,19 @@ const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
 
+const db = require('./database/Database');
 const GameManager = require('./game/GameManager');
 const SocketHandler = require('./sockets/SocketHandler');
 
 // Configuration
 const PORT = process.env.PORT || 3000;
-const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS?.split(',') || ['*'];
+const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS === '*' 
+    ? true  // Allow all origins
+    : (process.env.ALLOWED_ORIGINS?.split(',') || ['*']);
 
 // Express setup
 const app = express();
-app.use(cors({ origin: ALLOWED_ORIGINS }));
+app.use(cors({ origin: ALLOWED_ORIGINS, credentials: true }));
 app.use(express.json());
 
 // HTTP server
@@ -28,7 +34,8 @@ const server = http.createServer(app);
 const io = new Server(server, {
     cors: {
         origin: ALLOWED_ORIGINS,
-        methods: ['GET', 'POST']
+        methods: ['GET', 'POST'],
+        credentials: true
     },
     pingInterval: parseInt(process.env.WS_PING_INTERVAL) || 25000,
     pingTimeout: parseInt(process.env.WS_PING_TIMEOUT) || 5000
@@ -37,14 +44,26 @@ const io = new Server(server, {
 // Initialize game manager
 const gameManager = new GameManager();
 
-// Initialize socket handler
-const socketHandler = new SocketHandler(io, gameManager);
-socketHandler.initialize();
+// Initialize socket handler (will be set up after DB connects)
+let socketHandler = null;
 
-// REST API endpoints for health checks and lobby info
+// REST API endpoints
+app.get('/', (req, res) => {
+    res.json({
+        name: 'Poker Game Server',
+        version: '1.0.0',
+        status: db.isConnected ? 'online' : 'database_offline',
+        endpoints: {
+            health: '/health',
+            tables: '/api/tables'
+        }
+    });
+});
+
 app.get('/health', (req, res) => {
     res.json({ 
-        status: 'ok', 
+        status: db.isConnected ? 'ok' : 'database_offline',
+        database: db.isConnected,
         timestamp: Date.now(),
         activeTables: gameManager.getActiveTableCount(),
         onlinePlayers: gameManager.getOnlinePlayerCount()
@@ -55,25 +74,95 @@ app.get('/api/tables', (req, res) => {
     res.json(gameManager.getPublicTableList());
 });
 
-// Start server
-server.listen(PORT, () => {
+/**
+ * Start the server
+ */
+async function start() {
     console.log(`
 ╔══════════════════════════════════════════════════════════════╗
-║                    POKER SERVER STARTED                       ║
-╠══════════════════════════════════════════════════════════════╣
-║  Port: ${PORT.toString().padEnd(54)}║
-║  Environment: ${(process.env.NODE_ENV || 'development').padEnd(47)}║
-║  WebSocket: Ready for connections                             ║
+║              POKER SERVER - STARTING UP                      ║
 ╚══════════════════════════════════════════════════════════════╝
     `);
-});
+
+    // Initialize database (creates tables if they don't exist)
+    console.log('[Server] Connecting to database...');
+    const dbConnected = await db.initialize();
+    
+    if (!dbConnected) {
+        console.error('[Server] WARNING: Database connection failed!');
+        console.error('[Server] The server will start but authentication will not work.');
+        console.error('[Server] Make sure MySQL is running (WAMP/XAMPP) and check .env settings.');
+        console.log('');
+    } else {
+        console.log('[Server] Database connected and tables ready');
+    }
+
+    // Initialize socket handler with database access
+    socketHandler = new SocketHandler(io, gameManager);
+    socketHandler.initialize();
+
+    // Start listening
+    server.listen(PORT, '0.0.0.0', () => {
+        const localIP = getLocalIP();
+        console.log(`
+╔══════════════════════════════════════════════════════════════╗
+║                    POKER SERVER ONLINE                       ║
+╠══════════════════════════════════════════════════════════════╣
+║  Local:    http://localhost:${PORT.toString().padEnd(36)}║
+║  Network:  http://${(localIP + ':' + PORT).padEnd(42)}║
+║  Database: ${(dbConnected ? 'Connected ✓' : 'OFFLINE ✗').padEnd(50)}║
+║  WebSocket: Ready for connections                            ║
+╠══════════════════════════════════════════════════════════════╣
+║  Unity clients can connect to the Network address above      ║
+╚══════════════════════════════════════════════════════════════╝
+        `);
+    });
+}
+
+/**
+ * Get local IP address for display
+ */
+function getLocalIP() {
+    const { networkInterfaces } = require('os');
+    const nets = networkInterfaces();
+    
+    for (const name of Object.keys(nets)) {
+        for (const net of nets[name]) {
+            if (net.family === 'IPv4' && !net.internal) {
+                return net.address;
+            }
+        }
+    }
+    return 'localhost';
+}
 
 // Graceful shutdown
-process.on('SIGTERM', () => {
+process.on('SIGTERM', async () => {
     console.log('SIGTERM received, shutting down gracefully...');
+    await db.close();
     server.close(() => {
         console.log('Server closed');
         process.exit(0);
     });
 });
 
+process.on('SIGINT', async () => {
+    console.log('\nShutting down...');
+    await db.close();
+    server.close(() => {
+        console.log('Server closed');
+        process.exit(0);
+    });
+});
+
+// Handle uncaught errors
+process.on('uncaughtException', (err) => {
+    console.error('[Server] Uncaught Exception:', err);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('[Server] Unhandled Rejection:', reason);
+});
+
+// Start the server
+start();

@@ -23,12 +23,6 @@ class AdventureManager {
         
         const session = {
             oderId: user.id,
-            oderId: user.id,
-            oderId: user.id,
-            oderId: user.id,
-            oderId: user.id,
-            oderId: user.id,
-            oderId: user.id,
             boss: boss,
             level: targetLevel,
             userChips: 10000,  // Starting stack for adventure
@@ -53,10 +47,7 @@ class AdventureManager {
         if (!session) return null;
         
         return {
-            oderId: session.oderId,
-            oderId: session.oderId,
-            oderId: session.oderId,
-            oderId: session.oderId,
+            oderId: session.userId,
             level: session.level,
             boss: {
                 id: session.boss.id,
@@ -189,4 +180,3 @@ class AdventureManager {
 }
 
 module.exports = AdventureManager;
-
