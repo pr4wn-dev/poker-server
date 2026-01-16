@@ -45,6 +45,7 @@ Building a **Texas Hold'em Poker Game** with two modes:
 | Table passwords & privacy | ✅ Done | Updated in `Table.js` |
 | Spectator mode | ✅ Done | Updated in `Table.js` |
 | Table invites | ✅ Done | Updated in `Table.js` |
+| **Item side pot gambling** | ✅ Done | `src/game/SidePot.js` |
 | **Setup script** | ✅ Done | `npm run setup` |
 | **Install documentation** | ✅ Done | `INSTALL.md` |
 
@@ -211,6 +212,12 @@ C:\Projects\
 - Made server plug-and-play (just clone, npm install, npm start)
 - Created INSTALL.md with detailed setup instructions
 - Server now shows local IP for easy Unity connection
+- **Added item side pot gambling system:**
+  - Table creator can start side pot with their item
+  - Other players submit items for approval
+  - Creator approves/declines each item
+  - Winner takes all items in side pot
+  - Players can opt out and just play for chips
 
 ---
 
