@@ -31,6 +31,25 @@ class Table {
         this.smallBlind = options.smallBlind;
         this.bigBlind = options.bigBlind;
         this.isPrivate = options.isPrivate;
+        
+        // New: Password protection
+        this.password = options.password || null;
+        this.hasPassword = !!options.password;
+        
+        // New: Creator/Host
+        this.creatorId = options.creatorId || null;
+        this.createdAt = Date.now();
+        
+        // New: House Rules
+        this.houseRules = options.houseRules || null;
+        
+        // New: Spectators
+        this.spectators = new Map();  // oderId -> { oderId, name, oderId }
+        this.maxSpectators = options.maxSpectators || 20;
+        this.allowSpectators = options.allowSpectators !== false;
+        
+        // New: Pending invites (friends invited before game starts)
+        this.pendingInvites = new Set();  // Set of userIds
 
         // Seats: array of player objects or null
         this.seats = new Array(this.maxPlayers).fill(null);
@@ -43,6 +62,10 @@ class Table {
         this.sidePots = [];
         this.currentBet = 0;
         this.minRaise = this.bigBlind;
+        
+        // Track if game has started (for spectator-only joins)
+        this.gameStarted = false;
+        this.handsPlayed = 0;
 
         // Position tracking
         this.dealerIndex = -1;
@@ -418,6 +441,54 @@ class Table {
         this.pot = 0;
     }
 
+    // ============ Spectators ============
+
+    addSpectator(userId, name, socketId) {
+        if (!this.allowSpectators) {
+            return { success: false, error: 'Spectators not allowed' };
+        }
+        if (this.spectators.size >= this.maxSpectators) {
+            return { success: false, error: 'Spectator limit reached' };
+        }
+        
+        this.spectators.set(userId, { oderId: userId, playerName: name, socketId });
+        console.log(`[Table ${this.name}] ${name} is now spectating`);
+        return { success: true };
+    }
+
+    removeSpectator(userId) {
+        this.spectators.delete(userId);
+    }
+
+    getSpectatorCount() {
+        return this.spectators.size;
+    }
+
+    isSpectator(userId) {
+        return this.spectators.has(userId);
+    }
+
+    // ============ Password ============
+
+    checkPassword(password) {
+        if (!this.hasPassword) return true;
+        return this.password === password;
+    }
+
+    // ============ Invites ============
+
+    invitePlayer(userId) {
+        this.pendingInvites.add(userId);
+    }
+
+    isInvited(userId) {
+        return this.pendingInvites.has(userId);
+    }
+
+    clearInvite(userId) {
+        this.pendingInvites.delete(userId);
+    }
+
     // ============ State ============
 
     getPublicInfo() {
@@ -426,13 +497,21 @@ class Table {
             name: this.name,
             playerCount: this.getSeatedPlayerCount(),
             maxPlayers: this.maxPlayers,
+            spectatorCount: this.getSpectatorCount(),
             smallBlind: this.smallBlind,
             bigBlind: this.bigBlind,
-            isPrivate: this.isPrivate
+            isPrivate: this.isPrivate,
+            hasPassword: this.hasPassword,
+            gameStarted: this.gameStarted,
+            allowSpectators: this.allowSpectators,
+            houseRulesPreset: this.houseRules?.bettingType || 'standard',
+            createdAt: this.createdAt
         };
     }
 
     getState(forPlayerId = null) {
+        const isSpectating = this.isSpectator(forPlayerId);
+        
         return {
             id: this.id,
             name: this.name,
@@ -442,8 +521,18 @@ class Table {
             currentBet: this.currentBet,
             dealerIndex: this.dealerIndex,
             currentPlayerIndex: this.currentPlayerIndex,
+            handsPlayed: this.handsPlayed,
+            spectatorCount: this.getSpectatorCount(),
+            isSpectating: isSpectating,
+            houseRules: this.houseRules?.toJSON?.() || null,
             seats: this.seats.map((seat, index) => {
                 if (!seat) return null;
+                
+                // Spectators never see hole cards (except showdown)
+                // Players only see their own cards (except showdown)
+                const canSeeCards = !isSpectating && 
+                    (seat.playerId === forPlayerId || this.phase === GAME_PHASES.SHOWDOWN);
+                
                 return {
                     index,
                     playerId: seat.playerId,
@@ -453,15 +542,15 @@ class Table {
                     isFolded: seat.isFolded,
                     isAllIn: seat.isAllIn,
                     isConnected: seat.isConnected,
-                    // Only show cards to the player themselves (or during showdown)
-                    cards: (seat.playerId === forPlayerId || this.phase === GAME_PHASES.SHOWDOWN) 
-                        ? seat.cards 
-                        : seat.cards.map(() => null)
+                    cards: canSeeCards ? seat.cards : seat.cards.map(() => null)
                 };
             })
         };
     }
 }
+
+Table.PHASES = GAME_PHASES;
+Table.ACTIONS = ACTIONS;
 
 module.exports = Table;
 
