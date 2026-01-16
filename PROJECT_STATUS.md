@@ -52,6 +52,8 @@ Building a **Texas Hold'em Poker Game** with two modes:
 | Spectator mode | ✅ Done | Updated in `Table.js` |
 | Table invites | ✅ Done | Updated in `Table.js` |
 | **Item side pot gambling** | ✅ Done | `src/game/SidePot.js` |
+| **Tournament System** | ✅ Done | `src/game/Tournament.js`, `TournamentManager.js` |
+| **Area Tournaments** | ✅ Done | Progressive requirements per area |
 | **Setup script** | ✅ Done | `npm run setup` |
 | **Install documentation** | ✅ Done | `INSTALL.md` |
 
@@ -70,6 +72,8 @@ Building a **Texas Hold'em Poker Game** with two modes:
 | Adventure controller | ✅ Done | `Scripts/Adventure/AdventureController.cs` |
 | **XP & World Map Models** | ✅ Done | `NetworkModels.cs` |
 | **Adventure Events** | ✅ Done | `PokerEvents.cs` |
+| **Tournament Models** | ✅ Done | `NetworkModels.cs` |
+| **Tournament Events** | ✅ Done | `PokerEvents.cs` |
 
 ---
 
@@ -90,16 +94,30 @@ Building a **Texas Hold'em Poker Game** with two modes:
 
 ### World Map Areas
 
-| Area | Type | Requirements | Bosses |
-|------|------|--------------|--------|
-| Poker Academy | Starter | None | Dealer Dan |
-| Downtown Casino | Casino | Level 2 | Slick Sally, Iron Mike |
-| The Highrise | City | Level 5, Defeat Iron Mike | The Countess, The Cipher |
-| The Underground | Underground | Level 8, 50k chips | Shadow, Viper |
-| Golden Yacht | Yacht | **Yacht Invitation item** | Captain Goldhand, The Heiress |
-| Private Island | Island | **Island Key item**, Level 15 | The Mogul, The Oracle |
-| The Penthouse | Final | Level 20, Defeat Oracle | **The House** (final boss) |
-| ??? Lounge | Secret | **Mystery Token item** | ??? |
+| Area | Type | Requirements | Bosses | Tournaments |
+|------|------|--------------|--------|-------------|
+| Poker Academy | Starter | None | Dealer Dan | None |
+| Downtown Casino | Casino | Level 2 | Slick Sally, Iron Mike | Tier 1 |
+| The Highrise | City | Level 5, Defeat Iron Mike | The Countess, The Cipher | Tier 2 |
+| The Underground | Underground | Level 8, 50k chips | Shadow, Viper | Tier 3 |
+| Golden Yacht | Yacht | **Yacht Invitation item** | Captain Goldhand, The Heiress | Tier 4 |
+| Private Island | Island | **Island Key item**, Level 15 | The Mogul, The Oracle | Tier 5 |
+| The Penthouse | Final | Level 20, Defeat Oracle | **The House** (final boss) | Tier 6 |
+| ??? Lounge | Secret | **Mystery Token item** | ??? | Tier 7 |
+
+### Tournament Tiers
+
+Each area has multiplayer tournaments with progressive requirements:
+
+| Tier | Area | Entry Fee | Level | Min Chips | Side Pot |
+|------|------|-----------|-------|-----------|----------|
+| 1 | Downtown | 500-2k | 2-3 | 5k | None |
+| 2 | Highrise | 5k-10k | 5-7 | 10-25k | Uncommon+ |
+| 3 | Underground | 25k-50k | 8-10 | 50-100k | Rare+ |
+| 4 | Yacht | 50k-100k | 10-12 | 100-250k | Epic+ |
+| 5 | Island | 200k-500k | 15-18 | 500k-1M | Legendary |
+| 6 | Penthouse | 1M | 20 | 2M | Legendary |
+| 7 | Secret | 2M | 22 | 5M | Legendary |
 
 ### Ultra-Rare Drops
 

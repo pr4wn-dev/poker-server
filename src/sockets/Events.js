@@ -138,6 +138,15 @@ module.exports = {
     FORFEIT_ADVENTURE: 'forfeit_adventure',
     GET_ACTIVE_SESSION: 'get_active_session',
     USE_XP_ITEM: 'use_xp_item',
+    
+    // Client -> Server: Tournaments
+    GET_AREA_TOURNAMENTS: 'get_area_tournaments',
+    GET_ALL_TOURNAMENTS: 'get_all_tournaments',
+    REGISTER_TOURNAMENT: 'register_tournament',
+    UNREGISTER_TOURNAMENT: 'unregister_tournament',
+    GET_TOURNAMENT_STATE: 'get_tournament_state',
+    GET_MY_TOURNAMENT: 'get_my_tournament',
+    GET_ELIGIBLE_SIDE_POT_ITEMS: 'get_eligible_side_pot_items',
 
     // Server -> Client
     TABLE_CREATED: 'table_created',
@@ -166,6 +175,17 @@ module.exports = {
     XP_GAINED: 'xp_gained',
     LEVEL_UP: 'level_up',
     RARE_DROP_OBTAINED: 'rare_drop_obtained',
+    
+    // Server -> Client: Tournaments
+    TOURNAMENT_LIST: 'tournament_list',
+    TOURNAMENT_STATE: 'tournament_state',
+    TOURNAMENT_PLAYER_JOINED: 'tournament_player_joined',
+    TOURNAMENT_PLAYER_LEFT: 'tournament_player_left',
+    TOURNAMENT_STARTING: 'tournament_starting',
+    TOURNAMENT_STARTED: 'tournament_started',
+    TOURNAMENT_ELIMINATED: 'tournament_eliminated',
+    TOURNAMENT_COMPLETED: 'tournament_completed',
+    TOURNAMENT_BLIND_LEVEL_UP: 'tournament_blind_level_up',
 
     // Game Actions
     ACTIONS: {

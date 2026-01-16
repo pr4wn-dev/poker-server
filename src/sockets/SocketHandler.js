@@ -6,12 +6,14 @@
 const userRepo = require('../database/UserRepository');
 const db = require('../database/Database');
 const AdventureManager = require('../adventure/AdventureManager');
+const TournamentManager = require('../game/TournamentManager');
 
 class SocketHandler {
     constructor(io, gameManager) {
         this.io = io;
         this.gameManager = gameManager;
         this.adventureManager = new AdventureManager(userRepo);
+        this.tournamentManager = new TournamentManager(userRepo);
         
         // Track authenticated users: userId -> { userId, socketId, profile }
         this.authenticatedUsers = new Map();
@@ -663,6 +665,141 @@ class SocketHandler {
                     newXP,
                     level: xpInfo?.level || 1
                 });
+            });
+
+            // ============ Tournaments ============
+            
+            socket.on('get_area_tournaments', async (data, callback) => {
+                const user = this.getAuthenticatedUser(socket);
+                if (!user) return callback({ success: false, error: 'Not authenticated' });
+                
+                const { areaId } = data;
+                const tournaments = this.tournamentManager.getTournamentsByArea(areaId);
+                
+                // Get user info to check eligibility
+                const profile = await userRepo.getProfile(user.userId);
+                const xpInfo = await userRepo.getXPInfo(user.userId);
+                const inventory = await userRepo.getInventory(user.userId);
+                
+                const userProfile = {
+                    id: user.userId,
+                    chips: profile?.chips || 0,
+                    level: xpInfo?.level || 1
+                };
+                
+                const tournamentsWithEligibility = tournaments.map(t => ({
+                    ...t.getPublicInfo(),
+                    canEnter: t.canEnter(userProfile, inventory)
+                }));
+                
+                callback({ success: true, areaId, tournaments: tournamentsWithEligibility });
+            });
+            
+            socket.on('get_all_tournaments', async (callback) => {
+                const user = this.getAuthenticatedUser(socket);
+                if (!user) return callback({ success: false, error: 'Not authenticated' });
+                
+                const tournaments = this.tournamentManager.getActiveTournaments();
+                callback({ 
+                    success: true, 
+                    tournaments: tournaments.map(t => t.getPublicInfo())
+                });
+            });
+            
+            socket.on('register_tournament', async (data, callback) => {
+                const user = this.getAuthenticatedUser(socket);
+                if (!user) return callback({ success: false, error: 'Not authenticated' });
+                
+                const { tournamentId, sidePotItemId } = data;
+                const result = await this.tournamentManager.registerPlayer(
+                    user.userId, 
+                    tournamentId, 
+                    sidePotItemId
+                );
+                
+                if (result.success) {
+                    // Notify all users in tournament lobby
+                    const tournament = this.tournamentManager.getTournament(tournamentId);
+                    this.io.to(`tournament:${tournamentId}`).emit('tournament_player_joined', {
+                        oderId: user.userId,
+                        username: user.profile.username,
+                        totalRegistered: result.totalRegistered
+                    });
+                    
+                    // Join tournament room
+                    socket.join(`tournament:${tournamentId}`);
+                }
+                
+                callback(result);
+            });
+            
+            socket.on('unregister_tournament', async (callback) => {
+                const user = this.getAuthenticatedUser(socket);
+                if (!user) return callback({ success: false, error: 'Not authenticated' });
+                
+                const tournament = this.tournamentManager.getPlayerTournament(user.userId);
+                if (!tournament) {
+                    return callback({ success: false, error: 'Not in a tournament' });
+                }
+                
+                const result = await this.tournamentManager.unregisterPlayer(user.userId);
+                
+                if (result.success) {
+                    socket.leave(`tournament:${tournament.id}`);
+                    this.io.to(`tournament:${tournament.id}`).emit('tournament_player_left', {
+                        oderId: user.userId
+                    });
+                }
+                
+                callback(result);
+            });
+            
+            socket.on('get_tournament_state', async (data, callback) => {
+                const user = this.getAuthenticatedUser(socket);
+                if (!user) return callback({ success: false, error: 'Not authenticated' });
+                
+                const { tournamentId } = data;
+                const tournament = this.tournamentManager.getTournament(tournamentId);
+                
+                if (!tournament) {
+                    return callback({ success: false, error: 'Tournament not found' });
+                }
+                
+                callback({ success: true, tournament: tournament.getState() });
+            });
+            
+            socket.on('get_my_tournament', async (callback) => {
+                const user = this.getAuthenticatedUser(socket);
+                if (!user) return callback({ success: false, error: 'Not authenticated' });
+                
+                const tournament = this.tournamentManager.getPlayerTournament(user.userId);
+                
+                if (!tournament) {
+                    return callback({ success: true, inTournament: false });
+                }
+                
+                callback({ 
+                    success: true, 
+                    inTournament: true,
+                    tournament: tournament.getState()
+                });
+            });
+            
+            socket.on('get_eligible_side_pot_items', async (data, callback) => {
+                const user = this.getAuthenticatedUser(socket);
+                if (!user) return callback({ success: false, error: 'Not authenticated' });
+                
+                const { tournamentId } = data;
+                const tournament = this.tournamentManager.getTournament(tournamentId);
+                
+                if (!tournament) {
+                    return callback({ success: false, error: 'Tournament not found' });
+                }
+                
+                const inventory = await userRepo.getInventory(user.userId);
+                const eligibleItems = tournament.getEligibleSidePotItems(inventory);
+                
+                callback({ success: true, items: eligibleItems });
             });
 
             // ============ Chat ============
