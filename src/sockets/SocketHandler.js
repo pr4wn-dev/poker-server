@@ -159,10 +159,10 @@ class SocketHandler {
                     success: true, 
                     tableId: table.id, 
                     table: table.getPublicInfo(),
-                    seatIndex: joinResult.success ? joinResult.seatIndex : null,
+                    seatIndex: joinResult.success ? joinResult.seatIndex : -1,  // -1 means not seated (Issue #57)
                     state 
                 };
-                console.log('[SocketHandler] create_table SUCCESS, emitting response');
+                console.log(`[SocketHandler] create_table SUCCESS - seatIndex: ${response.seatIndex}`);
                 if (callback) callback(response);
                 socket.emit('create_table_response', response);
                 
