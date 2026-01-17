@@ -1177,6 +1177,21 @@ if (player.currentTableId) {
 }
 ```
 
+### Issue #57: Double-Join on CreateTable Causes "Seat Taken" Error
+
+**Symptoms:** After creating a table, error "Seat taken" appears. User cannot play.
+
+**Cause:** Server was updated to auto-seat creator (Issue #55), but client still called `JoinTable` after `CreateTable`, causing a double-join attempt.
+
+**Fix:** 
+1. Server now sends `seatIndex` and `state` in `create_table_response` if auto-seated
+2. Client checks for `seatIndex` in response - if present, skips the extra `JoinTable` call
+
+**Files changed:**
+- Server: Already sends seatIndex/state
+- Client: `NetworkModels.cs` - added `seatIndex` and `state` to `CreateTableResponse`
+- Client: `GameService.cs` - check if auto-seated before calling JoinTable
+
 ### Issue #56: Spectators May Not See Community Cards (NEEDS VERIFICATION)
 
 **Symptoms:** When watching as a spectator, community cards (flop/turn/river) may not display on the table.
