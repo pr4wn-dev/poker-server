@@ -1177,6 +1177,23 @@ if (player.currentTableId) {
 }
 ```
 
+### Issue #55: Creator Not Auto-Seated at Table
+
+**Symptoms:** Bots play without the player. Player watches as spectator instead of participating.
+
+**Cause:** `create_table` only created the table but did NOT join the creator to a seat. When bots were added and countdown started, the game began without the human player. If they tried to join after, they became a spectator.
+
+**Fix:** Auto-join the creator to seat 0 when creating a table:
+```javascript
+// In create_table handler:
+const joinResult = this.gameManager.joinTable(user.userId, table.id, 0);
+if (joinResult.success) {
+    socket.join(`table:${table.id}`);
+}
+```
+
+Also load user's chips from DB before joining.
+
 ### Issue #54: Table Layout - Seats Cut Off by Action Panel
 
 **Symptoms:** Player's seat at bottom of screen is partially or fully cut off. Action buttons overlap with player seat area.

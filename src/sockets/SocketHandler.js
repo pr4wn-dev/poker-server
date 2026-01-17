@@ -112,7 +112,7 @@ class SocketHandler {
                 socket.emit('get_tables_response', response);
             });
 
-            socket.on('create_table', (data, callback) => {
+            socket.on('create_table', async (data, callback) => {
                 console.log('[SocketHandler] create_table received:', JSON.stringify(data));
                 const user = this.getAuthenticatedUser(socket);
                 if (!user) {
@@ -121,6 +121,21 @@ class SocketHandler {
                     if (callback) callback(error);
                     socket.emit('create_table_response', error);
                     return;
+                }
+
+                // Get user's chips from DB
+                const dbUser = await userRepo.getById(user.userId);
+                if (!dbUser) {
+                    const error = { success: false, error: 'User not found' };
+                    if (callback) callback(error);
+                    socket.emit('create_table_response', error);
+                    return;
+                }
+                
+                // Update player's chips in game manager
+                const player = this.gameManager.players.get(user.userId);
+                if (player) {
+                    player.chips = dbUser.chips;
                 }
 
                 console.log('[SocketHandler] create_table - user authenticated:', user.username);
@@ -132,8 +147,22 @@ class SocketHandler {
                 // Set up table callbacks for state broadcasting
                 this.setupTableCallbacks(table);
                 
-                const response = { success: true, tableId: table.id, table: table.getPublicInfo() };
-                console.log('[SocketHandler] create_table SUCCESS, emitting response:', JSON.stringify(response));
+                // Auto-join the creator to seat 0 (Issue #55: Creator must be seated to play)
+                const joinResult = this.gameManager.joinTable(user.userId, table.id, 0);
+                if (joinResult.success) {
+                    socket.join(`table:${table.id}`);
+                    console.log(`[SocketHandler] Creator ${user.username} auto-joined table at seat 0`);
+                }
+                
+                const state = table.getState(user.userId);
+                const response = { 
+                    success: true, 
+                    tableId: table.id, 
+                    table: table.getPublicInfo(),
+                    seatIndex: joinResult.success ? joinResult.seatIndex : null,
+                    state 
+                };
+                console.log('[SocketHandler] create_table SUCCESS, emitting response');
                 if (callback) callback(response);
                 socket.emit('create_table_response', response);
                 
