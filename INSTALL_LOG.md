@@ -5,6 +5,31 @@
 
 ---
 
+## 📦 EXACT VERSIONS (for Monday replication)
+
+| Software | Version | Download Link |
+|----------|---------|---------------|
+| Node.js | v24.13.0 (LTS) | https://nodejs.org/ |
+| npm | 11.6.2 | (comes with Node.js) |
+| XAMPP | 8.2.12 / PHP 8.2.12 | https://www.apachefriends.org/download.html |
+| Unity Hub | _TBD_ | https://unity.com/download |
+| Unity Editor | _TBD_ (2022.3 LTS recommended) | (via Unity Hub) |
+
+### Monday Quick Install Commands
+```powershell
+# After Node.js installed:
+cd C:\Projects\poker-server
+npm install
+
+# After XAMPP MySQL running:
+npm run setup
+
+# Start server:
+npm start
+```
+
+---
+
 ## 🔄 CURRENT STATUS
 
 **Step:** Installing XAMPP
