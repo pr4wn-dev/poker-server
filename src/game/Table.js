@@ -80,7 +80,7 @@ class Table {
         // Timing
         this.turnTimeout = null;
         this.turnStartTime = null;
-        this.turnTimeLimit = options.turnTimeLimit || 30000; // 30 seconds per turn
+        this.turnTimeLimit = options.turnTimeLimit || 10000; // 10 seconds per turn
         
         // Game start countdown timer
         this.startCountdown = null;
@@ -318,6 +318,10 @@ class Table {
         this.phase = GAME_PHASES.PRE_FLOP;
         this.handsPlayed++;
         
+        // Debug: Log who's turn it is
+        const firstPlayer = this.seats[this.currentPlayerIndex];
+        console.log(`[Table ${this.name}] Hand started - First to act: ${firstPlayer?.name} (seat ${this.currentPlayerIndex}, isBot: ${firstPlayer?.isBot})`);
+        
         // Start turn timer
         this.startTurnTimer();
 
@@ -503,6 +507,8 @@ class Table {
             this.advancePhase();
         } else {
             this.currentPlayerIndex = nextPlayer;
+            const nextPlayerSeat = this.seats[this.currentPlayerIndex];
+            console.log(`[Table ${this.name}] Turn: ${nextPlayerSeat?.name} (seat ${this.currentPlayerIndex}, isBot: ${nextPlayerSeat?.isBot})`);
             this.startTurnTimer();
         }
     }
