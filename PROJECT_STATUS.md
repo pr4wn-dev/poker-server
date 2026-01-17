@@ -1,7 +1,7 @@
 # Poker Game Project Status
 
-> **Last Updated:** January 16, 2026
-> **Session:** 3 - XP System & World Map
+> **Last Updated:** January 17, 2026
+> **Session:** 4 - MONDAY DEMO READY 🎮
 
 ---
 
@@ -86,6 +86,58 @@ Building a **Texas Hold'em Poker Game** with two modes:
 | **Adventure Map Scene** | ✅ Done | `Scripts/UI/Scenes/AdventureMapScene.cs` |
 | **Game Manager** | ✅ Done | `Scripts/Core/GameManager.cs` |
 | **Scene Bootstrap** | ✅ Done | `Scripts/Core/SceneBootstrap.cs` |
+| **SocketManager (WebSocket)** | ✅ Done | `Scripts/Networking/SocketManager.cs` |
+| **GameService API** | ✅ Done | `Scripts/Networking/GameService.cs` |
+| **LobbyScene** | ✅ Done | `Scripts/UI/Scenes/LobbyScene.cs` |
+| **TableScene** | ✅ Done | `Scripts/UI/Scenes/TableScene.cs` |
+| **AdventureScene** | ✅ Done | `Scripts/UI/Scenes/AdventureScene.cs` |
+| **PokerTableView** | ✅ Done | `Scripts/UI/Components/PokerTableView.cs` |
+| **Boss AI** | ✅ Done | `src/adventure/BossAI.js` (server) |
+
+---
+
+## 🚀 MONDAY DEMO CHECKLIST
+
+### Server Setup (On Server PC)
+```bash
+# 1. Install Node.js from nodejs.org
+# 2. Install WAMP or XAMPP for MySQL
+# 3. Clone the repo
+git clone https://github.com/pr4wn-dev/poker-server.git
+cd poker-server
+
+# 4. Install dependencies
+npm install
+
+# 5. Configure .env file
+# DATABASE_HOST=localhost
+# DATABASE_USER=root
+# DATABASE_PASSWORD=
+# DATABASE_NAME=poker_game
+
+# 6. Run setup (creates tables)
+npm run setup
+
+# 7. Start server
+npm start
+```
+
+### Unity Client Setup
+1. Open Unity project
+2. Install TextMeshPro (Window > TextMeshPro > Import)
+3. Build Settings: Add scenes (MainMenuScene, LobbyScene, TableScene, AdventureScene)
+4. Player Settings: Landscape orientation
+5. Set `serverUrl` in MainMenuScene to server IP
+6. Build to Android
+
+### Demo Flow
+1. **Register** - Both create accounts
+2. **Login** - Both log in
+3. **Create Table** - You create table
+4. **Invite** - Invite boss by username
+5. **Join** - Boss joins
+6. **Play** - Full poker game
+7. **Adventure** - Try boss battles
 
 ---
 
