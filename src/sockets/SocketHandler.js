@@ -291,6 +291,78 @@ class SocketHandler {
                 callback(result);
             });
 
+            // ============ Rebuy / Add Chips ============
+            
+            socket.on('rebuy', async (data, callback) => {
+                const user = this.getAuthenticatedUser(socket);
+                if (!user) {
+                    return callback({ success: false, error: 'Not authenticated' });
+                }
+                
+                const { amount } = data;
+                const player = this.gameManager.players.get(user.userId);
+                
+                if (!player?.currentTableId) {
+                    return callback({ success: false, error: 'Not at a table' });
+                }
+                
+                const table = this.gameManager.getTable(player.currentTableId);
+                if (!table) {
+                    return callback({ success: false, error: 'Table not found' });
+                }
+                
+                // Check if game is in progress (can only rebuy between hands)
+                if (table.phase !== 'waiting' && table.phase !== 'showdown') {
+                    return callback({ success: false, error: 'Cannot rebuy during a hand' });
+                }
+                
+                // Check house rules for rebuy
+                if (table.houseRules && !table.houseRules.allowRebuy) {
+                    return callback({ success: false, error: 'Rebuys not allowed at this table' });
+                }
+                
+                // Check player has enough chips in their account
+                const profile = await userRepo.findByUserId(user.userId);
+                if (!profile || profile.chips < amount) {
+                    return callback({ success: false, error: 'Insufficient chips' });
+                }
+                
+                // Check min/max buy-in
+                const minBuyIn = table.houseRules?.minBuyIn || table.bigBlind * 20;
+                const maxBuyIn = table.houseRules?.maxBuyIn || table.bigBlind * 200;
+                
+                const seat = table.seats.find(s => s?.playerId === user.userId);
+                if (!seat) {
+                    return callback({ success: false, error: 'Seat not found' });
+                }
+                
+                const newTotal = seat.chips + amount;
+                if (newTotal > maxBuyIn) {
+                    return callback({ success: false, error: `Maximum buy-in is ${maxBuyIn}` });
+                }
+                
+                // Deduct from account and add to table stack
+                await userRepo.updateChips(user.userId, -amount);
+                seat.chips += amount;
+                player.chips = seat.chips;
+                
+                console.log(`[SocketHandler] ${user.username} rebought ${amount} chips at table ${table.name}`);
+                
+                // Broadcast updated state
+                this.broadcastTableState(player.currentTableId);
+                
+                callback({ 
+                    success: true, 
+                    newTableStack: seat.chips,
+                    accountBalance: profile.chips - amount
+                });
+            });
+            
+            socket.on('add_chips', async (data, callback) => {
+                // Alias for rebuy - same functionality
+                socket.emit('rebuy', data, callback);
+            });
+
             // ============ Friends & Social ============
             
             socket.on('get_friends', async (callback) => {
