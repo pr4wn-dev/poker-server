@@ -547,6 +547,16 @@ class Table {
 
         // Set first player after dealer
         this.currentPlayerIndex = this.getNextActivePlayer(this.dealerIndex);
+        
+        // If no one can act (all folded or all-in), advance to next phase immediately
+        if (this.currentPlayerIndex === -1) {
+            console.log(`[Table ${this.name}] No active players - running out board`);
+            this.onStateChange?.();
+            // Short delay before next phase for visual effect
+            setTimeout(() => this.advancePhase(), 1000);
+            return;
+        }
+        
         this.lastRaiserIndex = this.currentPlayerIndex;
         this.startTurnTimer();
         

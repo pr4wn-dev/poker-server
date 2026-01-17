@@ -1177,6 +1177,23 @@ if (player.currentTableId) {
 }
 ```
 
+### Issue #59: Game Stuck When All Players All-In
+
+**Symptoms:** Game advances to flop/turn but gets stuck when all remaining players are all-in. No further cards dealt, no showdown.
+
+**Cause:** When all players are all-in, `getNextActivePlayer()` returns `-1` (no one can act). But `advancePhase()` tried to start a turn timer for player `-1` and got stuck.
+
+**Fix:** In `advancePhase()`, check if `currentPlayerIndex === -1` after setting it. If so, automatically advance to the next phase after a short delay (to show the cards).
+
+```javascript
+if (this.currentPlayerIndex === -1) {
+    console.log(`[Table ${this.name}] No active players - running out board`);
+    this.onStateChange?.();
+    setTimeout(() => this.advancePhase(), 1000);
+    return;
+}
+```
+
 ### Issue #58: State Not Broadcast When Turn Changes - Player Never Gets Turn
 
 **Symptoms:** Player is at table, bots play, but player never sees action buttons. Server logs show player gets turn then times out. Client logs show `currentPlayerId` is always a bot, never the player.
