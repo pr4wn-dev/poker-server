@@ -1156,6 +1156,19 @@ npm start
 
 **For Android/other devices:** Use the Network address shown in server output (e.g., `http://192.168.1.23:3000`) and ensure the device is on the same network.
 
+### Issue #44: Bot UI Added to Wrong File (PokerTableScene vs TableScene)
+
+**Symptoms:** User says "I don't see anywhere to invite bots" even after bot UI was added.
+
+**Cause:** Added bot UI to `PokerTableScene.cs` but the game actually loads `TableScene.cs`. Two similar files exist!
+
+**Fix:** 
+1. Check which scene is loaded: `grep -r "LoadScene.*Table" Assets/Scripts/` 
+2. Add UI to the correct file (`TableScene.cs`)
+3. Both files now have bot UI for consistency
+
+**Lesson:** Before adding UI, verify which scene file is actually being loaded.
+
 ### Issue #43: UserProfile Uses 'id' Not 'oderId'
 
 **Symptoms:** `CS1061: 'UserProfile' does not contain a definition for 'oderId'`
