@@ -1,7 +1,32 @@
-# Installation Progress Log
+# POKER GAME - MASTER PROJECT LOG
 
-> **Started:** January 17, 2026
+> **READ THIS FILE AT START OF EVERY SESSION**
+> 
+> **Last Updated:** January 17, 2026
+> **Session:** 5 - Fixing Unity compilation and Socket.IO issues
+> **Next:** Test multiplayer flow end-to-end
 > **Goal:** Get poker game running for Monday demo
+
+---
+
+## 📋 PROJECT OVERVIEW
+
+Building a **Texas Hold'em Poker Game** with two modes:
+1. **Multiplayer** - Real-time online poker with friends
+2. **Adventure** - Single-player progression with XP, world map, and poker bosses
+
+**Tech Stack:**
+- **Server:** Node.js + Socket.IO (WebSockets) + MySQL
+- **Client:** Unity C# (Android target)
+- **Database:** MySQL (included with WAMP/XAMPP)
+
+**Repositories:**
+- Server: `https://github.com/pr4wn-dev/poker-server`
+- Client: `https://github.com/pr4wn-dev/poker-client-unity`
+
+**Project Paths:**
+- Server: `C:\Projects\poker-server`
+- Unity Client: `C:\Projects\poker-client-unity`
 
 ---
 
@@ -631,4 +656,91 @@ void OnResponse(SocketIOResponse response) {
 2. Check Node.js console for server-side logs
 3. Use browser at `http://localhost:3000` to verify server is running
 4. Add `Debug.Log` for every emit and every response received
+
+---
+
+## ✅ COMPLETED FEATURES
+
+### Server (poker-server)
+| Feature | Status | Files |
+|---------|--------|-------|
+| Core poker game logic | ✅ Done | `src/game/Table.js`, `Deck.js`, `HandEvaluator.js` |
+| WebSocket communication | ✅ Done | `src/sockets/SocketHandler.js`, `Events.js` |
+| MySQL Database | ✅ Done | `src/database/Database.js` |
+| User authentication | ✅ Done | `src/database/UserRepository.js` |
+| XP System & World Map | ✅ Done | `src/adventure/WorldMap.js` |
+| 12 Bosses across 8 areas | ✅ Done | `src/adventure/Boss.js` |
+| Tournament System | ✅ Done | `src/game/Tournament.js` |
+
+### Unity Client (poker-client-unity)
+| Feature | Status | Files |
+|---------|--------|-------|
+| SocketManager (WebSocket) | ✅ Done | `Scripts/Networking/SocketManager.cs` |
+| GameService API | ✅ Done | `Scripts/Networking/GameService.cs` |
+| UI Theme System | ✅ Done | `Scripts/UI/Core/GameTheme.cs` |
+| UI Factory | ✅ Done | `Scripts/UI/Core/UIFactory.cs` |
+| MainMenuScene | ✅ Done | `Scripts/UI/Scenes/MainMenuScene.cs` |
+| LobbyScene | ✅ Done | `Scripts/UI/Scenes/LobbyScene.cs` |
+| TableScene | ✅ Done | `Scripts/UI/Scenes/TableScene.cs` |
+| AdventureScene | ✅ Done | `Scripts/UI/Scenes/AdventureScene.cs` |
+
+---
+
+## 🎮 ADVENTURE MODE DESIGN
+
+### World Map Areas
+| Area | Requirements | Bosses |
+|------|--------------|--------|
+| Poker Academy | None | Dealer Dan |
+| Downtown Casino | Level 2 | Slick Sally, Iron Mike |
+| The Highrise | Level 5 | The Countess, The Cipher |
+| The Underground | Level 8, 50k chips | Shadow, Viper |
+| Golden Yacht | **Yacht Invitation item** | Captain Goldhand, The Heiress |
+| Private Island | **Island Key item**, Level 15 | The Mogul, The Oracle |
+| The Penthouse | Level 20 | **The House** (final boss) |
+| ??? Lounge | **Mystery Token item** | ??? |
+
+### Ultra-Rare Drops (All Tradeable!)
+| Item | Drop Source | Drop Rate |
+|------|-------------|-----------|
+| Yacht Invitation | Iron Mike, Countess, Cipher, Shadow | 0.1-0.3% |
+| Island Key | Viper, Captain, Heiress | 0.08-0.15% |
+| Mystery Token | The Mogul, The Oracle, The House | 0.01-0.1% |
+
+---
+
+## 📁 KEY FILE LOCATIONS
+
+### Server
+```
+poker-server/src/
+├── server.js              # Entry point
+├── database/Database.js   # MySQL connection
+├── adventure/Boss.js      # All bosses defined
+├── game/Table.js          # Poker table logic
+└── sockets/SocketHandler.js # All socket events
+```
+
+### Unity Client
+```
+poker-client-unity/Assets/Scripts/
+├── Networking/
+│   ├── SocketManager.cs   # WebSocket connection
+│   ├── GameService.cs     # High-level API
+│   └── NetworkModels.cs   # All data models
+├── UI/Core/
+│   ├── UIFactory.cs       # UI element creation
+│   └── GameTheme.cs       # Color/styling
+└── UI/Scenes/             # All scene scripts
+```
+
+---
+
+## 🚧 TODO / IN PROGRESS
+
+- [ ] Test multiplayer table creation end-to-end
+- [ ] Test multiplayer joining
+- [ ] Adventure battle scene
+- [ ] Android APK build
+- [ ] Boss PC setup for Monday demo
 
