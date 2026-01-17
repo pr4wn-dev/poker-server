@@ -695,6 +695,28 @@ scriptingDefineSymbols:
 
 ---
 
+### 22. useMockMode Flag Set to True by Default
+**Symptoms:**
+- Even with SocketIO installed and defines set, still uses mock mode
+- Server shows no connections
+
+**Root Cause:**
+In `SocketManager.cs`, the `useMockMode` field was set to `true` by default.
+
+**Solution:**
+Change in SocketManager.cs:
+```csharp
+// WRONG:
+[SerializeField] private bool useMockMode = true;
+
+// RIGHT:
+[SerializeField] private bool useMockMode = false;
+```
+
+**Also check:** If the SocketManager exists in a scene, the serialized value might override the code default. Delete and recreate the GameObject if needed.
+
+---
+
 ### 18. SocketIOUnity GetValue<T>() Returns Wrong Data
 **Symptoms:**
 - `response.GetValue<MyClass>()` returns object with all default values
