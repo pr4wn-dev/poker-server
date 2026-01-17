@@ -1177,6 +1177,23 @@ if (player.currentTableId) {
 }
 ```
 
+### Issue #54: Table Layout - Seats Cut Off by Action Panel
+
+**Symptoms:** Player's seat at bottom of screen is partially or fully cut off. Action buttons overlap with player seat area.
+
+**Cause:** 
+- PokerTableView filled entire canvas (anchorMin 0,0 to anchorMax 1,1)
+- Seat positions at 5% Y overlapped with action panel (120px at bottom)
+
+**Fix:**
+1. In `TableScene.cs`, adjust table view rect to leave room:
+```csharp
+rect.anchorMin = new Vector2(0, 0.12f); // Leave room for action panel
+rect.anchorMax = new Vector2(1, 0.95f); // Leave room for top bar
+```
+
+2. In `PokerTableView.cs`, adjust seat positions to 0.08f-0.88f range and felt to 0.12f-0.88f.
+
 ### Issue #53: Bot Uses Wrong Action Name 'all_in' Instead of 'allin'
 
 **Symptoms:** Bot action fails with "Invalid action". Server logs show: `[BotManager] Tex action failed: Invalid action`
