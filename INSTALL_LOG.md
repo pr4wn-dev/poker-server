@@ -644,6 +644,42 @@ string username = jobj["username"]?.ToString() ?? "DefaultValue";
 
 ---
 
+### 20. Unity: Anonymous Types Cause Same CS0656 Error
+**Symptoms:**
+- Same CS0656 error even after removing `dynamic`
+- Code uses `return new { success = true, ... }`
+
+**Root Cause:**
+Anonymous types in Unity also use the runtime binder internally.
+
+**Solution:**
+Replace anonymous types with proper classes:
+```csharp
+// WRONG - anonymous type:
+return new { success = true, tableId = "123" };
+
+// RIGHT - use proper response class:
+return new CreateTableResponse { success = true, tableId = "123" };
+```
+
+---
+
+### 21. SOCKET_IO_AVAILABLE Only Defined for Android
+**Symptoms:**
+- Socket code works on Android but not in Editor
+- Unity falls back to mock mode when testing in Editor
+
+**Root Cause:**
+In ProjectSettings.asset, `SOCKET_IO_AVAILABLE` is only defined for Android platform.
+
+**Solution:**
+Either:
+1. Add define for Standalone in Project Settings → Player → Scripting Define Symbols
+2. Or make mock mode actually work (use proper response classes, not anonymous types)
+3. Or remove the `#if SOCKET_IO_AVAILABLE` checks if package is always installed
+
+---
+
 ### 18. SocketIOUnity GetValue<T>() Returns Wrong Data
 **Symptoms:**
 - `response.GetValue<MyClass>()` returns object with all default values
