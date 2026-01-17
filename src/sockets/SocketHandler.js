@@ -127,6 +127,10 @@ class SocketHandler {
                     ...data,
                     creatorId: user.userId
                 });
+                
+                // Set up table callbacks for state broadcasting
+                this.setupTableCallbacks(table);
+                
                 const response = { success: true, tableId: table.id, table: table.getPublicInfo() };
                 console.log('[SocketHandler] create_table SUCCESS, emitting response:', JSON.stringify(response));
                 if (callback) callback(response);
@@ -942,6 +946,30 @@ class SocketHandler {
                 this.io.to(friendAuth.socketId).emit(event, { userId: userId });
             }
         }
+    }
+
+    // ============ Table Callbacks ============
+    
+    setupTableCallbacks(table) {
+        // Called when table state changes (for auto-broadcasting)
+        table.onStateChange = () => {
+            this.broadcastTableState(table.id);
+        };
+        
+        // Called when a player auto-folds due to timeout
+        table.onAutoFold = (playerId, seatIndex) => {
+            console.log(`[SocketHandler] Auto-fold: ${playerId} at seat ${seatIndex}`);
+            
+            // Broadcast the fold action to all players at the table
+            this.io.to(`table:${table.id}`).emit('player_action', {
+                userId: playerId,
+                action: 'fold',
+                amount: 0,
+                isTimeout: true
+            });
+            
+            // State will be broadcast by onStateChange
+        };
     }
 
     // ============ Broadcasting ============

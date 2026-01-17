@@ -79,7 +79,64 @@ class Table {
 
         // Timing
         this.turnTimeout = null;
-        this.turnTimeLimit = 30000; // 30 seconds per turn
+        this.turnStartTime = null;
+        this.turnTimeLimit = options.turnTimeLimit || 30000; // 30 seconds per turn
+        
+        // Event callbacks (set by SocketHandler)
+        this.onStateChange = null;  // Called when state changes, for broadcasting
+        this.onAutoFold = null;     // Called when player auto-folds on timeout
+    }
+    
+    // ============ Turn Timer ============
+    
+    startTurnTimer() {
+        this.clearTurnTimer();
+        
+        if (this.currentPlayerIndex < 0) return;
+        
+        this.turnStartTime = Date.now();
+        
+        this.turnTimeout = setTimeout(() => {
+            this.handleTurnTimeout();
+        }, this.turnTimeLimit);
+    }
+    
+    clearTurnTimer() {
+        if (this.turnTimeout) {
+            clearTimeout(this.turnTimeout);
+            this.turnTimeout = null;
+        }
+        this.turnStartTime = null;
+    }
+    
+    getTurnTimeRemaining() {
+        if (!this.turnStartTime || this.currentPlayerIndex < 0) return null;
+        const elapsed = Date.now() - this.turnStartTime;
+        const remaining = Math.max(0, this.turnTimeLimit - elapsed);
+        return remaining / 1000; // Return seconds
+    }
+    
+    handleTurnTimeout() {
+        const player = this.seats[this.currentPlayerIndex];
+        if (!player) return;
+        
+        console.log(`[Table ${this.name}] ${player.name} timed out - auto-folding`);
+        
+        // Auto-fold
+        this.fold(this.currentPlayerIndex);
+        
+        // Notify via callback
+        if (this.onAutoFold) {
+            this.onAutoFold(player.playerId, this.currentPlayerIndex);
+        }
+        
+        // Advance game
+        this.advanceGame();
+        
+        // Notify state change
+        if (this.onStateChange) {
+            this.onStateChange();
+        }
     }
 
     // ============ Player Management ============
@@ -205,6 +262,10 @@ class Table {
         this.currentPlayerIndex = this.getNextActivePlayer(bbIndex);
         this.lastRaiserIndex = bbIndex;
         this.phase = GAME_PHASES.PRE_FLOP;
+        this.handsPlayed++;
+        
+        // Start turn timer
+        this.startTurnTimer();
 
         return this.getState();
     }
@@ -271,6 +332,7 @@ class Table {
         }
 
         if (result.success) {
+            this.clearTurnTimer();
             this.advanceGame();
         }
 
@@ -373,6 +435,7 @@ class Table {
         // Check for winner (all but one folded)
         const activePlayers = this.seats.filter(s => s && !s.isFolded);
         if (activePlayers.length === 1) {
+            this.clearTurnTimer();
             this.awardPot(activePlayers[0]);
             setTimeout(() => this.startNewHand(), 3000);
             return;
@@ -386,6 +449,7 @@ class Table {
             this.advancePhase();
         } else {
             this.currentPlayerIndex = nextPlayer;
+            this.startTurnTimer();
         }
     }
 
@@ -418,9 +482,11 @@ class Table {
         // Set first player after dealer
         this.currentPlayerIndex = this.getNextActivePlayer(this.dealerIndex);
         this.lastRaiserIndex = this.currentPlayerIndex;
+        this.startTurnTimer();
     }
 
     showdown() {
+        this.clearTurnTimer();
         this.phase = GAME_PHASES.SHOWDOWN;
         
         const activePlayers = this.seats
@@ -616,6 +682,7 @@ class Table {
             dealerIndex: this.dealerIndex,
             currentPlayerIndex: this.currentPlayerIndex,
             currentPlayerId: currentPlayer?.playerId || null,
+            turnTimeRemaining: this.getTurnTimeRemaining(),
             handsPlayed: this.handsPlayed,
             spectatorCount: this.getSpectatorCount(),
             isSpectating: isSpectating,
