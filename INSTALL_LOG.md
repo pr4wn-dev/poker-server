@@ -1449,6 +1449,22 @@ for (int i = 0; i < _seats.Count; i++)
 
 Also add `_tableView?.UpdateFromState(state)` in TableScene.cs.
 
+### Issue #47: Cards Showing "?" Instead of Card Backs
+
+**Symptoms:** Other players' hidden cards show "?" marks instead of card backs. Community cards also show incorrectly.
+
+**Cause:**
+1. Server sends `rank: "?"` for hidden cards, but `Card.IsHidden` only checked for null/empty
+2. `CardView` in `PokerTableView.cs` didn't check `card.IsHidden` before displaying
+3. `CardView` didn't use `SpriteManager` for sprites
+
+**Fix:**
+1. Updated `Card.IsHidden` in `NetworkModels.cs` to also check for `"?"` values
+2. Updated `CardView.SetCard()` to call `SetHidden()` if `card.IsHidden` is true
+3. Updated `CardView` to use `SpriteManager` for card face and back sprites
+
+**Date:** January 17, 2026
+
 ### Issue #46: Card Back and Chips Not Visible
 
 **Symptoms:** Card backs show as plain colored rectangles, not the card_back.png sprite. Chips don't appear or look wrong.
