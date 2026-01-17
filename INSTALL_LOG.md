@@ -1156,6 +1156,20 @@ npm start
 
 **For Android/other devices:** Use the Network address shown in server output (e.g., `http://192.168.1.23:3000`) and ensure the device is on the same network.
 
+### Issue #42: Bot UI Must Be Added to TableScene
+
+**Symptoms:** Bot system works on backend but no UI to use it. User says "I don't see anywhere I can invite bots."
+
+**Cause:** Created bot backend (BotPlayer.js, BotManager.js, socket events) but forgot to add UI in Unity.
+
+**Fix:** Added to PokerTableScene.cs:
+1. "🤖 ADD BOTS" button in menu panel
+2. Bot selection panel with Tex/Lazy Larry/Pickles buttons
+3. Bot approval popup for other players
+4. Event subscriptions for bot_invite_pending, bot_joined, bot_rejected
+
+**Lesson:** Backend code without frontend UI is useless. Always add the UI when adding features.
+
 ### Issue #41: Login Screen Shows "Connecting" Forever
 
 **Symptoms:** MainMenuScene shows "Connecting..." text that never goes away, login form may or may not be visible.
