@@ -1156,6 +1156,27 @@ npm start
 
 **For Android/other devices:** Use the Network address shown in server output (e.g., `http://192.168.1.23:3000`) and ensure the device is on the same network.
 
+### Issue #47: "Already at a table" After Disconnect/Reconnect
+
+**Symptoms:** After disconnecting and reconnecting, player can't create or join tables - gets "Already at a table" error.
+
+**Cause:** When player reconnects, their `currentTableId` is still set from old session, even though they were removed from that table.
+
+**Fix:** In `GameManager.joinTable()`, check if the old table still exists AND player is still there:
+```javascript
+if (player.currentTableId) {
+    const oldTable = this.tables.get(player.currentTableId);
+    if (oldTable) {
+        const stillAtTable = oldTable.seats.some(s => s?.playerId === playerId);
+        if (stillAtTable) {
+            return { success: false, error: 'Already at a table' };
+        }
+    }
+    // Clear stale reference
+    player.currentTableId = null;
+}
+```
+
 ### Issue #46: NullReferenceException in PokerTableView.UpdateFromState
 
 **Symptoms:** `NullReferenceException: Object reference not set to an instance of an object` in PokerTableView.cs:177

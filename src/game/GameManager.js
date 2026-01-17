@@ -108,8 +108,19 @@ class GameManager {
             return { success: false, error: 'Invalid player or table' };
         }
 
+        // Check if player thinks they're at a table
         if (player.currentTableId) {
-            return { success: false, error: 'Already at a table' };
+            // If that table still exists and they're actually there, block
+            const oldTable = this.tables.get(player.currentTableId);
+            if (oldTable) {
+                const stillAtTable = oldTable.seats.some(s => s?.playerId === playerId);
+                if (stillAtTable) {
+                    return { success: false, error: 'Already at a table' };
+                }
+            }
+            // Old table is gone or player not there - clear it
+            console.log(`[GameManager] Clearing stale table reference for ${playerId}`);
+            player.currentTableId = null;
         }
 
         const result = table.addPlayer(playerId, player.name, player.chips, seatIndex);
