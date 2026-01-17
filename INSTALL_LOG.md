@@ -741,6 +741,62 @@ Change in SocketManager.cs:
 
 ---
 
+### 26. Duplicate Response Classes Between Files (CRITICAL)
+**Symptoms:**
+- `response.success` is `false` even though server sends `{"success":true}`
+- `response.tableId` or `response.table` is null even though server sends them
+- No compile errors but runtime parsing fails silently
+
+**Root Cause:**
+Both `GameService.cs` and `NetworkModels.cs` were defining the same response classes (e.g., `CreateTableResponse`, `LoginResponse`) in the same `PokerClient.Networking` namespace. This creates ambiguity - C# may pick either class, and if fields differ, JsonUtility parsing fails.
+
+Example conflict:
+- `GameService.cs` had `CreateTableResponse` with `table` field
+- `NetworkModels.cs` had `CreateTableResponse` without `table` field
+- When Unity used the NetworkModels version, the `table` field was never parsed
+
+**Solution:**
+1. Keep ALL response classes ONLY in `NetworkModels.cs`
+2. DELETE duplicate classes from `GameService.cs`
+3. Ensure `NetworkModels.cs` has all necessary fields matching what server sends
+
+**Files Changed:**
+- `GameService.cs`: Removed lines 494-593 (duplicate response classes)
+- `NetworkModels.cs`: Updated all response classes to have complete fields
+
+**Key Response Classes:**
+```csharp
+// LoginResponse needs userId (or playerId) AND profile
+public class LoginResponse
+{
+    public bool success;
+    public string error;
+    public string userId;
+    public UserProfile profile;
+}
+
+// CreateTableResponse needs tableId AND table
+public class CreateTableResponse
+{
+    public bool success;
+    public string error;
+    public string tableId;
+    public TableInfo table;
+}
+
+// JoinTableResponse needs seatIndex AND state
+public class JoinTableResponse
+{
+    public bool success;
+    public string error;
+    public int seatIndex;
+    public bool isSpectating;
+    public TableState state;
+}
+```
+
+---
+
 ### 18. SocketIOUnity GetValue<T>() Returns Wrong Data
 **Symptoms:**
 - `response.GetValue<MyClass>()` returns object with all default values
