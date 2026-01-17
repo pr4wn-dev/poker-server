@@ -1156,6 +1156,21 @@ npm start
 
 **For Android/other devices:** Use the Network address shown in server output (e.g., `http://192.168.1.23:3000`) and ensure the device is on the same network.
 
+### Issue #43: UserProfile Uses 'id' Not 'oderId'
+
+**Symptoms:** `CS1061: 'UserProfile' does not contain a definition for 'oderId'`
+
+**Cause:** Typo - used `currentUser.oderId` instead of `currentUser.id`. The field is just `id` in UserProfile.
+
+**Fix:** Use the correct field name:
+```csharp
+// WRONG
+_isTableCreator = currentUser.oderId == state.creatorId;
+
+// CORRECT
+_isTableCreator = currentUser.id == state.creatorId;
+```
+
 ### Issue #42: Bot UI Must Be Added to TableScene
 
 **Symptoms:** Bot system works on backend but no UI to use it. User says "I don't see anywhere I can invite bots."
