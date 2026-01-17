@@ -1,214 +1,205 @@
 # Installation Progress Log
 
 > **Started:** January 17, 2026
-> **Goal:** Get poker game running locally for Monday demo
+> **Goal:** Get poker game running for Monday demo
 
 ---
 
-## 📦 EXACT VERSIONS (for Monday replication)
+## 🏠 SETUP OVERVIEW
+
+| Location | Purpose | What's Installed |
+|----------|---------|------------------|
+| **Home PC** | Development (Cursor, code editing) | Node.js, XAMPP, Unity 6 LTS, Git |
+| **Boss's PC (Monday)** | Production Server | Will install: Node.js, XAMPP |
+
+**Workflow:**
+- You edit code at home → push to GitHub
+- Server at boss's place pulls from GitHub → runs the game
+- Unity builds the Android APK that players install
+
+---
+
+## 📦 EXACT VERSIONS
 
 | Software | Version | Download Link |
 |----------|---------|---------------|
-| Node.js | v24.13.0 (LTS) | https://nodejs.org/ |
+| Node.js | v24.13.0 | https://nodejs.org/ |
 | npm | 11.6.2 | (comes with Node.js) |
 | XAMPP | 8.2.12 / PHP 8.2.12 | https://www.apachefriends.org/download.html |
-| Unity Hub | _TBD_ | https://unity.com/download |
-| Unity Editor | _TBD_ (2022.3 LTS recommended) | (via Unity Hub) |
-
-### Monday Quick Install Commands
-```powershell
-# After Node.js installed:
-cd C:\Projects\poker-server
-npm install
-
-# After XAMPP MySQL running:
-npm run setup
-
-# Start server:
-npm start
-```
+| Unity Hub | Latest | https://unity.com/download |
+| Unity Editor | 6 LTS (6.3) | (via Unity Hub) |
 
 ---
 
-## 🔄 CURRENT STATUS
-
-**Step:** Installing Unity
-**Status:** ⏳ Ready to start
-
-**🟢 SERVER IS RUNNING AT:** `http://192.168.1.23:3000`
-
----
-
-## ✅ COMPLETED STEPS
+## ✅ HOME PC - COMPLETED
 
 | Step | Status | Notes |
 |------|--------|-------|
 | Code complete (server) | ✅ Done | All features ready |
 | Code complete (Unity client) | ✅ Done | All scenes ready |
 | GitHub repos synced | ✅ Done | Both pushed |
-| Node.js installed | ✅ Done | v24.13.0, npm 11.6.2 |
-| npm install | ✅ Done | 184 packages installed |
-| XAMPP installed | ✅ Done | 8.2.12 / PHP 8.2.12 |
-| MySQL running | ✅ Done | Port 3306 |
-| Database setup | ✅ Done | All tables created |
-| Server started | ✅ Done | http://192.168.1.23:3000 |
+| Node.js v24.13.0 | ✅ Done | + npm 11.6.2 |
+| XAMPP 8.2.12 | ✅ Done | MySQL on port 3306 |
+| Database tables | ✅ Done | All created |
+| Server tested | ✅ Done | Runs on 192.168.1.23:3000 |
+| Unity 6 LTS | ⏳ Installing | With Android Build Support |
+
+**GitHub Repos:**
+- Server: `https://github.com/pr4wn-dev/poker-server`
+- Unity Client: `https://github.com/pr4wn-dev/poker-client-unity`
 
 ---
 
-## 📋 INSTALLATION PROGRESS
+## 📋 MONDAY CHECKLIST - BOSS'S SERVER PC
 
-### 1. Node.js Installation ✅ COMPLETE
-- [x] Downloaded from nodejs.org (LTS version)
-- [x] Ran installer
-- [x] Accepted license
-- [x] Kept default install path
-- [x] Checked "Tools for Native Modules" box
-- [x] Clicked Install
-- [x] Build tools installed (19 Chocolatey packages)
-- [x] Restarted Cursor
-- [x] Verified with `node --version` → v24.13.0
-- [x] Verified with `npm --version` → 11.6.2
-- [x] Ran `npm install` → 184 packages
+### Before You Go
+- [ ] Make sure latest code is pushed to GitHub from home
+- [ ] Have this checklist ready on your phone or printed
 
-**Result:** ✅ SUCCESS
+### At Boss's Place - Server Setup (15-20 min)
 
----
+#### Step 1: Install Node.js
+```
+1. Go to https://nodejs.org/
+2. Download LTS (should be v24.x)
+3. Run installer → Next → Next → CHECK "Tools for Native Modules" → Install
+4. Wait for black window to finish (takes 5-10 min)
+5. Press ENTER when it says "Type ENTER to exit"
+```
 
-### 2. XAMPP Installation ✅ COMPLETE
-- [x] Downloaded from apachefriends.org (8.2.12)
-- [x] Ran installer
-- [x] Selected MySQL component
-- [x] Installed to default path (C:\xampp)
-- [x] Opened XAMPP Control Panel
-- [x] Started MySQL service
-- [x] MySQL showing green "Running"
+#### Step 2: Install XAMPP
+```
+1. Go to https://www.apachefriends.org/download.html
+2. Download 8.2.12 (or latest)
+3. Run installer → Keep MySQL checked → Install to C:\xampp
+4. Open XAMPP Control Panel
+5. Click START next to MySQL → wait for GREEN
+```
 
-**Result:** ✅ SUCCESS
+#### Step 3: Get Server Code
+```powershell
+# Open PowerShell or Command Prompt
+cd C:\Projects
+git clone https://github.com/pr4wn-dev/poker-server.git
+cd poker-server
+```
 
----
+#### Step 4: Setup & Run Server
+```powershell
+# Install dependencies
+npm install
 
-### 3. Database Setup ✅ COMPLETE
-- [x] Created `.env` file in poker-server folder
-- [x] Set DB_HOST=localhost
-- [x] Set DB_USER=root
-- [x] Set DB_PASSWORD= (blank)
-- [x] Set DB_NAME=poker_game
-- [x] Ran `npm install` ✅ (done in step 1)
-- [x] Ran `npm run setup`
-- [x] Tables created successfully
+# Copy environment file
+Copy-Item env.example .env
 
-**Result:** ✅ SUCCESS
+# Create database tables
+echo y | npm run setup
 
----
+# Start server
+npm start
+```
 
-### 4. Server Test ✅ COMPLETE
-- [x] Ran `npm start`
-- [x] Server started on port 3000
-- [x] No errors in console
-- [x] Database connected ✓
-- [x] WebSocket ready ✓
+#### Step 5: Note the Server IP
+- Server will show: `Network: http://192.168.X.X:3000`
+- **Write this IP down** - Unity clients connect here!
 
-**Local URL:** http://localhost:3000
-**Network URL:** http://192.168.1.23:3000
+#### Step 6: Port Forward (for outside access)
+```
+1. Open router admin (usually 192.168.1.1 or 192.168.0.1)
+2. Find "Port Forwarding" 
+3. Add rule: External Port 3000 → Internal IP (server PC) → Port 3000
+4. Save
+```
 
-**Result:** ✅ SUCCESS - SERVER RUNNING!
+### Unity Client Setup
 
----
+#### Option A: Use Pre-Built APK
+- Build APK at home before Monday
+- Transfer to phones via USB or cloud
 
-### 5. Unity Installation
-- [ ] Downloaded Unity Hub
-- [ ] Installed Unity Hub
-- [ ] Logged into Unity account
-- [ ] Installed Unity 2022.3 LTS
-- [ ] Checked Android Build Support
-- [ ] Android SDK installed
-- [ ] Android NDK installed
-
-**Result:** _not started_
-
----
-
-### 6. Unity Project Setup
-- [ ] Opened poker-client-unity project
-- [ ] Imported TextMeshPro
-- [ ] Added scenes to Build Settings
-- [ ] Set orientation to Landscape
-- [ ] Changed serverUrl to localhost:3000
-- [ ] Built for Android
-
-**Result:** _not started_
+#### Option B: Install Unity at Boss's (takes longer)
+```
+1. Download Unity Hub from https://unity.com/download
+2. Install Unity 6 LTS with Android Build Support
+3. Clone: git clone https://github.com/pr4wn-dev/poker-client-unity.git
+4. Open project in Unity
+5. Update serverUrl in SocketManager.cs to boss's server IP
+6. Build → Android APK
+```
 
 ---
 
-### 7. Network Setup (for remote play)
-- [ ] Found PC's local IP (ipconfig)
-- [ ] Logged into router
-- [ ] Port forwarded 3000 → PC IP
-- [ ] Allowed Node.js through Windows Firewall
-- [ ] Tested from another device
+## 🔄 UPDATING SERVER FROM HOME
 
-**PC Local IP:** `192.168.1.23`
-**Router Admin URL:** _usually 192.168.1.1 or 192.168.0.1_
+Once server is set up at boss's place, you can update it remotely:
 
-**Result:** _not started_
+### From Home (push changes):
+```powershell
+cd C:\Projects\poker-server
+git add .
+git commit -m "Your changes"
+git push
+```
+
+### At Boss's Server (pull changes):
+```powershell
+cd C:\Projects\poker-server
+git pull
+# Restart server if needed
+npm start
+```
+
+**OR** set up auto-pull (advanced - can do later)
 
 ---
 
-## 🔧 ISSUES ENCOUNTERED
+## 🆘 TROUBLESHOOTING
 
-_None yet_
+### Node.js Not Found
+```powershell
+node --version  # Should show v24.x
+# If not found, restart terminal or check PATH
+```
+
+### MySQL Won't Start
+```
+- Open XAMPP Control Panel
+- Check if port 3306 is blocked
+- Try "Stop" then "Start" again
+```
+
+### Server Won't Connect to Database
+```powershell
+# Check MySQL is running
+netstat -an | findstr 3306
+
+# Check .env file exists and has correct settings
+cat .env
+```
+
+### Can't Connect from Phone
+```
+1. Make sure phone is on same WiFi as server
+2. Check Windows Firewall allowed Node.js
+3. Try: http://SERVER_IP:3000 in phone browser
+```
 
 ---
 
 ## 📝 NOTES
 
-- User doing installs one by one
-- Will need router port forwarding for remote play
 - Monday demo with boss
+- Home PC IP: 192.168.1.23 (for local testing only)
+- Boss's server IP: TBD Monday
+- Unity 6 LTS is compatible with our code (uses stable APIs)
 
 ---
 
-## 🆘 IF SOMETHING BREAKS
+## 🎮 PLAYING THE GAME
 
-### Node.js Issues
-```powershell
-# Check if installed
-node --version
-npm --version
-
-# If not found, check PATH:
-$env:PATH -split ';' | Select-String "node"
-
-# Manual PATH fix (if needed):
-# Add C:\Program Files\nodejs\ to System PATH
-```
-
-### XAMPP/MySQL Issues
-```powershell
-# Check if MySQL is running
-netstat -an | findstr 3306
-
-# If port 3306 not listening, MySQL isn't running
-# Open XAMPP Control Panel and click Start next to MySQL
-```
-
-### npm install Issues
-```powershell
-# Clear npm cache
-npm cache clean --force
-
-# Delete node_modules and try again
-Remove-Item -Recurse -Force node_modules
-npm install
-```
-
-### Server Won't Start
-```powershell
-# Check what's using port 3000
-netstat -ano | findstr 3000
-
-# Kill process using port (replace PID with actual number)
-taskkill /PID <PID> /F
-```
-
+1. Server running at `http://BOSS_SERVER_IP:3000`
+2. Install APK on Android phones
+3. Open app → Register/Login
+4. Create table or join existing one
+5. Play poker! 🃏
 
