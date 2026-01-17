@@ -1177,6 +1177,18 @@ if (player.currentTableId) {
 }
 ```
 
+### Issue #51: Bots Don't Trigger Game Start Countdown
+
+**Symptoms:** Timer doesn't start when bots join. Game never auto-starts even with human + bots.
+
+**Cause:** `BotManager.confirmBot()` directly sets `table.seats[seatIndex]` without calling `table.checkStartCountdown()`. Only `Table.addPlayer()` called the countdown check.
+
+**Fix:** Call `table.checkStartCountdown()` at the end of `BotManager.confirmBot()`:
+```javascript
+// Trigger countdown check - bots count as players!
+table.checkStartCountdown();
+```
+
 ### Issue #50: Auto-Leave Old Table When Joining New One
 
 **Symptoms:** After disconnect/reconnect, creating a new table fails with "Already at a table" because player is still seated at the old table (within 60-second reconnect window).
