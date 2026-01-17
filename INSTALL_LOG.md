@@ -1137,6 +1137,25 @@ public class UserProfile
 }
 ```
 
+### Issue #40: Unity "Cannot connect to server" - Server Not Running
+
+**Symptoms:** Unity Console shows: `[SocketManager] Connection failed: Cannot connect to server 'http://localhost:3000/'`
+
+**Cause:** The Node.js poker server is not running. Unity client cannot connect to a server that isn't started.
+
+**Fix:** Start the server before running Unity:
+```powershell
+cd C:\Projects\poker-server
+npm start
+```
+
+**Verify server is running:**
+1. Check terminal shows: `POKER SERVER ONLINE` and `WebSocket: Ready for connections`
+2. Open browser to `http://localhost:3000` - should load without error
+3. THEN press Play in Unity
+
+**For Android/other devices:** Use the Network address shown in server output (e.g., `http://192.168.1.23:3000`) and ensure the device is on the same network.
+
 ### Debugging Tips
 1. Check Unity Console for `[SocketManager]` logs
 2. Check Node.js console for server-side logs
