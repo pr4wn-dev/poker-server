@@ -499,3 +499,136 @@ public static class GameObjectExtensions
 
 Use: `title.GetOrAddComponent<LayoutElement>().preferredHeight = 50;`
 
+---
+
+### 16. SocketIOUnity Callback Pattern Doesn't Work Reliably
+**Symptoms:**
+- Client emits event, loading spinner never stops
+- Server logs show event received and response sent
+- Client callback never fires
+
+**Root Cause:**
+SocketIOUnity's `EmitAsync` with callback doesn't reliably receive responses. The socket.io callback mechanism may not work the same as in JavaScript.
+
+**Solution:**
+Instead of using callbacks, have the server emit a `eventName_response` event:
+
+**Server (Node.js):**
+```javascript
+socket.on('create_table', (data, callback) => {
+    const response = { success: true, tableId: table.id };
+    if (callback) callback(response);  // Keep for compatibility
+    socket.emit('create_table_response', response);  // This is what client uses
+});
+```
+
+**Client (C#):**
+```csharp
+public void Emit<T>(string eventName, object data, Action<T> callback) where T : class
+{
+    string responseEvent = eventName + "_response";
+    
+    void OnResponse(SocketIOResponse response)
+    {
+        _socket.Off(responseEvent);  // Unsubscribe after receiving
+        var obj = response.GetValue<object>();
+        string jsonStr = obj?.ToString() ?? "{}";
+        var result = JsonUtility.FromJson<T>(jsonStr);
+        UnityMainThread.Execute(() => callback?.Invoke(result));
+    }
+    
+    _socket.On(responseEvent, OnResponse);
+    _socket?.EmitAsync(eventName, data);
+}
+```
+
+---
+
+### 17. SocketIOUnity Namespace Collision
+**Symptoms:**
+- CS0426: The type name 'SocketIOUnity' does not exist in the type 'SocketIOUnity'
+- Can't use fully qualified name `SocketIOUnity.SocketIOUnity`
+
+**Root Cause:**
+The SocketIOUnity package has a namespace AND class with the same name. C# gets confused when you try `SocketIOUnity.SocketIOUnity`.
+
+**Solution:**
+Just import the namespace and use the class directly:
+```csharp
+#if SOCKET_IO_AVAILABLE
+using SocketIOClient;
+using SocketIOUnity;  // Just the namespace
+#endif
+
+// Then use it directly:
+private SocketIOUnity _socket;  // Class name same as namespace - works after using
+
+_socket = new SocketIOUnity(uri, new SocketIOOptions
+{
+    Transport = SocketIOClient.Transport.TransportProtocol.WebSocket
+});
+```
+
+**DON'T DO THIS:**
+```csharp
+using SIOUnity = SocketIOUnity.SocketIOUnity;  // FAILS - namespace/type conflict
+private SocketIOUnity.SocketIOUnity _socket;   // FAILS - same reason
+```
+
+---
+
+### 18. SocketIOUnity GetValue<T>() Returns Wrong Data
+**Symptoms:**
+- `response.GetValue<MyClass>()` returns object with all default values
+- Server sends `{"success":true}` but client gets `success = false`
+
+**Root Cause:**
+SocketIOUnity uses System.Text.Json or Newtonsoft internally, but Unity's `[Serializable]` classes need `JsonUtility`.
+
+**Solution:**
+Get raw JSON string, then use `JsonUtility.FromJson<T>()`:
+```csharp
+var obj = response.GetValue<object>();
+string jsonStr = obj?.ToString() ?? "{}";
+var result = JsonUtility.FromJson<T>(jsonStr);
+```
+
+---
+
+## 📋 SOCKET.IO BEST PRACTICES FOR THIS PROJECT
+
+### Event Naming Convention
+- Client sends: `event_name` (e.g., `create_table`, `join_table`)
+- Server responds: `event_name_response` (e.g., `create_table_response`)
+
+### Response Format
+All responses should follow this pattern:
+```javascript
+{
+    success: boolean,
+    error?: string,        // Only if success = false
+    ...other_data          // Only if success = true
+}
+```
+
+### Unity Client Pattern
+```csharp
+// 1. Listen for response event BEFORE emitting
+_socket.On("my_event_response", OnResponse);
+
+// 2. Emit the request
+_socket.EmitAsync("my_event", data);
+
+// 3. In OnResponse, unsubscribe immediately
+void OnResponse(SocketIOResponse response) {
+    _socket.Off("my_event_response");
+    // Process response...
+}
+```
+
+### Debugging Tips
+1. Check Unity Console for `[SocketManager]` logs
+2. Check Node.js console for server-side logs
+3. Use browser at `http://localhost:3000` to verify server is running
+4. Add `Debug.Log` for every emit and every response received
+
