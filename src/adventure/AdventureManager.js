@@ -5,11 +5,13 @@
 const Boss = require('./Boss');
 const WorldMap = require('./WorldMap');
 const Item = require('../models/Item');
+const AdventurePokerGame = require('./AdventurePokerGame');
 
 class AdventureManager {
     constructor(userRepository) {
         this.userRepo = userRepository;
         this.activeSessions = new Map();  // userId -> AdventureSession
+        this.activeGames = new Map();     // userId -> AdventurePokerGame
         this.worldMap = new WorldMap();
     }
     
@@ -126,8 +128,142 @@ class AdventureManager {
         
         console.log(`[Adventure] ${userId} started battle with ${boss.name} (defeat count: ${defeatCount})`);
         
+        // Start first hand
+        const handState = this.startNewHand(userId);
+        
         return {
             success: true,
+            session: this.getSessionState(userId),
+            hand: handState
+        };
+    }
+    
+    /**
+     * Start a new poker hand in the adventure session
+     */
+    startNewHand(userId) {
+        const session = this.activeSessions.get(userId);
+        if (!session) return null;
+        
+        // Create or reset the poker game
+        const game = new AdventurePokerGame(session, session.boss);
+        this.activeGames.set(userId, game);
+        
+        // Start the hand
+        const state = game.startHand();
+        session.handsPlayed++;
+        
+        // If it's boss's turn, get their action
+        if (!state.isPlayerTurn && !state.isHandComplete) {
+            return this.processBossTurn(userId);
+        }
+        
+        return state;
+    }
+    
+    /**
+     * Process player's poker action
+     */
+    handlePlayerAction(userId, action, amount = 0) {
+        const session = this.activeSessions.get(userId);
+        const game = this.activeGames.get(userId);
+        
+        if (!session || !game) {
+            return { success: false, error: 'No active game' };
+        }
+        
+        // Process player action
+        const result = game.handlePlayerAction(action, amount);
+        if (!result.success) {
+            return result;
+        }
+        
+        // Check if hand is complete
+        if (game.isHandComplete()) {
+            return this.handleHandComplete(userId);
+        }
+        
+        // If it's boss's turn, process boss action
+        if (!game.isPlayerTurn) {
+            return this.processBossTurn(userId);
+        }
+        
+        return {
+            success: true,
+            action: result.action,
+            amount: result.amount,
+            state: game.getState()
+        };
+    }
+    
+    /**
+     * Process boss AI turn
+     */
+    processBossTurn(userId) {
+        const session = this.activeSessions.get(userId);
+        const game = this.activeGames.get(userId);
+        
+        if (!session || !game) return null;
+        
+        const bossActions = [];
+        
+        // Boss may take multiple actions if player is all-in
+        while (!game.isPlayerTurn && !game.isHandComplete()) {
+            const bossResult = game.getBossAction();
+            if (bossResult && bossResult.success) {
+                bossActions.push({
+                    action: bossResult.action,
+                    amount: bossResult.amount,
+                    taunt: bossResult.taunt
+                });
+                game.advanceGame();
+            } else {
+                break;
+            }
+        }
+        
+        // Check if hand is complete
+        if (game.isHandComplete()) {
+            return this.handleHandComplete(userId, bossActions);
+        }
+        
+        return {
+            success: true,
+            bossActions: bossActions,
+            state: game.getState()
+        };
+    }
+    
+    /**
+     * Handle end of a poker hand
+     */
+    handleHandComplete(userId, bossActions = []) {
+        const session = this.activeSessions.get(userId);
+        const game = this.activeGames.get(userId);
+        
+        if (!session || !game) return null;
+        
+        // Update session chip counts
+        session.userChips = game.playerChips;
+        session.bossChips = game.bossChips;
+        
+        const state = game.getState();
+        
+        // Check if game is over
+        if (game.isGameOver()) {
+            if (session.userChips <= 0) {
+                return this.handleDefeat(userId, state, bossActions);
+            } else {
+                return this.handleVictory(userId, state, bossActions);
+            }
+        }
+        
+        return {
+            success: true,
+            handComplete: true,
+            winner: state.winner,
+            bossActions: bossActions,
+            state: state,
             session: this.getSessionState(userId)
         };
     }
@@ -193,11 +329,14 @@ class AdventureManager {
     /**
      * Handle boss defeat
      */
-    async handleVictory(userId) {
+    async handleVictory(userId, finalState = null, bossActions = []) {
         const session = this.activeSessions.get(userId);
         if (!session) return null;
         
         const boss = session.boss;
+        
+        // Clean up game
+        this.activeGames.delete(userId);
         
         // Record the defeat and get new count
         const newDefeatCount = await this.userRepo.recordBossDefeat(userId, boss.id);
@@ -252,6 +391,7 @@ class AdventureManager {
         
         return {
             status: 'victory',
+            success: true,
             boss: {
                 id: boss.id,
                 name: boss.name,
@@ -268,16 +408,21 @@ class AdventureManager {
             xpProgress: xpInfo?.xpProgress || 0,
             defeatCount: newDefeatCount,
             isFirstDefeat: isFirstDefeat,
-            handsPlayed: session.handsPlayed
+            handsPlayed: session.handsPlayed,
+            finalState: finalState,
+            bossActions: bossActions
         };
     }
     
     /**
      * Handle player defeat
      */
-    async handleDefeat(userId) {
+    async handleDefeat(userId, finalState = null, bossActions = []) {
         const session = this.activeSessions.get(userId);
         if (!session) return null;
+        
+        // Clean up game
+        this.activeGames.delete(userId);
         
         // Still give some XP for trying (10% of normal)
         const consolationXP = Math.floor(session.boss.xpReward * 0.1);
@@ -297,6 +442,7 @@ class AdventureManager {
         
         return {
             status: 'defeat',
+            success: true,
             boss: {
                 id: session.boss.id,
                 name: session.boss.name,
@@ -305,7 +451,9 @@ class AdventureManager {
             consolationXP: consolationXP,
             entryFeeLost: session.entryFee,
             handsPlayed: session.handsPlayed,
-            message: session.boss.getWinQuote()
+            message: session.boss.getWinQuote(),
+            finalState: finalState,
+            bossActions: bossActions
         };
     }
     
@@ -320,6 +468,7 @@ class AdventureManager {
         
         // Entry fee is not refunded
         this.activeSessions.delete(userId);
+        this.activeGames.delete(userId);
         
         console.log(`[Adventure] ${userId} forfeited battle with ${session.boss.name}`);
         

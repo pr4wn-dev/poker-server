@@ -647,20 +647,25 @@ class SocketHandler {
                     return callback({ success: false, error: 'No active adventure session' });
                 }
                 
-                // Process hand result (this would come from game logic)
-                const result = this.adventureManager.processHandResult(user.userId, data.handResult);
+                const { action, amount } = data;
                 
+                // Process player's poker action
+                const result = await this.adventureManager.handlePlayerAction(user.userId, action, amount);
+                
+                if (!result.success) {
+                    return callback(result);
+                }
+                
+                // Check for game end
                 if (result.status === 'victory') {
-                    // Send victory result with rewards
-                    const victoryResult = await this.adventureManager.handleVictory(user.userId);
-                    socket.emit('adventure_result', victoryResult);
+                    socket.emit('adventure_result', result);
                     
                     // Check for rare drops
-                    if (victoryResult.rewards?.items?.some(i => 
+                    if (result.rewards?.items?.some(i => 
                         ['legendary', 'epic'].includes(i.rarity?.toLowerCase())
                     )) {
                         socket.emit('rare_drop_obtained', {
-                            items: victoryResult.rewards.items.filter(i => 
+                            items: result.rewards.items.filter(i => 
                                 ['legendary', 'epic'].includes(i.rarity?.toLowerCase())
                             )
                         });
@@ -669,7 +674,24 @@ class SocketHandler {
                     socket.emit('adventure_result', result);
                 }
                 
-                callback({ success: true, result });
+                // Send response
+                const response = { success: true, ...result };
+                if (callback) callback(response);
+                socket.emit('adventure_action_response', response);
+            });
+            
+            socket.on('adventure_next_hand', async (data, callback) => {
+                const user = this.getAuthenticatedUser(socket);
+                if (!user) return callback({ success: false, error: 'Not authenticated' });
+                
+                const handState = this.adventureManager.startNewHand(user.userId);
+                if (!handState) {
+                    return callback({ success: false, error: 'No active session' });
+                }
+                
+                const response = { success: true, hand: handState };
+                if (callback) callback(response);
+                socket.emit('adventure_next_hand_response', response);
             });
             
             socket.on('forfeit_adventure', async (callback) => {
