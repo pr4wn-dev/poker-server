@@ -1072,15 +1072,39 @@ poker-client-unity/Assets/Scripts/
 - [x] **SpectatorBar** - UI bar for spectator mode
 - [x] **Friends API** - GetFriends, SendFriendRequest, AcceptFriendRequest, etc.
 - [x] **ShopScene** - Chips/items/cosmetics shop
-- [x] **LeaderboardScene** - Top players across categories
-- [x] **DailyRewardsPopup** - 7-day login streak rewards
+- [x] **LeaderboardScene** - Top players across categories (with server endpoint)
+- [x] **DailyRewardsPopup** - 7-day login streak rewards (with server endpoint)
 - [x] **StatisticsScene** - Detailed player stats
-- [x] **AchievementsPanel** - 20+ achievements with XP rewards
+- [x] **AchievementsPanel** - 20+ achievements with XP rewards (with server endpoint)
 - [x] **SceneTransition** - Smooth fade transitions between scenes
 - [x] **ConfirmDialog** - Reusable confirmation popups
 - [x] **TutorialOverlay** - Tutorial system for new players
+- [x] **Reconnection Handling** - 60s grace period, reconnect_to_table event
+- [x] **Sit-Out Functionality** - sit_out, sit_back, toggle sitting out
+- [x] **TournamentBracket** - Visual tournament bracket component
+- [x] **InvitePopup** - Accept/decline table invites from friends
+- [x] **Server: Leaderboard Endpoints** - getTopByChips, getTopByWins, etc.
+- [x] **Server: Daily Reward Endpoints** - get_daily_reward_status, claim_daily_reward
+- [x] **Server: Achievement Endpoints** - get_achievements, unlock_achievement
+- [x] **UserRepository Methods** - addGems, addXP, updateDailyStreak, unlockAchievement
 
-**38 ITEMS COMPLETED TOTAL**
+**50 CODE ITEMS COMPLETED TOTAL**
+
+### 📊 PROJECT COMPLETION STATUS
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| Server Core | ✅ 100% | All endpoints implemented |
+| Client Networking | ✅ 100% | All API methods wired |
+| UI Scenes | ✅ 100% | All scenes built programmatically |
+| UI Components | ✅ 100% | 25+ reusable components |
+| Game Logic | ✅ 100% | Poker, adventure, tournaments |
+| Social Features | ✅ 100% | Friends, chat, invites |
+| Progression | ✅ 100% | XP, levels, achievements, daily rewards |
+| Assets | ⚠️ Fallback | Procedural sprites, needs real art |
+| Audio | ⚠️ Framework | AudioManager built, needs sound files |
+| Testing | 🔴 Needed | Integration testing required |
+| Android Build | 🔴 Needed | APK not yet created |
 
 ### 📅 SESSION 8 EARLIER (Jan 17, 2026)
 
