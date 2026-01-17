@@ -32,8 +32,10 @@ npm start
 
 ## 🔄 CURRENT STATUS
 
-**Step:** Installing XAMPP
+**Step:** Installing Unity
 **Status:** ⏳ Ready to start
+
+**🟢 SERVER IS RUNNING AT:** `http://192.168.1.23:3000`
 
 ---
 
@@ -46,6 +48,10 @@ npm start
 | GitHub repos synced | ✅ Done | Both pushed |
 | Node.js installed | ✅ Done | v24.13.0, npm 11.6.2 |
 | npm install | ✅ Done | 184 packages installed |
+| XAMPP installed | ✅ Done | 8.2.12 / PHP 8.2.12 |
+| MySQL running | ✅ Done | Port 3306 |
+| Database setup | ✅ Done | All tables created |
+| Server started | ✅ Done | http://192.168.1.23:3000 |
 
 ---
 
@@ -68,40 +74,44 @@ npm start
 
 ---
 
-### 2. XAMPP Installation
-- [ ] Downloaded from apachefriends.org
-- [ ] Ran installer
-- [ ] Selected MySQL component
-- [ ] Installed to default path (C:\xampp)
-- [ ] Opened XAMPP Control Panel
-- [ ] Started MySQL service
-- [ ] MySQL showing green "Running"
+### 2. XAMPP Installation ✅ COMPLETE
+- [x] Downloaded from apachefriends.org (8.2.12)
+- [x] Ran installer
+- [x] Selected MySQL component
+- [x] Installed to default path (C:\xampp)
+- [x] Opened XAMPP Control Panel
+- [x] Started MySQL service
+- [x] MySQL showing green "Running"
 
-**Result:** _not started_
+**Result:** ✅ SUCCESS
 
 ---
 
-### 3. Database Setup
-- [ ] Created `.env` file in poker-server folder
-- [ ] Set DB_HOST=localhost
-- [ ] Set DB_USER=root
-- [ ] Set DB_PASSWORD= (blank)
-- [ ] Set DB_NAME=poker_game
+### 3. Database Setup ✅ COMPLETE
+- [x] Created `.env` file in poker-server folder
+- [x] Set DB_HOST=localhost
+- [x] Set DB_USER=root
+- [x] Set DB_PASSWORD= (blank)
+- [x] Set DB_NAME=poker_game
 - [x] Ran `npm install` ✅ (done in step 1)
-- [ ] Ran `npm run setup`
-- [ ] Tables created successfully
+- [x] Ran `npm run setup`
+- [x] Tables created successfully
 
-**Result:** _waiting for XAMPP_
+**Result:** ✅ SUCCESS
 
 ---
 
-### 4. Server Test
-- [ ] Ran `npm start`
-- [ ] Server started on port 3000
-- [ ] No errors in console
-- [ ] Tested http://localhost:3000 in browser
+### 4. Server Test ✅ COMPLETE
+- [x] Ran `npm start`
+- [x] Server started on port 3000
+- [x] No errors in console
+- [x] Database connected ✓
+- [x] WebSocket ready ✓
 
-**Result:** _not started_
+**Local URL:** http://localhost:3000
+**Network URL:** http://192.168.1.23:3000
+
+**Result:** ✅ SUCCESS - SERVER RUNNING!
 
 ---
 
@@ -137,7 +147,7 @@ npm start
 - [ ] Allowed Node.js through Windows Firewall
 - [ ] Tested from another device
 
-**PC Local IP:** _not recorded yet_
+**PC Local IP:** `192.168.1.23`
 **Router Admin URL:** _usually 192.168.1.1 or 192.168.0.1_
 
 **Result:** _not started_
