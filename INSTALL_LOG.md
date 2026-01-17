@@ -1177,6 +1177,32 @@ if (player.currentTableId) {
 }
 ```
 
+### Issue #49: Event Listeners Using GetValue<T>() Don't Parse Correctly
+
+**Symptoms:** Socket event data (like `bot_joined`) shows default values. E.g., `Bot joined:  at seat 0` when server sent `seatIndex: 1, botName: "Tex"`.
+
+**Cause:** All event listeners in `RegisterEventListeners()` used `response.GetValue<T>()` which has the known parsing issue (Issue #1). Only the `Emit<T>` callbacks had the workaround.
+
+**Fix:** Add `ParseResponse<T>()` helper method and use it for all event listeners:
+```csharp
+private T ParseResponse<T>(SocketIOResponse response) where T : class
+{
+    try
+    {
+        var jsonStr = response.GetValue<object>()?.ToString();
+        if (string.IsNullOrEmpty(jsonStr)) return null;
+        return JsonUtility.FromJson<T>(jsonStr);
+    }
+    catch (Exception e)
+    {
+        Debug.LogError($"[SocketManager] Failed to parse response: {e.Message}");
+        return null;
+    }
+}
+```
+
+Replace all `response.GetValue<T>()` calls with `ParseResponse<T>(response)` in event listeners.
+
 ### Issue #48: Bot Seats Not Visible - Missing isBot/isSittingOut in getState
 
 **Symptoms:** Bots join on server (confirmed in logs) but don't appear in client UI.
