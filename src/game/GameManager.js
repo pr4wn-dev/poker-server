@@ -87,11 +87,12 @@ class GameManager {
             maxPlayers: options.maxPlayers || parseInt(process.env.MAX_PLAYERS) || 9,
             smallBlind: options.smallBlind || parseInt(process.env.DEFAULT_SMALL_BLIND) || 50,
             bigBlind: options.bigBlind || parseInt(process.env.DEFAULT_BIG_BLIND) || 100,
-            isPrivate: options.isPrivate || false
+            isPrivate: options.isPrivate || false,
+            creatorId: options.creatorId || null
         });
 
         this.tables.set(tableId, table);
-        console.log(`[GameManager] Table created: ${table.name} (${tableId})`);
+        console.log(`[GameManager] Table created: ${table.name} (${tableId}) by ${options.creatorId}`);
         return table;
     }
 

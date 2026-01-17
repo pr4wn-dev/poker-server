@@ -1156,6 +1156,20 @@ npm start
 
 **For Android/other devices:** Use the Network address shown in server output (e.g., `http://192.168.1.23:3000`) and ensure the device is on the same network.
 
+### Issue #45: Table creatorId Not Passed to Table Constructor
+
+**Symptoms:** Bots don't join. Server rejects with "Only the table creator can invite bots" even though user IS the creator.
+
+**Cause:** `GameManager.createTable()` wasn't passing `creatorId` to the `Table` constructor, so `table.creatorId` was always `null`.
+
+**Fix:** Add creatorId to Table options:
+```javascript
+const table = new Table({
+    ...options,
+    creatorId: options.creatorId || null  // Was missing!
+});
+```
+
 ### Issue #44: Bot UI Added to Wrong File (PokerTableScene vs TableScene)
 
 **Symptoms:** User says "I don't see anywhere to invite bots" even after bot UI was added.
