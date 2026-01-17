@@ -46,10 +46,10 @@ Before writing ANY code, complete these steps:
 - [ ] Check Unity client pattern for Emit calls
 
 ### Step 3: Before Any Socket.IO Work
-- [ ] Is `useMockMode = false` in SocketManager.cs?
 - [ ] Is `SOCKET_IO_AVAILABLE` in Scripting Define Symbols for current platform?
 - [ ] Am I adding response classes to NetworkModels.cs (not GameService.cs)?
 - [ ] Am I using the `Emit<T>` pattern that uses JsonUtility?
+- [ ] Does the server emit BOTH callback() AND socket.emit('event_response')?
 
 ### Step 4: Before Committing
 - [ ] Did I document any new issues/solutions in this log?
