@@ -1177,6 +1177,30 @@ if (player.currentTableId) {
 }
 ```
 
+### Issue #50: Auto-Leave Old Table When Joining New One
+
+**Symptoms:** After disconnect/reconnect, creating a new table fails with "Already at a table" because player is still seated at the old table (within 60-second reconnect window).
+
+**Cause:** The reconnect grace period keeps player at the table. When they try to create a NEW table (instead of rejoining the old one), the join fails.
+
+**Fix:** In `GameManager.joinTable()`, if player is at a DIFFERENT table, auto-leave it first:
+```javascript
+if (player.currentTableId && player.currentTableId !== tableId) {
+    const oldTable = this.tables.get(player.currentTableId);
+    if (oldTable) {
+        const stillAtTable = oldTable.seats.some(s => s?.playerId === playerId);
+        if (stillAtTable) {
+            console.log(`[GameManager] Auto-leaving old table to join new one`);
+            const chips = oldTable.removePlayer(playerId);
+            if (chips !== null) {
+                player.chips = chips;
+            }
+        }
+    }
+    player.currentTableId = null;
+}
+```
+
 ### Issue #49: Event Listeners Using GetValue<T>() Don't Parse Correctly
 
 **Symptoms:** Socket event data (like `bot_joined`) shows default values. E.g., `Bot joined:  at seat 0` when server sent `seatIndex: 1, botName: "Tex"`.
