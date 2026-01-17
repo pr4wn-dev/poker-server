@@ -327,8 +327,112 @@ cd folder; command1; command2
 - [x] Registration working
 - [x] Login working
 - [x] Main menu displaying
-- [ ] Multiplayer table creation
+- [ ] Multiplayer table creation (testing now)
 - [ ] Multiplayer joining
-- [ ] Adventure mode
+- [x] Adventure mode - WORKING! World map, boss selection, start adventure all functional
+- [ ] AdventureBattleScene (needs to be created)
 - [ ] Android APK build
+
+---
+
+## 🔧 ADDITIONAL ISSUES & SOLUTIONS (Session 2)
+
+### 9. GameService/SocketManager Getting Destroyed Despite DontDestroyOnLoad
+**Symptoms:**
+- GameService created with DontDestroyOnLoad but still destroyed on scene change
+- AdventureScene can't find GameService.Instance
+
+**Root Cause:**
+Unknown - possibly Unity 6 behavior or scene-specific object in hierarchy
+
+**Solution:**
+Changed GameService and SocketManager to use lazy singleton pattern:
+```csharp
+private static GameService _instance;
+public static GameService Instance 
+{ 
+    get 
+    {
+        if (_instance == null)
+        {
+            _instance = FindAnyObjectByType<GameService>(FindObjectsInactive.Include);
+            if (_instance == null)
+            {
+                var go = new GameObject("Services");
+                _instance = go.AddComponent<GameService>();
+                go.AddComponent<SocketManager>();
+            }
+        }
+        return _instance;
+    }
+}
+```
+Also made `CurrentUser` static so login state survives recreation.
+
+---
+
+### 10. GetComponent<LayoutElement>() Returns Null
+**Symptoms:**
+- NullReferenceException on `.GetComponent<LayoutElement>().preferredHeight = 30;`
+
+**Solution:**
+Added extension method in UIFactory.cs:
+```csharp
+public static LayoutElement GetOrAddLayoutElement(this GameObject go)
+{
+    var le = go.GetComponent<LayoutElement>();
+    if (le == null)
+        le = go.AddComponent<LayoutElement>();
+    return le;
+}
+```
+Then use `go.GetOrAddLayoutElement().preferredHeight = 30;`
+
+---
+
+### 11. Server Using Callbacks But Client Expects Response Events
+**Symptoms:**
+- Client emits event, server processes it, but client never receives response
+- Adventure mode shows "Loading..." forever
+
+**Root Cause:**
+Server was using `callback({ success: true, ... })` but client listens for `eventName_response` events.
+
+**Solution:**
+Update server handlers to emit response events:
+```javascript
+socket.on('get_world_map', async (data, callback) => {
+    const response = { success: true, mapState: await manager.getMapState(userId) };
+    if (callback) callback(response);  // For old clients
+    socket.emit('get_world_map_response', response);  // For new clients
+});
+```
+
+---
+
+### 12. SocketManager._socket is Null When Emit Called
+**Symptoms:**
+- NullReferenceException in SocketManager.Emit
+- Socket never connected
+
+**Solution:**
+Auto-connect when creating on demand:
+```csharp
+if (_instance == null)
+{
+    var go = new GameObject("SocketManager");
+    _instance = go.AddComponent<SocketManager>();
+    DontDestroyOnLoad(go);
+    _instance.Connect();  // Auto-connect!
+}
+```
+
+Also added safety check in Emit:
+```csharp
+if (_socket == null)
+{
+    Connect();
+    if (_socket == null) { callback?.Invoke(null); return; }
+}
+```
 

@@ -104,22 +104,29 @@ class SocketHandler {
 
             // ============ Lobby ============
             
-            socket.on('get_tables', (callback) => {
+            socket.on('get_tables', (data, callback) => {
                 const tables = this.gameManager.getPublicTableList();
-                callback({ success: true, tables });
+                const response = { success: true, tables };
+                if (callback) callback(response);
+                socket.emit('get_tables_response', response);
             });
 
             socket.on('create_table', (data, callback) => {
                 const user = this.getAuthenticatedUser(socket);
                 if (!user) {
-                    return callback({ success: false, error: 'Not authenticated' });
+                    const error = { success: false, error: 'Not authenticated' };
+                    if (callback) callback(error);
+                    socket.emit('create_table_response', error);
+                    return;
                 }
 
                 const table = this.gameManager.createTable({
                     ...data,
                     creatorId: user.userId
                 });
-                callback({ success: true, tableId: table.id });
+                const response = { success: true, tableId: table.id, table: table.getPublicInfo() };
+                if (callback) callback(response);
+                socket.emit('create_table_response', response);
                 
                 // Broadcast new table to lobby
                 this.io.emit('table_created', table.getPublicInfo());
@@ -130,25 +137,37 @@ class SocketHandler {
             socket.on('join_table', async (data, callback) => {
                 const user = this.getAuthenticatedUser(socket);
                 if (!user) {
-                    return callback({ success: false, error: 'Not authenticated' });
+                    const error = { success: false, error: 'Not authenticated' };
+                    if (callback) callback(error);
+                    socket.emit('join_table_response', error);
+                    return;
                 }
 
                 const { tableId, seatIndex, password, asSpectator } = data;
                 const table = this.gameManager.getTable(tableId);
                 
                 if (!table) {
-                    return callback({ success: false, error: 'Table not found' });
+                    const error = { success: false, error: 'Table not found' };
+                    if (callback) callback(error);
+                    socket.emit('join_table_response', error);
+                    return;
                 }
                 
                 // Check password
                 if (table.hasPassword && !table.checkPassword(password)) {
-                    return callback({ success: false, error: 'Incorrect password' });
+                    const error = { success: false, error: 'Incorrect password' };
+                    if (callback) callback(error);
+                    socket.emit('join_table_response', error);
+                    return;
                 }
                 
                 // Get user's current chips from DB
                 const dbUser = await userRepo.getById(user.userId);
                 if (!dbUser) {
-                    return callback({ success: false, error: 'User not found' });
+                    const error = { success: false, error: 'User not found' };
+                    if (callback) callback(error);
+                    socket.emit('join_table_response', error);
+                    return;
                 }
                 
                 let result;
@@ -158,14 +177,17 @@ class SocketHandler {
                     if (result.success) {
                         socket.join(`table:${tableId}`);
                         const state = table.getState(user.userId);
-                        callback({ success: true, isSpectating: true, state });
+                        const response = { success: true, isSpectating: true, state };
+                        if (callback) callback(response);
+                        socket.emit('join_table_response', response);
                         
                         socket.to(`table:${tableId}`).emit('spectator_joined', {
                             userId: user.userId,
                             name: user.profile.username
                         });
                     } else {
-                        callback(result);
+                        if (callback) callback(result);
+                        socket.emit('join_table_response', result);
                     }
                 } else {
                     // Join as player
@@ -184,9 +206,12 @@ class SocketHandler {
                         });
 
                         const state = this.gameManager.getTableState(tableId, user.userId);
-                        callback({ success: true, seatIndex: result.seatIndex, isSpectating: false, state });
+                        const response = { success: true, seatIndex: result.seatIndex, isSpectating: false, state };
+                        if (callback) callback(response);
+                        socket.emit('join_table_response', response);
                     } else {
-                        callback(result);
+                        if (callback) callback(result);
+                        socket.emit('join_table_response', result);
                     }
                 }
             });
@@ -561,30 +586,36 @@ class SocketHandler {
 
             // ============ Adventure Mode ============
             
-            socket.on('get_world_map', async (callback) => {
+            socket.on('get_world_map', async (data, callback) => {
                 const user = this.getAuthenticatedUser(socket);
-                if (!user) return callback({ success: false, error: 'Not authenticated' });
+                const response = !user 
+                    ? { success: false, error: 'Not authenticated' }
+                    : { success: true, mapState: await this.adventureManager.getMapState(user.userId) };
                 
-                const mapState = await this.adventureManager.getMapState(user.userId);
-                callback({ success: true, mapState });
+                if (callback) callback(response);
+                socket.emit('get_world_map_response', response);
             });
             
             socket.on('get_area_bosses', async (data, callback) => {
                 const user = this.getAuthenticatedUser(socket);
-                if (!user) return callback({ success: false, error: 'Not authenticated' });
+                const { areaId } = data || {};
+                const response = !user 
+                    ? { success: false, error: 'Not authenticated' }
+                    : { success: true, areaId, bosses: await this.adventureManager.getBossesInArea(user.userId, areaId) };
                 
-                const { areaId } = data;
-                const bosses = await this.adventureManager.getBossesInArea(user.userId, areaId);
-                callback({ success: true, areaId, bosses });
+                if (callback) callback(response);
+                socket.emit('get_area_bosses_response', response);
             });
             
             socket.on('start_adventure', async (data, callback) => {
                 const user = this.getAuthenticatedUser(socket);
-                if (!user) return callback({ success: false, error: 'Not authenticated' });
+                const { bossId } = data || {};
+                const response = !user 
+                    ? { success: false, error: 'Not authenticated' }
+                    : await this.adventureManager.startSession(user.userId, bossId);
                 
-                const { bossId } = data;
-                const result = await this.adventureManager.startSession(user.userId, bossId);
-                callback(result);
+                if (callback) callback(response);
+                socket.emit('start_adventure_response', response);
             });
             
             socket.on('get_active_session', async (callback) => {
