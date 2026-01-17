@@ -13,6 +13,8 @@
 2. **READ THIS LOG AT SESSION START** - Check for solutions before debugging
 3. **ADD NEW ISSUES TO THIS LOG** - Document every fix with symptoms, cause, and solution
 4. **ONE MASTER LOG FILE** - All notes go here, not in separate files
+5. **NO MOCK MODE** - Always use real server connections. Install packages properly, don't use workarounds.
+6. **SOLVE PROBLEMS PROPERLY** - Don't use bandaid fixes. Install dependencies, fix root causes.
 
 ---
 
