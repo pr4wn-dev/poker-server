@@ -21,7 +21,7 @@
 
 1. **COMMIT CHANGES AUTOMATICALLY** - Don't wait to be asked. After making code changes, immediately `git add -A; git commit -m "message"; git push`
 2. **READ THIS LOG AT SESSION START** - Check for solutions before debugging
-3. **ADD NEW ISSUES TO THIS LOG** - Document every fix with symptoms, cause, and solution
+3. **DOCUMENT FIXES IMMEDIATELY** - When you fix ANY bug/error, add it to this log BEFORE moving to the next issue. Do NOT wait. Do NOT batch. Every fix gets logged RIGHT AWAY with symptoms, cause, and solution. This prevents repeating mistakes.
 4. **ONE MASTER LOG FILE** - All notes go here, not in separate files
 5. **NO MOCK MODE** - Always use real server connections. Install packages properly, don't use workarounds.
 6. **SOLVE PROBLEMS PROPERLY** - Don't use bandaid fixes. Install dependencies, fix root causes.
