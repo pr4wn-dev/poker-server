@@ -287,13 +287,16 @@ class SocketHandler {
                     
                     // Broadcast action to all players at the table
                     this.io.to(`table:${tableId}`).emit('player_action', {
-                        userId: user.userId,
+                        oderId: user.userId,
                         action: result.action,
                         amount: result.amount
                     });
 
                     // Send updated state to all players
                     this.broadcastTableState(tableId);
+                    
+                    // Check if next player is a bot
+                    this.gameManager.checkBotTurn(tableId);
                     
                     // Update stats
                     await userRepo.updateStats(user.userId, { handsPlayed: 1 });
@@ -377,6 +380,101 @@ class SocketHandler {
             socket.on('add_chips', async (data, callback) => {
                 // Alias for rebuy - same functionality
                 socket.emit('rebuy', data, callback);
+            });
+
+            // ============ Bot Management ============
+            
+            socket.on('add_bot', (data, callback) => {
+                const respond = (response) => {
+                    if (callback) callback(response);
+                    socket.emit('add_bot_response', response);
+                };
+                
+                const user = this.getAuthenticatedUser(socket);
+                if (!user) {
+                    return respond({ success: false, error: 'Not authenticated' });
+                }
+                
+                const { tableId, botProfile, buyIn } = data;
+                
+                // Validate bot profile
+                const validBots = this.gameManager.getAvailableBots();
+                if (!validBots.includes(botProfile)) {
+                    return respond({ success: false, error: `Invalid bot. Available: ${validBots.join(', ')}` });
+                }
+                
+                // Add bot to table
+                const result = this.gameManager.addBot(tableId, botProfile, buyIn || 1000);
+                
+                if (result.success) {
+                    console.log(`[SocketHandler] Bot ${result.bot.name} added to table by ${user.username}`);
+                    
+                    // Broadcast updated table state
+                    this.broadcastTableState(tableId);
+                    
+                    // Notify all players at the table
+                    this.io.to(`table:${tableId}`).emit('bot_joined', {
+                        seatIndex: result.seatIndex,
+                        botName: result.bot.name,
+                        chips: result.bot.chips
+                    });
+                    
+                    // Check if it's now the bot's turn
+                    this.gameManager.checkBotTurn(tableId);
+                }
+                
+                respond({
+                    success: result.success,
+                    seatIndex: result.seatIndex,
+                    botName: result.bot?.name,
+                    error: result.error
+                });
+            });
+            
+            socket.on('remove_bot', (data, callback) => {
+                const respond = (response) => {
+                    if (callback) callback(response);
+                    socket.emit('remove_bot_response', response);
+                };
+                
+                const user = this.getAuthenticatedUser(socket);
+                if (!user) {
+                    return respond({ success: false, error: 'Not authenticated' });
+                }
+                
+                const { tableId, seatIndex } = data;
+                const result = this.gameManager.removeBot(tableId, seatIndex);
+                
+                if (result.success) {
+                    console.log(`[SocketHandler] Bot ${result.botName} removed from table by ${user.username}`);
+                    
+                    // Broadcast updated table state
+                    this.broadcastTableState(tableId);
+                    
+                    // Notify all players
+                    this.io.to(`table:${tableId}`).emit('bot_left', {
+                        seatIndex,
+                        botName: result.botName
+                    });
+                }
+                
+                respond(result);
+            });
+            
+            socket.on('get_available_bots', (callback) => {
+                const respond = (response) => {
+                    if (callback) callback(response);
+                    socket.emit('get_available_bots_response', response);
+                };
+                
+                respond({
+                    success: true,
+                    bots: [
+                        { id: 'tex', name: 'Tex', personality: 'Aggressive', description: 'Bets big, bluffs often' },
+                        { id: 'lazy_larry', name: 'Lazy Larry', personality: 'Passive', description: 'Mostly checks and calls' },
+                        { id: 'pickles', name: 'Pickles', personality: 'Unpredictable', description: 'Random plays, hard to read' }
+                    ]
+                });
             });
 
             // ============ Sit Out / Back ============
@@ -1667,6 +1765,9 @@ class SocketHandler {
         // Called when table state changes (for auto-broadcasting)
         table.onStateChange = () => {
             this.broadcastTableState(table.id);
+            
+            // Check if next player is a bot
+            this.gameManager.checkBotTurn(table.id);
         };
         
         // Called when a player auto-folds due to timeout
@@ -1675,13 +1776,13 @@ class SocketHandler {
             
             // Broadcast the fold action to all players at the table
             this.io.to(`table:${table.id}`).emit('player_action', {
-                userId: playerId,
+                oderId: playerId,
                 action: 'fold',
                 amount: 0,
                 isTimeout: true
             });
             
-            // State will be broadcast by onStateChange
+            // State will be broadcast by onStateChange (which also checks for bot turns)
         };
     }
 

@@ -3,6 +3,7 @@
  */
 
 const Table = require('./Table');
+const BotManager = require('./BotManager');
 const { v4: uuidv4 } = require('uuid');
 
 class GameManager {
@@ -10,6 +11,7 @@ class GameManager {
         this.tables = new Map();      // tableId -> Table
         this.players = new Map();     // playerId -> { socketId, name, currentTableId }
         this.socketToPlayer = new Map(); // socketId -> playerId
+        this.botManager = new BotManager(this);
     }
 
     // ============ Player Management ============
@@ -146,6 +148,42 @@ class GameManager {
         }
 
         return table.handleAction(playerId, action, amount);
+    }
+    
+    /**
+     * Handle action for bots or players (used by BotManager)
+     */
+    handleAction(tableId, oderId, action, amount = 0) {
+        const table = this.tables.get(tableId);
+        if (!table) {
+            return { success: false, error: 'Table not found' };
+        }
+        
+        return table.handleAction(oderId, action, amount);
+    }
+    
+    // ============ Bot Management ============
+    
+    addBot(tableId, botProfile, buyIn = 1000) {
+        return this.botManager.addBot(tableId, botProfile, buyIn);
+    }
+    
+    removeBot(tableId, seatIndex) {
+        return this.botManager.removeBot(tableId, seatIndex);
+    }
+    
+    /**
+     * Called after each action to check if next player is a bot
+     */
+    checkBotTurn(tableId) {
+        this.botManager.checkBotTurn(tableId);
+    }
+    
+    /**
+     * Get available bot profiles
+     */
+    getAvailableBots() {
+        return ['tex', 'lazy_larry', 'pickles'];
     }
 
     // ============ Query Methods ============

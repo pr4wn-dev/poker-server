@@ -1179,6 +1179,57 @@ public void ShowLoginPanel()
 }
 ```
 
+---
+
+## 🤖 BOT SYSTEM
+
+### Overview
+Bot players can be added to tables for testing or single-player practice. Three bots are available:
+
+| Bot | Personality | Play Style |
+|-----|-------------|------------|
+| **Tex** | Aggressive | Bets big, bluffs often, quick decisions |
+| **Lazy Larry** | Passive | Mostly checks/calls, rarely raises, slow thinking |
+| **Pickles** | Unpredictable | Random decisions, hard to read |
+
+### Server Files
+- `src/game/BotPlayer.js` - Bot AI with hand evaluation and decision making
+- `src/game/BotManager.js` - Manages bots at tables, triggers bot turns
+
+### Socket Events
+```javascript
+// Add a bot to a table
+socket.emit('add_bot', { tableId, botProfile: 'tex', buyIn: 1000 });
+
+// Remove a bot
+socket.emit('remove_bot', { tableId, seatIndex: 2 });
+
+// Get available bots
+socket.emit('get_available_bots');
+```
+
+### Unity Client
+```csharp
+// Add bot
+GameService.Instance.AddBot(tableId, "tex", 1000, (success, seat, name, error) => { });
+
+// Remove bot
+GameService.Instance.RemoveBot(tableId, seatIndex, (success, error) => { });
+
+// Get available bots
+GameService.Instance.GetAvailableBots(bots => { });
+```
+
+### How Bots Work
+1. When a bot is added, it gets a seat like any player
+2. After each action, `GameManager.checkBotTurn()` is called
+3. If current player is a bot, `BotManager` schedules their turn with a delay (simulated thinking)
+4. Bot evaluates hand strength and makes decision based on personality
+5. Action is executed through normal `Table.handleAction()`
+6. State is broadcast to all players
+
+---
+
 ### Debugging Tips
 1. Check Unity Console for `[SocketManager]` logs
 2. Check Node.js console for server-side logs
