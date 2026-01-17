@@ -1177,6 +1177,22 @@ if (player.currentTableId) {
 }
 ```
 
+### Issue #56: Spectators May Not See Community Cards (NEEDS VERIFICATION)
+
+**Symptoms:** When watching as a spectator, community cards (flop/turn/river) may not display on the table.
+
+**Status:** Reported but not reproduced after Issue #55 fix. May have been a side effect of being an unintended spectator.
+
+**Possible Causes:**
+- Spectators not receiving `table_state` updates correctly
+- Client-side filtering of state for spectators
+- Socket room not joined properly for spectators
+
+**To Investigate:** If issue persists after Issue #55 fix, check:
+1. Server `broadcastTableState` sends to spectators
+2. Client `OnTableStateUpdate` fires for spectators
+3. `communityCards` field is populated in received state
+
 ### Issue #55: Creator Not Auto-Seated at Table
 
 **Symptoms:** Bots play without the player. Player watches as spectator instead of participating.
