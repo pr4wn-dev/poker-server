@@ -1449,6 +1449,22 @@ for (int i = 0; i < _seats.Count; i++)
 
 Also add `_tableView?.UpdateFromState(state)` in TableScene.cs.
 
+### Issue #46: Card Back and Chips Not Visible
+
+**Symptoms:** Card backs show as plain colored rectangles, not the card_back.png sprite. Chips don't appear or look wrong.
+
+**Cause:** 
+1. `SpriteManager.Instance` was a simple `{ get; private set; }` - it didn't auto-instantiate like `AudioManager`
+2. `CardVisual.SetFaceDown()` hid the card background instead of showing the back sprite
+3. `ChipStack` wasn't using `SpriteManager` for procedural chip sprites
+
+**Fix:**
+1. Updated `SpriteManager.Instance` to auto-create if null (like AudioManager pattern)
+2. Updated `CardVisual` to use `SpriteManager.GetCardBack()` for the back image
+3. Updated `ChipStack` to use `SpriteManager.GetChipSprite()` for procedural chips
+
+**Date:** January 17, 2026
+
 ### Issue #45: Table creatorId Not Passed to Table Constructor
 
 **Symptoms:** Bots don't join. Server rejects with "Only the table creator can invite bots" even though user IS the creator.
