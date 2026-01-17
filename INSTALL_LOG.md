@@ -2,9 +2,9 @@
 
 > **READ THIS FILE AT START OF EVERY SESSION**
 > 
-> **Last Updated:** January 17, 2026 (Session 6 complete)
-> **Session:** 6 - MULTIPLAYER FULLY WORKING! 🎉
-> **Next:** Test Adventure mode battle, build Android APK
+> **Last Updated:** January 17, 2026 (Session 7 - Reality Check)
+> **Session:** 7 - FULL AUDIT - GAME IS NOT READY
+> **Status:** SKELETON ONLY - Missing visuals, sounds, core gameplay
 > **Goal:** Get poker game running for Monday demo
 > 
 > ## 📊 PROJECT STATS
@@ -832,6 +832,95 @@ Added missing fields and classes to NetworkModels.cs:
 
 ---
 
+### 29. Server Sends currentPlayerIndex, Client Expects currentPlayerId
+**Symptoms:**
+- Game never shows action buttons
+- Players don't know it's their turn
+
+**Root Cause:**
+Server `Table.js` line 614:
+```javascript
+currentPlayerIndex: this.currentPlayerIndex,  // NUMBER (seat index)
+```
+Client `TableScene.cs` line 345:
+```csharp
+_isMyTurn = state.currentPlayerId == myId;  // STRING comparison
+```
+
+**Solution:**
+Either:
+A) Server should also send `currentPlayerId` (the actual player ID string), OR
+B) Client should look up seat by index and compare playerId
+
+---
+
+### 30. AdventureBattleScene Missing Entirely
+**Symptoms:**
+- Click "Challenge" on a boss
+- Game tries to load "AdventureBattleScene"
+- Scene doesn't exist, nothing happens
+
+**Root Cause:**
+`AdventureScene.cs` line 597:
+```csharp
+SceneManager.LoadScene("AdventureBattleScene");
+```
+But no such scene or script exists.
+
+**Solution:**
+Need to create:
+1. `AdventureBattleScene.unity` in Assets/Scenes/
+2. `AdventureBattleScene.cs` script with actual poker gameplay vs AI
+3. Wire up BossAI.js on server side to make decisions
+
+---
+
+### 31. Adventure Mode Has No Game Loop
+**Symptoms:**
+- Start adventure session works
+- But no cards are dealt, no hands played
+- BossAI exists but is never called
+
+**Root Cause:**
+`AdventureManager.js` `processHandResult()` expects client to send `handResult` but:
+- No poker game is running
+- No deck is dealt
+- No AI decisions are made
+- Client has no adventure poker scene
+
+**Solution:**
+Need to build actual adventure poker game loop:
+1. Server deals cards to player and boss
+2. Server uses BossAI to make decisions
+3. Client displays cards and actions
+4. Hand completes, winner determined
+5. Repeat until someone busts
+
+---
+
+### 32. Turn Timer Never Runs
+**Symptoms:**
+- No countdown visible
+- Players can stall forever
+- No auto-fold on timeout
+
+**Root Cause:**
+Server `Table.js`:
+```javascript
+this.turnTimeLimit = 30000; // 30 seconds per turn
+this.turnTimeout = null;    // Never set to anything
+```
+The timer is declared but never actually started or checked.
+
+**Solution:**
+Need to implement:
+1. Start timer when player's turn begins
+2. Emit remaining time in table state
+3. Auto-fold when timer expires
+4. Client displays countdown
+
+---
+
 ### 18. SocketIOUnity GetValue<T>() Returns Wrong Data
 **Symptoms:**
 - `response.GetValue<MyClass>()` returns object with all default values
@@ -968,15 +1057,88 @@ poker-client-unity/Assets/Scripts/
 
 ## 🚧 TODO / IN PROGRESS
 
-- [x] ~~Test multiplayer table creation end-to-end~~ ✅ WORKING!
-- [x] ~~Test multiplayer joining~~ ✅ WORKING!
-- [ ] Adventure battle scene (AdventureBattleScene.cs)
+### ✅ What Actually Works
+- [x] Server starts and connects
+- [x] Login/Register flow
+- [x] Create table / Join table
+- [x] TableScene loads
+- [x] World map loads, shows areas
+- [x] Boss list loads
+
+### 🔴 CRITICAL - Game Not Playable
+- [ ] **AdventureBattleScene doesn't exist** - AdventureScene tries to load it but no scene/script exists
+- [ ] **Adventure mode has no gameplay** - BossAI.js exists but is never called, no poker vs AI
+- [ ] **Table state field mismatch** - Server sends `currentPlayerIndex` (number), client expects `currentPlayerId` (string) - players never know it's their turn
+- [ ] **Turn timer not implemented** - Server has `turnTimeLimit = 30000` but never uses it, no auto-fold
+
+### 🟡 Missing Visual Assets (NONE EXIST)
+- [ ] Card sprites (52 cards + back)
+- [ ] Chip graphics
+- [ ] Table felt/background
+- [ ] Player avatars
+- [ ] Dealer button
+- [ ] UI icons
+- [ ] Animations (cards, chips, wins)
+
+### 🟡 Missing Sound Effects (ZERO)
+- [ ] Card dealing/flip
+- [ ] Chip sounds
+- [ ] Button clicks
+- [ ] Win/lose sounds
+- [ ] Timer warning
+- [ ] Background music
+
+### 🟡 Missing Scenes
+- [ ] AdventureBattleScene (the actual boss poker game)
+- [ ] Settings/Options
+- [ ] Profile/Stats
+- [ ] Inventory/Items
+- [ ] Tournament bracket
+
+### 🟡 Missing UI Components
+- [ ] Chat panel
+- [ ] Hand history
+- [ ] Player info popups
+- [ ] Error/notification toasts
+- [ ] Proper loading states
+- [ ] Invite dialogs
+
+### 🟡 Missing Game Logic
+- [ ] Adventure poker game loop (deal cards, AI decisions, showdown)
+- [ ] Side pot calculations for all-ins
+- [ ] Reconnection handling
+- [ ] Sit-out functionality
+
+### 📱 For Monday Demo
 - [ ] Android APK build
-- [ ] Boss PC setup for Monday demo
+- [ ] Boss PC setup
 
 ---
 
 ## 📝 SESSION HISTORY
+
+### Session 7 (Jan 17, 2026) - REALITY CHECK / FULL AUDIT
+**What was discovered:**
+The game is a skeleton. Previous sessions marked things as "working" but actual gameplay is missing.
+
+**Critical Issues Found:**
+1. **AdventureBattleScene doesn't exist** - Scene file missing, script missing, no poker vs AI
+2. **BossAI.js never called** - Adventure mode processes hand results but never runs actual hands
+3. **Server/Client field mismatch** - `currentPlayerIndex` vs `currentPlayerId` means turn detection broken
+4. **No visual assets** - Zero card sprites, chip graphics, backgrounds, icons
+5. **No sound effects** - Nothing
+6. **No animations** - Cards don't animate, chips don't move
+7. **Turn timer declared but never runs** - No auto-fold
+
+**What "works" means:**
+- Sockets connect ✓
+- Data flows ✓
+- UI panels appear ✓
+- But NO ACTUAL POKER GAME RUNS
+
+**Status:** Not demo-ready. Need to prioritize what's essential for Monday.
+
+---
 
 ### Session 6 (Jan 17, 2026) - MULTIPLAYER WORKING! 🎉
 **What was fixed:**
