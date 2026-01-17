@@ -1057,7 +1057,32 @@ poker-client-unity/Assets/Scripts/
 
 ## 🚧 TODO / IN PROGRESS
 
-### 📅 SESSION 8 PROGRESS (Jan 17, 2026)
+### 📅 SESSION 8 CONTINUED (Jan 17, 2026 - Evening)
+
+**ADDITIONAL FEATURES ADDED:**
+- [x] **Rebuy/Add Chips** - Server endpoint + client UI (RebuyPanel.cs)
+- [x] **Adventure Actions Wiring** - GameService properly wired to AdventureBattleScene
+- [x] **ChatPanel** - Table chat UI component
+- [x] **FriendsPanel** - Friends list popup with add/remove
+- [x] **InventoryPanel** - Item inventory management
+- [x] **LoadingOverlay** - Full-screen loading spinner
+- [x] **ToastNotification** - Toast messages for feedback
+- [x] **PlayerProfilePopup** - View player stats/add friend
+- [x] **EmotePanel** - Quick chat emotes/phrases
+- [x] **SpectatorBar** - UI bar for spectator mode
+- [x] **Friends API** - GetFriends, SendFriendRequest, AcceptFriendRequest, etc.
+- [x] **ShopScene** - Chips/items/cosmetics shop
+- [x] **LeaderboardScene** - Top players across categories
+- [x] **DailyRewardsPopup** - 7-day login streak rewards
+- [x] **StatisticsScene** - Detailed player stats
+- [x] **AchievementsPanel** - 20+ achievements with XP rewards
+- [x] **SceneTransition** - Smooth fade transitions between scenes
+- [x] **ConfirmDialog** - Reusable confirmation popups
+- [x] **TutorialOverlay** - Tutorial system for new players
+
+**38 ITEMS COMPLETED TOTAL**
+
+### 📅 SESSION 8 EARLIER (Jan 17, 2026)
 
 **FIXED THIS SESSION:**
 - [x] **currentPlayerId fix** - Server now sends `currentPlayerId` string, not just index
@@ -1073,7 +1098,7 @@ poker-client-unity/Assets/Scripts/
 - [x] **HandHistoryPanel** - Action history display component
 - [x] **WinnerAnimation** - Pot win celebration animation
 
-**16 ITEMS COMPLETED THIS SESSION**
+**16 ITEMS COMPLETED EARLIER**
 
 ### ✅ What Actually Works
 - [x] Server starts and connects
