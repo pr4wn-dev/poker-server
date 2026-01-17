@@ -324,6 +324,9 @@ class Table {
         
         // Start turn timer
         this.startTurnTimer();
+        
+        // Broadcast state for new hand
+        this.onStateChange?.();
 
         return this.getState();
     }
@@ -510,6 +513,9 @@ class Table {
             const nextPlayerSeat = this.seats[this.currentPlayerIndex];
             console.log(`[Table ${this.name}] Turn: ${nextPlayerSeat?.name} (seat ${this.currentPlayerIndex}, isBot: ${nextPlayerSeat?.isBot})`);
             this.startTurnTimer();
+            
+            // CRITICAL: Broadcast state so client knows it's their turn! (Issue #58)
+            this.onStateChange?.();
         }
     }
 
@@ -543,6 +549,9 @@ class Table {
         this.currentPlayerIndex = this.getNextActivePlayer(this.dealerIndex);
         this.lastRaiserIndex = this.currentPlayerIndex;
         this.startTurnTimer();
+        
+        // Broadcast state for new phase
+        this.onStateChange?.();
     }
 
     showdown() {

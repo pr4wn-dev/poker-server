@@ -1177,6 +1177,17 @@ if (player.currentTableId) {
 }
 ```
 
+### Issue #58: State Not Broadcast When Turn Changes - Player Never Gets Turn
+
+**Symptoms:** Player is at table, bots play, but player never sees action buttons. Server logs show player gets turn then times out. Client logs show `currentPlayerId` is always a bot, never the player.
+
+**Cause:** In `Table.js`, the `advanceGame()` method set `currentPlayerIndex` but did NOT call `onStateChange()` to broadcast the new state. Same issue in `advancePhase()` and after `startNewHand()`.
+
+**Fix:** Add `this.onStateChange?.()` after setting the next player in:
+1. `advanceGame()` - after setting `currentPlayerIndex`
+2. `advancePhase()` - after setting first player for new phase
+3. `startNewHand()` - after dealing and setting first player
+
 ### Issue #57: Double-Join on CreateTable Causes "Seat Taken" Error
 
 **Symptoms:** After creating a table, error "Seat taken" appears. User cannot play.
