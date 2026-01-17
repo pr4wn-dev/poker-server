@@ -384,10 +384,11 @@ class SocketHandler {
 
             // ============ Bot Management ============
             
-            socket.on('add_bot', (data, callback) => {
+            // Invite a bot to the table (table creator only, requires player approval)
+            socket.on('invite_bot', (data, callback) => {
                 const respond = (response) => {
                     if (callback) callback(response);
-                    socket.emit('add_bot_response', response);
+                    socket.emit('invite_bot_response', response);
                 };
                 
                 const user = this.getAuthenticatedUser(socket);
@@ -403,34 +404,114 @@ class SocketHandler {
                     return respond({ success: false, error: `Invalid bot. Available: ${validBots.join(', ')}` });
                 }
                 
-                // Add bot to table
-                const result = this.gameManager.addBot(tableId, botProfile, buyIn || 1000);
+                // Invite bot to table
+                const result = this.gameManager.inviteBot(tableId, botProfile, user.userId, buyIn || 1000);
                 
                 if (result.success) {
-                    console.log(`[SocketHandler] Bot ${result.bot.name} added to table by ${user.username}`);
-                    
-                    // Broadcast updated table state
-                    this.broadcastTableState(tableId);
-                    
-                    // Notify all players at the table
-                    this.io.to(`table:${tableId}`).emit('bot_joined', {
-                        seatIndex: result.seatIndex,
-                        botName: result.bot.name,
-                        chips: result.bot.chips
-                    });
-                    
-                    // Check if it's now the bot's turn
-                    this.gameManager.checkBotTurn(tableId);
+                    if (result.pendingApproval) {
+                        // Notify players that approval is needed
+                        console.log(`[SocketHandler] Bot ${result.bot.name} pending approval at table`);
+                        
+                        this.io.to(`table:${tableId}`).emit('bot_invite_pending', {
+                            seatIndex: result.seatIndex,
+                            botName: result.bot.name,
+                            botPersonality: result.bot.personality,
+                            invitedBy: user.username,
+                            approvalsNeeded: result.approvalsNeeded
+                        });
+                    } else {
+                        // Auto-approved (only creator at table)
+                        console.log(`[SocketHandler] Bot ${result.bot.name} auto-approved and joined table`);
+                        
+                        this.broadcastTableState(tableId);
+                        
+                        this.io.to(`table:${tableId}`).emit('bot_joined', {
+                            seatIndex: result.seatIndex,
+                            botName: result.bot.name,
+                            chips: result.bot.chips
+                        });
+                    }
                 }
                 
                 respond({
                     success: result.success,
                     seatIndex: result.seatIndex,
                     botName: result.bot?.name,
+                    pendingApproval: result.pendingApproval,
                     error: result.error
                 });
             });
             
+            // Approve a pending bot
+            socket.on('approve_bot', (data, callback) => {
+                const respond = (response) => {
+                    if (callback) callback(response);
+                    socket.emit('approve_bot_response', response);
+                };
+                
+                const user = this.getAuthenticatedUser(socket);
+                if (!user) {
+                    return respond({ success: false, error: 'Not authenticated' });
+                }
+                
+                const { tableId, seatIndex } = data;
+                const result = this.gameManager.approveBot(tableId, seatIndex, user.userId);
+                
+                if (result.success) {
+                    if (result.bot) {
+                        // All approved - bot is now active
+                        console.log(`[SocketHandler] Bot ${result.bot.name} fully approved and joined table`);
+                        
+                        this.broadcastTableState(tableId);
+                        
+                        this.io.to(`table:${tableId}`).emit('bot_joined', {
+                            seatIndex: result.seatIndex,
+                            botName: result.bot.name,
+                            chips: result.bot.chips
+                        });
+                    } else {
+                        // Still waiting for more approvals
+                        this.io.to(`table:${tableId}`).emit('bot_approval_update', {
+                            seatIndex,
+                            approvedBy: user.username,
+                            approvalsReceived: result.approvalsReceived,
+                            approvalsNeeded: result.approvalsNeeded
+                        });
+                    }
+                }
+                
+                respond(result);
+            });
+            
+            // Reject a pending bot
+            socket.on('reject_bot', (data, callback) => {
+                const respond = (response) => {
+                    if (callback) callback(response);
+                    socket.emit('reject_bot_response', response);
+                };
+                
+                const user = this.getAuthenticatedUser(socket);
+                if (!user) {
+                    return respond({ success: false, error: 'Not authenticated' });
+                }
+                
+                const { tableId, seatIndex } = data;
+                const result = this.gameManager.rejectBot(tableId, seatIndex, user.userId);
+                
+                if (result.success) {
+                    console.log(`[SocketHandler] Bot ${result.botName} rejected by ${user.username}`);
+                    
+                    this.io.to(`table:${tableId}`).emit('bot_rejected', {
+                        seatIndex,
+                        botName: result.botName,
+                        rejectedBy: user.username
+                    });
+                }
+                
+                respond(result);
+            });
+            
+            // Remove an active bot (table creator only)
             socket.on('remove_bot', (data, callback) => {
                 const respond = (response) => {
                     if (callback) callback(response);
@@ -443,15 +524,20 @@ class SocketHandler {
                 }
                 
                 const { tableId, seatIndex } = data;
+                
+                // Check if user is table creator
+                const table = this.gameManager.getTable(tableId);
+                if (table && table.creatorId !== user.userId) {
+                    return respond({ success: false, error: 'Only the table creator can remove bots' });
+                }
+                
                 const result = this.gameManager.removeBot(tableId, seatIndex);
                 
                 if (result.success) {
                     console.log(`[SocketHandler] Bot ${result.botName} removed from table by ${user.username}`);
                     
-                    // Broadcast updated table state
                     this.broadcastTableState(tableId);
                     
-                    // Notify all players
                     this.io.to(`table:${tableId}`).emit('bot_left', {
                         seatIndex,
                         botName: result.botName
@@ -459,6 +545,22 @@ class SocketHandler {
                 }
                 
                 respond(result);
+            });
+            
+            // Get pending bots awaiting approval
+            socket.on('get_pending_bots', (data, callback) => {
+                const respond = (response) => {
+                    if (callback) callback(response);
+                    socket.emit('get_pending_bots_response', response);
+                };
+                
+                const { tableId } = data;
+                const pendingBots = this.gameManager.getPendingBots(tableId);
+                
+                respond({
+                    success: true,
+                    pendingBots
+                });
             });
             
             socket.on('get_available_bots', (callback) => {

@@ -13,20 +13,32 @@ class BotManager {
     constructor(gameManager) {
         this.gameManager = gameManager;
         this.activeBots = new Map(); // tableId -> Map of seatIndex -> BotPlayer
+        this.pendingBots = new Map(); // tableId -> Map of seatIndex -> { bot, approvals: Set, rejectedBy: null }
         this.botTurnTimers = new Map(); // `${tableId}_${seatIndex}` -> timeout
     }
     
     /**
-     * Add a bot to a table
+     * Invite a bot to a table (requires approval from all players)
      * @param {string} tableId 
      * @param {string} botProfile - 'tex', 'lazy_larry', or 'pickles'
+     * @param {string} inviterId - User ID of the table creator
      * @param {number} buyIn - Starting chips for the bot
-     * @returns {Object} { success, seatIndex, bot, error }
+     * @returns {Object} { success, seatIndex, bot, pendingApproval, error }
      */
-    addBot(tableId, botProfile, buyIn = 1000) {
+    inviteBot(tableId, botProfile, inviterId, buyIn = 1000) {
         const table = this.gameManager.tables.get(tableId);
         if (!table) {
             return { success: false, error: 'Table not found' };
+        }
+        
+        // Only table creator can invite bots
+        if (table.creatorId !== inviterId) {
+            return { success: false, error: 'Only the table creator can invite bots' };
+        }
+        
+        // Can't add bots after game started
+        if (table.gameStarted) {
+            return { success: false, error: 'Cannot add bots after game has started' };
         }
         
         // Find empty seat
@@ -35,12 +47,18 @@ class BotManager {
             return { success: false, error: 'Table is full' };
         }
         
-        // Check if this bot profile is already at the table
+        // Check if this bot profile is already at the table (active or pending)
         const tableBots = this.activeBots.get(tableId) || new Map();
+        const tablePending = this.pendingBots.get(tableId) || new Map();
+        
         for (const [, bot] of tableBots) {
-            if (bot.personality === BOT_PROFILES[botProfile]?.personality && 
-                bot.name === BOT_PROFILES[botProfile]?.name) {
+            if (bot.name === BOT_PROFILES[botProfile]?.name) {
                 return { success: false, error: `${BOT_PROFILES[botProfile]?.name} is already at this table` };
+            }
+        }
+        for (const [, pending] of tablePending) {
+            if (pending.bot.name === BOT_PROFILES[botProfile]?.name) {
+                return { success: false, error: `${BOT_PROFILES[botProfile]?.name} is already pending approval` };
             }
         }
         
@@ -50,8 +68,117 @@ class BotManager {
         bot.seatIndex = emptySeat;
         bot.tableId = tableId;
         
+        // Get list of human players who need to approve
+        const humanPlayers = table.seats
+            .filter(s => s !== null && !s.isBot)
+            .map(s => s.playerId);
+        
+        // If only the creator is at the table, auto-approve
+        if (humanPlayers.length <= 1) {
+            return this.confirmBot(tableId, emptySeat, bot);
+        }
+        
+        // Create pending bot entry
+        if (!this.pendingBots.has(tableId)) {
+            this.pendingBots.set(tableId, new Map());
+        }
+        
+        const pendingEntry = {
+            bot,
+            buyIn,
+            inviterId,
+            approvals: new Set([inviterId]), // Creator auto-approves
+            requiredApprovals: new Set(humanPlayers),
+            rejectedBy: null,
+            createdAt: Date.now()
+        };
+        
+        this.pendingBots.get(tableId).set(emptySeat, pendingEntry);
+        
+        console.log(`[BotManager] ${bot.name} invited to table ${table.name} - awaiting ${humanPlayers.length - 1} approvals`);
+        
+        return { 
+            success: true, 
+            seatIndex: emptySeat, 
+            bot,
+            pendingApproval: true,
+            approvalsNeeded: humanPlayers.filter(id => id !== inviterId)
+        };
+    }
+    
+    /**
+     * Approve a pending bot (called by each player)
+     */
+    approveBot(tableId, seatIndex, oderId) {
+        const tablePending = this.pendingBots.get(tableId);
+        if (!tablePending || !tablePending.has(seatIndex)) {
+            return { success: false, error: 'No pending bot at that seat' };
+        }
+        
+        const pending = tablePending.get(seatIndex);
+        
+        // Check player is required to approve
+        if (!pending.requiredApprovals.has(oderId)) {
+            return { success: false, error: 'You are not required to approve this bot' };
+        }
+        
+        // Add approval
+        pending.approvals.add(oderId);
+        
+        console.log(`[BotManager] ${pending.bot.name} approved by ${oderId} (${pending.approvals.size}/${pending.requiredApprovals.size})`);
+        
+        // Check if all approvals received
+        if (pending.approvals.size >= pending.requiredApprovals.size) {
+            // All approved - add the bot
+            tablePending.delete(seatIndex);
+            return this.confirmBot(tableId, seatIndex, pending.bot);
+        }
+        
+        return { 
+            success: true, 
+            approved: true,
+            allApproved: false,
+            approvalsReceived: pending.approvals.size,
+            approvalsNeeded: pending.requiredApprovals.size
+        };
+    }
+    
+    /**
+     * Reject a pending bot (any player can reject)
+     */
+    rejectBot(tableId, seatIndex, oderId) {
+        const tablePending = this.pendingBots.get(tableId);
+        if (!tablePending || !tablePending.has(seatIndex)) {
+            return { success: false, error: 'No pending bot at that seat' };
+        }
+        
+        const pending = tablePending.get(seatIndex);
+        pending.rejectedBy = oderId;
+        
+        const botName = pending.bot.name;
+        tablePending.delete(seatIndex);
+        
+        console.log(`[BotManager] ${botName} rejected by ${oderId}`);
+        
+        return { 
+            success: true, 
+            rejected: true,
+            botName,
+            rejectedBy: oderId
+        };
+    }
+    
+    /**
+     * Actually add the bot to the table (after approval or auto-approval)
+     */
+    confirmBot(tableId, seatIndex, bot) {
+        const table = this.gameManager.tables.get(tableId);
+        if (!table) {
+            return { success: false, error: 'Table not found' };
+        }
+        
         // Add to table (match Table.js seat structure)
-        table.seats[emptySeat] = {
+        table.seats[seatIndex] = {
             playerId: bot.id,
             name: bot.name,
             chips: bot.chips,
@@ -70,11 +197,29 @@ class BotManager {
         if (!this.activeBots.has(tableId)) {
             this.activeBots.set(tableId, new Map());
         }
-        this.activeBots.get(tableId).set(emptySeat, bot);
+        this.activeBots.get(tableId).set(seatIndex, bot);
         
-        console.log(`[BotManager] ${bot.name} joined table ${table.name} at seat ${emptySeat}`);
+        console.log(`[BotManager] ${bot.name} confirmed and joined table ${table.name} at seat ${seatIndex}`);
         
-        return { success: true, seatIndex: emptySeat, bot };
+        return { success: true, seatIndex, bot, pendingApproval: false };
+    }
+    
+    /**
+     * Get pending bots for a table
+     */
+    getPendingBots(tableId) {
+        const tablePending = this.pendingBots.get(tableId);
+        if (!tablePending) return [];
+        
+        return Array.from(tablePending.entries()).map(([seatIndex, pending]) => ({
+            seatIndex,
+            botName: pending.bot.name,
+            botPersonality: pending.bot.personality,
+            inviterId: pending.inviterId,
+            approvalsReceived: pending.approvals.size,
+            approvalsNeeded: pending.requiredApprovals.size,
+            waitingFor: Array.from(pending.requiredApprovals).filter(id => !pending.approvals.has(id))
+        }));
     }
     
     /**

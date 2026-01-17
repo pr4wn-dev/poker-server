@@ -1184,49 +1184,79 @@ public void ShowLoginPanel()
 ## 🤖 BOT SYSTEM
 
 ### Overview
-Bot players can be added to tables for testing or single-player practice. Three bots are available:
+Bot players can be invited to tables for testing or single-player practice. Three bots are available:
 
 | Bot | Personality | Play Style |
 |-----|-------------|------------|
-| **Tex** | Aggressive | Bets big, bluffs often, quick decisions |
-| **Lazy Larry** | Passive | Mostly checks/calls, rarely raises, slow thinking |
-| **Pickles** | Unpredictable | Random decisions, hard to read |
+| **Tex** | Aggressive | Bets big, bluffs often, quick decisions (1s) |
+| **Lazy Larry** | Passive | Mostly checks/calls, rarely raises, slow thinking (2.5s) |
+| **Pickles** | Unpredictable | Random decisions, hard to read, varying speed |
+
+### Key Rules
+1. **Only table creator can invite bots**
+2. **All human players must approve** before bot joins
+3. **Any player can reject** a bot invite
+4. **Bots cannot be added after game starts**
+5. **Never forced** - players have full control
 
 ### Server Files
 - `src/game/BotPlayer.js` - Bot AI with hand evaluation and decision making
-- `src/game/BotManager.js` - Manages bots at tables, triggers bot turns
+- `src/game/BotManager.js` - Manages bot invites, approvals, and turns
 
 ### Socket Events
 ```javascript
-// Add a bot to a table
-socket.emit('add_bot', { tableId, botProfile: 'tex', buyIn: 1000 });
+// Invite a bot (table creator only)
+socket.emit('invite_bot', { tableId, botProfile: 'tex', buyIn: 1000 });
 
-// Remove a bot
+// Approve a pending bot
+socket.emit('approve_bot', { tableId, seatIndex: 2 });
+
+// Reject a pending bot (any player)
+socket.emit('reject_bot', { tableId, seatIndex: 2 });
+
+// Remove an active bot (table creator only)
 socket.emit('remove_bot', { tableId, seatIndex: 2 });
 
-// Get available bots
+// Get pending bots awaiting approval
+socket.emit('get_pending_bots', { tableId });
+
+// Get available bot profiles
 socket.emit('get_available_bots');
 ```
 
 ### Unity Client
 ```csharp
-// Add bot
-GameService.Instance.AddBot(tableId, "tex", 1000, (success, seat, name, error) => { });
+// Invite bot (table creator only)
+GameService.Instance.InviteBot(tableId, "tex", 1000, 
+    (success, seat, name, pending, error) => { });
 
-// Remove bot
+// Approve pending bot
+GameService.Instance.ApproveBot(tableId, seatIndex, (success, error) => { });
+
+// Reject pending bot
+GameService.Instance.RejectBot(tableId, seatIndex, (success, error) => { });
+
+// Remove active bot
 GameService.Instance.RemoveBot(tableId, seatIndex, (success, error) => { });
+
+// Get pending bots
+GameService.Instance.GetPendingBots(tableId, bots => { });
 
 // Get available bots
 GameService.Instance.GetAvailableBots(bots => { });
 ```
 
 ### How Bots Work
-1. When a bot is added, it gets a seat like any player
-2. After each action, `GameManager.checkBotTurn()` is called
-3. If current player is a bot, `BotManager` schedules their turn with a delay (simulated thinking)
-4. Bot evaluates hand strength and makes decision based on personality
-5. Action is executed through normal `Table.handleAction()`
-6. State is broadcast to all players
+1. Table creator invites a bot via `invite_bot`
+2. If only creator at table: bot auto-approved and joins immediately
+3. If other players present: bot enters "pending" state
+4. All human players must approve (`approve_bot`)
+5. If any player rejects (`reject_bot`): bot invite cancelled
+6. Once approved, bot joins and plays automatically
+7. After each action, `GameManager.checkBotTurn()` checks if next player is bot
+8. Bot "thinks" (1-3 seconds), evaluates hand, makes decision
+9. Action executed through `Table.handleAction()`
+10. State broadcast to all players
 
 ---
 

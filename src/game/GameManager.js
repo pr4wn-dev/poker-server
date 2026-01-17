@@ -164,12 +164,24 @@ class GameManager {
     
     // ============ Bot Management ============
     
-    addBot(tableId, botProfile, buyIn = 1000) {
-        return this.botManager.addBot(tableId, botProfile, buyIn);
+    inviteBot(tableId, botProfile, inviterId, buyIn = 1000) {
+        return this.botManager.inviteBot(tableId, botProfile, inviterId, buyIn);
+    }
+    
+    approveBot(tableId, seatIndex, oderId) {
+        return this.botManager.approveBot(tableId, seatIndex, oderId);
+    }
+    
+    rejectBot(tableId, seatIndex, oderId) {
+        return this.botManager.rejectBot(tableId, seatIndex, oderId);
     }
     
     removeBot(tableId, seatIndex) {
         return this.botManager.removeBot(tableId, seatIndex);
+    }
+    
+    getPendingBots(tableId) {
+        return this.botManager.getPendingBots(tableId);
     }
     
     /**
