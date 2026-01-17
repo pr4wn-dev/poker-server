@@ -107,7 +107,7 @@ class BotPlayer {
                 if (Math.random() < this.traits.aggression) {
                     // All-in with very strong hands
                     if (effectiveStrength >= this.traits.allInThreshold && this.chips <= pot * 0.5) {
-                        return { action: 'all_in' };
+                        return { action: 'allin' };
                     }
                     
                     // Raise
@@ -124,7 +124,7 @@ class BotPlayer {
             } else {
                 // Can't afford to call - all-in or fold
                 if (effectiveStrength >= this.traits.callThreshold) {
-                    return { action: 'all_in' };
+                    return { action: 'allin' };
                 }
                 return { action: 'fold' };
             }

@@ -1177,6 +1177,17 @@ if (player.currentTableId) {
 }
 ```
 
+### Issue #53: Bot Uses Wrong Action Name 'all_in' Instead of 'allin'
+
+**Symptoms:** Bot action fails with "Invalid action". Server logs show: `[BotManager] Tex action failed: Invalid action`
+
+**Cause:** `BotPlayer.js` returns `{ action: 'all_in' }` but `Table.js` ACTIONS constant uses `allin` (no underscore).
+
+**Fix:** Change `'all_in'` to `'allin'` in BotPlayer.js:
+```javascript
+return { action: 'allin' };
+```
+
 ### Issue #52: MainMenuScene Resets to Login When Already Logged In
 
 **Symptoms:** After logging in and going to mode select, navigating back to MainMenuScene shows login screen instead of mode select, even though user is still logged in.
