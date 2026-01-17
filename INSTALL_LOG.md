@@ -1156,6 +1156,25 @@ npm start
 
 **For Android/other devices:** Use the Network address shown in server output (e.g., `http://192.168.1.23:3000`) and ensure the device is on the same network.
 
+### Issue #46: NullReferenceException in PokerTableView.UpdateFromState
+
+**Symptoms:** `NullReferenceException: Object reference not set to an instance of an object` in PokerTableView.cs:177
+
+**Cause:** No null checks on `_seats`, `state.seats`, or individual seat elements before accessing them.
+
+**Fix:** Add null guards:
+```csharp
+if (_seats == null || state.seats == null) return;
+
+for (int i = 0; i < _seats.Count; i++)
+{
+    if (_seats[i] == null) continue;
+    // ... rest of code
+}
+```
+
+Also add `_tableView?.UpdateFromState(state)` in TableScene.cs.
+
 ### Issue #45: Table creatorId Not Passed to Table Constructor
 
 **Symptoms:** Bots don't join. Server rejects with "Only the table creator can invite bots" even though user IS the creator.
