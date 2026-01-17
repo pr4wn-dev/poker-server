@@ -1033,6 +1033,26 @@ socket.on('my_event', async (data, callback) => {
 
 **EVERY socket.on handler must use this pattern or Unity will break!**
 
+### Issue #34: Unity Reserved Method Names Cannot Take Parameters
+
+**Symptoms:** Unity Console shows: `Script error (ClassName): Start() can not take parameters.` (or Awake, Update, etc.)
+
+**Cause:** Unity lifecycle methods (`Start`, `Awake`, `Update`, `OnEnable`, `OnDisable`, `OnDestroy`, etc.) are reserved and MUST be parameterless. If you create a method named `Start(SomeType param)`, Unity sees it as an invalid lifecycle method.
+
+**Fix:** Rename the method to something else:
+```csharp
+// WRONG - Unity thinks this is the lifecycle method
+private void Start(List<Step> steps, Action onComplete) { ... }
+
+// CORRECT - Use a different name
+private void BeginTutorial(List<Step> steps, Action onComplete) { ... }
+```
+
+**Reserved Unity lifecycle method names to NEVER use with parameters:**
+- `Awake`, `Start`, `Update`, `FixedUpdate`, `LateUpdate`
+- `OnEnable`, `OnDisable`, `OnDestroy`
+- `OnTriggerEnter`, `OnCollisionEnter`, etc.
+
 ### Debugging Tips
 1. Check Unity Console for `[SocketManager]` logs
 2. Check Node.js console for server-side logs
