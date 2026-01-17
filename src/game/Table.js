@@ -795,6 +795,8 @@ class Table {
                     isFolded: seat.isFolded,
                     isAllIn: seat.isAllIn,
                     isConnected: seat.isConnected,
+                    isBot: seat.isBot || false,
+                    isSittingOut: seat.isSittingOut || false,
                     inSidePot: this.itemSidePot.isParticipating(seat.playerId),
                     cards: canSeeCards ? seat.cards : seat.cards.map(() => null)
                 };

@@ -1177,6 +1177,27 @@ if (player.currentTableId) {
 }
 ```
 
+### Issue #48: Bot Seats Not Visible - Missing isBot/isSittingOut in getState
+
+**Symptoms:** Bots join on server (confirmed in logs) but don't appear in client UI.
+
+**Cause:** `Table.getState()` wasn't including `isBot` and `isSittingOut` fields in the seat data sent to clients, even though `BotManager.confirmBot()` sets these on the seat object.
+
+**Fix:** Add missing fields to `Table.js` getState seat mapping:
+```javascript
+return {
+    index,
+    playerId: seat.playerId,
+    name: seat.name,
+    // ... other fields ...
+    isBot: seat.isBot || false,
+    isSittingOut: seat.isSittingOut || false,
+    // ...
+};
+```
+
+Also add `isBot` and `isSittingOut` to client's `SeatInfo` class in `NetworkModels.cs`.
+
 ### Issue #46: NullReferenceException in PokerTableView.UpdateFromState
 
 **Symptoms:** `NullReferenceException: Object reference not set to an instance of an object` in PokerTableView.cs:177
