@@ -82,9 +82,62 @@ class Table {
         this.turnStartTime = null;
         this.turnTimeLimit = options.turnTimeLimit || 30000; // 30 seconds per turn
         
+        // Game start countdown timer
+        this.startCountdown = null;
+        this.startCountdownTime = null;
+        this.startDelaySeconds = options.startDelaySeconds || 10; // 10 seconds to start after 2+ players
+        
         // Event callbacks (set by SocketHandler)
         this.onStateChange = null;  // Called when state changes, for broadcasting
         this.onAutoFold = null;     // Called when player auto-folds on timeout
+        this.onCountdownUpdate = null; // Called when countdown changes
+    }
+    
+    // ============ Game Start Countdown ============
+    
+    checkStartCountdown() {
+        const activePlayers = this.getActivePlayerCount();
+        
+        if (this.gameStarted) {
+            // Game already started, no countdown needed
+            return;
+        }
+        
+        if (activePlayers >= 2 && !this.startCountdown) {
+            // Start countdown
+            this.startCountdownTime = Date.now();
+            console.log(`[Table ${this.name}] Starting ${this.startDelaySeconds}s countdown with ${activePlayers} players`);
+            
+            this.startCountdown = setTimeout(() => {
+                this.startCountdown = null;
+                this.startCountdownTime = null;
+                
+                // Check again - players might have left
+                if (this.getActivePlayerCount() >= 2) {
+                    console.log(`[Table ${this.name}] Countdown complete, starting game!`);
+                    this.startNewHand();
+                    this.onStateChange?.();
+                } else {
+                    console.log(`[Table ${this.name}] Not enough players to start`);
+                }
+            }, this.startDelaySeconds * 1000);
+            
+            this.onCountdownUpdate?.();
+        } else if (activePlayers < 2 && this.startCountdown) {
+            // Cancel countdown - not enough players
+            console.log(`[Table ${this.name}] Countdown cancelled - only ${activePlayers} player(s)`);
+            clearTimeout(this.startCountdown);
+            this.startCountdown = null;
+            this.startCountdownTime = null;
+            this.onCountdownUpdate?.();
+        }
+    }
+    
+    getStartCountdownRemaining() {
+        if (!this.startCountdownTime || !this.startCountdown) return null;
+        const elapsed = Date.now() - this.startCountdownTime;
+        const remaining = Math.max(0, (this.startDelaySeconds * 1000) - elapsed);
+        return Math.ceil(remaining / 1000); // Return seconds, rounded up
     }
     
     // ============ Turn Timer ============
@@ -170,10 +223,8 @@ class Table {
 
         console.log(`[Table ${this.name}] ${name} joined at seat ${seatIndex}`);
 
-        // Auto-start game if enough players
-        if (this.phase === GAME_PHASES.WAITING && this.getActivePlayerCount() >= 2) {
-            setTimeout(() => this.startNewHand(), 3000);
-        }
+        // Check if we should start countdown
+        this.checkStartCountdown();
 
         return { success: true, seatIndex };
     }
@@ -192,6 +243,9 @@ class Table {
         if (this.phase !== GAME_PHASES.WAITING && this.currentPlayerIndex === seatIndex) {
             this.handleAction(playerId, ACTIONS.FOLD);
         }
+
+        // Check if countdown should be cancelled (not enough players)
+        this.checkStartCountdown();
 
         return chips;
     }
@@ -767,10 +821,13 @@ class Table {
             currentBet: this.currentBet,
             minBet: this.bigBlind,
             minRaise: this.minRaise,
+            smallBlind: this.smallBlind,
+            bigBlind: this.bigBlind,
             dealerIndex: this.dealerIndex,
             currentPlayerIndex: this.currentPlayerIndex,
             currentPlayerId: currentPlayer?.playerId || null,
             turnTimeRemaining: this.getTurnTimeRemaining(),
+            startCountdownRemaining: this.getStartCountdownRemaining(),
             handsPlayed: this.handsPlayed,
             spectatorCount: this.getSpectatorCount(),
             lastPotAwards: this.phase === GAME_PHASES.SHOWDOWN ? this.lastPotAwards : null,

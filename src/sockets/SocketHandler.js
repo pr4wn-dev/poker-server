@@ -1872,6 +1872,20 @@ class SocketHandler {
             this.gameManager.checkBotTurn(table.id);
         };
         
+        // Called when countdown starts/stops/updates
+        table.onCountdownUpdate = () => {
+            const countdown = table.getStartCountdownRemaining();
+            console.log(`[SocketHandler] Countdown update for table ${table.name}: ${countdown}s`);
+            
+            this.io.to(`table:${table.id}`).emit('countdown_update', {
+                tableId: table.id,
+                secondsRemaining: countdown
+            });
+            
+            // Also broadcast full state so UI updates
+            this.broadcastTableState(table.id);
+        };
+        
         // Called when a player auto-folds due to timeout
         table.onAutoFold = (playerId, seatIndex) => {
             console.log(`[SocketHandler] Auto-fold: ${playerId} at seat ${seatIndex}`);
