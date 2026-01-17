@@ -1079,6 +1079,245 @@ class SocketHandler {
                 });
             });
 
+            // ============ Leaderboards ============
+            
+            socket.on('get_leaderboard', async (data, callback) => {
+                const { category } = data || { category: 'chips' };
+                
+                try {
+                    let entries = [];
+                    
+                    switch (category) {
+                        case 'chips':
+                            entries = await userRepo.getTopByChips(20);
+                            break;
+                        case 'wins':
+                            entries = await userRepo.getTopByWins(20);
+                            break;
+                        case 'level':
+                            entries = await userRepo.getTopByLevel(20);
+                            break;
+                        case 'biggest_pot':
+                            entries = await userRepo.getTopByBiggestPot(20);
+                            break;
+                        default:
+                            entries = await userRepo.getTopByChips(20);
+                    }
+                    
+                    callback?.({
+                        success: true,
+                        category,
+                        entries: entries.map((e, i) => ({
+                            rank: i + 1,
+                            oderId: e.id,
+                            username: e.username,
+                            level: e.level || 1,
+                            value: e.value || e.chips || 0
+                        }))
+                    });
+                } catch (error) {
+                    console.error('[Leaderboard] Error:', error);
+                    callback?.({ success: false, error: 'Failed to load leaderboard' });
+                }
+            });
+
+            // ============ Daily Rewards ============
+            
+            socket.on('get_daily_reward_status', async (callback) => {
+                const user = this.getAuthenticatedUser(socket);
+                if (!user) {
+                    return callback?.({ success: false, error: 'Not authenticated' });
+                }
+                
+                try {
+                    const profile = await userRepo.findByUserId(user.userId);
+                    const lastClaim = profile.lastDailyReward ? new Date(profile.lastDailyReward) : null;
+                    const now = new Date();
+                    
+                    let canClaim = true;
+                    let nextClaimTime = null;
+                    
+                    if (lastClaim) {
+                        const hoursSinceClaim = (now - lastClaim) / (1000 * 60 * 60);
+                        canClaim = hoursSinceClaim >= 24;
+                        
+                        if (!canClaim) {
+                            const nextClaim = new Date(lastClaim.getTime() + 24 * 60 * 60 * 1000);
+                            nextClaimTime = nextClaim.toISOString();
+                        }
+                    }
+                    
+                    // Check if streak is broken (more than 48 hours)
+                    let currentDay = profile.dailyStreak || 1;
+                    if (lastClaim) {
+                        const hoursSinceClaim = (now - lastClaim) / (1000 * 60 * 60);
+                        if (hoursSinceClaim >= 48) {
+                            currentDay = 1;  // Reset streak
+                        }
+                    }
+                    
+                    const rewards = [
+                        { day: 1, chips: 5000, xp: 50 },
+                        { day: 2, chips: 7500, xp: 75 },
+                        { day: 3, chips: 10000, xp: 100, bonus: 'Mystery Box' },
+                        { day: 4, chips: 15000, xp: 125 },
+                        { day: 5, chips: 20000, xp: 150, gems: 5 },
+                        { day: 6, chips: 30000, xp: 200 },
+                        { day: 7, chips: 50000, xp: 300, gems: 20, bonus: 'Epic Item' }
+                    ];
+                    
+                    callback?.({
+                        success: true,
+                        currentDay: Math.min(currentDay, 7),
+                        canClaim,
+                        nextClaimTime,
+                        reward: rewards[Math.min(currentDay - 1, 6)]
+                    });
+                } catch (error) {
+                    console.error('[DailyReward] Error:', error);
+                    callback?.({ success: false, error: 'Failed to get daily reward status' });
+                }
+            });
+            
+            socket.on('claim_daily_reward', async (callback) => {
+                const user = this.getAuthenticatedUser(socket);
+                if (!user) {
+                    return callback?.({ success: false, error: 'Not authenticated' });
+                }
+                
+                try {
+                    const profile = await userRepo.findByUserId(user.userId);
+                    const lastClaim = profile.lastDailyReward ? new Date(profile.lastDailyReward) : null;
+                    const now = new Date();
+                    
+                    if (lastClaim) {
+                        const hoursSinceClaim = (now - lastClaim) / (1000 * 60 * 60);
+                        if (hoursSinceClaim < 24) {
+                            return callback?.({ success: false, error: 'Already claimed today' });
+                        }
+                    }
+                    
+                    // Calculate streak
+                    let newStreak = 1;
+                    if (lastClaim) {
+                        const hoursSinceClaim = (now - lastClaim) / (1000 * 60 * 60);
+                        if (hoursSinceClaim < 48) {
+                            newStreak = Math.min((profile.dailyStreak || 0) + 1, 7);
+                        }
+                    }
+                    
+                    const rewards = [
+                        { day: 1, chips: 5000, xp: 50, gems: 0 },
+                        { day: 2, chips: 7500, xp: 75, gems: 0 },
+                        { day: 3, chips: 10000, xp: 100, gems: 0, bonus: 'Mystery Box' },
+                        { day: 4, chips: 15000, xp: 125, gems: 0 },
+                        { day: 5, chips: 20000, xp: 150, gems: 5 },
+                        { day: 6, chips: 30000, xp: 200, gems: 0 },
+                        { day: 7, chips: 50000, xp: 300, gems: 20, bonus: 'Epic Item' }
+                    ];
+                    
+                    const reward = rewards[newStreak - 1];
+                    
+                    // Award rewards
+                    await userRepo.updateChips(user.userId, reward.chips);
+                    await userRepo.addXP(user.userId, reward.xp);
+                    if (reward.gems > 0) {
+                        await userRepo.addGems(user.userId, reward.gems);
+                    }
+                    
+                    // Update streak and last claim
+                    await userRepo.updateDailyStreak(user.userId, newStreak, now.toISOString());
+                    
+                    console.log(`[DailyReward] ${user.username} claimed day ${newStreak}: +${reward.chips} chips, +${reward.xp} XP`);
+                    
+                    callback?.({
+                        success: true,
+                        chipsAwarded: reward.chips,
+                        xpAwarded: reward.xp,
+                        gemsAwarded: reward.gems || 0,
+                        bonusItem: reward.bonus || null,
+                        newStreak
+                    });
+                } catch (error) {
+                    console.error('[DailyReward] Error claiming:', error);
+                    callback?.({ success: false, error: 'Failed to claim reward' });
+                }
+            });
+
+            // ============ Achievements ============
+            
+            socket.on('get_achievements', async (callback) => {
+                const user = this.getAuthenticatedUser(socket);
+                if (!user) {
+                    return callback?.({ success: false, error: 'Not authenticated' });
+                }
+                
+                try {
+                    const profile = await userRepo.findByUserId(user.userId);
+                    const unlockedIds = profile.achievements || [];
+                    
+                    const allAchievements = [
+                        { id: 'first_win', name: 'First Victory', description: 'Win your first hand', icon: '🏆', category: 'Beginner', xpReward: 100 },
+                        { id: 'play_10', name: 'Getting Started', description: 'Play 10 hands', icon: '🃏', category: 'Beginner', xpReward: 50 },
+                        { id: 'win_50', name: 'Winning Streak', description: 'Win 50 hands', icon: '🔥', category: 'Skill', xpReward: 250 },
+                        { id: 'royal_flush', name: 'Royal Flush', description: 'Get a royal flush', icon: '👑', category: 'Skill', xpReward: 1000 },
+                        { id: 'chips_10k', name: 'Stacking Up', description: 'Accumulate 10,000 chips', icon: '💰', category: 'Wealth', xpReward: 100 },
+                        { id: 'chips_100k', name: 'High Roller', description: 'Accumulate 100,000 chips', icon: '💎', category: 'Wealth', xpReward: 500 },
+                        { id: 'chips_1m', name: 'Millionaire', description: 'Accumulate 1,000,000 chips', icon: '🏦', category: 'Wealth', xpReward: 2000 },
+                        { id: 'first_boss', name: 'Boss Slayer', description: 'Defeat your first boss', icon: '👹', category: 'Adventure', xpReward: 200 },
+                        { id: 'tournament_win', name: 'Tournament Champion', description: 'Win a tournament', icon: '🏆', category: 'Tournaments', xpReward: 1000 },
+                    ];
+                    
+                    callback?.({
+                        success: true,
+                        unlockedIds,
+                        allAchievements: allAchievements.map(a => ({
+                            ...a,
+                            isUnlocked: unlockedIds.includes(a.id)
+                        }))
+                    });
+                } catch (error) {
+                    console.error('[Achievements] Error:', error);
+                    callback?.({ success: false, error: 'Failed to load achievements' });
+                }
+            });
+            
+            socket.on('unlock_achievement', async (data, callback) => {
+                const user = this.getAuthenticatedUser(socket);
+                if (!user) {
+                    return callback?.({ success: false, error: 'Not authenticated' });
+                }
+                
+                const { achievementId } = data;
+                if (!achievementId) {
+                    return callback?.({ success: false, error: 'Achievement ID required' });
+                }
+                
+                try {
+                    const result = await userRepo.unlockAchievement(user.userId, achievementId);
+                    
+                    if (result.alreadyUnlocked) {
+                        return callback?.({ success: false, error: 'Already unlocked' });
+                    }
+                    
+                    // Award XP
+                    if (result.xpReward) {
+                        await userRepo.addXP(user.userId, result.xpReward);
+                    }
+                    
+                    console.log(`[Achievement] ${user.username} unlocked: ${achievementId}`);
+                    
+                    callback?.({
+                        success: true,
+                        achievementId,
+                        xpAwarded: result.xpReward || 0
+                    });
+                } catch (error) {
+                    console.error('[Achievement] Error:', error);
+                    callback?.({ success: false, error: 'Failed to unlock achievement' });
+                }
+            });
+
             // ============ Disconnect ============
             
             socket.on('disconnect', async () => {

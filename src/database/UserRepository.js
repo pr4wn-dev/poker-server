@@ -604,6 +604,148 @@ class UserRepository {
             chips: u.chips
         }));
     }
+    
+    // ============ Leaderboards ============
+    
+    async getTopByChips(limit = 20) {
+        const results = await db.query(
+            `SELECT id, username, chips as value, 
+                    COALESCE((SELECT level FROM user_stats WHERE user_id = users.id), 1) as level
+             FROM users 
+             WHERE is_banned = FALSE 
+             ORDER BY chips DESC 
+             LIMIT ?`,
+            [limit]
+        );
+        return results;
+    }
+    
+    async getTopByWins(limit = 20) {
+        const results = await db.query(
+            `SELECT u.id, u.username, us.hands_won as value, us.level
+             FROM users u
+             JOIN user_stats us ON u.id = us.user_id
+             WHERE u.is_banned = FALSE
+             ORDER BY us.hands_won DESC
+             LIMIT ?`,
+            [limit]
+        );
+        return results;
+    }
+    
+    async getTopByLevel(limit = 20) {
+        const results = await db.query(
+            `SELECT u.id, u.username, us.level as value, us.level
+             FROM users u
+             JOIN user_stats us ON u.id = us.user_id
+             WHERE u.is_banned = FALSE
+             ORDER BY us.level DESC, us.xp DESC
+             LIMIT ?`,
+            [limit]
+        );
+        return results;
+    }
+    
+    async getTopByBiggestPot(limit = 20) {
+        const results = await db.query(
+            `SELECT u.id, u.username, us.biggest_pot as value, us.level
+             FROM users u
+             JOIN user_stats us ON u.id = us.user_id
+             WHERE u.is_banned = FALSE
+             ORDER BY us.biggest_pot DESC
+             LIMIT ?`,
+            [limit]
+        );
+        return results;
+    }
+    
+    // ============ Daily Rewards ============
+    
+    async addGems(userId, amount) {
+        await db.query(
+            'UPDATE users SET gems = gems + ? WHERE id = ?',
+            [amount, userId]
+        );
+    }
+    
+    async addXP(userId, amount) {
+        // Add XP and check for level up
+        const stats = await db.queryOne(
+            'SELECT xp, level FROM user_stats WHERE user_id = ?',
+            [userId]
+        );
+        
+        if (!stats) {
+            await db.query(
+                'INSERT INTO user_stats (user_id, xp, level) VALUES (?, ?, 1)',
+                [userId, amount]
+            );
+            return { newXP: amount, level: 1, leveledUp: false };
+        }
+        
+        const newXP = stats.xp + amount;
+        const xpPerLevel = 1000;  // XP needed per level
+        const newLevel = Math.floor(newXP / xpPerLevel) + 1;
+        const leveledUp = newLevel > stats.level;
+        
+        await db.query(
+            'UPDATE user_stats SET xp = ?, level = ? WHERE user_id = ?',
+            [newXP, newLevel, userId]
+        );
+        
+        return { newXP, level: newLevel, leveledUp };
+    }
+    
+    async updateDailyStreak(userId, streak, claimTime) {
+        await db.query(
+            'UPDATE users SET daily_streak = ?, last_daily_reward = ? WHERE id = ?',
+            [streak, claimTime, userId]
+        );
+    }
+    
+    // ============ Achievements ============
+    
+    async unlockAchievement(userId, achievementId) {
+        // Check if already unlocked
+        const existing = await db.queryOne(
+            'SELECT 1 FROM user_achievements WHERE user_id = ? AND achievement_id = ?',
+            [userId, achievementId]
+        );
+        
+        if (existing) {
+            return { alreadyUnlocked: true };
+        }
+        
+        // Get achievement XP reward
+        const xpRewards = {
+            'first_win': 100,
+            'play_10': 50,
+            'win_50': 250,
+            'royal_flush': 1000,
+            'chips_10k': 100,
+            'chips_100k': 500,
+            'chips_1m': 2000,
+            'first_boss': 200,
+            'tournament_win': 1000
+        };
+        
+        const xpReward = xpRewards[achievementId] || 50;
+        
+        await db.query(
+            'INSERT INTO user_achievements (user_id, achievement_id, unlocked_at) VALUES (?, ?, NOW())',
+            [userId, achievementId]
+        );
+        
+        return { alreadyUnlocked: false, xpReward };
+    }
+    
+    async getUnlockedAchievements(userId) {
+        const results = await db.query(
+            'SELECT achievement_id, unlocked_at FROM user_achievements WHERE user_id = ?',
+            [userId]
+        );
+        return results.map(r => r.achievement_id);
+    }
 }
 
 module.exports = new UserRepository();
