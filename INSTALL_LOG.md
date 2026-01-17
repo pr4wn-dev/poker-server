@@ -2,10 +2,15 @@
 
 > **READ THIS FILE AT START OF EVERY SESSION**
 > 
-> **Last Updated:** January 17, 2026 (Session 8 - Fixing Everything)
-> **Session:** 8 - IMPLEMENTING MISSING FEATURES
-> **Status:** ACTIVELY BUILDING - Core features being implemented
+> **Last Updated:** January 17, 2026 (Session 8 - Socket Response Pattern Fix)
+> **Session:** 8 - AUDIT & FIX SOCKET PATTERNS
+> **Status:** FIXING - Critical socket response pattern bug found and fixed
 > **Goal:** Get poker game running for Monday demo
+>
+> ### 🔴 CRITICAL FIX THIS SESSION
+> Found 10 socket endpoints missing the `_response` emit - Unity client would NEVER receive responses!
+> Fixed: rebuy, sit_out, sit_back, get_sit_out_status, get_leaderboard, get_daily_reward_status, 
+> claim_daily_reward, get_achievements, unlock_achievement, reconnect_to_table, check_active_session
 > 
 > ## 📊 PROJECT STATS
 > - **Server:** 21 files, 6,722 lines (Node.js)
@@ -31,7 +36,8 @@ Before writing ANY code, complete these steps:
 - [ ] Read Issue #1: SocketIOUnity GetValue<T>() - USE JsonUtility.FromJson
 - [ ] Read Issue #21: SOCKET_IO_AVAILABLE must be in Standalone platform
 - [ ] Read Issue #26: Response classes ONLY in NetworkModels.cs
-- [ ] Scan all 32+ documented solutions in ISSUES section
+- [ ] Read Issue #33: Server MUST emit BOTH callback AND _response event
+- [ ] Scan all 33+ documented solutions in ISSUES section
 
 ### Step 2: Verify Patterns Before Coding
 - [ ] Check SOCKET.IO BEST PRACTICES section
@@ -1000,6 +1006,32 @@ void OnResponse(SocketIOResponse response) {
     // Process response...
 }
 ```
+
+### Issue #33: Server MUST emit BOTH callback AND _response event (CRITICAL!)
+
+**Symptoms:** Client `Emit<T>` calls hang forever, never receive responses. Server processes request but client times out.
+
+**Cause:** The Unity client's `Emit<T>` method listens for `eventName_response` events, NOT Socket.IO callbacks. If server only calls `callback?.({...})`, the Unity client will NEVER receive it.
+
+**Fix - Server Pattern:** Always use a `respond` helper that does both:
+```javascript
+socket.on('my_event', async (data, callback) => {
+    // Create respond helper that does BOTH
+    const respond = (response) => {
+        if (callback) callback(response);           // For native Socket.IO clients
+        socket.emit('my_event_response', response); // For Unity client (REQUIRED!)
+    };
+    
+    // Use respond() for ALL return paths
+    if (!user) return respond({ success: false, error: 'Not authenticated' });
+    
+    // ... process request ...
+    
+    respond({ success: true, ...data });  // NOT callback()!
+});
+```
+
+**EVERY socket.on handler must use this pattern or Unity will break!**
 
 ### Debugging Tips
 1. Check Unity Console for `[SocketManager]` logs

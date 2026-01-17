@@ -295,37 +295,42 @@ class SocketHandler {
             // ============ Rebuy / Add Chips ============
             
             socket.on('rebuy', async (data, callback) => {
+                const respond = (response) => {
+                    if (callback) callback(response);
+                    socket.emit('rebuy_response', response);
+                };
+                
                 const user = this.getAuthenticatedUser(socket);
                 if (!user) {
-                    return callback({ success: false, error: 'Not authenticated' });
+                    return respond({ success: false, error: 'Not authenticated' });
                 }
                 
                 const { amount } = data;
                 const player = this.gameManager.players.get(user.userId);
                 
                 if (!player?.currentTableId) {
-                    return callback({ success: false, error: 'Not at a table' });
+                    return respond({ success: false, error: 'Not at a table' });
                 }
                 
                 const table = this.gameManager.getTable(player.currentTableId);
                 if (!table) {
-                    return callback({ success: false, error: 'Table not found' });
+                    return respond({ success: false, error: 'Table not found' });
                 }
                 
                 // Check if game is in progress (can only rebuy between hands)
                 if (table.phase !== 'waiting' && table.phase !== 'showdown') {
-                    return callback({ success: false, error: 'Cannot rebuy during a hand' });
+                    return respond({ success: false, error: 'Cannot rebuy during a hand' });
                 }
                 
                 // Check house rules for rebuy
                 if (table.houseRules && !table.houseRules.allowRebuy) {
-                    return callback({ success: false, error: 'Rebuys not allowed at this table' });
+                    return respond({ success: false, error: 'Rebuys not allowed at this table' });
                 }
                 
                 // Check player has enough chips in their account
                 const profile = await userRepo.findByUserId(user.userId);
                 if (!profile || profile.chips < amount) {
-                    return callback({ success: false, error: 'Insufficient chips' });
+                    return respond({ success: false, error: 'Insufficient chips' });
                 }
                 
                 // Check min/max buy-in
@@ -334,12 +339,12 @@ class SocketHandler {
                 
                 const seat = table.seats.find(s => s?.playerId === user.userId);
                 if (!seat) {
-                    return callback({ success: false, error: 'Seat not found' });
+                    return respond({ success: false, error: 'Seat not found' });
                 }
                 
                 const newTotal = seat.chips + amount;
                 if (newTotal > maxBuyIn) {
-                    return callback({ success: false, error: `Maximum buy-in is ${maxBuyIn}` });
+                    return respond({ success: false, error: `Maximum buy-in is ${maxBuyIn}` });
                 }
                 
                 // Deduct from account and add to table stack
@@ -352,7 +357,7 @@ class SocketHandler {
                 // Broadcast updated state
                 this.broadcastTableState(player.currentTableId);
                 
-                callback({ 
+                respond({ 
                     success: true, 
                     newTableStack: seat.chips,
                     accountBalance: profile.chips - amount
@@ -367,24 +372,29 @@ class SocketHandler {
             // ============ Sit Out / Back ============
             
             socket.on('sit_out', async (callback) => {
+                const respond = (response) => {
+                    if (callback) callback(response);
+                    socket.emit('sit_out_response', response);
+                };
+                
                 const user = this.getAuthenticatedUser(socket);
                 if (!user) {
-                    return callback?.({ success: false, error: 'Not authenticated' });
+                    return respond({ success: false, error: 'Not authenticated' });
                 }
                 
                 const player = this.gameManager.players.get(user.userId);
                 if (!player?.currentTableId) {
-                    return callback?.({ success: false, error: 'Not at a table' });
+                    return respond({ success: false, error: 'Not at a table' });
                 }
                 
                 const table = this.gameManager.getTable(player.currentTableId);
                 if (!table) {
-                    return callback?.({ success: false, error: 'Table not found' });
+                    return respond({ success: false, error: 'Table not found' });
                 }
                 
                 const seat = table.seats.find(s => s?.playerId === user.userId);
                 if (!seat) {
-                    return callback?.({ success: false, error: 'Seat not found' });
+                    return respond({ success: false, error: 'Seat not found' });
                 }
                 
                 seat.isSittingOut = true;
@@ -400,32 +410,37 @@ class SocketHandler {
                 
                 this.broadcastTableState(table.id);
                 
-                callback?.({ success: true });
+                respond({ success: true });
             });
             
             socket.on('sit_back', async (callback) => {
+                const respond = (response) => {
+                    if (callback) callback(response);
+                    socket.emit('sit_back_response', response);
+                };
+                
                 const user = this.getAuthenticatedUser(socket);
                 if (!user) {
-                    return callback?.({ success: false, error: 'Not authenticated' });
+                    return respond({ success: false, error: 'Not authenticated' });
                 }
                 
                 const player = this.gameManager.players.get(user.userId);
                 if (!player?.currentTableId) {
-                    return callback?.({ success: false, error: 'Not at a table' });
+                    return respond({ success: false, error: 'Not at a table' });
                 }
                 
                 const table = this.gameManager.getTable(player.currentTableId);
                 if (!table) {
-                    return callback?.({ success: false, error: 'Table not found' });
+                    return respond({ success: false, error: 'Table not found' });
                 }
                 
                 const seat = table.seats.find(s => s?.playerId === user.userId);
                 if (!seat) {
-                    return callback?.({ success: false, error: 'Seat not found' });
+                    return respond({ success: false, error: 'Seat not found' });
                 }
                 
                 if (!seat.isSittingOut) {
-                    return callback?.({ success: false, error: 'Not sitting out' });
+                    return respond({ success: false, error: 'Not sitting out' });
                 }
                 
                 seat.isSittingOut = false;
@@ -450,24 +465,29 @@ class SocketHandler {
                     }
                 }
                 
-                callback?.({ success: true });
+                respond({ success: true });
             });
             
             socket.on('get_sit_out_status', async (callback) => {
+                const respond = (response) => {
+                    if (callback) callback(response);
+                    socket.emit('get_sit_out_status_response', response);
+                };
+                
                 const user = this.getAuthenticatedUser(socket);
                 if (!user) {
-                    return callback?.({ success: false, error: 'Not authenticated' });
+                    return respond({ success: false, error: 'Not authenticated' });
                 }
                 
                 const player = this.gameManager.players.get(user.userId);
                 if (!player?.currentTableId) {
-                    return callback?.({ success: true, isSittingOut: false });
+                    return respond({ success: true, isSittingOut: false });
                 }
                 
                 const table = this.gameManager.getTable(player.currentTableId);
                 const seat = table?.seats?.find(s => s?.playerId === user.userId);
                 
-                callback?.({
+                respond({
                     success: true,
                     isSittingOut: seat?.isSittingOut || false,
                     sitOutTime: seat?.sitOutTime
@@ -1082,6 +1102,11 @@ class SocketHandler {
             // ============ Leaderboards ============
             
             socket.on('get_leaderboard', async (data, callback) => {
+                const respond = (response) => {
+                    if (callback) callback(response);
+                    socket.emit('get_leaderboard_response', response);
+                };
+                
                 const { category } = data || { category: 'chips' };
                 
                 try {
@@ -1104,7 +1129,7 @@ class SocketHandler {
                             entries = await userRepo.getTopByChips(20);
                     }
                     
-                    callback?.({
+                    respond({
                         success: true,
                         category,
                         entries: entries.map((e, i) => ({
@@ -1117,16 +1142,21 @@ class SocketHandler {
                     });
                 } catch (error) {
                     console.error('[Leaderboard] Error:', error);
-                    callback?.({ success: false, error: 'Failed to load leaderboard' });
+                    respond({ success: false, error: 'Failed to load leaderboard' });
                 }
             });
 
             // ============ Daily Rewards ============
             
             socket.on('get_daily_reward_status', async (callback) => {
+                const respond = (response) => {
+                    if (callback) callback(response);
+                    socket.emit('get_daily_reward_status_response', response);
+                };
+                
                 const user = this.getAuthenticatedUser(socket);
                 if (!user) {
-                    return callback?.({ success: false, error: 'Not authenticated' });
+                    return respond({ success: false, error: 'Not authenticated' });
                 }
                 
                 try {
@@ -1166,7 +1196,7 @@ class SocketHandler {
                         { day: 7, chips: 50000, xp: 300, gems: 20, bonus: 'Epic Item' }
                     ];
                     
-                    callback?.({
+                    respond({
                         success: true,
                         currentDay: Math.min(currentDay, 7),
                         canClaim,
@@ -1175,14 +1205,19 @@ class SocketHandler {
                     });
                 } catch (error) {
                     console.error('[DailyReward] Error:', error);
-                    callback?.({ success: false, error: 'Failed to get daily reward status' });
+                    respond({ success: false, error: 'Failed to get daily reward status' });
                 }
             });
             
             socket.on('claim_daily_reward', async (callback) => {
+                const respond = (response) => {
+                    if (callback) callback(response);
+                    socket.emit('claim_daily_reward_response', response);
+                };
+                
                 const user = this.getAuthenticatedUser(socket);
                 if (!user) {
-                    return callback?.({ success: false, error: 'Not authenticated' });
+                    return respond({ success: false, error: 'Not authenticated' });
                 }
                 
                 try {
@@ -1193,7 +1228,7 @@ class SocketHandler {
                     if (lastClaim) {
                         const hoursSinceClaim = (now - lastClaim) / (1000 * 60 * 60);
                         if (hoursSinceClaim < 24) {
-                            return callback?.({ success: false, error: 'Already claimed today' });
+                            return respond({ success: false, error: 'Already claimed today' });
                         }
                     }
                     
@@ -1230,7 +1265,7 @@ class SocketHandler {
                     
                     console.log(`[DailyReward] ${user.username} claimed day ${newStreak}: +${reward.chips} chips, +${reward.xp} XP`);
                     
-                    callback?.({
+                    respond({
                         success: true,
                         chipsAwarded: reward.chips,
                         xpAwarded: reward.xp,
@@ -1240,16 +1275,21 @@ class SocketHandler {
                     });
                 } catch (error) {
                     console.error('[DailyReward] Error claiming:', error);
-                    callback?.({ success: false, error: 'Failed to claim reward' });
+                    respond({ success: false, error: 'Failed to claim reward' });
                 }
             });
 
             // ============ Achievements ============
             
             socket.on('get_achievements', async (callback) => {
+                const respond = (response) => {
+                    if (callback) callback(response);
+                    socket.emit('get_achievements_response', response);
+                };
+                
                 const user = this.getAuthenticatedUser(socket);
                 if (!user) {
-                    return callback?.({ success: false, error: 'Not authenticated' });
+                    return respond({ success: false, error: 'Not authenticated' });
                 }
                 
                 try {
@@ -1268,7 +1308,7 @@ class SocketHandler {
                         { id: 'tournament_win', name: 'Tournament Champion', description: 'Win a tournament', icon: '🏆', category: 'Tournaments', xpReward: 1000 },
                     ];
                     
-                    callback?.({
+                    respond({
                         success: true,
                         unlockedIds,
                         allAchievements: allAchievements.map(a => ({
@@ -1278,26 +1318,31 @@ class SocketHandler {
                     });
                 } catch (error) {
                     console.error('[Achievements] Error:', error);
-                    callback?.({ success: false, error: 'Failed to load achievements' });
+                    respond({ success: false, error: 'Failed to load achievements' });
                 }
             });
             
             socket.on('unlock_achievement', async (data, callback) => {
+                const respond = (response) => {
+                    if (callback) callback(response);
+                    socket.emit('unlock_achievement_response', response);
+                };
+                
                 const user = this.getAuthenticatedUser(socket);
                 if (!user) {
-                    return callback?.({ success: false, error: 'Not authenticated' });
+                    return respond({ success: false, error: 'Not authenticated' });
                 }
                 
                 const { achievementId } = data;
                 if (!achievementId) {
-                    return callback?.({ success: false, error: 'Achievement ID required' });
+                    return respond({ success: false, error: 'Achievement ID required' });
                 }
                 
                 try {
                     const result = await userRepo.unlockAchievement(user.userId, achievementId);
                     
                     if (result.alreadyUnlocked) {
-                        return callback?.({ success: false, error: 'Already unlocked' });
+                        return respond({ success: false, error: 'Already unlocked' });
                     }
                     
                     // Award XP
@@ -1307,14 +1352,14 @@ class SocketHandler {
                     
                     console.log(`[Achievement] ${user.username} unlocked: ${achievementId}`);
                     
-                    callback?.({
+                    respond({
                         success: true,
                         achievementId,
                         xpAwarded: result.xpReward || 0
                     });
                 } catch (error) {
                     console.error('[Achievement] Error:', error);
-                    callback?.({ success: false, error: 'Failed to unlock achievement' });
+                    respond({ success: false, error: 'Failed to unlock achievement' });
                 }
             });
 
@@ -1361,9 +1406,14 @@ class SocketHandler {
             // ============ Reconnection ============
             
             socket.on('reconnect_to_table', async (data, callback) => {
+                const respond = (response) => {
+                    if (callback) callback(response);
+                    socket.emit('reconnect_to_table_response', response);
+                };
+                
                 const user = this.getAuthenticatedUser(socket);
                 if (!user) {
-                    return callback?.({ success: false, error: 'Not authenticated' });
+                    return respond({ success: false, error: 'Not authenticated' });
                 }
                 
                 const { tableId } = data || {};
@@ -1371,17 +1421,17 @@ class SocketHandler {
                 // Check if player has a pending reconnection
                 const player = this.gameManager.players.get(user.userId);
                 if (!player) {
-                    return callback?.({ success: false, error: 'No active session found' });
+                    return respond({ success: false, error: 'No active session found' });
                 }
                 
                 const table = this.gameManager.getTable(player.currentTableId || tableId);
                 if (!table) {
-                    return callback?.({ success: false, error: 'Table not found' });
+                    return respond({ success: false, error: 'Table not found' });
                 }
                 
                 const seat = table.seats.find(s => s?.playerId === user.userId);
                 if (!seat) {
-                    return callback?.({ success: false, error: 'Seat not found' });
+                    return respond({ success: false, error: 'Seat not found' });
                 }
                 
                 // Clear reconnect timeout
@@ -1408,7 +1458,7 @@ class SocketHandler {
                 // Send current table state
                 const state = table.getState(user.userId);
                 
-                callback?.({
+                respond({
                     success: true,
                     tableId: table.id,
                     tableName: table.name,
@@ -1417,22 +1467,27 @@ class SocketHandler {
             });
             
             socket.on('check_active_session', async (callback) => {
+                const respond = (response) => {
+                    if (callback) callback(response);
+                    socket.emit('check_active_session_response', response);
+                };
+                
                 const user = this.getAuthenticatedUser(socket);
                 if (!user) {
-                    return callback?.({ success: false, error: 'Not authenticated' });
+                    return respond({ success: false, error: 'Not authenticated' });
                 }
                 
                 const player = this.gameManager.players.get(user.userId);
                 if (!player?.currentTableId) {
-                    return callback?.({ success: true, hasActiveSession: false });
+                    return respond({ success: true, hasActiveSession: false });
                 }
                 
                 const table = this.gameManager.getTable(player.currentTableId);
                 if (!table) {
-                    return callback?.({ success: true, hasActiveSession: false });
+                    return respond({ success: true, hasActiveSession: false });
                 }
                 
-                callback?.({
+                respond({
                     success: true,
                     hasActiveSession: true,
                     tableId: table.id,
