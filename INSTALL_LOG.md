@@ -1449,6 +1449,38 @@ for (int i = 0; i < _seats.Count; i++)
 
 Also add `_tableView?.UpdateFromState(state)` in TableScene.cs.
 
+### Issue #48: Card Sprites Not Loading - Wrong Import Mode
+
+**Symptoms:** Card back shows weird pattern instead of actual card_back.png. Cards may show procedural fallback instead of sprites.
+
+**Cause:** Unity imported card PNGs with `spriteMode: 2` (Multiple) instead of `spriteMode: 1` (Single). This causes the sprite name to be `card_back_0` instead of `card_back`, so `Resources.Load<Sprite>("Sprites/Cards/card_back")` returns null.
+
+**Fix:** Changed all 53 card sprite .meta files from `spriteMode: 2` to `spriteMode: 1`:
+```powershell
+$metas = Get-ChildItem "Assets\Resources\Sprites\Cards\*.meta"
+foreach ($meta in $metas) {
+    $content = Get-Content $meta.FullName -Raw
+    $newContent = $content -replace "spriteMode: 2", "spriteMode: 1"
+    Set-Content $meta.FullName -Value $newContent -NoNewline
+}
+```
+
+**Date:** January 17, 2026
+
+### Issue #49: No Chip Visuals in PlayerSeatView
+
+**Symptoms:** Bets shown as text only, no visual chip stacks next to players.
+
+**Cause:** `PlayerSeatView` in `PokerTableView.cs` only used `_betText` for bet display, didn't include `ChipStack` component.
+
+**Fix:** 
+1. Added `private ChipStack _betChips;` field to `PlayerSeatView`
+2. Created ChipStack in `Initialize()`: `_betChips = ChipStack.Create(transform, 0);`
+3. Updated `SetPlayer()` to call `_betChips.SetValue((int)info.currentBet);`
+4. Updated `SetEmpty()` to reset chips: `_betChips.SetValue(0);`
+
+**Date:** January 17, 2026
+
 ### Issue #47: Cards Showing "?" Instead of Card Backs
 
 **Symptoms:** Other players' hidden cards show "?" marks instead of card backs. Community cards also show incorrectly.
