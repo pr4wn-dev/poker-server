@@ -1915,6 +1915,19 @@ class SocketHandler {
             this.broadcastTableState(table.id);
         };
         
+        // Called when game ends (one player has all the chips)
+        table.onGameOver = (winner) => {
+            console.log(`[SocketHandler] Game over at table ${table.name} - Winner: ${winner.name}`);
+            
+            this.io.to(`table:${table.id}`).emit('game_over', {
+                tableId: table.id,
+                winnerId: winner.playerId,
+                winnerName: winner.name,
+                winnerChips: winner.chips,
+                isBot: winner.isBot || false
+            });
+        };
+        
         // Called when a player auto-folds due to timeout
         table.onAutoFold = (playerId, seatIndex) => {
             console.log(`[SocketHandler] Auto-fold: ${playerId} at seat ${seatIndex}`);

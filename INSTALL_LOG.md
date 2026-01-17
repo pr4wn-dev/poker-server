@@ -1177,6 +1177,31 @@ if (player.currentTableId) {
 }
 ```
 
+### Issue #60: Game Continues After All Opponents Out of Chips
+
+**Symptoms:** After winning all-in, other players are out of chips, but game kept dealing new hands instead of ending.
+
+**Cause:** No check for game-over condition when all players except one are at 0 chips.
+
+**Fix:** At the start of `startNewHand()`, check if only one player has chips. If so, emit a `game_over` event and stop dealing.
+
+```javascript
+// In Table.js startNewHand()
+const playersWithChips = this.seats.filter(s => s && s.chips > 0);
+if (playersWithChips.length === 1) {
+    const winner = playersWithChips[0];
+    this.phase = GAME_PHASES.WAITING;
+    this.gameStarted = false;
+    this.onGameOver?.(winner);  // New callback
+    this.onStateChange?.();
+    return;
+}
+```
+
+Client-side:
+- Added `OnGameOver` event to `SocketManager.cs` and `GameService.cs`
+- `TableScene.cs` shows popup with winner announcement and "Leave Table" button
+
 ### Issue #59: Game Stuck When All Players All-In
 
 **Symptoms:** Game advances to flop/turn but gets stuck when all remaining players are all-in. No further cards dealt, no showdown.

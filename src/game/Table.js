@@ -265,6 +265,34 @@ class Table {
             this.phase = GAME_PHASES.WAITING;
             return;
         }
+        
+        // Check if only one player has chips (game over!)
+        const playersWithChips = this.seats.filter(s => s && s.chips > 0);
+        if (playersWithChips.length === 1) {
+            const winner = playersWithChips[0];
+            console.log(`[Table ${this.name}] GAME OVER - ${winner.name} wins with ${winner.chips} chips!`);
+            this.phase = GAME_PHASES.WAITING;
+            this.gameStarted = false;
+            
+            // Notify about game winner
+            if (this.onGameOver) {
+                this.onGameOver(winner);
+            }
+            this.onStateChange?.();
+            return;
+        }
+        
+        // Remove players with no chips
+        for (let i = 0; i < this.seats.length; i++) {
+            const seat = this.seats[i];
+            if (seat && seat.chips <= 0 && !seat.isBot) {
+                console.log(`[Table ${this.name}] ${seat.name} is out of chips`);
+                // Don't remove human players - let them rebuy or leave
+            } else if (seat && seat.chips <= 0 && seat.isBot) {
+                console.log(`[Table ${this.name}] Bot ${seat.name} eliminated`);
+                this.seats[i] = null;
+            }
+        }
 
         console.log(`[Table ${this.name}] Starting new hand`);
         
