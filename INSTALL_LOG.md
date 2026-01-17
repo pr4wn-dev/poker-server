@@ -1156,6 +1156,29 @@ npm start
 
 **For Android/other devices:** Use the Network address shown in server output (e.g., `http://192.168.1.23:3000`) and ensure the device is on the same network.
 
+### Issue #41: Login Screen Shows "Connecting" Forever
+
+**Symptoms:** MainMenuScene shows "Connecting..." text that never goes away, login form may or may not be visible.
+
+**Cause:** Two issues combined:
+1. `loadingPanel` was a `[SerializeField]` expecting Inspector assignment, but UI is built programmatically - so it was null
+2. Error text showing "Connecting..." was never cleared when login panel showed
+
+**Fix:**
+1. Add `BuildLoadingPanel()` method to create loading panel programmatically (like LobbyScene, AdventureScene)
+2. Call `ClearError()` in `ShowLoginPanel()` to remove any status messages
+3. Don't show "Connecting..." as an error - just wait silently then show login
+
+```csharp
+public void ShowLoginPanel()
+{
+    loginPanel?.SetActive(true);
+    registerPanel?.SetActive(false);
+    mainPanel?.SetActive(false);
+    ClearError();  // Always clear any lingering messages
+}
+```
+
 ### Debugging Tips
 1. Check Unity Console for `[SocketManager]` logs
 2. Check Node.js console for server-side logs
