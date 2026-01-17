@@ -717,6 +717,30 @@ Change in SocketManager.cs:
 
 ---
 
+### 23. Unity Not Picking Up Code Changes
+**Symptoms:**
+- Code changes made but Unity runs old code
+- Debug logs you added don't appear
+- Errors reference old line numbers
+
+**Solutions (try in order):**
+1. **Ctrl+R** in Unity (Assets → Refresh)
+2. **Touch the file** to update timestamp:
+   ```powershell
+   (Get-Item "path\to\file.cs").LastWriteTime = Get-Date
+   ```
+3. **Delete compiled assemblies** (forces full recompile):
+   ```powershell
+   Remove-Item "C:\Projects\poker-client-unity\Library\ScriptAssemblies\*.dll" -Force
+   ```
+4. **Restart Unity completely**
+5. **Delete Library folder** (nuclear option - takes long to reimport):
+   ```powershell
+   Remove-Item "C:\Projects\poker-client-unity\Library" -Recurse -Force
+   ```
+
+---
+
 ### 18. SocketIOUnity GetValue<T>() Returns Wrong Data
 **Symptoms:**
 - `response.GetValue<MyClass>()` returns object with all default values
