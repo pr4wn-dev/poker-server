@@ -1177,6 +1177,28 @@ if (player.currentTableId) {
 }
 ```
 
+### Issue #52: MainMenuScene Resets to Login When Already Logged In
+
+**Symptoms:** After logging in and going to mode select, navigating back to MainMenuScene shows login screen instead of mode select, even though user is still logged in.
+
+**Cause:** `MainMenuScene.Start()` always calls `ShowLoginPanel()` regardless of `GameService.IsLoggedIn` state.
+
+**Fix:** Check if already logged in at startup:
+```csharp
+if (_gameService != null && _gameService.IsLoggedIn)
+{
+    _isLoggedIn = true;
+    // Restore user info from CurrentUser
+    ShowMainMenu();
+}
+else
+{
+    ShowLoginPanel();
+}
+```
+
+Also guard `CheckConnectionStatus()` coroutine to not override panel if already logged in.
+
 ### Issue #51: Bots Don't Trigger Game Start Countdown
 
 **Symptoms:** Timer doesn't start when bots join. Game never auto-starts even with human + bots.
