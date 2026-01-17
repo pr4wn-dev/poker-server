@@ -49,10 +49,13 @@ class UserRepository {
         const userId = uuidv4();
         const startingChips = parseInt(process.env.DEFAULT_STARTING_CHIPS) || 10000;
         
+        // Convert empty email to null to avoid duplicate key issues
+        const emailValue = email && email.trim() !== '' ? email : null;
+        
         await db.query(
             `INSERT INTO users (id, username, email, password_hash, chips) 
              VALUES (?, ?, ?, ?, ?)`,
-            [userId, username, email, passwordHash, startingChips]
+            [userId, username, emailValue, passwordHash, startingChips]
         );
         
         // Create associated records

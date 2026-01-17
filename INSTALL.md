@@ -162,3 +162,4 @@ For production:
 3. Consider using HTTPS with a reverse proxy (nginx)
 4. Limit `ALLOWED_ORIGINS` to your app's domain
 
+

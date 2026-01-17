@@ -186,12 +186,126 @@ cat .env
 
 ---
 
+## 🔧 ISSUES ENCOUNTERED & SOLUTIONS
+
+### 1. SocketIOUnity GetValue<T>() Returns Default Values (CRITICAL)
+**Symptoms:**
+- Server sends `{"success":true,...}` 
+- Unity receives it but `response.success` is `false`
+- All fields have default values instead of parsed values
+
+**Root Cause:**
+SocketIOUnity's `GetValue<T>()` method doesn't properly deserialize JSON to C# classes with `[Serializable]` attribute.
+
+**Solution:**
+In `SocketManager.cs`, DON'T use `response.GetValue<T>()` directly. Instead:
+```csharp
+// Get JSON string from response object
+var obj = response.GetValue<object>();
+string jsonStr = obj.ToString();
+
+// Use Unity's JsonUtility to deserialize
+var result = JsonUtility.FromJson<T>(jsonStr);
+```
+
+---
+
+### 2. Empty Email Causes Duplicate Entry Error
+**Symptoms:**
+- Server crashes with `ER_DUP_ENTRY` for empty email
+- Multiple users can't register without email
+
+**Solution:**
+In `UserRepository.js`, only check email uniqueness if email is provided:
+```javascript
+if (email && email.trim() !== '') {
+    // Check email uniqueness
+}
+```
+
+---
+
+### 3. Unity Mock Mode Keeps Reverting
+**Symptoms:**
+- `useMockMode` checkbox keeps turning back on
+- Client shows "Connected" but doesn't actually connect
+
+**Solution:**
+1. Set default value in code: `public bool useMockMode = false;`
+2. Delete the Services GameObject
+3. Re-add it fresh (gets new default value)
+
+---
+
+### 4. "No overload for EmitStringAsJSON takes 3 arguments"
+**Symptoms:**
+- Compile error with SocketIOUnity Emit methods
+
+**Solution:**
+Use this pattern for events with responses:
+```csharp
+// Listen for response event first
+_socket.On(eventName + "_response", handler);
+
+// Then emit the request
+_socket.Emit(eventName, data);
+```
+
+---
+
+### 5. Unity Duplicate Class Definitions
+**Symptoms:**
+- CS0101 errors: "namespace already contains a definition for..."
+
+**Causes:**
+1. Nested Scripts folder (`Assets/Scripts/Scripts/`)
+2. Duplicate response classes in both `NetworkModels.cs` and `GameService.cs`
+
+**Solution:**
+- Delete duplicate folders
+- Keep response classes ONLY in `NetworkModels.cs`
+
+---
+
+### 6. WorldMapArea Not Found
+**Symptoms:**
+- CS0246: Type 'WorldMapArea' could not be found
+
+**Solution:**
+The class is named `AreaInfo` in `NetworkModels.cs`. Update references to use `AreaInfo`.
+
+---
+
+### 7. Git Remote Already Exists
+**Symptoms:**
+- `fatal: remote origin already exists`
+
+**Solution:**
+```powershell
+git remote set-url origin https://github.com/YOUR_USERNAME/repo-name.git
+```
+
+---
+
+### 8. PowerShell && Operator Error
+**Symptoms:**
+- "The token '&&' is not a valid statement separator"
+
+**Solution:**
+Use semicolons instead, or run commands separately:
+```powershell
+cd folder; command1; command2
+```
+
+---
+
 ## 📝 NOTES
 
 - Monday demo with boss
 - Home PC IP: 192.168.1.23 (for local testing only)
 - Boss's server IP: TBD Monday
 - Unity 6 LTS is compatible with our code (uses stable APIs)
+- **CRITICAL:** Always use `JsonUtility.FromJson<T>()` for SocketIOUnity responses!
 
 ---
 
@@ -202,4 +316,19 @@ cat .env
 3. Open app → Register/Login
 4. Create table or join existing one
 5. Play poker! 🃏
+
+---
+
+## ✅ DEMO READY CHECKLIST
+
+- [x] Server code complete
+- [x] Unity client code complete
+- [x] Socket connection working
+- [x] Registration working
+- [x] Login working
+- [x] Main menu displaying
+- [ ] Multiplayer table creation
+- [ ] Multiplayer joining
+- [ ] Adventure mode
+- [ ] Android APK build
 

@@ -27,47 +27,64 @@ class SocketHandler {
             // ============ Authentication ============
             
             socket.on('register', async (data, callback) => {
+                console.log('[Register] Received:', data);
                 if (!db.isConnected) {
-                    return callback({ success: false, error: 'Database offline' });
+                    const error = { success: false, error: 'Database offline' };
+                    if (callback) callback(error);
+                    socket.emit('register_response', error);
+                    return;
                 }
                 
                 const { username, password, email } = data;
                 const result = await userRepo.register(username, password, email);
+                console.log('[Register] DB result:', result);
                 
+                let response;
                 if (result.success) {
                     // Auto-login after registration
                     const loginResult = await userRepo.login(username, password);
+                    console.log('[Register] Login result:', loginResult);
                     if (loginResult.success) {
                         this.authenticateSocket(socket, loginResult.userId, loginResult.profile);
                     }
-                    callback({ 
+                    response = { 
                         success: true, 
                         userId: result.userId,
                         profile: loginResult.profile 
-                    });
+                    };
                 } else {
-                    callback(result);
+                    response = result;
                 }
+                
+                console.log('[Register] Sending response:', JSON.stringify(response));
+                if (callback) callback(response);
+                socket.emit('register_response', response);
             });
 
             socket.on('login', async (data, callback) => {
                 if (!db.isConnected) {
-                    return callback({ success: false, error: 'Database offline' });
+                    const error = { success: false, error: 'Database offline' };
+                    if (callback) callback(error);
+                    socket.emit('login_response', error);
+                    return;
                 }
                 
                 const { username, password } = data;
                 const result = await userRepo.login(username, password);
                 
+                let response;
                 if (result.success) {
                     this.authenticateSocket(socket, result.userId, result.profile);
-                    callback({
+                    response = {
                         success: true,
                         userId: result.userId,
                         profile: result.profile
-                    });
+                    };
                 } else {
-                    callback(result);
+                    response = result;
                 }
+                if (callback) callback(response);
+                socket.emit('login_response', response);
             });
 
             socket.on('logout', (callback) => {

@@ -2,6 +2,7 @@
 
 > **Last Updated:** January 17, 2026
 > **Session:** 4 - MONDAY DEMO READY 🎮
+> **Next Session:** Install Node.js, XAMPP, Unity - then live test
 
 ---
 
@@ -138,6 +139,80 @@ npm start
 5. **Join** - Boss joins
 6. **Play** - Full poker game
 7. **Adventure** - Try boss battles
+
+---
+
+## 📋 LOCAL SETUP CHECKLIST
+
+### Software To Install
+- [ ] **Node.js LTS** - https://nodejs.org/ (click LTS button)
+- [ ] **XAMPP** - https://www.apachefriends.org/ (only need MySQL)
+- [ ] **Unity Hub** - https://unity.com/download
+- [ ] **Unity 2022.3 LTS** - Install via Unity Hub (with Android Build Support)
+
+### After Node.js Installed
+```powershell
+cd C:\Projects\poker-server
+npm install
+```
+
+### After XAMPP Installed
+1. Open XAMPP Control Panel
+2. Click "Start" next to MySQL
+3. Create `.env` file in poker-server folder:
+```
+DATABASE_HOST=localhost
+DATABASE_PORT=3306
+DATABASE_USER=root
+DATABASE_PASSWORD=
+DATABASE_NAME=poker_game
+SERVER_PORT=3000
+```
+4. Run setup: `npm run setup`
+5. Start server: `npm start`
+
+### Router Port Forwarding (For Remote Access)
+| Service | Internal Port | External Port | Protocol |
+|---------|---------------|---------------|----------|
+| Poker Server | 3000 | 3000 | TCP |
+
+- Forward to your PC's local IP (find with `ipconfig`)
+- Firewall: Allow Node.js through Windows Firewall
+
+### Unity Setup
+1. Open Unity Hub → Open Project → `C:\Projects\poker-client-unity`
+2. Import TextMeshPro when prompted
+3. Build Settings → Add Scenes:
+   - `Assets/Scenes/MainMenuScene`
+   - `Assets/Scenes/LobbyScene`
+   - `Assets/Scenes/TableScene`
+   - `Assets/Scenes/AdventureScene`
+4. Edit `MainMenuScene.cs` → Change `serverUrl` to:
+   - Local test: `http://localhost:3000`
+   - Network test: `http://YOUR_PC_IP:3000`
+   - Remote test: `http://YOUR_PUBLIC_IP:3000`
+5. Player Settings → Default Orientation: Landscape Left
+6. Build → Android
+
+### Quick Test (No Unity)
+Once server is running, test with browser:
+- http://localhost:3000 (should show server info or connection)
+
+---
+
+## 🔧 TROUBLESHOOTING
+
+### "ECONNREFUSED" or Can't Connect
+- Check MySQL is running in XAMPP
+- Check server is running (`npm start`)
+- Check firewall allows port 3000
+
+### "Table doesn't exist"
+- Run `npm run setup` again
+
+### Unity Build Fails
+- Make sure TextMeshPro is imported
+- Check all scenes are in Build Settings
 
 ---
 
