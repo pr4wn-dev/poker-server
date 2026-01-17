@@ -74,6 +74,18 @@ Building a **Texas Hold'em Poker Game** with two modes:
 | **Adventure Events** | ✅ Done | `PokerEvents.cs` |
 | **Tournament Models** | ✅ Done | `NetworkModels.cs` |
 | **Tournament Events** | ✅ Done | `PokerEvents.cs` |
+| **UI Theme System** | ✅ Done | `Scripts/UI/Core/GameTheme.cs` |
+| **UI Factory** | ✅ Done | `Scripts/UI/Core/UIFactory.cs` |
+| **Card Visuals** | ✅ Done | `Scripts/UI/Components/CardVisual.cs` |
+| **Chip Stack Visuals** | ✅ Done | `Scripts/UI/Components/ChipStack.cs` |
+| **Player Seat UI** | ✅ Done | `Scripts/UI/Components/PlayerSeat.cs` |
+| **Poker Table Layout** | ✅ Done | `Scripts/UI/Components/PokerTableLayout.cs` |
+| **Action Panel** | ✅ Done | `Scripts/UI/Components/ActionPanel.cs` |
+| **Main Menu Scene** | ✅ Done | `Scripts/UI/Scenes/MainMenuScene.cs` |
+| **Poker Table Scene** | ✅ Done | `Scripts/UI/Scenes/PokerTableScene.cs` |
+| **Adventure Map Scene** | ✅ Done | `Scripts/UI/Scenes/AdventureMapScene.cs` |
+| **Game Manager** | ✅ Done | `Scripts/Core/GameManager.cs` |
+| **Scene Bootstrap** | ✅ Done | `Scripts/Core/SceneBootstrap.cs` |
 
 ---
 
@@ -186,16 +198,20 @@ These items unlock special areas. **NO ACCOUNT BOUND** - all tradeable/gambleabl
 - [ ] Tournament mode
 
 ### Unity Client  
-- [ ] Actual Unity project setup (scenes, prefabs)
-- [ ] Card visuals and animations
-- [ ] Table layout and seat positions
-- [ ] **World Map UI with tile-based areas**
-- [ ] **Boss battle scene**
-- [ ] **XP bar and level display**
-- [ ] Chip animations
+- [x] **Programmatic UI System** - All scenes build themselves from code
+- [x] **Card visuals** - Text-based (swappable to sprites)
+- [x] **Table layout with 9 seats** - Oval arrangement
+- [x] **World Map UI** - Area nodes with unlock status
+- [x] **Main Menu scene** - Login, register, mode selection
+- [x] **Poker Table scene** - Full gameplay UI
+- [x] **Adventure Map scene** - World map with areas
+- [x] **Action Panel** - Fold/Check/Call/Bet/Raise
+- [x] **XP bar and level display**
+- [ ] Chip animations (placeholder stacks done)
 - [ ] Sound effects
 - [ ] Android build configuration
 - [ ] Socket.IO package installation
+- [ ] Actual Unity project setup (import scripts into Unity)
 
 ### Infrastructure
 - [ ] Server PC setup (WAMP/XAMPP + Node.js)
