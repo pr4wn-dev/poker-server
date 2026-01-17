@@ -498,30 +498,118 @@ class Table {
             player.handResult = HandEvaluator.evaluate([...player.cards, ...this.communityCards]);
         }
 
-        // Sort by hand strength (descending)
-        activePlayers.sort((a, b) => HandEvaluator.compare(b.handResult, a.handResult));
-
-        // Award pot (simplified - doesn't handle split pots/side pots fully)
-        const winner = activePlayers[0];
-        this.awardPot(winner);
+        // Calculate and award side pots
+        this.calculateAndAwardSidePots(activePlayers);
         
-        // Award item side pot if active and winner is participating
+        // Award item side pot if active
         let sidePotResult = null;
         if (this.itemSidePot.status === SidePot.STATUS.LOCKED) {
-            if (this.itemSidePot.isParticipating(winner.playerId)) {
-                sidePotResult = this.itemSidePot.award(winner.playerId);
+            // Find overall winner (player with most chips gained? or best hand among all?)
+            // Use the best hand among participants
+            const participants = activePlayers.filter(p => 
+                this.itemSidePot.isParticipating(p.playerId)
+            );
+            if (participants.length > 0) {
+                participants.sort((a, b) => HandEvaluator.compare(b.handResult, a.handResult));
+                const itemWinner = participants[0];
+                sidePotResult = this.itemSidePot.award(itemWinner.playerId);
+                if (sidePotResult?.success) {
+                    console.log(`[Table ${this.name}] ${itemWinner.name} wins ${sidePotResult.items.length} items from side pot!`);
+                }
             }
-        }
-
-        console.log(`[Table ${this.name}] ${winner.name} wins with ${winner.handResult.name}`);
-        if (sidePotResult?.success) {
-            console.log(`[Table ${this.name}] ${winner.name} also wins ${sidePotResult.items.length} items from side pot!`);
         }
 
         setTimeout(() => this.startNewHand(), 5000);
     }
 
+    /**
+     * Calculate side pots based on all-in amounts and award them
+     * Side pots occur when players are all-in for different amounts
+     */
+    calculateAndAwardSidePots(activePlayers) {
+        // Get all players (including folded) with their total bets
+        const allContributors = this.seats
+            .filter(seat => seat !== null)
+            .map(seat => ({
+                playerId: seat.playerId,
+                name: seat.name,
+                totalBet: seat.totalBet,
+                isFolded: seat.isFolded,
+                isAllIn: seat.isAllIn,
+                seatIndex: this.seats.indexOf(seat),
+                handResult: activePlayers.find(p => p.playerId === seat.playerId)?.handResult || null
+            }))
+            .filter(p => p.totalBet > 0);
+
+        // Sort by total bet to create side pots
+        const sortedByBet = [...allContributors].sort((a, b) => a.totalBet - b.totalBet);
+        
+        let previousBetLevel = 0;
+        const potAwards = [];
+        
+        for (const player of sortedByBet) {
+            if (player.totalBet > previousBetLevel) {
+                // Calculate pot at this level
+                const betDiff = player.totalBet - previousBetLevel;
+                const eligiblePlayers = allContributors.filter(p => p.totalBet >= player.totalBet);
+                const potAmount = eligiblePlayers.length * betDiff;
+                
+                // Find best eligible hand that isn't folded
+                const eligibleHands = eligiblePlayers
+                    .filter(p => !p.isFolded && p.handResult)
+                    .sort((a, b) => HandEvaluator.compare(b.handResult, a.handResult));
+                
+                if (eligibleHands.length > 0 && potAmount > 0) {
+                    // Check for split pot (ties)
+                    const winners = [eligibleHands[0]];
+                    for (let i = 1; i < eligibleHands.length; i++) {
+                        if (HandEvaluator.compare(eligibleHands[0].handResult, eligibleHands[i].handResult) === 0) {
+                            winners.push(eligibleHands[i]);
+                        } else {
+                            break;
+                        }
+                    }
+                    
+                    // Split among winners
+                    const winAmount = Math.floor(potAmount / winners.length);
+                    const remainder = potAmount % winners.length;
+                    
+                    for (let i = 0; i < winners.length; i++) {
+                        const award = winAmount + (i === 0 ? remainder : 0);
+                        potAwards.push({
+                            playerId: winners[i].playerId,
+                            name: winners[i].name,
+                            amount: award,
+                            handName: winners[i].handResult.name,
+                            potType: previousBetLevel === 0 ? 'main' : 'side'
+                        });
+                    }
+                }
+                
+                previousBetLevel = player.totalBet;
+            }
+        }
+        
+        // Award the pots
+        for (const award of potAwards) {
+            const seat = this.seats.find(s => s?.playerId === award.playerId);
+            if (seat) {
+                seat.chips += award.amount;
+                console.log(`[Table ${this.name}] ${award.name} wins ${award.amount} from ${award.potType} pot with ${award.handName}`);
+            }
+        }
+        
+        // Clear pot
+        this.pot = 0;
+        
+        // Store awards for client display
+        this.lastPotAwards = potAwards;
+        
+        return potAwards;
+    }
+
     awardPot(winner) {
+        // Legacy method - kept for simple cases
         const seat = this.seats.find(s => s?.playerId === winner.playerId);
         if (seat) {
             seat.chips += this.pot;
@@ -685,6 +773,7 @@ class Table {
             turnTimeRemaining: this.getTurnTimeRemaining(),
             handsPlayed: this.handsPlayed,
             spectatorCount: this.getSpectatorCount(),
+            lastPotAwards: this.phase === GAME_PHASES.SHOWDOWN ? this.lastPotAwards : null,
             isSpectating: isSpectating,
             creatorId: this.creatorId,
             houseRules: this.houseRules?.toJSON?.() || null,
