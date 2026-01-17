@@ -226,9 +226,14 @@ class SocketHandler {
             });
 
             socket.on('leave_table', async (callback) => {
+                const respond = (response) => {
+                    if (callback) callback(response);
+                    socket.emit('leave_table_response', response);
+                };
+                
                 const user = this.getAuthenticatedUser(socket);
                 if (!user) {
-                    return callback?.({ success: false, error: 'Not authenticated' });
+                    return respond({ success: false, error: 'Not authenticated' });
                 }
 
                 const player = this.gameManager.players.get(user.userId);
@@ -240,7 +245,7 @@ class SocketHandler {
                     table.removeSpectator(user.userId);
                     socket.leave(`table:${tableId}`);
                     socket.to(`table:${tableId}`).emit('spectator_left', { userId: user.userId });
-                    return callback?.({ success: true });
+                    return respond({ success: true });
                 }
                 
                 const result = this.gameManager.leaveTable(user.userId);
@@ -257,15 +262,20 @@ class SocketHandler {
                     });
                 }
 
-                callback?.(result);
+                respond(result);
             });
 
             // ============ Game Actions ============
             
             socket.on('action', async (data, callback) => {
+                const respond = (response) => {
+                    if (callback) callback(response);
+                    socket.emit('action_response', response);
+                };
+                
                 const user = this.getAuthenticatedUser(socket);
                 if (!user) {
-                    return callback({ success: false, error: 'Not authenticated' });
+                    return respond({ success: false, error: 'Not authenticated' });
                 }
 
                 const { action, amount } = data;
@@ -289,7 +299,7 @@ class SocketHandler {
                     await userRepo.updateStats(user.userId, { handsPlayed: 1 });
                 }
 
-                callback(result);
+                respond(result);
             });
 
             // ============ Rebuy / Add Chips ============
@@ -497,9 +507,14 @@ class SocketHandler {
             // ============ Friends & Social ============
             
             socket.on('get_friends', async (callback) => {
+                const respond = (response) => {
+                    if (callback) callback(response);
+                    socket.emit('get_friends_response', response);
+                };
+                
                 const user = this.getAuthenticatedUser(socket);
                 if (!user) {
-                    return callback({ success: false, error: 'Not authenticated' });
+                    return respond({ success: false, error: 'Not authenticated' });
                 }
                 
                 const friendIds = await userRepo.getFriendIds(user.userId);
@@ -513,13 +528,18 @@ class SocketHandler {
                     }
                 }
                 
-                callback({ success: true, friends });
+                respond({ success: true, friends });
             });
 
             socket.on('send_friend_request', async (data, callback) => {
+                const respond = (response) => {
+                    if (callback) callback(response);
+                    socket.emit('send_friend_request_response', response);
+                };
+                
                 const user = this.getAuthenticatedUser(socket);
                 if (!user) {
-                    return callback({ success: false, error: 'Not authenticated' });
+                    return respond({ success: false, error: 'Not authenticated' });
                 }
                 
                 const result = await userRepo.sendFriendRequest(user.userId, data.toUserId);
@@ -535,13 +555,18 @@ class SocketHandler {
                     }
                 }
                 
-                callback(result);
+                respond(result);
             });
 
             socket.on('accept_friend_request', async (data, callback) => {
+                const respond = (response) => {
+                    if (callback) callback(response);
+                    socket.emit('accept_friend_request_response', response);
+                };
+                
                 const user = this.getAuthenticatedUser(socket);
                 if (!user) {
-                    return callback({ success: false, error: 'Not authenticated' });
+                    return respond({ success: false, error: 'Not authenticated' });
                 }
                 
                 const result = await userRepo.acceptFriendRequest(user.userId, data.fromUserId);
@@ -557,56 +582,96 @@ class SocketHandler {
                     }
                 }
                 
-                callback(result);
+                respond(result);
             });
 
             socket.on('decline_friend_request', async (data, callback) => {
+                const respond = (response) => {
+                    if (callback) callback(response);
+                    socket.emit('decline_friend_request_response', response);
+                };
+                
                 const user = this.getAuthenticatedUser(socket);
                 if (!user) {
-                    return callback({ success: false, error: 'Not authenticated' });
+                    return respond({ success: false, error: 'Not authenticated' });
                 }
                 
                 const result = await userRepo.declineFriendRequest(user.userId, data.fromUserId);
-                callback(result);
+                respond(result);
             });
 
             socket.on('remove_friend', async (data, callback) => {
+                const respond = (response) => {
+                    if (callback) callback(response);
+                    socket.emit('remove_friend_response', response);
+                };
+                
                 const user = this.getAuthenticatedUser(socket);
                 if (!user) {
-                    return callback({ success: false, error: 'Not authenticated' });
+                    return respond({ success: false, error: 'Not authenticated' });
                 }
                 
                 const result = await userRepo.removeFriend(user.userId, data.friendId);
-                callback(result);
+                respond(result);
+            });
+            
+            socket.on('get_friend_requests', async (callback) => {
+                const respond = (response) => {
+                    if (callback) callback(response);
+                    socket.emit('get_friend_requests_response', response);
+                };
+                
+                const user = this.getAuthenticatedUser(socket);
+                if (!user) {
+                    return respond({ success: false, error: 'Not authenticated' });
+                }
+                
+                try {
+                    const requests = await userRepo.getPendingFriendRequests(user.userId);
+                    respond({ success: true, requests });
+                } catch (error) {
+                    console.error('[Friends] Error getting requests:', error);
+                    respond({ success: false, error: 'Failed to load friend requests' });
+                }
             });
 
             socket.on('search_users', async (data, callback) => {
+                const respond = (response) => {
+                    if (callback) callback(response);
+                    socket.emit('search_users_response', response);
+                };
+                
                 const user = this.getAuthenticatedUser(socket);
                 if (!user) {
-                    return callback({ success: false, error: 'Not authenticated' });
+                    return respond({ success: false, error: 'Not authenticated' });
                 }
                 
                 const results = await userRepo.searchUsers(data.query, user.userId);
-                callback({ success: true, users: results });
+                respond({ success: true, users: results });
             });
 
             socket.on('invite_to_table', async (data, callback) => {
+                const respond = (response) => {
+                    if (callback) callback(response);
+                    socket.emit('invite_to_table_response', response);
+                };
+                
                 const user = this.getAuthenticatedUser(socket);
                 if (!user) {
-                    return callback({ success: false, error: 'Not authenticated' });
+                    return respond({ success: false, error: 'Not authenticated' });
                 }
                 
                 const { toUserId, tableId } = data;
                 const table = this.gameManager.getTable(tableId);
                 
                 if (!table) {
-                    return callback({ success: false, error: 'Table not found' });
+                    return respond({ success: false, error: 'Table not found' });
                 }
                 
                 // Check if friends
                 const friendIds = await userRepo.getFriendIds(user.userId);
                 if (!friendIds.includes(toUserId)) {
-                    return callback({ success: false, error: 'Not friends' });
+                    return respond({ success: false, error: 'Not friends' });
                 }
                 
                 // Mark as invited
@@ -623,7 +688,7 @@ class SocketHandler {
                     });
                 }
                 
-                callback({ success: true });
+                respond({ success: true });
             });
 
             // ============ Side Pot (Item Gambling) ============
@@ -898,11 +963,16 @@ class SocketHandler {
             });
             
             socket.on('forfeit_adventure', async (callback) => {
+                const respond = (response) => {
+                    if (callback) callback(response);
+                    socket.emit('forfeit_adventure_response', response);
+                };
+                
                 const user = this.getAuthenticatedUser(socket);
-                if (!user) return callback({ success: false, error: 'Not authenticated' });
+                if (!user) return respond({ success: false, error: 'Not authenticated' });
                 
                 const result = await this.adventureManager.forfeit(user.userId);
-                callback(result);
+                respond(result);
             });
             
             socket.on('use_xp_item', async (data, callback) => {

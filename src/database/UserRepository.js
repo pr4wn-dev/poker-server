@@ -537,6 +537,23 @@ class UserRepository {
         }
     }
     
+    async getPendingFriendRequests(userId) {
+        const requests = await db.query(
+            `SELECT fr.from_user_id, fr.created_at, u.username 
+             FROM friend_requests fr
+             JOIN users u ON fr.from_user_id = u.id
+             WHERE fr.to_user_id = ?
+             ORDER BY fr.created_at DESC`,
+            [userId]
+        );
+        
+        return requests.map(r => ({
+            fromUserId: r.from_user_id,
+            fromUsername: r.username,
+            createdAt: r.created_at
+        }));
+    }
+    
     async acceptFriendRequest(userId, fromUserId) {
         // Remove the request
         const result = await db.query(
