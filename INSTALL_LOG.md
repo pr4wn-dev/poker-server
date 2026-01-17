@@ -598,6 +598,19 @@ _socket = new SocketIOUnity(uri, new SocketIOOptions
 ```csharp
 using SIOUnity = SocketIOUnity.SocketIOUnity;  // FAILS - namespace/type conflict
 private SocketIOUnity.SocketIOUnity _socket;   // FAILS - same reason
+using SocketIOUnity;  // FAILS - CS0138: it's a type, not a namespace
+```
+
+**CORRECT APPROACH:**
+```csharp
+#if SOCKET_IO_AVAILABLE
+using SocketIOClient;
+// SocketIOUnity class is in GLOBAL namespace - no using needed!
+#endif
+
+// Just use the class directly:
+private SocketIOUnity _socket;
+_socket = new SocketIOUnity(uri, new SocketIOOptions { ... });
 ```
 
 ---
