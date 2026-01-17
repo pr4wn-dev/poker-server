@@ -436,3 +436,66 @@ if (_socket == null)
 }
 ```
 
+---
+
+### 13. Missing `using PokerClient.UI;` Import in Scene Files
+**Symptoms:**
+- Blue screen when playing in Unity
+- No compile errors but UI doesn't build
+- `Theme.Current` and `UIFactory` not found at runtime
+
+**Root Cause:**
+Scene files and component files were importing `PokerClient.UI.Components` but `Theme` and `UIFactory` are in `PokerClient.UI` namespace.
+
+**Solution:**
+Add `using PokerClient.UI;` to all files that use Theme or UIFactory:
+- All files in `Scripts/UI/Scenes/`
+- All files in `Scripts/UI/Components/`
+
+---
+
+### 14. Nullable int? Operator Misuse
+**Symptoms:**
+- CS0019: Operator '??' cannot be applied to operands of type 'int' and 'int'
+- CS0266: Cannot implicitly convert type 'float?' to 'float'
+
+**Root Cause:**
+Using `??` operator on non-nullable types, or doing math with nullable types without handling null.
+
+**Solution:**
+Check which fields are actually nullable in `NetworkModels.cs`:
+```csharp
+// WRONG - playerLevel is int, not int?
+playerLevelText.text = $"Level {state.playerLevel ?? 1}";
+
+// RIGHT - only xpForNextLevel is nullable
+int xpNeeded = state.xpForNextLevel ?? 100;
+float progress = xpNeeded > 0 ? (float)state.playerXP / xpNeeded : 0;
+```
+
+---
+
+### 15. GetOrAddComponent Extension Method
+**Issue:** `GetComponent<LayoutElement>()` returns null because UIFactory doesn't add LayoutElements.
+
+**Solution:** Added extension method in `UIFactory.cs`:
+```csharp
+public static class GameObjectExtensions
+{
+    public static T GetOrAddComponent<T>(this GameObject go) where T : Component
+    {
+        var component = go.GetComponent<T>();
+        if (component == null)
+            component = go.AddComponent<T>();
+        return component;
+    }
+    
+    public static T GetOrAddComponent<T>(this Component c) where T : Component
+    {
+        return c.gameObject.GetOrAddComponent<T>();
+    }
+}
+```
+
+Use: `title.GetOrAddComponent<LayoutElement>().preferredHeight = 50;`
+
