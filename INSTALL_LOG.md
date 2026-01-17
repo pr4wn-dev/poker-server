@@ -2,9 +2,9 @@
 
 > **READ THIS FILE AT START OF EVERY SESSION**
 > 
-> **Last Updated:** January 17, 2026 (Session 8 - Socket Response Pattern Fix)
-> **Session:** 8 - AUDIT & FIX SOCKET PATTERNS
-> **Status:** FIXING - Critical socket response pattern bug found and fixed
+> **Last Updated:** January 17, 2026 (Session 8 - Compile Error Fixes)
+> **Session:** 8 - AUDIT & FIX SOCKET PATTERNS + COMPILE ERRORS
+> **Status:** FIXING - Addressing Unity compile errors, documenting all fixes
 > **Goal:** Get poker game running for Monday demo
 >
 > ### 🔴 CRITICAL FIX THIS SESSION
@@ -37,7 +37,9 @@ Before writing ANY code, complete these steps:
 - [ ] Read Issue #21: SOCKET_IO_AVAILABLE must be in Standalone platform
 - [ ] Read Issue #26: Response classes ONLY in NetworkModels.cs
 - [ ] Read Issue #33: Server MUST emit BOTH callback AND _response event
-- [ ] Scan all 33+ documented solutions in ISSUES section
+- [ ] Read Issue #34: Unity lifecycle methods (Start, Awake, etc.) can't take parameters
+- [ ] Read Issue #38: Use GameService.Instance.Property, not GameService.Property
+- [ ] Scan all 39 documented solutions in ISSUES section
 
 ### Step 2: Verify Patterns Before Coding
 - [ ] Check SOCKET.IO BEST PRACTICES section
@@ -1052,6 +1054,88 @@ private void BeginTutorial(List<Step> steps, Action onComplete) { ... }
 - `Awake`, `Start`, `Update`, `FixedUpdate`, `LateUpdate`
 - `OnEnable`, `OnDisable`, `OnDestroy`
 - `OnTriggerEnter`, `OnCollisionEnter`, etc.
+
+### Issue #35: TMP_InputField.placeholder Requires Graphic, Not RectTransform
+
+**Symptoms:** `CS0029: Cannot implicitly convert type 'UnityEngine.RectTransform' to 'UnityEngine.UI.Graphic'`
+
+**Cause:** `TMP_InputField.placeholder` property expects a `Graphic` component (like `TextMeshProUGUI`), not a `RectTransform`.
+
+**Fix:** Get the actual text component:
+```csharp
+// WRONG
+_inputField.placeholder = CreatePlaceholder(parent);  // Returns RectTransform
+
+// CORRECT
+_inputField.placeholder = CreatePlaceholder(parent).GetComponent<TextMeshProUGUI>();
+```
+
+### Issue #36: NetworkModels Type Consistency - Use Same Types Throughout
+
+**Symptoms:** `CS1503: cannot convert from 'List<TournamentPlayer>' to 'List<TournamentPlayerInfo>'`
+
+**Cause:** Created two similar classes (`TournamentPlayer` and `TournamentPlayerInfo`) or using wrong type in method signatures.
+
+**Fix:** Pick ONE type and use it consistently. In `TournamentState`:
+```csharp
+public List<TournamentPlayer> players;  // Use TournamentPlayer everywhere
+```
+Update ALL method signatures to match:
+```csharp
+private void CreateRoundColumn(..., List<TournamentPlayer> players)  // NOT TournamentPlayerInfo
+private void CreateMatchCard(..., List<TournamentPlayer> players)    // NOT TournamentPlayerInfo
+```
+
+### Issue #37: UIFactory.CreateButton Expects UnityAction, Not System.Action
+
+**Symptoms:** `CS1503: cannot convert from 'System.Action' to 'UnityEngine.Events.UnityAction'`
+
+**Cause:** Unity UI buttons use `UnityAction` delegates, not `System.Action`.
+
+**Fix:** Wrap in a lambda:
+```csharp
+// WRONG
+UIFactory.CreateButton(parent, "Click", OnClick);  // OnClick is System.Action
+
+// CORRECT
+UIFactory.CreateButton(parent, "Click", () => OnClick());  // Lambda converts to UnityAction
+```
+
+### Issue #38: Access Instance Properties via Instance, Not Static Class
+
+**Symptoms:** `CS0120: An object reference is required for the non-static field, method, or property 'GameService.CurrentUser'`
+
+**Cause:** Trying to access instance properties as if they were static.
+
+**Fix:** Use the singleton instance:
+```csharp
+// WRONG
+var user = GameService.CurrentUser;
+
+// CORRECT
+var user = GameService.Instance.CurrentUser;
+```
+
+### Issue #39: Nested Object Properties Need Accessors or Null Checks
+
+**Symptoms:** `CS1061: 'UserProfile' does not contain a definition for 'level'` when level is in nested `adventureProgress`
+
+**Cause:** Properties like `level`, `xp` are inside nested objects (`stats`, `adventureProgress`), not directly on `UserProfile`.
+
+**Fix:** Add convenience accessors to the model:
+```csharp
+[Serializable]
+public class UserProfile
+{
+    public UserStats stats;
+    public AdventureProgress adventureProgress;
+    
+    // Convenience accessors
+    public int level => adventureProgress?.level ?? 1;
+    public int xp => adventureProgress?.xp ?? 0;
+    public int handsPlayed => stats?.handsPlayed ?? 0;
+}
+```
 
 ### Debugging Tips
 1. Check Unity Console for `[SocketManager]` logs
