@@ -361,8 +361,9 @@ cd folder; command1; command2
 - [x] Registration working
 - [x] Login working
 - [x] Main menu displaying
-- [ ] Multiplayer table creation (testing now)
-- [ ] Multiplayer joining
+- [x] Multiplayer table creation ✅ WORKING!
+- [x] Multiplayer table joining ✅ WORKING!
+- [x] TableScene loading with correct state ✅ WORKING!
 - [x] Adventure mode - WORKING! World map, boss selection, start adventure all functional
 - [ ] AdventureBattleScene (needs to be created)
 - [ ] Android APK build
@@ -794,6 +795,35 @@ public class JoinTableResponse
     public TableState state;
 }
 ```
+
+---
+
+### 27. Type Mismatches: long vs int in NetworkModels
+**Symptoms:**
+- CS1503: cannot convert from 'long' to 'int'
+- CS0266: Cannot implicitly convert type 'long' to 'int'
+
+**Root Cause:**
+`SeatInfo.chips`, `SeatInfo.currentBet`, `TableState.pot`, etc. were defined as `long` but UI code expects `int`.
+
+**Solution:**
+Changed all chip/bet/pot fields from `long` to `int` in NetworkModels.cs. Poker chip counts won't exceed 2 billion, so `int` is safe.
+
+---
+
+### 28. Missing Fields in NetworkModels Classes
+**Symptoms:**
+- CS1061: 'AdventureProgress' does not contain a definition for 'xp'
+- CS1061: 'AdventureSession' does not contain a definition for 'level'
+- CS0246: 'ItemInfo' could not be found
+- CS0246: 'LevelInfo' could not be found
+
+**Solution:**
+Added missing fields and classes to NetworkModels.cs:
+- `AdventureProgress`: Added `xp`, `level`, `xpToNextLevel`
+- `AdventureSession`: Added `level`, `userId` alias
+- `AreaInfo`: Added `unlockReason`
+- Added new classes: `ItemInfo`, `LevelInfo`, `TablesResponse`
 
 ---
 
