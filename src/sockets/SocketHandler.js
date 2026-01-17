@@ -112,19 +112,23 @@ class SocketHandler {
             });
 
             socket.on('create_table', (data, callback) => {
+                console.log('[SocketHandler] create_table received:', JSON.stringify(data));
                 const user = this.getAuthenticatedUser(socket);
                 if (!user) {
+                    console.log('[SocketHandler] create_table FAILED - not authenticated');
                     const error = { success: false, error: 'Not authenticated' };
                     if (callback) callback(error);
                     socket.emit('create_table_response', error);
                     return;
                 }
 
+                console.log('[SocketHandler] create_table - user authenticated:', user.username);
                 const table = this.gameManager.createTable({
                     ...data,
                     creatorId: user.userId
                 });
                 const response = { success: true, tableId: table.id, table: table.getPublicInfo() };
+                console.log('[SocketHandler] create_table SUCCESS, emitting response:', JSON.stringify(response));
                 if (callback) callback(response);
                 socket.emit('create_table_response', response);
                 
