@@ -666,19 +666,32 @@ return new CreateTableResponse { success = true, tableId = "123" };
 
 ---
 
-### 21. SOCKET_IO_AVAILABLE Only Defined for Android
+### 21. SOCKET_IO_AVAILABLE Only Defined for Android - CRITICAL!
 **Symptoms:**
 - Socket code works on Android but not in Editor
 - Unity falls back to mock mode when testing in Editor
+- Server logs show NO connection attempts
+- Create table stuck on loading forever
 
 **Root Cause:**
-In ProjectSettings.asset, `SOCKET_IO_AVAILABLE` is only defined for Android platform.
+In `ProjectSettings/ProjectSettings.asset`, `SOCKET_IO_AVAILABLE` was only defined for Android platform, not Standalone/Editor.
 
 **Solution:**
-Either:
-1. Add define for Standalone in Project Settings → Player → Scripting Define Symbols
-2. Or make mock mode actually work (use proper response classes, not anonymous types)
-3. Or remove the `#if SOCKET_IO_AVAILABLE` checks if package is always installed
+Edit `ProjectSettings/ProjectSettings.asset` and add Standalone define:
+```yaml
+scriptingDefineSymbols:
+  Android: SOCKETIO_INSTALLED;SOCKET_IO_AVAILABLE
+  Standalone: SOCKETIO_INSTALLED;SOCKET_IO_AVAILABLE  # ADD THIS LINE
+```
+
+**IMPORTANT:** Must restart Unity after changing scripting defines!
+
+**OR via Unity UI:**
+1. Edit → Project Settings → Player
+2. Other Settings → Scripting Define Symbols
+3. Add: `SOCKETIO_INSTALLED;SOCKET_IO_AVAILABLE`
+4. Click Apply
+5. Restart Unity
 
 ---
 
