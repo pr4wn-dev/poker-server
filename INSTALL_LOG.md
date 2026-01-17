@@ -7,6 +7,13 @@
 > **Next:** Test multiplayer flow end-to-end
 > **Goal:** Get poker game running for Monday demo
 
+## ⚠️ AGENT RULES - FOLLOW THESE ALWAYS
+
+1. **COMMIT CHANGES AUTOMATICALLY** - Don't wait to be asked. After making code changes, immediately `git add -A; git commit -m "message"; git push`
+2. **READ THIS LOG AT SESSION START** - Check for solutions before debugging
+3. **ADD NEW ISSUES TO THIS LOG** - Document every fix with symptoms, cause, and solution
+4. **ONE MASTER LOG FILE** - All notes go here, not in separate files
+
 ---
 
 ## 📋 PROJECT OVERVIEW
@@ -611,6 +618,28 @@ using SocketIOClient;
 // Just use the class directly:
 private SocketIOUnity _socket;
 _socket = new SocketIOUnity(uri, new SocketIOOptions { ... });
+```
+
+---
+
+### 19. Unity: CS0656 - Dynamic Keyword Not Supported
+**Symptoms:**
+- CS0656: Missing compiler required member 'Microsoft.CSharp.RuntimeBinder.CSharpArgumentInfo.Create'
+- Happens when using `dynamic` keyword
+
+**Root Cause:**
+Unity doesn't include Microsoft.CSharp.dll by default. The `dynamic` keyword requires this assembly.
+
+**Solution:**
+DON'T use `dynamic` in Unity. Instead use JSON parsing:
+```csharp
+// WRONG - doesn't work in Unity:
+var username = ((dynamic)data).username;
+
+// RIGHT - use Newtonsoft.Json:
+var json = JsonConvert.SerializeObject(data);
+var jobj = JObject.Parse(json);
+string username = jobj["username"]?.ToString() ?? "DefaultValue";
 ```
 
 ---
