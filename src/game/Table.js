@@ -602,6 +602,7 @@ class Table {
 
     getState(forPlayerId = null) {
         const isSpectating = this.isSpectator(forPlayerId);
+        const currentPlayer = this.currentPlayerIndex >= 0 ? this.seats[this.currentPlayerIndex] : null;
         
         return {
             id: this.id,
@@ -610,8 +611,11 @@ class Table {
             pot: this.pot,
             communityCards: this.communityCards,
             currentBet: this.currentBet,
+            minBet: this.bigBlind,
+            minRaise: this.minRaise,
             dealerIndex: this.dealerIndex,
             currentPlayerIndex: this.currentPlayerIndex,
+            currentPlayerId: currentPlayer?.playerId || null,
             handsPlayed: this.handsPlayed,
             spectatorCount: this.getSpectatorCount(),
             isSpectating: isSpectating,
