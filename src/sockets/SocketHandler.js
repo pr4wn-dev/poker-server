@@ -18,6 +18,7 @@ class SocketHandler {
         // Track authenticated users: userId -> { userId, socketId, profile }
         this.authenticatedUsers = new Map();
         this.socketToUser = new Map();  // socketId -> userId
+        this.reconnectTimeouts = new Map();  // userId -> timeout handle
     }
 
     initialize() {
@@ -361,6 +362,116 @@ class SocketHandler {
             socket.on('add_chips', async (data, callback) => {
                 // Alias for rebuy - same functionality
                 socket.emit('rebuy', data, callback);
+            });
+
+            // ============ Sit Out / Back ============
+            
+            socket.on('sit_out', async (callback) => {
+                const user = this.getAuthenticatedUser(socket);
+                if (!user) {
+                    return callback?.({ success: false, error: 'Not authenticated' });
+                }
+                
+                const player = this.gameManager.players.get(user.userId);
+                if (!player?.currentTableId) {
+                    return callback?.({ success: false, error: 'Not at a table' });
+                }
+                
+                const table = this.gameManager.getTable(player.currentTableId);
+                if (!table) {
+                    return callback?.({ success: false, error: 'Table not found' });
+                }
+                
+                const seat = table.seats.find(s => s?.playerId === user.userId);
+                if (!seat) {
+                    return callback?.({ success: false, error: 'Seat not found' });
+                }
+                
+                seat.isSittingOut = true;
+                seat.sitOutTime = Date.now();
+                
+                console.log(`[SocketHandler] ${user.username} is sitting out at table ${table.name}`);
+                
+                // Notify other players
+                socket.to(`table:${table.id}`).emit('player_sitting_out', {
+                    playerId: user.userId,
+                    username: user.username
+                });
+                
+                this.broadcastTableState(table.id);
+                
+                callback?.({ success: true });
+            });
+            
+            socket.on('sit_back', async (callback) => {
+                const user = this.getAuthenticatedUser(socket);
+                if (!user) {
+                    return callback?.({ success: false, error: 'Not authenticated' });
+                }
+                
+                const player = this.gameManager.players.get(user.userId);
+                if (!player?.currentTableId) {
+                    return callback?.({ success: false, error: 'Not at a table' });
+                }
+                
+                const table = this.gameManager.getTable(player.currentTableId);
+                if (!table) {
+                    return callback?.({ success: false, error: 'Table not found' });
+                }
+                
+                const seat = table.seats.find(s => s?.playerId === user.userId);
+                if (!seat) {
+                    return callback?.({ success: false, error: 'Seat not found' });
+                }
+                
+                if (!seat.isSittingOut) {
+                    return callback?.({ success: false, error: 'Not sitting out' });
+                }
+                
+                seat.isSittingOut = false;
+                seat.sitOutTime = null;
+                
+                console.log(`[SocketHandler] ${user.username} is back at table ${table.name}`);
+                
+                // Notify other players
+                socket.to(`table:${table.id}`).emit('player_sitting_back', {
+                    playerId: user.userId,
+                    username: user.username
+                });
+                
+                this.broadcastTableState(table.id);
+                
+                // Check if we can start a hand now
+                if (table.phase === 'waiting') {
+                    const activePlayers = table.seats.filter(s => s && !s.isSittingOut && s.chips > 0);
+                    if (activePlayers.length >= 2) {
+                        table.startNewHand();
+                        this.broadcastTableState(table.id);
+                    }
+                }
+                
+                callback?.({ success: true });
+            });
+            
+            socket.on('get_sit_out_status', async (callback) => {
+                const user = this.getAuthenticatedUser(socket);
+                if (!user) {
+                    return callback?.({ success: false, error: 'Not authenticated' });
+                }
+                
+                const player = this.gameManager.players.get(user.userId);
+                if (!player?.currentTableId) {
+                    return callback?.({ success: true, isSittingOut: false });
+                }
+                
+                const table = this.gameManager.getTable(player.currentTableId);
+                const seat = table?.seats?.find(s => s?.playerId === user.userId);
+                
+                callback?.({
+                    success: true,
+                    isSittingOut: seat?.isSittingOut || false,
+                    sitOutTime: seat?.sitOutTime
+                });
             });
 
             // ============ Friends & Social ============
@@ -978,26 +1089,170 @@ class SocketHandler {
                     const player = this.gameManager.players.get(user.userId);
                     
                     if (player?.currentTableId) {
-                        // Save chips before removing
-                        await userRepo.setChips(user.userId, player.chips);
+                        const table = this.gameManager.getTable(player.currentTableId);
+                        
+                        // Mark player as disconnected but don't remove yet
+                        // Allow reconnection within timeout period
+                        const seat = table?.seats?.find(s => s?.playerId === user.userId);
+                        if (seat) {
+                            seat.isConnected = false;
+                            seat.disconnectedAt = Date.now();
+                        }
                         
                         socket.to(`table:${player.currentTableId}`).emit('player_disconnected', {
-                            playerId: user.userId
+                            playerId: user.userId,
+                            canReconnect: true,
+                            timeoutSeconds: 60
                         });
+                        
+                        // Set timeout to remove player if they don't reconnect
+                        this.setReconnectTimeout(user.userId, player.currentTableId, 60000);
+                    } else {
+                        // Not at a table, just remove
+                        this.gameManager.removePlayer(user.userId, socket.id);
                     }
                     
-                    this.gameManager.removePlayer(user.userId, socket.id);
                     this.deauthenticateSocket(socket);
                     
                     // Notify friends that user went offline
                     this.notifyFriendsStatus(user.userId, false);
                 }
             });
+            
+            // ============ Reconnection ============
+            
+            socket.on('reconnect_to_table', async (data, callback) => {
+                const user = this.getAuthenticatedUser(socket);
+                if (!user) {
+                    return callback?.({ success: false, error: 'Not authenticated' });
+                }
+                
+                const { tableId } = data || {};
+                
+                // Check if player has a pending reconnection
+                const player = this.gameManager.players.get(user.userId);
+                if (!player) {
+                    return callback?.({ success: false, error: 'No active session found' });
+                }
+                
+                const table = this.gameManager.getTable(player.currentTableId || tableId);
+                if (!table) {
+                    return callback?.({ success: false, error: 'Table not found' });
+                }
+                
+                const seat = table.seats.find(s => s?.playerId === user.userId);
+                if (!seat) {
+                    return callback?.({ success: false, error: 'Seat not found' });
+                }
+                
+                // Clear reconnect timeout
+                this.clearReconnectTimeout(user.userId);
+                
+                // Mark as connected
+                seat.isConnected = true;
+                seat.disconnectedAt = null;
+                
+                // Update player's socket
+                player.socketId = socket.id;
+                
+                // Rejoin room
+                socket.join(`table:${table.id}`);
+                
+                console.log(`[Socket] ${user.username} reconnected to table ${table.name}`);
+                
+                // Notify other players
+                socket.to(`table:${table.id}`).emit('player_reconnected', {
+                    playerId: user.userId,
+                    username: user.username
+                });
+                
+                // Send current table state
+                const state = table.getState(user.userId);
+                
+                callback?.({
+                    success: true,
+                    tableId: table.id,
+                    tableName: table.name,
+                    state
+                });
+            });
+            
+            socket.on('check_active_session', async (callback) => {
+                const user = this.getAuthenticatedUser(socket);
+                if (!user) {
+                    return callback?.({ success: false, error: 'Not authenticated' });
+                }
+                
+                const player = this.gameManager.players.get(user.userId);
+                if (!player?.currentTableId) {
+                    return callback?.({ success: true, hasActiveSession: false });
+                }
+                
+                const table = this.gameManager.getTable(player.currentTableId);
+                if (!table) {
+                    return callback?.({ success: true, hasActiveSession: false });
+                }
+                
+                callback?.({
+                    success: true,
+                    hasActiveSession: true,
+                    tableId: table.id,
+                    tableName: table.name,
+                    phase: table.phase
+                });
+            });
         });
 
         console.log('[SocketHandler] Initialized');
     }
 
+    // ============ Reconnection Helpers ============
+    
+    setReconnectTimeout(userId, tableId, timeoutMs) {
+        // Clear any existing timeout
+        this.clearReconnectTimeout(userId);
+        
+        const timeout = setTimeout(async () => {
+            console.log(`[Socket] Reconnect timeout expired for user ${userId}`);
+            
+            const player = this.gameManager.players.get(userId);
+            if (player?.currentTableId === tableId) {
+                const table = this.gameManager.getTable(tableId);
+                const seat = table?.seats?.find(s => s?.playerId === userId);
+                
+                // Only remove if still disconnected
+                if (seat && !seat.isConnected) {
+                    // Save chips before removing
+                    await userRepo.setChips(userId, player.chips);
+                    
+                    // Remove from table
+                    this.gameManager.leaveTable(userId);
+                    
+                    // Notify remaining players
+                    this.io.to(`table:${tableId}`).emit('player_left', {
+                        userId: userId,
+                        reason: 'disconnect_timeout'
+                    });
+                    
+                    // Broadcast updated state
+                    this.broadcastTableState(tableId);
+                }
+            }
+            
+            this.reconnectTimeouts.delete(userId);
+        }, timeoutMs);
+        
+        this.reconnectTimeouts.set(userId, timeout);
+    }
+    
+    clearReconnectTimeout(userId) {
+        const timeout = this.reconnectTimeouts.get(userId);
+        if (timeout) {
+            clearTimeout(timeout);
+            this.reconnectTimeouts.delete(userId);
+        }
+    }
+    
     // ============ Authentication Helpers ============
     
     authenticateSocket(socket, userId, profile) {
