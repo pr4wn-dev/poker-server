@@ -1177,6 +1177,25 @@ if (player.currentTableId) {
 }
 ```
 
+### Issue #61: Audio System Integration
+
+**Summary:** Wired up the existing AudioManager to play sounds during gameplay.
+
+**Changes Made:**
+1. `AudioManager.cs` - Added lazy instantiation pattern so it auto-creates if accessed and doesn't exist
+2. `TableScene.cs` - Plays table music on load, action sounds on player actions, win/lose sounds on hand complete, victory music on game over
+3. `LobbyScene.cs` - Plays lobby music on load
+4. `MainMenuScene.cs` - Plays menu music on load
+
+**Audio Hooks Added:**
+- `PlayPokerAction()` on player actions (fold, check, call, bet, raise, allin)
+- `PlayChipWin()` on hand complete
+- `PlayHandWin()` / `PlayHandLose()` on win/lose
+- `PlayVictoryMusic()` on game over win
+- Scene-specific music: menu → lobby → table
+
+**Note:** AudioClips must be assigned in Unity Inspector or loaded from Resources folder.
+
 ### Issue #60: Game Continues After All Opponents Out of Chips
 
 **Symptoms:** After winning all-in, other players are out of chips, but game kept dealing new hands instead of ending.
