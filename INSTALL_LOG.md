@@ -23,6 +23,37 @@
 
 ---
 
+## 🚨 MANDATORY PRE-FLIGHT CHECKLIST (DO THIS EVERY SESSION START)
+
+Before writing ANY code, complete these steps:
+
+### Step 1: Read Critical Issues
+- [ ] Read Issue #1: SocketIOUnity GetValue<T>() - USE JsonUtility.FromJson
+- [ ] Read Issue #21: SOCKET_IO_AVAILABLE must be in Standalone platform
+- [ ] Read Issue #26: Response classes ONLY in NetworkModels.cs
+- [ ] Scan all 32+ documented solutions in ISSUES section
+
+### Step 2: Verify Patterns Before Coding
+- [ ] Check SOCKET.IO BEST PRACTICES section
+- [ ] Verify event naming: `event_name` → `event_name_response`
+- [ ] Verify response format: `{ success, error?, ...data }`
+- [ ] Check Unity client pattern for Emit calls
+
+### Step 3: Before Any Socket.IO Work
+- [ ] Is `useMockMode = false` in SocketManager.cs?
+- [ ] Is `SOCKET_IO_AVAILABLE` in Scripting Define Symbols for current platform?
+- [ ] Am I adding response classes to NetworkModels.cs (not GameService.cs)?
+- [ ] Am I using the `Emit<T>` pattern that uses JsonUtility?
+
+### Step 4: Before Committing
+- [ ] Did I document any new issues/solutions in this log?
+- [ ] Did I update the SESSION PROGRESS section?
+- [ ] Are both repos pushed to GitHub?
+
+**FAILURE TO COMPLETE THIS CHECKLIST = REPEATING PAST MISTAKES = WASTING USER'S TIME AND MONEY**
+
+---
+
 ## 📋 PROJECT OVERVIEW
 
 Building a **Texas Hold'em Poker Game** with two modes:
