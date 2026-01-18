@@ -2,10 +2,10 @@
 
 > **READ THIS FILE AT START OF EVERY SESSION**
 > 
-> **Last Updated:** January 18, 2026 (Session 12 continued - Turn Timer + UI Polish)
-> **Session:** 12 - TURN TIMER + UI POLISH
-> **Status:** READY FOR TESTING - Works on cellular without port forwarding!
-> **Goal:** Get poker game running for Monday demo
+> **Last Updated:** January 18, 2026 (Session 12 - READY FOR MONDAY!)
+> **Session:** 12 - MULTIPLAYER POLISH & STABILITY
+> **Status:** ✅ READY FOR MONDAY DEMO - Works on cellular without port forwarding!
+> **Goal:** Get poker game running for Monday demo - ACHIEVED!
 >
 > ### 🔴 KEY FIXES THIS SESSION
 > 1. **Turn Timer Display**: Timer now counts down locally (smooth animation) and shows on screen during player turns
@@ -19,6 +19,12 @@
 > 9. **Auto-Cleanup Empty Tables**: Tables with no connected human players are automatically removed when viewing table list
 > 10. **Add Bots Only in Practice Mode**: Only the table creator sees the "Add Bots" button, and only if table was created in practice mode
 > 11. **Round Timer (Blind Increases)**: Optional tournament-style feature - blinds double at configurable intervals (5-60 min, or OFF). Timer visible to all players during game.
+> 12. **Player Leave During Turn Fixed**: Game no longer freezes when a player leaves during their turn - advances to next player properly
+> 13. **Spectator Join/Leave Notifications**: Shows when someone starts spectating the table
+> 14. **Spectators Can Leave**: Fixed bug where spectators couldn't leave the table - now tracks spectator's tableId properly
+> 15. **My Chips Panel**: Prominent gold panel in bottom-right showing your chip count with animations
+> 16. **Player Join/Leave Notifications**: Shows when players join or leave the table
+> 17. **Music Muted by Default**: Music starts muted, can be enabled in settings
 >
 > ### 🌐 CURRENT TUNNEL URL
 > **`https://continuous-affordable-sky-provisions.trycloudflare.com`**
