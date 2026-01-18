@@ -14,6 +14,7 @@
 > 4. **Action Announcements**: Added banner showing who did what action with proper grammar
 > 5. **Bet Slider Styling**: Fixed fat/stretched slider handles in table and lobby scenes
 > 6. **Input Fields Fixed**: Register panel now properly stores username/password/email inputs
+> 7. **Configurable Server URL**: ⚙️ SERVER button on login screen - enter any IP, saved to device storage
 > 
 > ## 📊 PROJECT STATS
 > - **Server:** 21 files, 6,722 lines (Node.js)
@@ -1874,6 +1875,29 @@ public void ShowLoginPanel()
 **Files Changed:**
 - `LobbyScene.cs` - CreateSlider() handle fix
 - `TableScene.cs` - CreateBetSlider() handle fix
+
+**Date:** January 18, 2026
+
+---
+
+### Issue #75: Configurable Server URL in App
+
+**Feature:** Added ability to change server URL from within the app (no APK rebuild needed).
+
+**Implementation:**
+1. Added "⚙️ SERVER" button in top-right corner of login panel
+2. Opens popup with URL input field
+3. Saves URL to PlayerPrefs (persists across app restarts)
+4. Auto-reconnects when URL is saved
+
+**Usage:**
+1. Tap "⚙️ SERVER" on login screen
+2. Enter server IP (e.g., `http://192.168.1.50:3000`)
+3. Tap "SAVE & RECONNECT"
+4. App connects to new server
+
+**Files Changed:**
+- `MainMenuScene.cs` - Added serverSettingsPanel, ShowServerSettings(), SaveServerSettings()
 
 **Date:** January 18, 2026
 
