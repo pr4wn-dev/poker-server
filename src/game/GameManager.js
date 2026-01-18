@@ -125,7 +125,7 @@ class GameManager {
                     console.log(`[GameManager] Auto-leaving old table ${player.currentTableId} to join ${tableId}`);
                     const chips = oldTable.removePlayer(playerId);
                     if (chips !== null) {
-                        player.chips = chips;
+                        player.chips += chips; // ADD chips back to account (was = which replaced!)
                     }
                 }
             }
@@ -152,7 +152,7 @@ class GameManager {
         if (table) {
             const chips = table.removePlayer(playerId);
             if (chips !== null) {
-                player.chips = chips; // Return chips to player
+                player.chips += chips; // ADD chips back to account (was = which replaced!)
             }
         }
 
