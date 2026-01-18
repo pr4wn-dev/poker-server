@@ -14,12 +14,19 @@
 > 4. **No Manual Config**: Phone on cellular auto-connects via tunnel
 >
 > ### 🌐 CURRENT TUNNEL URL
-> **`https://pr4wn-poker.loca.lt`** - baked into the app, auto-checked on startup
+> **`https://floor-known-glasgow-society.trycloudflare.com`**
+> (Cloudflare tunnel - no password needed!)
 >
 > ### ⚠️ TO RUN SERVER FOR CELLULAR ACCESS
 > 1. Start the poker server: `npm start` (in poker-server folder)
-> 2. Start the tunnel: `lt --port 3000 --subdomain pr4wn-poker`
-> 3. Keep both terminals running!
+> 2. Start the tunnel: `cloudflared tunnel --url http://localhost:3000`
+> 3. **Copy the new URL** from the output and update `TUNNEL_URLS` in `MainMenuScene.cs` if it changed
+> 4. Keep both terminals running!
+>
+> ### 📝 Note: Cloudflare gives a RANDOM URL each time!
+> When you restart the tunnel, you get a new URL like `https://random-words.trycloudflare.com`
+> You'll need to update the app code with the new URL and rebuild the APK.
+> For now: just keep the tunnel running!
 >
 > ### 📝 PREVIOUS SESSION (11) FIXES
 > 1. **Player Joins Now Visible**: Table creator can now see when other players join (broadcasts table state)
