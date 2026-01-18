@@ -311,21 +311,8 @@ class SocketHandler {
                 const result = this.gameManager.handlePlayerAction(user.userId, action, amount);
                 
                 if (result.success) {
-                    const player = this.gameManager.players.get(user.userId);
-                    const tableId = player?.currentTableId;
-                    
-                    // Broadcast action to all players at the table
-                    this.io.to(`table:${tableId}`).emit('player_action', {
-                        oderId: user.userId,
-                        action: result.action,
-                        amount: result.amount
-                    });
-
-                    // Send updated state to all players
-                    this.broadcastTableState(tableId);
-                    
-                    // Check if next player is a bot
-                    this.gameManager.checkBotTurn(tableId);
+                    // Note: player_action is now emitted by Table.onPlayerAction callback
+                    // State broadcast and bot turn check happen via Table.onStateChange callback
                     
                     // Update stats
                     await userRepo.updateStats(user.userId, { handsPlayed: 1 });
@@ -2004,13 +1991,24 @@ class SocketHandler {
             });
         };
         
+        // Called when ANY player (human or bot) takes an action
+        table.onPlayerAction = (playerId, action, amount) => {
+            console.log(`[SocketHandler] Player action: ${playerId} ${action} ${amount}`);
+            
+            this.io.to(`table:${table.id}`).emit('player_action', {
+                playerId: playerId,
+                action: action,
+                amount: amount || 0
+            });
+        };
+        
         // Called when a player auto-folds due to timeout
         table.onAutoFold = (playerId, seatIndex) => {
             console.log(`[SocketHandler] Auto-fold: ${playerId} at seat ${seatIndex}`);
             
             // Broadcast the fold action to all players at the table
             this.io.to(`table:${table.id}`).emit('player_action', {
-                oderId: playerId,
+                playerId: playerId,
                 action: 'fold',
                 amount: 0,
                 isTimeout: true

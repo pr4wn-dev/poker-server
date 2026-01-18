@@ -103,6 +103,7 @@ class Table {
         this.onCountdownUpdate = null; // Called when countdown changes
         this.onReadyPrompt = null;  // Called when ready prompt should show
         this.onPlayerNotReady = null; // Called when player doesn't ready in time
+        this.onPlayerAction = null; // Called when any player (human or bot) takes an action
     }
     
     // ============ Game Start Countdown ============
@@ -653,6 +654,10 @@ class Table {
 
         if (result.success) {
             this.clearTurnTimer();
+            
+            // Notify about the action (for all players including bots)
+            this.onPlayerAction?.(playerId, result.action, result.amount || 0);
+            
             this.advanceGame();
         }
 
