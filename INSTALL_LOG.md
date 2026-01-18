@@ -2049,26 +2049,47 @@ else
 
 **Problem:** Spectrum and other ISPs use CGNAT (Carrier-Grade NAT), which means port forwarding on your router doesn't work. Your router gets a private IP from the ISP, not a real public IP.
 
-**Solution:** Use localtunnel with a fixed subdomain:
-1. Install localtunnel: `npm install -g localtunnel`
-2. Run tunnel: `lt --port 3000 --subdomain pr4wn-poker`
-3. Tunnel URL: `https://pr4wn-poker.loca.lt`
+**Solution:** Use cloudflared (Cloudflare's free tunnel - no signup, no password!):
+1. Install: `winget install Cloudflare.cloudflared`
+2. Run tunnel: `cloudflared tunnel --url http://localhost:3000`
+3. Copy the URL from output (e.g., `https://random-words.trycloudflare.com`)
+4. Update `TUNNEL_URLS` in `MainMenuScene.cs` with the new URL
 
 **Client Changes:**
-- Added `TUNNEL_URLS` array in `MainMenuScene.cs` with fixed tunnel URLs
+- Added `TUNNEL_URLS` array in `MainMenuScene.cs` with tunnel URLs
 - Auto-connect tries tunnels after local network scan fails (Step 4)
 - Manual scan also checks tunnels as last resort
 - 8-second timeout for tunnel connections (longer than local)
+- **CRITICAL FIX:** HTTPS URLs now correctly test port 443 (not 3000!)
 
 **How It Works:**
 1. App starts → tries last known server
 2. Scans local network (192.168.x.1-50)
 3. Checks saved remote servers
-4. **NEW: Tries tunnel URLs** (works through CGNAT!)
+4. **Tries tunnel URLs** (works through CGNAT!)
 5. If all fail, shows manual entry
 
 **Files Changed:**
-- `MainMenuScene.cs` - Added TUNNEL_URLS array and tunnel checking logic
+- `MainMenuScene.cs` - Added TUNNEL_URLS array, tunnel checking logic, HTTPS port 443 fix
+
+**Date:** January 18, 2026
+
+---
+
+### Issue #82: HTTPS Tunnel URLs Must Use Port 443
+
+**Symptoms:** Cloudflare tunnel URL works in browser but app says "No server found"
+
+**Cause:** `TestServerConnection()` was hardcoded to test port 3000, but HTTPS URLs use port 443.
+
+**Fix:** Detect HTTPS and use correct port:
+```csharp
+bool isHttps = url.StartsWith("https://");
+int port = isHttps ? 443 : 3000;  // HTTPS uses port 443!
+```
+
+**Files Changed:**
+- `MainMenuScene.cs` - TestServerConnection() now handles HTTPS correctly
 
 **Date:** January 18, 2026
 
