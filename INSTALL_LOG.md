@@ -18,6 +18,7 @@
 > 8. **Larger Bet Display**: Bet amount is now 28pt bold - easy to read
 > 9. **Auto-Cleanup Empty Tables**: Tables with no connected human players are automatically removed when viewing table list
 > 10. **Add Bots Only in Practice Mode**: Only the table creator sees the "Add Bots" button, and only if table was created in practice mode
+> 11. **Round Timer (Blind Increases)**: Optional tournament-style feature - blinds double at configurable intervals (5-60 min, or OFF). Timer visible to all players during game.
 >
 > ### 🌐 CURRENT TUNNEL URL
 > **`https://continuous-affordable-sky-provisions.trycloudflare.com`**
