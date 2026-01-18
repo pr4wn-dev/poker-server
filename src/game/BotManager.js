@@ -201,8 +201,8 @@ class BotManager {
         
         console.log(`[BotManager] ${bot.name} confirmed and joined table ${table.name} at seat ${seatIndex}`);
         
-        // Trigger countdown check - bots count as players!
-        table.checkStartCountdown();
+        // Broadcast state update so UI shows the new bot
+        table.onStateChange?.();
         
         return { success: true, seatIndex, bot, pendingApproval: false };
     }

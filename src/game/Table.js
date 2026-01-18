@@ -107,62 +107,39 @@ class Table {
     
     // ============ Game Start Countdown ============
     
+    // Called when players leave - cancels any active countdown/ready-up if not enough players
     checkStartCountdown() {
         const activePlayers = this.getActivePlayerCount();
         
         if (this.gameStarted) {
-            // Game already started, no countdown needed
             return;
         }
         
-        if (activePlayers >= 2 && !this.startCountdown) {
-            // Start countdown
-            this.startCountdownTime = Date.now();
-            console.log(`[Table ${this.name}] Starting ${this.startDelaySeconds}s countdown with ${activePlayers} players`);
-            
-            // Broadcast countdown updates every second
-            this.countdownInterval = setInterval(() => {
-                const remaining = this.getStartCountdownRemaining();
-                console.log(`[Table ${this.name}] Countdown tick: ${remaining}s remaining`);
-                if (remaining !== null && remaining > 0) {
-                    this.onStateChange?.(); // Broadcast updated countdown
-                }
-            }, 1000);
-            
-            this.startCountdown = setTimeout(() => {
-                // Clear the interval
+        // Only used to CANCEL countdowns when players leave
+        // Game start is now triggered by table creator clicking START GAME
+        if (activePlayers < 2) {
+            // Cancel any active countdown or ready-up phase
+            if (this.startCountdown) {
+                console.log(`[Table ${this.name}] Countdown cancelled - only ${activePlayers} player(s)`);
+                clearTimeout(this.startCountdown);
                 if (this.countdownInterval) {
                     clearInterval(this.countdownInterval);
                     this.countdownInterval = null;
                 }
-                
                 this.startCountdown = null;
                 this.startCountdownTime = null;
-                
-                // Check again - players might have left
-                if (this.getActivePlayerCount() >= 2) {
-                    console.log(`[Table ${this.name}] Countdown complete, starting game!`);
-                    this.startNewHand();
-                    this.onStateChange?.();
-                } else {
-                    console.log(`[Table ${this.name}] Not enough players to start`);
-                }
-            }, this.startDelaySeconds * 1000);
-            
-            this.onCountdownUpdate?.();
-            this.onStateChange?.(); // Initial broadcast with countdown
-        } else if (activePlayers < 2 && this.startCountdown) {
-            // Cancel countdown - not enough players
-            console.log(`[Table ${this.name}] Countdown cancelled - only ${activePlayers} player(s)`);
-            clearTimeout(this.startCountdown);
-            if (this.countdownInterval) {
-                clearInterval(this.countdownInterval);
-                this.countdownInterval = null;
+                this.onCountdownUpdate?.();
             }
-            this.startCountdown = null;
-            this.startCountdownTime = null;
-            this.onCountdownUpdate?.();
-            this.onStateChange?.(); // Broadcast cancelled state
+            
+            // Also cancel ready-up phase if active
+            if (this.phase === GAME_PHASES.READY_UP || this.phase === GAME_PHASES.COUNTDOWN) {
+                console.log(`[Table ${this.name}] Ready-up cancelled - only ${activePlayers} player(s)`);
+                this.clearReadyUpTimer();
+                this.phase = GAME_PHASES.WAITING;
+                this.readyPlayers.clear();
+            }
+            
+            this.onStateChange?.();
         }
     }
     
