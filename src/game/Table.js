@@ -850,7 +850,7 @@ class Table {
         }
 
         // Calculate and award side pots
-        this.calculateAndAwardSidePots(activePlayers);
+        const potAwards = this.calculateAndAwardSidePots(activePlayers);
         
         // Award item side pot if active
         let sidePotResult = null;
@@ -868,6 +868,19 @@ class Table {
                     console.log(`[Table ${this.name}] ${itemWinner.name} wins ${sidePotResult.items.length} items from side pot!`);
                 }
             }
+        }
+
+        // Notify about each pot winner (for hand_result event)
+        if (potAwards && potAwards.length > 0 && this.onHandComplete) {
+            // Emit for the main pot winner (first award)
+            const mainWinner = potAwards[0];
+            this.onHandComplete({
+                winnerId: mainWinner.playerId,
+                winnerName: mainWinner.name,
+                handName: mainWinner.handName,
+                potAmount: potAwards.reduce((sum, a) => sum + a.amount, 0), // Total pot
+                potAwards: potAwards // All individual awards
+            });
         }
 
         setTimeout(() => this.startNewHand(), 5000);
@@ -960,12 +973,31 @@ class Table {
     }
 
     awardPot(winner) {
-        // Legacy method - kept for simple cases
+        // Simple case - everyone folded, winner takes pot
         const seat = this.seats.find(s => s?.playerId === winner.playerId);
+        const potAmount = this.pot;
+        
         if (seat) {
-            seat.chips += this.pot;
+            seat.chips += potAmount;
         }
         this.pot = 0;
+        
+        // Notify about the winner (for hand_result event)
+        if (this.onHandComplete) {
+            this.onHandComplete({
+                winnerId: winner.playerId,
+                winnerName: winner.name,
+                handName: "Everyone Folded",
+                potAmount: potAmount,
+                potAwards: [{
+                    playerId: winner.playerId,
+                    name: winner.name,
+                    amount: potAmount,
+                    handName: "Everyone Folded",
+                    potType: 'main'
+                }]
+            });
+        }
     }
 
     // ============ Spectators ============

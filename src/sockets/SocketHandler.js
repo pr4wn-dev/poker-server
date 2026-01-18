@@ -2010,6 +2010,20 @@ class SocketHandler {
             });
         };
         
+        // Called when a hand is complete (showdown or all folded)
+        table.onHandComplete = (result) => {
+            console.log(`[SocketHandler] Hand complete: ${result.winnerName} wins ${result.potAmount} with ${result.handName}`);
+            
+            this.io.to(`table:${table.id}`).emit('hand_result', {
+                tableId: table.id,
+                winnerId: result.winnerId,
+                winnerName: result.winnerName,
+                handName: result.handName,
+                potAmount: result.potAmount,
+                potAwards: result.potAwards || []
+            });
+        };
+        
         // Called when a player auto-folds due to timeout
         table.onAutoFold = (playerId, seatIndex) => {
             console.log(`[SocketHandler] Auto-fold: ${playerId} at seat ${seatIndex}`);
