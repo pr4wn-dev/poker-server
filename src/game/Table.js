@@ -1167,6 +1167,7 @@ class Table {
             lastPotAwards: this.phase === GAME_PHASES.SHOWDOWN ? this.lastPotAwards : null,
             isSpectating: isSpectating,
             creatorId: this.creatorId,
+            practiceMode: this.practiceMode,
             houseRules: this.houseRules?.toJSON?.() || null,
             sidePot: this.getSidePotState(forPlayerId),
             seats: this.seats.map((seat, index) => {
