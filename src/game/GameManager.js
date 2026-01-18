@@ -91,11 +91,15 @@ class GameManager {
             practiceMode: options.practiceMode || false, // Allow broke players to practice
             isPrivate: options.isPrivate || false,
             creatorId: options.creatorId || null,
-            turnTimeLimit: options.turnTimeLimit || 20000 // Turn time in ms (default 20 seconds)
+            turnTimeLimit: options.turnTimeLimit || 20000, // Turn time in ms (default 20 seconds)
+            blindIncreaseInterval: options.blindIncreaseInterval || 0 // 0 = disabled, otherwise ms between blind increases
         });
 
         this.tables.set(tableId, table);
-        console.log(`[GameManager] Table created: ${table.name} (${tableId}) by ${options.creatorId}, practiceMode: ${table.practiceMode}, turnTimeLimit: ${table.turnTimeLimit}ms`);
+        const blindInfo = table.blindIncreaseInterval > 0 
+            ? `blindIncrease: every ${table.blindIncreaseInterval / 60000} min` 
+            : 'blindIncrease: disabled';
+        console.log(`[GameManager] Table created: ${table.name} (${tableId}) by ${options.creatorId}, practiceMode: ${table.practiceMode}, turnTimeLimit: ${table.turnTimeLimit}ms, ${blindInfo}`);
         return table;
     }
 

@@ -92,6 +92,16 @@ class Table {
         this.turnStartTime = null;
         this.turnTimeLimit = options.turnTimeLimit || 20000; // 20 seconds per turn (default)
         
+        // Blind increase timer (tournament-style)
+        // 0 = disabled (blinds never increase)
+        // otherwise = time in milliseconds between blind increases (default 20 minutes)
+        this.blindIncreaseInterval = options.blindIncreaseInterval || 0; // 0 = disabled
+        this.initialSmallBlind = this.smallBlind;
+        this.initialBigBlind = this.bigBlind;
+        this.blindLevel = 1; // Current blind level (1 = starting blinds)
+        this.nextBlindIncreaseAt = null; // Timestamp when blinds will next increase
+        this.blindIncreaseTimer = null; // Timer handle
+        
         // Game start countdown timer
         this.startCountdown = null;
         this.startCountdownTime = null;
@@ -429,6 +439,63 @@ class Table {
         }
     }
 
+    // ============ Blind Increase Timer ============
+    
+    startBlindTimer() {
+        this.stopBlindTimer();
+        
+        if (this.blindIncreaseInterval <= 0) {
+            return; // Blind increases disabled
+        }
+        
+        this.nextBlindIncreaseAt = Date.now() + this.blindIncreaseInterval;
+        
+        this.blindIncreaseTimer = setTimeout(() => {
+            this.increaseBlinds();
+        }, this.blindIncreaseInterval);
+        
+        console.log(`[Table ${this.name}] Blind timer started - next increase in ${this.blindIncreaseInterval / 60000} minutes`);
+    }
+    
+    stopBlindTimer() {
+        if (this.blindIncreaseTimer) {
+            clearTimeout(this.blindIncreaseTimer);
+            this.blindIncreaseTimer = null;
+        }
+        this.nextBlindIncreaseAt = null;
+    }
+    
+    getBlindTimeRemaining() {
+        if (!this.nextBlindIncreaseAt || this.blindIncreaseInterval <= 0) {
+            return -1; // Disabled or not running
+        }
+        const remaining = Math.max(0, this.nextBlindIncreaseAt - Date.now());
+        return Math.ceil(remaining / 1000); // Return seconds
+    }
+    
+    increaseBlinds() {
+        // Double the blinds
+        this.blindLevel++;
+        this.smallBlind = this.smallBlind * 2;
+        this.bigBlind = this.bigBlind * 2;
+        this.minRaise = this.bigBlind;
+        
+        console.log(`[Table ${this.name}] BLINDS INCREASED to Level ${this.blindLevel}: ${this.smallBlind}/${this.bigBlind}`);
+        
+        // Notify via callback
+        this.onBlindsIncrease?.({
+            level: this.blindLevel,
+            smallBlind: this.smallBlind,
+            bigBlind: this.bigBlind
+        });
+        
+        // Broadcast state change
+        this.onStateChange?.();
+        
+        // Schedule next increase
+        this.startBlindTimer();
+    }
+
     // ============ Player Management ============
 
     addPlayer(playerId, name, chips, preferredSeat = null) {
@@ -540,6 +607,8 @@ class Table {
         if (!this.gameStarted) {
             this.gameStarted = true;
             this.lockSidePot();
+            // Start blind increase timer if enabled
+            this.startBlindTimer();
         }
 
         // Reset state
@@ -1158,6 +1227,9 @@ class Table {
             currentPlayerIndex: this.currentPlayerIndex,
             currentPlayerId: currentPlayer?.playerId || null,
             turnTimeRemaining: this.getTurnTimeRemaining(),
+            blindTimeRemaining: this.getBlindTimeRemaining(),
+            blindLevel: this.blindLevel,
+            blindIncreaseEnabled: this.blindIncreaseInterval > 0,
             startCountdownRemaining: this.getStartCountdownRemaining(),
             readyUpTimeRemaining: this.getReadyUpTimeRemaining(),
             readyPlayerCount: this.getReadyPlayerCount(),
