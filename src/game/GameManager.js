@@ -95,7 +95,7 @@ class GameManager {
         });
 
         this.tables.set(tableId, table);
-        console.log(`[GameManager] Table created: ${table.name} (${tableId}) by ${options.creatorId}, practiceMode: ${table.practiceMode}`);
+        console.log(`[GameManager] Table created: ${table.name} (${tableId}) by ${options.creatorId}, practiceMode: ${table.practiceMode}, turnTimeLimit: ${table.turnTimeLimit}ms`);
         return table;
     }
 
