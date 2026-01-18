@@ -90,7 +90,8 @@ class GameManager {
             buyIn: options.buyIn || 20000000, // Default 20 million
             practiceMode: options.practiceMode || false, // Allow broke players to practice
             isPrivate: options.isPrivate || false,
-            creatorId: options.creatorId || null
+            creatorId: options.creatorId || null,
+            turnTimeLimit: options.turnTimeLimit || 20000 // Turn time in ms (default 20 seconds)
         });
 
         this.tables.set(tableId, table);

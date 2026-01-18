@@ -90,7 +90,7 @@ class Table {
         // Timing
         this.turnTimeout = null;
         this.turnStartTime = null;
-        this.turnTimeLimit = options.turnTimeLimit || 10000; // 10 seconds per turn
+        this.turnTimeLimit = options.turnTimeLimit || 20000; // 20 seconds per turn (default)
         
         // Game start countdown timer
         this.startCountdown = null;
