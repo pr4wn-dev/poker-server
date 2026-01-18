@@ -2,16 +2,18 @@
 
 > **READ THIS FILE AT START OF EVERY SESSION**
 > 
-> **Last Updated:** January 18, 2026 (Session 12 - Tunnel Support for CGNAT)
-> **Session:** 12 - TUNNEL SUPPORT FOR CGNAT/NAT BYPASS
+> **Last Updated:** January 18, 2026 (Session 12 continued - Turn Timer + UI Polish)
+> **Session:** 12 - TURN TIMER + UI POLISH
 > **Status:** READY FOR TESTING - Works on cellular without port forwarding!
 > **Goal:** Get poker game running for Monday demo
 >
 > ### 🔴 KEY FIXES THIS SESSION
-> 1. **Tunnel Auto-Check**: App now automatically tries tunnel URLs (localtunnel) when other connections fail
-> 2. **Fixed Subdomain**: Using `https://pr4wn-poker.loca.lt` - same URL every time
-> 3. **CGNAT Bypass**: Works even when ISP blocks port forwarding (Spectrum, etc.)
-> 4. **No Manual Config**: Phone on cellular auto-connects via tunnel
+> 1. **Turn Timer Display**: Timer now counts down locally (smooth animation) and shows on screen during player turns
+> 2. **Configurable Turn Time**: 20 second default, adjustable from 5s-60s when creating table
+> 3. **Pulsing Timer**: Timer pulses red when 10 seconds or less - clear visual urgency
+> 4. **Emoji Removal**: Removed unsupported emoji characters showing as squares in UI
+> 5. **Tunnel Auto-Check**: App automatically tries tunnel URLs when other connections fail
+> 6. **CGNAT Bypass**: Works even when ISP blocks port forwarding (Spectrum, etc.)
 >
 > ### 🌐 CURRENT TUNNEL URL
 > **`https://floor-known-glasgow-society.trycloudflare.com`**
