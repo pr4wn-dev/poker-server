@@ -2,17 +2,18 @@
 
 > **READ THIS FILE AT START OF EVERY SESSION**
 > 
-> **Last Updated:** January 18, 2026 (Session 9 - Ready-Up System & UI Fixes)
-> **Session:** 9 - READY-UP SYSTEM, COUNTDOWN TIMER, CREATE TABLE UI
-> **Status:** WORKING - Game ready-up system implemented, UI polish ongoing
+> **Last Updated:** January 18, 2026 (Session 10 - Buy-In System, Registration, APK Prep)
+> **Session:** 10 - BUY-IN SYSTEM, REGISTRATION FIXES, CHIPS SYSTEM
+> **Status:** READY FOR TESTING - Building APK for phone testing
 > **Goal:** Get poker game running for Monday demo
 >
 > ### 🔴 KEY FIXES THIS SESSION
-> 1. **Ready-Up System**: Table creator clicks START GAME → 1 min ready phase → 10 sec countdown → game starts
-> 2. **Countdown Timer Overlay**: Big centered countdown visible to all players
-> 3. **JsonUtility nullable fix**: Server returns 0 instead of null, client uses int not int?
-> 4. **Auto-start removed**: Game only starts via START GAME button, not auto-triggered by bots joining
-> 5. **Create Table UI**: Fixed slider controls, panel sizing, text overflow issues
+> 1. **Registration Feedback**: Error/success messages now display on register panel (was only updating hidden login panel)
+> 2. **20 Million Starting Chips**: New users get 20M, existing users migrated automatically
+> 3. **Buy-In System Fixed**: Table buyIn now properly passed to constructor and used for bots
+> 4. **Action Announcements**: Added banner showing who did what action with proper grammar
+> 5. **Bet Slider Styling**: Fixed fat/stretched slider handles in table and lobby scenes
+> 6. **Input Fields Fixed**: Register panel now properly stores username/password/email inputs
 > 
 > ## 📊 PROJECT STATS
 > - **Server:** 21 files, 6,722 lines (Node.js)
@@ -1751,6 +1752,130 @@ public void ShowLoginPanel()
     ClearError();  // Always clear any lingering messages
 }
 ```
+
+---
+
+### Issue #69: Registration Error Messages Not Displaying
+
+**Symptoms:** User registers, nothing happens. No error message shown even when username is taken. No success feedback.
+
+**Cause:** 
+1. `errorText` was a child of `loginPanel`, but when register panel is active, login panel is hidden
+2. Register panel created its own `regError` text but stored it as local variable, not a field
+3. `ShowError()` only updated `errorText` (on hidden login panel)
+4. Registration input fields (`regUsernameInput`, `regPasswordInput`, `emailInput`) were local variables, never stored
+
+**Fix:**
+1. Added `regErrorText` field to store register panel's error text
+2. Updated `ShowError()` to check which panel is active and update correct error text
+3. Added `ShowSuccess()` method for success messages  
+4. Fixed input fields to be stored in class fields
+5. Updated `ClearError()` to clear both error texts
+
+**Files Changed:**
+- `MainMenuScene.cs` - Added regErrorText field, fixed ShowError/ClearError/ShowSuccess, stored input fields
+
+**Date:** January 18, 2026
+
+---
+
+### Issue #70: New Users Only Getting 10,000 Starting Chips
+
+**Symptoms:** New registrations show 10,000 chips instead of 20 million.
+
+**Cause:** 
+1. Database schema had `chips INT DEFAULT 10000`
+2. `UserRepository.register()` had correct code but server wasn't restarted after changes
+3. No migration to update existing users
+
+**Fix:**
+1. Changed database schema to `chips BIGINT DEFAULT 20000000`
+2. Hardcoded 20 million in `UserRepository.register()` (removed env var dependency)
+3. Added migration to auto-update any user with <20M chips on server startup
+4. Migration runs every startup, ensuring no one has less than 20M
+
+**Files Changed:**
+- `Database.js` - Schema change, added migration
+- `UserRepository.js` - Hardcoded 20M starting chips
+
+**Date:** January 18, 2026
+
+---
+
+### Issue #71: Buy-In Not Applied to Tables or Bots
+
+**Symptoms:** Player shows full 20M at table instead of buy-in amount. Bots show 1K chips.
+
+**Cause:**
+1. `GameManager.createTable()` wasn't passing `buyIn` to Table constructor - tables always used default 20M
+2. `SocketHandler.invite_bot` used `buyIn || 1000` fallback instead of table's actual buyIn
+
+**Fix:**
+1. Added `buyIn: options.buyIn || 20000000` to Table constructor call in GameManager
+2. Changed bot invite to get `table.buyIn` and use that for bot chips
+
+**Files Changed:**
+- `GameManager.js` - Pass buyIn to Table constructor
+- `SocketHandler.js` - Use table.buyIn for bot invites
+
+**Date:** January 18, 2026
+
+---
+
+### Issue #72: Action Announcements Missing for Other Players
+
+**Symptoms:** Action banner shows "You called" for your actions but doesn't show other players' actions.
+
+**Cause:** 
+1. `player_action` event was only emitted in the socket `action` handler (for human actions)
+2. Bot actions and auto-fold didn't trigger the event
+3. `oderId` typo in auto-fold emit
+
+**Fix:**
+1. Added `onPlayerAction` callback to `Table.js` that fires for ALL actions
+2. Wired callback in `SocketHandler.setupTableCallbacks` to emit `player_action` for all actions
+3. Removed redundant emit from `action` handler
+4. Fixed `oderId` → `playerId` typo
+
+**Files Changed:**
+- `Table.js` - Added onPlayerAction callback
+- `SocketHandler.js` - Wired callback, removed duplicate emit
+
+**Date:** January 18, 2026
+
+---
+
+### Issue #73: Action Announcement Grammar ("You calls" instead of "You called")
+
+**Symptoms:** Action banner shows "You checks" and "You calls" instead of past tense.
+
+**Cause:** Client used present tense verbs for all players, didn't distinguish for "You" actions.
+
+**Fix:** Updated `OnPlayerActionReceived` in `TableScene.cs` to use past tense for current user's actions:
+- "folded", "checked", "called", "bet", "raised", "went ALL IN!"
+
+**Files Changed:**
+- `TableScene.cs` - Past tense for "You" actions
+
+**Date:** January 18, 2026
+
+---
+
+### Issue #74: Slider Handles Stretched Vertically (Fat Sliders)
+
+**Symptoms:** Slider handles in Create Table UI and bet slider appear as tall vertical bars instead of small circles.
+
+**Cause:** Handle RectTransform anchored to stretch vertically with parent instead of fixed size.
+
+**Fix:** 
+1. Set handle anchor to center (0.5, 0.5) with fixed 14x14 or 18x18 size
+2. Made slider track thinner with 0.4-0.6 anchors instead of 0.25-0.75
+
+**Files Changed:**
+- `LobbyScene.cs` - CreateSlider() handle fix
+- `TableScene.cs` - CreateBetSlider() handle fix
+
+**Date:** January 18, 2026
 
 ---
 
