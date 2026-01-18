@@ -69,7 +69,7 @@ class Database {
                 username VARCHAR(50) UNIQUE NOT NULL,
                 email VARCHAR(255) UNIQUE,
                 password_hash VARCHAR(255) NOT NULL,
-                chips INT DEFAULT 10000,
+                chips BIGINT DEFAULT 20000000,
                 adventure_coins INT DEFAULT 0,
                 xp INT DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -85,6 +85,18 @@ class Database {
             await this.query('ALTER TABLE users ADD COLUMN xp INT DEFAULT 0');
         } catch (e) {
             // Column already exists, ignore
+        }
+        
+        // Migration: Upgrade chips column to BIGINT and set minimum chips to 20 million
+        try {
+            await this.query('ALTER TABLE users MODIFY COLUMN chips BIGINT DEFAULT 20000000');
+            // Update any users with less than 20 million chips to have 20 million
+            const result = await this.query('UPDATE users SET chips = 20000000 WHERE chips < 20000000');
+            if (result.affectedRows > 0) {
+                console.log(`[Database] Updated ${result.affectedRows} users to 20 million starting chips`);
+            }
+        } catch (e) {
+            // Migration already applied or column doesn't exist yet
         }
 
         // User stats table
