@@ -283,8 +283,6 @@ class BotManager {
             return;
         }
         
-        console.log(`[BotManager] Bot turn detected: ${currentSeat.name} at seat ${table.currentPlayerIndex}, phase: ${table.phase}`);
-        
         const tableBots = this.activeBots.get(tableId);
         if (!tableBots) {
             console.log(`[BotManager] ERROR: No activeBots map for table ${tableId}`);
@@ -299,7 +297,12 @@ class BotManager {
         
         // Don't double-trigger - include phase and hand count to ensure unique key per turn
         const timerKey = `${tableId}_${table.currentPlayerIndex}_${table.phase}_${table.handsPlayed}`;
-        if (this.botTurnTimers.has(timerKey)) return;
+        if (this.botTurnTimers.has(timerKey)) {
+            // Already processing this turn, skip duplicate
+            return;
+        }
+        
+        console.log(`[BotManager] Bot turn: ${currentSeat.name} at seat ${table.currentPlayerIndex}, phase: ${table.phase}`);
         
         // Simulate thinking time (1-3 seconds based on personality)
         let thinkTime = 1500;
