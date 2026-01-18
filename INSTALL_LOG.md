@@ -1567,6 +1567,31 @@ foreach ($meta in $metas) {
 
 **Date:** January 17, 2026
 
+### Issue #65: Blue Rectangle at Bottom of Screen (Unity Camera Background Visible)
+
+**Symptoms:** Giant blue rectangle at the bottom of the screen, visible even when no one's at the table. The game doesn't fill the entire scene.
+
+**Cause:** The `TableScene.cs` canvas had UI elements that didn't fully cover the screen:
+- `_tableView` started at `anchorMin = (0, 0.18f)` (18% from bottom)
+- `actionPanel` was only 120px tall at the bottom
+- This left a gap where Unity's default blue camera background showed through
+- No full-screen background panel covered the entire canvas
+
+**Fix:** Added a full-screen background panel as the first element in `BuildScene()`:
+```csharp
+// FULL-SCREEN BACKGROUND - covers entire canvas so no Unity blue shows through
+var fullBg = UIFactory.CreatePanel(_canvas.transform, "FullScreenBackground", theme.backgroundColor);
+var fullBgRect = fullBg.GetComponent<RectTransform>();
+fullBgRect.anchorMin = Vector2.zero;
+fullBgRect.anchorMax = Vector2.one;
+fullBgRect.sizeDelta = Vector2.zero;
+fullBg.transform.SetAsFirstSibling(); // Ensure it's behind everything
+```
+
+**Date:** January 18, 2026
+
+---
+
 ### Issue #45: Table creatorId Not Passed to Table Constructor
 
 **Symptoms:** Bots don't join. Server rejects with "Only the table creator can invite bots" even though user IS the creator.
