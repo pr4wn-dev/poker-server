@@ -18,6 +18,13 @@
 > 8. **Practice Mode**: Tables can be created with "practice mode" - players get loaned chips but keep no winnings
 > 9. **Tables Auto-Close**: Tables with only bots automatically close when all humans leave
 > 10. **Mobile Input Fixed**: Better keyboard behavior, network scan button for easy server discovery
+> 11. **Connection Timeout Extended**: Remote server connections now have 5 second timeout (was 500ms)
+>
+> ### 📌 TODO TOMORROW: PORT FORWARDING
+> For phone to connect over cellular (not on WiFi), set up port forwarding on router:
+> - **External Port:** 3000 → **Internal IP:** 192.168.1.23 → **Internal Port:** 3000 (TCP)
+> - Known servers are baked into APK at `Assets/Resources/known_servers.json`
+> - Public IP: 76.37.183.166 | Local IP: 192.168.1.23
 > 
 > ## 📊 PROJECT STATS
 > - **Server:** 21 files, 6,722 lines (Node.js)
