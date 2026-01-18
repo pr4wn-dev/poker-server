@@ -14,9 +14,12 @@
 > 4. **Emoji Removal**: Removed unsupported emoji characters showing as squares in UI
 > 5. **Tunnel Auto-Check**: App automatically tries tunnel URLs when other connections fail
 > 6. **CGNAT Bypass**: Works even when ISP blocks port forwarding (Spectrum, etc.)
+> 7. **Bet Slider Shows Call Amount**: Slider defaults to call amount so you can see what's needed to match
+> 8. **Larger Bet Display**: Bet amount is now 28pt bold - easy to read
+> 9. **Auto-Cleanup Empty Tables**: Tables with no connected human players are automatically removed when viewing table list
 >
 > ### 🌐 CURRENT TUNNEL URL
-> **`https://floor-known-glasgow-society.trycloudflare.com`**
+> **`https://continuous-affordable-sky-provisions.trycloudflare.com`**
 > (Cloudflare tunnel - no password needed!)
 >
 > ### ⚠️ TO RUN SERVER FOR CELLULAR ACCESS
