@@ -15,6 +15,7 @@
 > 5. **Bet Slider Styling**: Fixed fat/stretched slider handles in table and lobby scenes
 > 6. **Input Fields Fixed**: Register panel now properly stores username/password/email inputs
 > 7. **Configurable Server URL**: ⚙️ SERVER button on login screen - enter any IP, saved to device storage
+> 8. **CRITICAL: Chip Return Bug**: Chips now ADD back to account when leaving table (was replacing, losing account balance!)
 > 
 > ## 📊 PROJECT STATS
 > - **Server:** 21 files, 6,722 lines (Node.js)
@@ -1898,6 +1899,32 @@ public void ShowLoginPanel()
 
 **Files Changed:**
 - `MainMenuScene.cs` - Added serverSettingsPanel, ShowServerSettings(), SaveServerSettings()
+
+**Date:** January 18, 2026
+
+---
+
+### Issue #76: CRITICAL - Chips Replaced Instead of Added When Leaving Table
+
+**Symptoms:** Player starts with 20M, buys in for 5M (15M left in account), wins 10M at table (now has 15M at table), leaves table and only has 10M total instead of 30M.
+
+**Cause:** In `GameManager.js`, the code used `player.chips = chips` instead of `player.chips += chips`:
+```javascript
+// BUG:
+player.chips = chips; // Replaces account balance with table chips!
+
+// FIX:
+player.chips += chips; // Adds table chips back to account
+```
+
+**Impact:** Players were losing their entire account balance when leaving tables! Only the chips from the table were kept.
+
+**Fix:** Changed `=` to `+=` in two places in `GameManager.js`:
+1. Line 128: Auto-leave old table when joining new one
+2. Line 155: Normal leave table
+
+**Files Changed:**
+- `GameManager.js` - Changed `player.chips = chips` to `player.chips += chips` (2 locations)
 
 **Date:** January 18, 2026
 
