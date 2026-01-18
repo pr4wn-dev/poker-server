@@ -270,16 +270,32 @@ class BotManager {
      */
     checkBotTurn(tableId) {
         const table = this.gameManager.tables.get(tableId);
-        if (!table || !table.gameStarted) return;
+        if (!table || !table.gameStarted) {
+            return;
+        }
         
         const currentSeat = table.seats[table.currentPlayerIndex];
-        if (!currentSeat || !currentSeat.isBot) return;
+        if (!currentSeat) {
+            return;
+        }
+        
+        if (!currentSeat.isBot) {
+            return;
+        }
+        
+        console.log(`[BotManager] Bot turn detected: ${currentSeat.name} at seat ${table.currentPlayerIndex}, phase: ${table.phase}`);
         
         const tableBots = this.activeBots.get(tableId);
-        if (!tableBots) return;
+        if (!tableBots) {
+            console.log(`[BotManager] ERROR: No activeBots map for table ${tableId}`);
+            return;
+        }
         
         const bot = tableBots.get(table.currentPlayerIndex);
-        if (!bot) return;
+        if (!bot) {
+            console.log(`[BotManager] ERROR: Bot not found in activeBots for seat ${table.currentPlayerIndex}. Active seats: ${Array.from(tableBots.keys()).join(', ')}`);
+            return;
+        }
         
         // Don't double-trigger
         const timerKey = `${tableId}_${table.currentPlayerIndex}`;
@@ -305,49 +321,80 @@ class BotManager {
      * Execute a bot's turn
      */
     executeBotTurn(tableId, seatIndex) {
-        const table = this.gameManager.tables.get(tableId);
-        if (!table || table.currentPlayerIndex !== seatIndex) {
-            console.log(`[BotManager] Skipping bot turn - no longer their turn`);
-            return;
-        }
-        
-        const tableBots = this.activeBots.get(tableId);
-        if (!tableBots) return;
-        
-        const bot = tableBots.get(seatIndex);
-        if (!bot) return;
-        
-        const seat = table.seats[seatIndex];
-        if (!seat || seat.isFolded || seat.isAllIn) return;
-        
-        // Sync bot state with seat
-        bot.chips = seat.chips;
-        bot.currentBet = seat.currentBet;
-        bot.cards = seat.cards;
-        bot.folded = seat.isFolded;
-        bot.allIn = seat.isAllIn;
-        
-        // Get game state for decision
-        const gameState = {
-            currentBet: table.currentBet,
-            pot: table.pot,
-            minRaise: table.bigBlind,
-            maxBet: seat.chips,
-            phase: table.phase,
-            communityCards: table.communityCards
-        };
-        
-        // Make decision
-        const decision = bot.decide(gameState);
-        console.log(`[BotManager] ${bot.name} decides: ${decision.action}${decision.amount ? ` $${decision.amount}` : ''}`);
-        
-        // Execute action through game manager
-        const result = this.gameManager.handleAction(tableId, bot.id, decision.action, decision.amount);
-        
-        if (!result.success) {
-            console.error(`[BotManager] ${bot.name} action failed: ${result.error}`);
-            // Fallback to fold if action failed
-            this.gameManager.handleAction(tableId, bot.id, 'fold');
+        try {
+            const table = this.gameManager.tables.get(tableId);
+            if (!table) {
+                console.log(`[BotManager] executeBotTurn: Table ${tableId} not found`);
+                return;
+            }
+            
+            if (table.currentPlayerIndex !== seatIndex) {
+                console.log(`[BotManager] executeBotTurn: No longer ${seatIndex}'s turn (now ${table.currentPlayerIndex})`);
+                return;
+            }
+            
+            const tableBots = this.activeBots.get(tableId);
+            if (!tableBots) {
+                console.log(`[BotManager] executeBotTurn: No activeBots for table`);
+                return;
+            }
+            
+            const bot = tableBots.get(seatIndex);
+            if (!bot) {
+                console.log(`[BotManager] executeBotTurn: Bot not found at seat ${seatIndex}`);
+                return;
+            }
+            
+            const seat = table.seats[seatIndex];
+            if (!seat) {
+                console.log(`[BotManager] executeBotTurn: Seat ${seatIndex} is empty`);
+                return;
+            }
+            
+            if (seat.isFolded) {
+                console.log(`[BotManager] executeBotTurn: ${bot.name} already folded`);
+                return;
+            }
+            
+            if (seat.isAllIn) {
+                console.log(`[BotManager] executeBotTurn: ${bot.name} already all-in`);
+                return;
+            }
+            
+            // Sync bot state with seat
+            bot.chips = seat.chips;
+            bot.currentBet = seat.currentBet;
+            bot.cards = seat.cards;
+            bot.folded = seat.isFolded;
+            bot.allIn = seat.isAllIn;
+            
+            // Get game state for decision
+            const gameState = {
+                currentBet: table.currentBet,
+                pot: table.pot,
+                minRaise: table.bigBlind,
+                maxBet: seat.chips,
+                phase: table.phase,
+                communityCards: table.communityCards
+            };
+            
+            console.log(`[BotManager] ${bot.name} deciding... phase=${table.phase}, currentBet=${table.currentBet}, botBet=${seat.currentBet}, pot=${table.pot}`);
+            
+            // Make decision
+            const decision = bot.decide(gameState);
+            console.log(`[BotManager] ${bot.name} decides: ${decision.action}${decision.amount ? ` $${decision.amount}` : ''}`);
+            
+            // Execute action through game manager
+            const result = this.gameManager.handleAction(tableId, bot.id, decision.action, decision.amount);
+            
+            if (!result.success) {
+                console.error(`[BotManager] ${bot.name} action failed: ${result.error}`);
+                // Fallback to check or fold if action failed
+                const fallbackResult = this.gameManager.handleAction(tableId, bot.id, table.currentBet > 0 ? 'fold' : 'check');
+                console.log(`[BotManager] ${bot.name} fallback action: ${fallbackResult.success ? 'success' : fallbackResult.error}`);
+            }
+        } catch (error) {
+            console.error(`[BotManager] executeBotTurn ERROR:`, error);
         }
     }
     
