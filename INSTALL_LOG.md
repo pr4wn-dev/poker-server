@@ -2,15 +2,17 @@
 
 > **READ THIS FILE AT START OF EVERY SESSION**
 > 
-> **Last Updated:** January 17, 2026 (Session 8 - Compile Error Fixes)
-> **Session:** 8 - AUDIT & FIX SOCKET PATTERNS + COMPILE ERRORS
-> **Status:** FIXING - Addressing Unity compile errors, documenting all fixes
+> **Last Updated:** January 18, 2026 (Session 9 - Ready-Up System & UI Fixes)
+> **Session:** 9 - READY-UP SYSTEM, COUNTDOWN TIMER, CREATE TABLE UI
+> **Status:** WORKING - Game ready-up system implemented, UI polish ongoing
 > **Goal:** Get poker game running for Monday demo
 >
-> ### 🔴 CRITICAL FIX THIS SESSION
-> Found 10 socket endpoints missing the `_response` emit - Unity client would NEVER receive responses!
-> Fixed: rebuy, sit_out, sit_back, get_sit_out_status, get_leaderboard, get_daily_reward_status, 
-> claim_daily_reward, get_achievements, unlock_achievement, reconnect_to_table, check_active_session
+> ### 🔴 KEY FIXES THIS SESSION
+> 1. **Ready-Up System**: Table creator clicks START GAME → 1 min ready phase → 10 sec countdown → game starts
+> 2. **Countdown Timer Overlay**: Big centered countdown visible to all players
+> 3. **JsonUtility nullable fix**: Server returns 0 instead of null, client uses int not int?
+> 4. **Auto-start removed**: Game only starts via START GAME button, not auto-triggered by bots joining
+> 5. **Create Table UI**: Fixed slider controls, panel sizing, text overflow issues
 > 
 > ## 📊 PROJECT STATS
 > - **Server:** 21 files, 6,722 lines (Node.js)
@@ -1208,6 +1210,64 @@ if (player.currentTableId) {
 - `ChipStack.cs` - Visual improvements
 - `PokerTableView.cs` - PlayerSeatView._betChips
 - All `Assets/Resources/Sprites/Cards/*.png.meta` files
+
+### Issue #68: Create Table UI Layout Issues (LobbyScene)
+
+**Symptoms:** Create Table panel controls too big, slider handles stretch vertically into tall bars, text wraps vertically ("CREATE TABLE" becomes C-R-E-A-T-E stacked), content overflows panel, goes off-screen when resizing.
+
+**Causes:**
+1. Slider handle RectTransform not anchored properly - stretched with parent height
+2. VerticalLayoutGroup with wrong childForceExpandWidth settings
+3. Panel too small (320px) for content totaling 342px
+4. No minWidth constraints causing text to wrap vertically
+
+**Fixes Applied:**
+1. **Slider handle anchoring**: Set anchor to vertical center (0.5, 0.5) with fixed 14x14 size
+2. **Slider track thinner**: Changed from 0.25-0.75 to 0.35-0.65 anchors
+3. **Panel size increased**: 380x360 with proper anchor/pivot/sizeDelta
+4. **childForceExpandWidth = true**: Let items fill width properly
+5. **minWidth: 300**: Added to all rows to prevent vertical text wrapping
+6. **Buttons in horizontal row**: CANCEL and CREATE side by side
+7. **Toggle size reduced**: 24x24 instead of 40x40
+
+**Files Changed:**
+- `LobbyScene.cs` - BuildCreateTablePanel(), CreateSlider(), CreateToggle()
+
+### Issue #67: JsonUtility Doesn't Support Nullable Types
+
+**Symptoms:** Countdown timer value shows as empty in Unity logs despite server sending countdown. `startCountdownRemaining` always null.
+
+**Cause:** Unity's `JsonUtility.FromJson` does NOT support nullable types (`int?`, `float?`). The field gets skipped during deserialization.
+
+**Fix:** 
+1. **Server-side** (`Table.js`): Return `0` instead of `null` from `getStartCountdownRemaining()` and `getTurnTimeRemaining()`
+2. **Client-side** (`NetworkModels.cs`): Change `int? startCountdownRemaining` to `int startCountdownRemaining`, and `float? turnTimeRemaining` to `float turnTimeRemaining`
+3. **Client-side** (`TableScene.cs`): Check `> 0` instead of `.HasValue`
+
+### Issue #66: Game Auto-Starts Before Ready-Up
+
+**Symptoms:** Game started automatically when bots joined, bypassing the new ready-up system.
+
+**Cause:** Old `checkStartCountdown()` method still had auto-start logic that triggered when 2+ players present. `BotManager.addBotToTable()` called it.
+
+**Fix:** 
+1. Modified `checkStartCountdown()` to ONLY cancel countdowns (not start them)
+2. Changed `BotManager.js` to call `table.onStateChange()` instead of `table.checkStartCountdown()`
+3. Game now only starts when table creator clicks START GAME button
+
+### Issue #65: Countdown Timer Overlay Implementation
+
+**Summary:** Added big centered countdown overlay visible to all players before game starts.
+
+**Components Added:**
+1. **Server** (`Table.js`): `countdownInterval` broadcasts state every second during countdown
+2. **Client** (`TableScene.cs`): `_countdownOverlay`, `_countdownNumber` with pulse animation
+3. **Client** (`TableScene.cs`): `UpdateCountdownDisplay()` shows/hides overlay based on `startCountdownRemaining`
+
+**Visual Design:**
+- Semi-transparent dark overlay covers table
+- Large white number (120px font) with pulse animation
+- "Get Ready!" title and "Game starting soon..." message
 
 ### Issue #62: Asset Integration System
 
