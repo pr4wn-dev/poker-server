@@ -215,6 +215,14 @@ class SocketHandler {
                     result = table.addSpectator(user.userId, user.profile.username, socket.id);
                     if (result.success) {
                         socket.join(`table:${tableId}`);
+                        
+                        // Track spectator's table so they can leave properly
+                        let player = this.gameManager.players.get(user.userId);
+                        if (player) {
+                            player.currentTableId = tableId;
+                            player.isSpectating = true;
+                        }
+                        
                         const state = table.getState(user.userId);
                         const response = { success: true, isSpectating: true, state };
                         if (callback) callback(response);
@@ -278,6 +286,14 @@ class SocketHandler {
                     table.removeSpectator(user.userId);
                     socket.leave(`table:${tableId}`);
                     socket.to(`table:${tableId}`).emit('spectator_left', { userId: user.userId });
+                    
+                    // Clear spectator's table tracking
+                    if (player) {
+                        player.currentTableId = null;
+                        player.isSpectating = false;
+                    }
+                    
+                    console.log(`[SocketHandler] Spectator ${user.profile?.username} left table ${tableId}`);
                     return respond({ success: true });
                 }
                 
