@@ -169,7 +169,8 @@ class GameManager {
         const player = this.players.get(playerId);
         if (!player?.currentTableId) return { success: false, error: 'Not at a table' };
 
-        const table = this.tables.get(player.currentTableId);
+        const tableId = player.currentTableId;
+        const table = this.tables.get(tableId);
         if (table) {
             const chips = table.removePlayer(playerId);
             
@@ -184,10 +185,39 @@ class GameManager {
             } else if (wasPracticePlayer) {
                 console.log(`[GameManager] Practice player ${player.name} left table - chips NOT added to account`);
             }
+            
+            // Check if only bots remain - if so, close the table
+            this.checkAndCloseEmptyTable(tableId);
         }
 
         player.currentTableId = null;
         return { success: true };
+    }
+    
+    /**
+     * Check if table has no human players and close it if so
+     */
+    checkAndCloseEmptyTable(tableId) {
+        const table = this.tables.get(tableId);
+        if (!table) return;
+        
+        // Count human players (non-bots)
+        const humanPlayers = table.seats.filter(seat => seat && !seat.isBot);
+        
+        if (humanPlayers.length === 0) {
+            console.log(`[GameManager] Table ${table.name} has no human players - closing table`);
+            
+            // Remove all bots from the table
+            for (const seat of table.seats) {
+                if (seat && seat.isBot) {
+                    table.removePlayer(seat.playerId);
+                }
+            }
+            
+            // Delete the table
+            this.tables.delete(tableId);
+            console.log(`[GameManager] Table ${tableId} closed`);
+        }
     }
 
     // ============ Game Actions ============

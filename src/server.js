@@ -74,6 +74,33 @@ app.get('/api/tables', (req, res) => {
     res.json(gameManager.getPublicTableList());
 });
 
+// Server info endpoint - returns local IP and public IP for remote connections
+app.get('/api/server-info', async (req, res) => {
+    const localIP = getLocalIP();
+    let publicIP = null;
+    
+    // Try to get public IP from external service
+    try {
+        const https = require('https');
+        publicIP = await new Promise((resolve, reject) => {
+            https.get('https://api.ipify.org', { timeout: 3000 }, (response) => {
+                let data = '';
+                response.on('data', chunk => data += chunk);
+                response.on('end', () => resolve(data.trim()));
+            }).on('error', () => resolve(null));
+        });
+    } catch (err) {
+        console.log('[Server] Could not fetch public IP:', err.message);
+    }
+    
+    res.json({
+        localIP: localIP,
+        publicIP: publicIP,
+        port: PORT,
+        name: 'Poker Game Server'
+    });
+});
+
 /**
  * Start the server
  */

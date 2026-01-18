@@ -107,6 +107,7 @@ class SocketHandler {
             
             socket.on('get_tables', (data, callback) => {
                 const tables = this.gameManager.getPublicTableList();
+                console.log(`[SocketHandler] get_tables - returning ${tables.length} tables`);
                 const response = { success: true, tables };
                 if (callback) callback(response);
                 socket.emit('get_tables_response', response);
@@ -247,6 +248,9 @@ class SocketHandler {
                         const response = { success: true, seatIndex: result.seatIndex, isSpectating: false, state };
                         if (callback) callback(response);
                         socket.emit('join_table_response', response);
+                        
+                        // Broadcast updated table state to all players so they see the new player
+                        this.broadcastTableState(tableId);
                     } else {
                         if (callback) callback(result);
                         socket.emit('join_table_response', result);

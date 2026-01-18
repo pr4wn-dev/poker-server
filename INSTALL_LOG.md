@@ -2,20 +2,22 @@
 
 > **READ THIS FILE AT START OF EVERY SESSION**
 > 
-> **Last Updated:** January 18, 2026 (Session 10 - Buy-In System, Registration, APK Prep)
-> **Session:** 10 - BUY-IN SYSTEM, REGISTRATION FIXES, CHIPS SYSTEM
-> **Status:** READY FOR TESTING - Building APK for phone testing
+> **Last Updated:** January 18, 2026 (Session 11 - Auto-Connect, Seat Perspective, Practice Mode)
+> **Session:** 11 - AUTO-CONNECT, SEAT PERSPECTIVE, PRACTICE MODE, MOBILE FIXES
+> **Status:** READY FOR TESTING - Mobile and PC working together
 > **Goal:** Get poker game running for Monday demo
 >
 > ### 🔴 KEY FIXES THIS SESSION
-> 1. **Registration Feedback**: Error/success messages now display on register panel (was only updating hidden login panel)
-> 2. **20 Million Starting Chips**: New users get 20M, existing users migrated automatically
-> 3. **Buy-In System Fixed**: Table buyIn now properly passed to constructor and used for bots
-> 4. **Action Announcements**: Added banner showing who did what action with proper grammar
-> 5. **Bet Slider Styling**: Fixed fat/stretched slider handles in table and lobby scenes
-> 6. **Input Fields Fixed**: Register panel now properly stores username/password/email inputs
-> 7. **Configurable Server URL**: ⚙️ SERVER button on login screen - enter any IP, saved to device storage
-> 8. **CRITICAL: Chip Return Bug**: Chips now ADD back to account when leaving table (was replacing, losing account balance!)
+> 1. **Player Joins Now Visible**: Table creator can now see when other players join (broadcasts table state)
+> 2. **Seat Perspective Fixed**: Your seat always appears at bottom center, opponents rotate around you
+> 3. **No More Duplicate Players**: Fixed seat rotation bug causing same player to appear in multiple seats
+> 4. **Auto-Connect on Startup**: App automatically scans network and connects - no manual config needed!
+> 5. **Saved Remote Servers**: Discovered servers save their public IP for remote access later
+> 6. **Server Info Endpoint**: New `/api/server-info` returns local + public IP for remote connections
+> 7. **Removed SERVER Button**: No longer needed - app handles connection automatically
+> 8. **Practice Mode**: Tables can be created with "practice mode" - players get loaned chips but keep no winnings
+> 9. **Tables Auto-Close**: Tables with only bots automatically close when all humans leave
+> 10. **Mobile Input Fixed**: Better keyboard behavior, network scan button for easy server discovery
 > 
 > ## 📊 PROJECT STATS
 > - **Server:** 21 files, 6,722 lines (Node.js)
@@ -1925,6 +1927,129 @@ player.chips += chips; // Adds table chips back to account
 
 **Files Changed:**
 - `GameManager.js` - Changed `player.chips = chips` to `player.chips += chips` (2 locations)
+
+**Date:** January 18, 2026
+
+---
+
+### Issue #77: Table Creator Can't See Other Players Join
+
+**Symptoms:** When player B joins a table created by player A, player A doesn't see player B appear at the table.
+
+**Cause:** Server emitted `player_joined` event but didn't broadcast full table state after a player joins.
+
+**Fix:** Added `this.broadcastTableState(tableId)` after successful join in `SocketHandler.js`:
+```javascript
+socket.on('join_table', async (data, callback) => {
+    // ... join logic ...
+    if (result.success) {
+        socket.join(`table:${tableId}`);
+        socket.to(`table:${tableId}`).emit('player_joined', {...});
+        this.broadcastTableState(tableId);  // NEW - everyone sees updated state
+    }
+});
+```
+
+**Files Changed:**
+- `SocketHandler.js` - Added broadcastTableState after join
+
+**Date:** January 18, 2026
+
+---
+
+### Issue #78: Player's Seat Not at Bottom Center (Seat Perspective)
+
+**Symptoms:** When joining a table, the table creator appears in the player's bottom seat instead of the player themselves. All seats shown from server's perspective, not the player's.
+
+**Cause:** `PokerTableView.UpdateFromState()` mapped server seat indices directly to visual positions without rotation. If player was at server seat 3, they appeared at visual position 3 (left side) instead of position 0 (bottom center).
+
+**Fix:** 
+1. Added `_mySeatIndex` field to `TableScene.cs` to track player's seat
+2. Modified `PokerTableView.UpdateFromState()` to accept `mySeatIndex` parameter
+3. Rotate visual positions: `serverSeatIndex = (visualIndex + mySeatIndex) % maxSeats`
+4. Player's seat always appears at visual position 0 (bottom center)
+
+```csharp
+// Rotation formula - player's seat becomes visual position 0
+int serverSeatIndex = mySeatIndex >= 0 
+    ? (visualIndex + mySeatIndex) % maxSeats 
+    : visualIndex;
+```
+
+**Files Changed:**
+- `PokerTableView.cs` - Added mySeatIndex parameter and rotation logic
+- `TableScene.cs` - Track player's seat index, pass to UpdateFromState
+
+**Date:** January 18, 2026
+
+---
+
+### Issue #79: Same Player Appearing in Multiple Seats
+
+**Symptoms:** After seat perspective fix, some players appeared duplicated across multiple seats.
+
+**Cause:** Used `state.seats.Count` for modulo instead of `_maxPlayers`. If server sent fewer seats, modulo wrapped around causing index reuse.
+
+**Fix:** 
+1. Changed modulo divisor from `state.seats.Count` to `_maxPlayers` (always 9)
+2. Added check for `!string.IsNullOrEmpty(playerId)` - empty seats properly show as empty
+
+```csharp
+int maxSeats = _maxPlayers;  // Use fixed table size, not variable array length
+// ...
+if (serverSeatIndex < state.seats.Count && state.seats[serverSeatIndex] != null && 
+    !string.IsNullOrEmpty(state.seats[serverSeatIndex].playerId))
+{
+    // Show player
+}
+else
+{
+    _seats[visualIndex].SetEmpty();  // Properly clear empty seats
+}
+```
+
+**Files Changed:**
+- `PokerTableView.cs` - Fixed modulo and added playerId check
+
+**Date:** January 18, 2026
+
+---
+
+### Issue #80: Auto-Connect and Smart Server Discovery
+
+**Feature:** App now automatically finds and connects to servers without manual configuration.
+
+**Implementation:**
+1. **On startup**: App shows "Finding Server..." screen with live status updates
+2. **Step 1**: Try last known server URL (from PlayerPrefs)
+3. **Step 2**: Scan local network (192.168.x.1-50) for open port 3000
+4. **Step 3**: Check saved remote servers by their public IP
+5. **On success**: Save server's public IP, connect, show login
+6. **On failure**: Show manual server entry dialog (fallback)
+
+**Server-side:** New `/api/server-info` endpoint returns:
+```json
+{
+    "localIP": "192.168.1.23",
+    "publicIP": "74.125.224.72",
+    "port": 3000,
+    "name": "Poker Game Server"
+}
+```
+
+**Saved Server Storage:**
+- Up to 10 recently seen servers stored in PlayerPrefs
+- Each entry: name, localIP, publicIP, port, lastSeen timestamp
+- Enables remote play: discover at boss's house, play from home via public IP
+
+**UI Changes:**
+- Removed "SERVER" button from login screen (no longer needed)
+- Added "CREATE ACCOUNT" button (was shortened to "NEW" before)
+- Beautiful connection status panel with live updates
+
+**Files Changed:**
+- `server.js` - Added `/api/server-info` endpoint
+- `MainMenuScene.cs` - AutoConnectToServer(), SaveServerWithPublicIP(), GetSavedServers(), BuildConnectionPanel()
 
 **Date:** January 18, 2026
 
