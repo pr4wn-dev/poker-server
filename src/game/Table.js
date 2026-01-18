@@ -542,17 +542,36 @@ class Table {
 
         const player = this.seats[seatIndex];
         const chips = player.chips;
+        const wasCurrentPlayer = this.currentPlayerIndex === seatIndex;
+        const wasInGame = this.phase !== GAME_PHASES.WAITING && 
+                          this.phase !== GAME_PHASES.READY_UP && 
+                          this.phase !== GAME_PHASES.COUNTDOWN;
         
-        this.seats[seatIndex] = null;
         console.log(`[Table ${this.name}] ${player.name} left`);
 
-        // Handle mid-game removal
-        if (this.phase !== GAME_PHASES.WAITING && this.currentPlayerIndex === seatIndex) {
-            this.handleAction(playerId, ACTIONS.FOLD);
+        // Handle mid-game removal - fold BEFORE removing from seat
+        if (wasInGame && wasCurrentPlayer) {
+            // Clear turn timer first
+            this.clearTurnTimer();
+            
+            // Mark as folded and remove
+            player.isFolded = true;
+            player.isActive = false;
+            this.seats[seatIndex] = null;
+            
+            // Advance the game manually since the player is gone
+            console.log(`[Table ${this.name}] Player left during their turn - advancing game`);
+            this.advanceGame();
+        } else {
+            // Not their turn - just remove
+            this.seats[seatIndex] = null;
         }
 
         // Check if countdown should be cancelled (not enough players)
         this.checkStartCountdown();
+        
+        // Broadcast state change
+        this.onStateChange?.();
 
         return chips;
     }
