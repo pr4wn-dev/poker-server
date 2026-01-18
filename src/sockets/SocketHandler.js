@@ -411,6 +411,82 @@ class SocketHandler {
                 socket.emit('rebuy', data, callback);
             });
 
+            // ============ Ready-Up System ============
+            
+            // Start the game (table creator only) - initiates ready-up phase
+            socket.on('start_game', (data, callback) => {
+                const respond = (response) => {
+                    if (callback) callback(response);
+                    socket.emit('start_game_response', response);
+                };
+                
+                const user = this.getAuthenticatedUser(socket);
+                if (!user) {
+                    return respond({ success: false, error: 'Not authenticated' });
+                }
+                
+                const { tableId } = data;
+                const table = this.gameManager.getTable(tableId);
+                
+                if (!table) {
+                    return respond({ success: false, error: 'Table not found' });
+                }
+                
+                const result = table.startReadyUp(user.userId);
+                
+                if (result.success) {
+                    console.log(`[SocketHandler] Ready-up phase started at table ${table.name}`);
+                    
+                    // Broadcast ready prompt to all players
+                    this.io.to(`table:${tableId}`).emit('ready_prompt', {
+                        tableId: tableId,
+                        timeLimit: table.readyUpDuration / 1000 // in seconds
+                    });
+                    
+                    // Broadcast updated state
+                    this.broadcastTableState(tableId);
+                }
+                
+                respond(result);
+            });
+            
+            // Player clicks "Ready"
+            socket.on('player_ready', (data, callback) => {
+                const respond = (response) => {
+                    if (callback) callback(response);
+                    socket.emit('player_ready_response', response);
+                };
+                
+                const user = this.getAuthenticatedUser(socket);
+                if (!user) {
+                    return respond({ success: false, error: 'Not authenticated' });
+                }
+                
+                const { tableId } = data;
+                const table = this.gameManager.getTable(tableId);
+                
+                if (!table) {
+                    return respond({ success: false, error: 'Table not found' });
+                }
+                
+                const result = table.playerReady(user.userId);
+                
+                if (result.success) {
+                    console.log(`[SocketHandler] ${user.username} is ready at table ${table.name}`);
+                    
+                    // Broadcast player ready event
+                    this.io.to(`table:${tableId}`).emit('player_readied', {
+                        playerId: user.userId,
+                        playerName: user.username
+                    });
+                    
+                    // Broadcast updated state
+                    this.broadcastTableState(tableId);
+                }
+                
+                respond(result);
+            });
+
             // ============ Bot Management ============
             
             // Invite a bot to the table (table creator only, requires player approval)
@@ -1941,6 +2017,36 @@ class SocketHandler {
             });
             
             // State will be broadcast by onStateChange (which also checks for bot turns)
+        };
+        
+        // Called when ready-up phase starts
+        table.onReadyPrompt = () => {
+            console.log(`[SocketHandler] Ready-up phase started at table ${table.name}`);
+            
+            this.io.to(`table:${table.id}`).emit('ready_prompt', {
+                tableId: table.id,
+                timeLimit: table.readyUpDuration / 1000 // in seconds
+            });
+        };
+        
+        // Called when a player didn't ready in time and becomes spectator
+        table.onPlayerNotReady = (playerId, playerName) => {
+            console.log(`[SocketHandler] ${playerName} not ready - moved to spectators at table ${table.name}`);
+            
+            // Find the player's socket and notify them
+            const playerAuth = this.authenticatedUsers.get(playerId);
+            if (playerAuth) {
+                this.io.to(playerAuth.socketId).emit('moved_to_spectator', {
+                    tableId: table.id,
+                    reason: 'Did not ready up in time'
+                });
+            }
+            
+            // Broadcast to all that player is now spectating
+            this.io.to(`table:${table.id}`).emit('player_not_ready', {
+                playerId: playerId,
+                playerName: playerName
+            });
         };
     }
 

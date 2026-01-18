@@ -8,6 +8,8 @@ const SidePot = require('./SidePot');
 
 const GAME_PHASES = {
     WAITING: 'waiting',
+    READY_UP: 'ready_up',    // New: waiting for players to click ready
+    COUNTDOWN: 'countdown',   // New: final 10-second countdown before start
     PRE_FLOP: 'preflop',
     FLOP: 'flop',
     TURN: 'turn',
@@ -86,12 +88,21 @@ class Table {
         this.startCountdown = null;
         this.startCountdownTime = null;
         this.countdownInterval = null;
-        this.startDelaySeconds = options.startDelaySeconds || 10; // 10 seconds to start after 2+ players
+        this.startDelaySeconds = options.startDelaySeconds || 10; // 10 seconds final countdown
+        
+        // Ready-up system
+        this.readyUpActive = false;
+        this.readyUpStartTime = null;
+        this.readyUpTimeout = null;
+        this.readyUpDuration = options.readyUpDuration || 60000; // 1 minute to ready up
+        this.readyUpInterval = null;
         
         // Event callbacks (set by SocketHandler)
         this.onStateChange = null;  // Called when state changes, for broadcasting
         this.onAutoFold = null;     // Called when player auto-folds on timeout
         this.onCountdownUpdate = null; // Called when countdown changes
+        this.onReadyPrompt = null;  // Called when ready prompt should show
+        this.onPlayerNotReady = null; // Called when player doesn't ready in time
     }
     
     // ============ Game Start Countdown ============
@@ -162,6 +173,224 @@ class Table {
         return Math.ceil(remaining / 1000); // Return seconds, rounded up
     }
     
+    // ============ Ready-Up System ============
+    
+    /**
+     * Called when table creator clicks "Start Game"
+     * Initiates the ready-up phase where all players must confirm
+     */
+    startReadyUp(creatorId) {
+        if (this.phase !== GAME_PHASES.WAITING) {
+            return { success: false, error: 'Game already in progress' };
+        }
+        
+        if (this.creatorId !== creatorId) {
+            return { success: false, error: 'Only the table creator can start the game' };
+        }
+        
+        const playerCount = this.getActivePlayerCount();
+        if (playerCount < 2) {
+            return { success: false, error: 'Need at least 2 players to start' };
+        }
+        
+        console.log(`[Table ${this.name}] Ready-up phase started by creator`);
+        
+        this.phase = GAME_PHASES.READY_UP;
+        this.readyUpActive = true;
+        this.readyUpStartTime = Date.now();
+        
+        // Mark all players as not ready initially (except bots - they're always ready)
+        for (const seat of this.seats) {
+            if (seat) {
+                seat.isReady = seat.isBot ? true : false;
+            }
+        }
+        
+        // Start 1-minute ready-up timer
+        this.readyUpTimeout = setTimeout(() => {
+            this.handleReadyUpTimeout();
+        }, this.readyUpDuration);
+        
+        // Broadcast updates every second
+        this.readyUpInterval = setInterval(() => {
+            this.onStateChange?.();
+        }, 1000);
+        
+        // Notify all players to show ready prompt
+        this.onReadyPrompt?.();
+        this.onStateChange?.();
+        
+        // Check if all already ready (all bots case)
+        this.checkAllReady();
+        
+        return { success: true };
+    }
+    
+    /**
+     * Called when a player clicks "Ready"
+     */
+    playerReady(playerId) {
+        if (this.phase !== GAME_PHASES.READY_UP && this.phase !== GAME_PHASES.COUNTDOWN) {
+            return { success: false, error: 'Not in ready-up phase' };
+        }
+        
+        const seat = this.seats.find(s => s && s.playerId === playerId);
+        if (!seat) {
+            return { success: false, error: 'Player not found at table' };
+        }
+        
+        if (seat.isReady) {
+            return { success: false, error: 'Already ready' };
+        }
+        
+        seat.isReady = true;
+        console.log(`[Table ${this.name}] ${seat.name} is ready!`);
+        
+        this.onStateChange?.();
+        this.checkAllReady();
+        
+        return { success: true };
+    }
+    
+    /**
+     * Check if all players are ready - if so, start final countdown
+     */
+    checkAllReady() {
+        if (this.phase !== GAME_PHASES.READY_UP) return;
+        
+        const allReady = this.seats.every(s => !s || s.isReady);
+        
+        if (allReady) {
+            console.log(`[Table ${this.name}] All players ready! Starting final countdown`);
+            this.startFinalCountdown();
+        }
+    }
+    
+    /**
+     * Called when 1-minute ready-up time expires
+     * Starts the 10-second final countdown
+     */
+    handleReadyUpTimeout() {
+        if (this.phase !== GAME_PHASES.READY_UP) return;
+        
+        console.log(`[Table ${this.name}] Ready-up time expired, starting final countdown`);
+        this.startFinalCountdown();
+    }
+    
+    /**
+     * Start the 10-second final countdown
+     * Players who haven't readied will become spectators when game starts
+     */
+    startFinalCountdown() {
+        // Clear ready-up timers
+        if (this.readyUpTimeout) {
+            clearTimeout(this.readyUpTimeout);
+            this.readyUpTimeout = null;
+        }
+        if (this.readyUpInterval) {
+            clearInterval(this.readyUpInterval);
+            this.readyUpInterval = null;
+        }
+        
+        this.phase = GAME_PHASES.COUNTDOWN;
+        this.startCountdownTime = Date.now();
+        
+        console.log(`[Table ${this.name}] Final ${this.startDelaySeconds}s countdown started`);
+        
+        // Broadcast countdown updates every second
+        this.countdownInterval = setInterval(() => {
+            const remaining = this.getStartCountdownRemaining();
+            if (remaining > 0) {
+                this.onStateChange?.();
+            }
+        }, 1000);
+        
+        // Start final countdown
+        this.startCountdown = setTimeout(() => {
+            if (this.countdownInterval) {
+                clearInterval(this.countdownInterval);
+                this.countdownInterval = null;
+            }
+            this.startCountdown = null;
+            this.startCountdownTime = null;
+            
+            this.handleGameStart();
+        }, this.startDelaySeconds * 1000);
+        
+        this.onStateChange?.();
+    }
+    
+    /**
+     * Handle game start - convert non-ready players to spectators
+     */
+    handleGameStart() {
+        console.log(`[Table ${this.name}] Countdown complete, processing ready status...`);
+        
+        // Convert non-ready players to spectators
+        for (let i = 0; i < this.seats.length; i++) {
+            const seat = this.seats[i];
+            if (seat && !seat.isReady && !seat.isBot) {
+                console.log(`[Table ${this.name}] ${seat.name} was not ready - moving to spectators`);
+                
+                // Add to spectators
+                this.spectators.set(seat.playerId, {
+                    oderId: seat.playerId,
+                    name: seat.name,
+                    socketId: seat.socketId
+                });
+                
+                // Notify the player they're now spectating
+                this.onPlayerNotReady?.(seat.playerId, seat.name);
+                
+                // Remove from seat
+                this.seats[i] = null;
+            }
+        }
+        
+        // Check if we still have enough players
+        const readyPlayers = this.seats.filter(s => s && s.isReady);
+        if (readyPlayers.length < 2) {
+            console.log(`[Table ${this.name}] Not enough ready players, returning to waiting`);
+            this.phase = GAME_PHASES.WAITING;
+            this.readyUpActive = false;
+            this.onStateChange?.();
+            return;
+        }
+        
+        // Start the game!
+        console.log(`[Table ${this.name}] Starting game with ${readyPlayers.length} players!`);
+        this.startNewHand();
+        this.onStateChange?.();
+    }
+    
+    /**
+     * Get time remaining in ready-up phase (in seconds)
+     */
+    getReadyUpTimeRemaining() {
+        if (!this.readyUpStartTime || this.phase !== GAME_PHASES.READY_UP) return 0;
+        const elapsed = Date.now() - this.readyUpStartTime;
+        const remaining = Math.max(0, this.readyUpDuration - elapsed);
+        return Math.ceil(remaining / 1000);
+    }
+    
+    /**
+     * Get count of ready players
+     */
+    getReadyPlayerCount() {
+        return this.seats.filter(s => s && s.isReady).length;
+    }
+    
+    /**
+     * Handle a player joining during ready-up phase
+     */
+    handleLateJoinerDuringReadyUp(seat) {
+        if (this.phase === GAME_PHASES.READY_UP || this.phase === GAME_PHASES.COUNTDOWN) {
+            // New joiners are not ready by default (unless bot)
+            seat.isReady = seat.isBot ? true : false;
+            console.log(`[Table ${this.name}] Late joiner ${seat.name} - needs to ready up`);
+        }
+    }
+    
     // ============ Turn Timer ============
     
     startTurnTimer() {
@@ -230,7 +459,7 @@ class Table {
             }
         }
 
-        this.seats[seatIndex] = {
+        const seat = {
             playerId,
             name,
             chips,
@@ -240,13 +469,16 @@ class Table {
             isActive: true,
             isFolded: false,
             isAllIn: false,
-            isConnected: true
+            isConnected: true,
+            isReady: false  // New: ready-up status
         };
+        
+        this.seats[seatIndex] = seat;
 
         console.log(`[Table ${this.name}] ${name} joined at seat ${seatIndex}`);
 
-        // Check if we should start countdown
-        this.checkStartCountdown();
+        // Handle late joiner during ready-up phase
+        this.handleLateJoinerDuringReadyUp(seat);
 
         return { success: true, seatIndex };
     }
@@ -903,6 +1135,9 @@ class Table {
             currentPlayerId: currentPlayer?.playerId || null,
             turnTimeRemaining: this.getTurnTimeRemaining(),
             startCountdownRemaining: this.getStartCountdownRemaining(),
+            readyUpTimeRemaining: this.getReadyUpTimeRemaining(),
+            readyPlayerCount: this.getReadyPlayerCount(),
+            totalPlayerCount: this.getActivePlayerCount(),
             handsPlayed: this.handsPlayed,
             spectatorCount: this.getSpectatorCount(),
             lastPotAwards: this.phase === GAME_PHASES.SHOWDOWN ? this.lastPotAwards : null,
@@ -929,6 +1164,7 @@ class Table {
                     isConnected: seat.isConnected,
                     isBot: seat.isBot || false,
                     isSittingOut: seat.isSittingOut || false,
+                    isReady: seat.isReady || false,
                     inSidePot: this.itemSidePot.isParticipating(seat.playerId),
                     cards: canSeeCards ? seat.cards : seat.cards.map(() => null)
                 };
