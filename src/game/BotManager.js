@@ -297,8 +297,8 @@ class BotManager {
             return;
         }
         
-        // Don't double-trigger
-        const timerKey = `${tableId}_${table.currentPlayerIndex}`;
+        // Don't double-trigger - include phase and hand count to ensure unique key per turn
+        const timerKey = `${tableId}_${table.currentPlayerIndex}_${table.phase}_${table.handsPlayed}`;
         if (this.botTurnTimers.has(timerKey)) return;
         
         // Simulate thinking time (1-3 seconds based on personality)
@@ -309,8 +309,9 @@ class BotManager {
         
         console.log(`[BotManager] ${bot.name} is thinking... (${Math.round(thinkTime)}ms)`);
         
+        const seatIndex = table.currentPlayerIndex;
         const timer = setTimeout(() => {
-            this.executeBotTurn(tableId, table.currentPlayerIndex);
+            this.executeBotTurn(tableId, seatIndex);
             this.botTurnTimers.delete(timerKey);
         }, thinkTime);
         
