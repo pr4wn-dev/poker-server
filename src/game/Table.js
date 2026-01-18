@@ -85,6 +85,7 @@ class Table {
         // Game start countdown timer
         this.startCountdown = null;
         this.startCountdownTime = null;
+        this.countdownInterval = null;
         this.startDelaySeconds = options.startDelaySeconds || 10; // 10 seconds to start after 2+ players
         
         // Event callbacks (set by SocketHandler)
@@ -108,7 +109,21 @@ class Table {
             this.startCountdownTime = Date.now();
             console.log(`[Table ${this.name}] Starting ${this.startDelaySeconds}s countdown with ${activePlayers} players`);
             
+            // Broadcast countdown updates every second
+            this.countdownInterval = setInterval(() => {
+                const remaining = this.getStartCountdownRemaining();
+                if (remaining !== null && remaining > 0) {
+                    this.onStateChange?.(); // Broadcast updated countdown
+                }
+            }, 1000);
+            
             this.startCountdown = setTimeout(() => {
+                // Clear the interval
+                if (this.countdownInterval) {
+                    clearInterval(this.countdownInterval);
+                    this.countdownInterval = null;
+                }
+                
                 this.startCountdown = null;
                 this.startCountdownTime = null;
                 
@@ -123,13 +138,19 @@ class Table {
             }, this.startDelaySeconds * 1000);
             
             this.onCountdownUpdate?.();
+            this.onStateChange?.(); // Initial broadcast with countdown
         } else if (activePlayers < 2 && this.startCountdown) {
             // Cancel countdown - not enough players
             console.log(`[Table ${this.name}] Countdown cancelled - only ${activePlayers} player(s)`);
             clearTimeout(this.startCountdown);
+            if (this.countdownInterval) {
+                clearInterval(this.countdownInterval);
+                this.countdownInterval = null;
+            }
             this.startCountdown = null;
             this.startCountdownTime = null;
             this.onCountdownUpdate?.();
+            this.onStateChange?.(); // Broadcast cancelled state
         }
     }
     
