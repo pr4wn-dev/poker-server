@@ -488,7 +488,7 @@ class SocketHandler {
                     return respond({ success: false, error: 'Not authenticated' });
                 }
                 
-                const { tableId, botProfile, buyIn } = data;
+                const { tableId, botProfile } = data;
                 
                 // Validate bot profile
                 const validBots = this.gameManager.getAvailableBots();
@@ -496,8 +496,12 @@ class SocketHandler {
                     return respond({ success: false, error: `Invalid bot. Available: ${validBots.join(', ')}` });
                 }
                 
-                // Invite bot to table
-                const result = this.gameManager.inviteBot(tableId, botProfile, user.userId, buyIn || 1000);
+                // Get table's buy-in amount for the bot
+                const table = this.gameManager.getTable(tableId);
+                const botBuyIn = table?.buyIn || 20000000;
+                
+                // Invite bot to table with same buy-in as players
+                const result = this.gameManager.inviteBot(tableId, botProfile, user.userId, botBuyIn);
                 
                 if (result.success) {
                     if (result.pendingApproval) {

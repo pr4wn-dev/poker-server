@@ -87,6 +87,7 @@ class GameManager {
             maxPlayers: options.maxPlayers || parseInt(process.env.MAX_PLAYERS) || 9,
             smallBlind: options.smallBlind || parseInt(process.env.DEFAULT_SMALL_BLIND) || 50,
             bigBlind: options.bigBlind || parseInt(process.env.DEFAULT_BIG_BLIND) || 100,
+            buyIn: options.buyIn || 20000000, // Default 20 million
             isPrivate: options.isPrivate || false,
             creatorId: options.creatorId || null
         });
