@@ -112,6 +112,7 @@ class Table {
             // Broadcast countdown updates every second
             this.countdownInterval = setInterval(() => {
                 const remaining = this.getStartCountdownRemaining();
+                console.log(`[Table ${this.name}] Countdown tick: ${remaining}s remaining`);
                 if (remaining !== null && remaining > 0) {
                     this.onStateChange?.(); // Broadcast updated countdown
                 }
@@ -155,7 +156,7 @@ class Table {
     }
     
     getStartCountdownRemaining() {
-        if (!this.startCountdownTime || !this.startCountdown) return null;
+        if (!this.startCountdownTime || !this.startCountdown) return 0; // Return 0 instead of null for Unity
         const elapsed = Date.now() - this.startCountdownTime;
         const remaining = Math.max(0, (this.startDelaySeconds * 1000) - elapsed);
         return Math.ceil(remaining / 1000); // Return seconds, rounded up
@@ -184,7 +185,7 @@ class Table {
     }
     
     getTurnTimeRemaining() {
-        if (!this.turnStartTime || this.currentPlayerIndex < 0) return null;
+        if (!this.turnStartTime || this.currentPlayerIndex < 0) return 0; // Return 0 instead of null for Unity
         const elapsed = Date.now() - this.turnStartTime;
         const remaining = Math.max(0, this.turnTimeLimit - elapsed);
         return remaining / 1000; // Return seconds
