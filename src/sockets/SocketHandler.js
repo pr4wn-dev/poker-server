@@ -1889,7 +1889,7 @@ class SocketHandler {
                     // Save chips before removing
                     await userRepo.setChips(userId, player.chips);
                     
-                    // Remove from table
+                    // Remove from table (this also calls checkAndCloseEmptyTable)
                     this.gameManager.leaveTable(userId);
                     
                     // Notify remaining players
@@ -1898,8 +1898,13 @@ class SocketHandler {
                         reason: 'disconnect_timeout'
                     });
                     
-                    // Broadcast updated state
-                    this.broadcastTableState(tableId);
+                    // Double-check table cleanup in case all players disconnected
+                    this.gameManager.checkAndCloseEmptyTable(tableId);
+                    
+                    // Broadcast updated state (if table still exists)
+                    if (this.gameManager.getTable(tableId)) {
+                        this.broadcastTableState(tableId);
+                    }
                 }
             }
             

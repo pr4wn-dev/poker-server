@@ -295,7 +295,61 @@ class GameManager {
         return this.players.size;
     }
 
+    /**
+     * Clean up all empty tables (tables with no connected human players)
+     * Called before returning table list to ensure stale tables are removed
+     */
+    cleanupEmptyTables() {
+        const tablesToRemove = [];
+        const DISCONNECT_TIMEOUT_MS = 60000; // 60 seconds
+        
+        for (const [tableId, table] of this.tables) {
+            // Count connected human players
+            const connectedHumans = table.seats.filter(seat => {
+                if (!seat || seat.isBot) return false;
+                
+                // Check if player is connected
+                if (seat.isConnected) return true;
+                
+                // Check if player disconnected recently (still within timeout)
+                if (seat.disconnectedAt) {
+                    const timeSinceDisconnect = Date.now() - seat.disconnectedAt;
+                    if (timeSinceDisconnect < DISCONNECT_TIMEOUT_MS) {
+                        return true; // Still within reconnect window
+                    }
+                }
+                
+                return false;
+            });
+            
+            if (connectedHumans.length === 0) {
+                tablesToRemove.push(tableId);
+            }
+        }
+        
+        // Remove empty tables
+        for (const tableId of tablesToRemove) {
+            const table = this.tables.get(tableId);
+            console.log(`[GameManager] Cleanup: Removing empty table ${table?.name || tableId}`);
+            
+            // Stop any game timers
+            if (table) {
+                table.stopTurnTimer?.();
+                table.clearReadyUpTimers?.();
+            }
+            
+            this.tables.delete(tableId);
+        }
+        
+        if (tablesToRemove.length > 0) {
+            console.log(`[GameManager] Cleaned up ${tablesToRemove.length} empty table(s)`);
+        }
+    }
+
     getPublicTableList() {
+        // Clean up empty tables before returning the list
+        this.cleanupEmptyTables();
+        
         const publicTables = [];
         for (const [id, table] of this.tables) {
             if (!table.isPrivate) {
