@@ -38,6 +38,11 @@ class Table {
         // Buy-in amount (chips required to join)
         this.buyIn = options.buyIn || 20000000; // Default 20 million
         
+        // Practice mode: players without enough chips get loaned the buy-in
+        // but don't keep any winnings
+        this.practiceMode = options.practiceMode || false;
+        this.practiceModePlayers = new Set(); // Track player IDs who are playing for practice
+        
         // New: Password protection
         this.password = options.password || null;
         this.hasPassword = !!options.password;
@@ -1090,6 +1095,7 @@ class Table {
             smallBlind: this.smallBlind,
             bigBlind: this.bigBlind,
             buyIn: this.buyIn,
+            practiceMode: this.practiceMode,
             isPrivate: this.isPrivate,
             hasPassword: this.hasPassword,
             gameStarted: this.gameStarted,

@@ -88,12 +88,13 @@ class GameManager {
             smallBlind: options.smallBlind || parseInt(process.env.DEFAULT_SMALL_BLIND) || 50,
             bigBlind: options.bigBlind || parseInt(process.env.DEFAULT_BIG_BLIND) || 100,
             buyIn: options.buyIn || 20000000, // Default 20 million
+            practiceMode: options.practiceMode || false, // Allow broke players to practice
             isPrivate: options.isPrivate || false,
             creatorId: options.creatorId || null
         });
 
         this.tables.set(tableId, table);
-        console.log(`[GameManager] Table created: ${table.name} (${tableId}) by ${options.creatorId}`);
+        console.log(`[GameManager] Table created: ${table.name} (${tableId}) by ${options.creatorId}, practiceMode: ${table.practiceMode}`);
         return table;
     }
 
@@ -111,8 +112,17 @@ class GameManager {
 
         // Check if player has enough chips for the buy-in
         const buyIn = table.buyIn || 20000000;
+        let isPracticePlayer = false;
+        
         if (player.chips < buyIn) {
-            return { success: false, error: `Not enough chips. Buy-in is ${buyIn.toLocaleString()}` };
+            // If practice mode is enabled, loan them the chips
+            if (table.practiceMode) {
+                console.log(`[GameManager] Player ${player.name} joining in PRACTICE MODE (has ${player.chips}, needs ${buyIn})`);
+                isPracticePlayer = true;
+                table.practiceModePlayers.add(playerId);
+            } else {
+                return { success: false, error: `Not enough chips. Buy-in is ${buyIn.toLocaleString()}` };
+            }
         }
 
         // Check if player is at another table
@@ -132,14 +142,25 @@ class GameManager {
             player.currentTableId = null;
         }
 
-        // Deduct buy-in from player's total chips, give them buy-in amount at table
-        player.chips -= buyIn;
+        // For practice players: don't deduct from account, just give them table chips
+        // For regular players: deduct buy-in from their account
+        if (!isPracticePlayer) {
+            player.chips -= buyIn;
+        }
+        
         const result = table.addPlayer(playerId, player.name, buyIn, seatIndex);
         if (result.success) {
             player.currentTableId = tableId;
+            if (isPracticePlayer) {
+                result.isPracticeMode = true;
+                result.practiceMessage = "You're playing in PRACTICE mode. Winnings won't be saved.";
+            }
         } else {
-            // Refund if join failed
-            player.chips += buyIn;
+            // Refund if join failed (only for non-practice players)
+            if (!isPracticePlayer) {
+                player.chips += buyIn;
+            }
+            table.practiceModePlayers.delete(playerId);
         }
         return result;
     }
@@ -151,8 +172,17 @@ class GameManager {
         const table = this.tables.get(player.currentTableId);
         if (table) {
             const chips = table.removePlayer(playerId);
-            if (chips !== null) {
-                player.chips += chips; // ADD chips back to account (was = which replaced!)
+            
+            // Check if this was a practice player
+            const wasPracticePlayer = table.practiceModePlayers.has(playerId);
+            table.practiceModePlayers.delete(playerId);
+            
+            if (chips !== null && !wasPracticePlayer) {
+                // Only add chips back for NON-practice players
+                player.chips += chips;
+                console.log(`[GameManager] Player ${player.name} left table with ${chips} chips (added to account)`);
+            } else if (wasPracticePlayer) {
+                console.log(`[GameManager] Practice player ${player.name} left table - chips NOT added to account`);
             }
         }
 
