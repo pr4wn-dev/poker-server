@@ -2,12 +2,26 @@
 
 > **READ THIS FILE AT START OF EVERY SESSION**
 > 
-> **Last Updated:** January 18, 2026 (Session 11 - Auto-Connect, Seat Perspective, Practice Mode)
-> **Session:** 11 - AUTO-CONNECT, SEAT PERSPECTIVE, PRACTICE MODE, MOBILE FIXES
-> **Status:** READY FOR TESTING - Mobile and PC working together
+> **Last Updated:** January 18, 2026 (Session 12 - Tunnel Support for CGNAT)
+> **Session:** 12 - TUNNEL SUPPORT FOR CGNAT/NAT BYPASS
+> **Status:** READY FOR TESTING - Works on cellular without port forwarding!
 > **Goal:** Get poker game running for Monday demo
 >
 > ### 🔴 KEY FIXES THIS SESSION
+> 1. **Tunnel Auto-Check**: App now automatically tries tunnel URLs (localtunnel) when other connections fail
+> 2. **Fixed Subdomain**: Using `https://pr4wn-poker.loca.lt` - same URL every time
+> 3. **CGNAT Bypass**: Works even when ISP blocks port forwarding (Spectrum, etc.)
+> 4. **No Manual Config**: Phone on cellular auto-connects via tunnel
+>
+> ### 🌐 CURRENT TUNNEL URL
+> **`https://pr4wn-poker.loca.lt`** - baked into the app, auto-checked on startup
+>
+> ### ⚠️ TO RUN SERVER FOR CELLULAR ACCESS
+> 1. Start the poker server: `npm start` (in poker-server folder)
+> 2. Start the tunnel: `lt --port 3000 --subdomain pr4wn-poker`
+> 3. Keep both terminals running!
+>
+> ### 📝 PREVIOUS SESSION (11) FIXES
 > 1. **Player Joins Now Visible**: Table creator can now see when other players join (broadcasts table state)
 > 2. **Seat Perspective Fixed**: Your seat always appears at bottom center, opponents rotate around you
 > 3. **No More Duplicate Players**: Fixed seat rotation bug causing same player to appear in multiple seats
@@ -20,11 +34,11 @@
 > 10. **Mobile Input Fixed**: Better keyboard behavior, network scan button for easy server discovery
 > 11. **Connection Timeout Extended**: Remote server connections now have 5 second timeout (was 500ms)
 >
-> ### 📌 TODO TOMORROW: PORT FORWARDING
+> ### 📌 PORT FORWARDING (OPTIONAL - not needed with tunnel)
 > For phone to connect over cellular (not on WiFi), set up port forwarding on router:
 > - **External Port:** 3000 → **Internal IP:** 192.168.1.23 → **Internal Port:** 3000 (TCP)
 > - Known servers are baked into APK at `Assets/Resources/known_servers.json`
-> - Public IP: 76.37.183.166 | Local IP: 192.168.1.23
+> - Public IP: 67.247.147.182 | Local IP: 192.168.1.23
 > 
 > ## 📊 PROJECT STATS
 > - **Server:** 21 files, 6,722 lines (Node.js)
@@ -2017,6 +2031,37 @@ else
 
 **Files Changed:**
 - `PokerTableView.cs` - Fixed modulo and added playerId check
+
+**Date:** January 18, 2026
+
+---
+
+### Issue #81: Tunnel Support for CGNAT/NAT Bypass
+
+**Feature:** App now automatically checks tunnel URLs when direct connections fail, enabling cellular access without port forwarding.
+
+**Problem:** Spectrum and other ISPs use CGNAT (Carrier-Grade NAT), which means port forwarding on your router doesn't work. Your router gets a private IP from the ISP, not a real public IP.
+
+**Solution:** Use localtunnel with a fixed subdomain:
+1. Install localtunnel: `npm install -g localtunnel`
+2. Run tunnel: `lt --port 3000 --subdomain pr4wn-poker`
+3. Tunnel URL: `https://pr4wn-poker.loca.lt`
+
+**Client Changes:**
+- Added `TUNNEL_URLS` array in `MainMenuScene.cs` with fixed tunnel URLs
+- Auto-connect tries tunnels after local network scan fails (Step 4)
+- Manual scan also checks tunnels as last resort
+- 8-second timeout for tunnel connections (longer than local)
+
+**How It Works:**
+1. App starts → tries last known server
+2. Scans local network (192.168.x.1-50)
+3. Checks saved remote servers
+4. **NEW: Tries tunnel URLs** (works through CGNAT!)
+5. If all fail, shows manual entry
+
+**Files Changed:**
+- `MainMenuScene.cs` - Added TUNNEL_URLS array and tunnel checking logic
 
 **Date:** January 18, 2026
 
