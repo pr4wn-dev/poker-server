@@ -1177,6 +1177,60 @@ if (player.currentTableId) {
 }
 ```
 
+### Issue #64: Card Proportions and Positioning Improvements
+
+**Symptoms:** Cards appeared stretched/elongated. Placeholder card slots for turn/river were also wrong aspect ratio. Player hole cards appeared below the seat instead of on it. Chip text overlapped by cards.
+
+**Fixes Applied:**
+1. **Card sizes increased**: `GameTheme.cs` - `cardWidth: 70`, `cardHeight: 98` (proper poker card ratio)
+2. **preserveAspect = true**: Added to all card Image components (`CardView`, `CardVisual`) to prevent stretching
+3. **Hole cards repositioned**: Now positioned as overlay ON the player seat (bottom area) instead of in the vertical layout
+4. **Placeholder fix**: `CardView.SetEmpty()` now explicitly sets `sizeDelta` to theme dimensions
+5. **Chips text badge**: Moved to top-right corner with dark background badge and gold border, no longer overlaps cards
+
+**Files Changed:**
+- `GameTheme.cs` - Card dimensions
+- `PokerTableView.cs` - CardView and PlayerSeatView
+- `CardVisual.cs` - preserveAspect
+
+### Issue #63: Card Back and Sprite Loading
+
+**Symptoms:** Card backs showed wrong pattern (red hearts pattern instead of proper back). Chips not visible.
+
+**Fixes Applied:**
+1. **SpriteManager singleton**: Auto-instantiates when accessed, loads sprites from Resources
+2. **Card sprite .meta files**: Changed `spriteMode: 2` → `spriteMode: 1` for all 53 card images
+3. **Procedural card back**: Enhanced fallback with navy checker pattern + red border + white trim
+4. **ChipStack visibility**: Increased size, repositioned to right of player seat
+
+**Files Changed:**
+- `SpriteManager.cs` - Singleton pattern, LoadSpritesFromResources()
+- `ChipStack.cs` - Visual improvements
+- `PokerTableView.cs` - PlayerSeatView._betChips
+- All `Assets/Resources/Sprites/Cards/*.png.meta` files
+
+### Issue #62: Asset Integration System
+
+**Summary:** Created infrastructure for loading sprites and audio from Unity's Resources folder.
+
+**Asset Structure:**
+```
+Assets/Resources/
+├── Audio/
+│   ├── SFX/     (25 sound effects)
+│   └── Music/   (6 music tracks)
+└── Sprites/
+    ├── Cards/   (52 cards + card_back.png)
+    ├── Chips/   (chip_*.png by color/value)
+    └── Avatars/ (player avatars)
+```
+
+**Key Changes:**
+- `AudioManager.cs` - LoadAudioClipsFromResources(), PlayPokerAction() helper
+- `SpriteManager.cs` - GetCardSprite(), GetCardBack(), GetChipSprite()
+- `CardVisual.cs` / `CardView` - Use SpriteManager with text fallback
+- `ChipStack.cs` - Use SpriteManager with color fallback
+
 ### Issue #61: Audio System Integration
 
 **Summary:** Wired up the existing AudioManager to play sounds during gameplay.
