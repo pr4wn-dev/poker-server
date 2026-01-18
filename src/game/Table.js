@@ -35,6 +35,9 @@ class Table {
         this.bigBlind = options.bigBlind;
         this.isPrivate = options.isPrivate;
         
+        // Buy-in amount (chips required to join)
+        this.buyIn = options.buyIn || 20000000; // Default 20 million
+        
         // New: Password protection
         this.password = options.password || null;
         this.hasPassword = !!options.password;
@@ -1086,6 +1089,7 @@ class Table {
             spectatorCount: this.getSpectatorCount(),
             smallBlind: this.smallBlind,
             bigBlind: this.bigBlind,
+            buyIn: this.buyIn,
             isPrivate: this.isPrivate,
             hasPassword: this.hasPassword,
             gameStarted: this.gameStarted,

@@ -108,6 +108,12 @@ class GameManager {
             return { success: false, error: 'Invalid player or table' };
         }
 
+        // Check if player has enough chips for the buy-in
+        const buyIn = table.buyIn || 20000000;
+        if (player.chips < buyIn) {
+            return { success: false, error: `Not enough chips. Buy-in is ${buyIn.toLocaleString()}` };
+        }
+
         // Check if player is at another table
         if (player.currentTableId && player.currentTableId !== tableId) {
             const oldTable = this.tables.get(player.currentTableId);
@@ -125,9 +131,14 @@ class GameManager {
             player.currentTableId = null;
         }
 
-        const result = table.addPlayer(playerId, player.name, player.chips, seatIndex);
+        // Deduct buy-in from player's total chips, give them buy-in amount at table
+        player.chips -= buyIn;
+        const result = table.addPlayer(playerId, player.name, buyIn, seatIndex);
         if (result.success) {
             player.currentTableId = tableId;
+        } else {
+            // Refund if join failed
+            player.chips += buyIn;
         }
         return result;
     }
@@ -178,7 +189,7 @@ class GameManager {
     
     // ============ Bot Management ============
     
-    inviteBot(tableId, botProfile, inviterId, buyIn = 1000) {
+    inviteBot(tableId, botProfile, inviterId, buyIn = 20000000) { // 20 million default
         return this.botManager.inviteBot(tableId, botProfile, inviterId, buyIn);
     }
     

@@ -25,7 +25,7 @@ class BotManager {
      * @param {number} buyIn - Starting chips for the bot
      * @returns {Object} { success, seatIndex, bot, pendingApproval, error }
      */
-    inviteBot(tableId, botProfile, inviterId, buyIn = 1000) {
+    inviteBot(tableId, botProfile, inviterId, buyIn = 20000000) { // 20 million default
         const table = this.gameManager.tables.get(tableId);
         if (!table) {
             return { success: false, error: 'Table not found' };
