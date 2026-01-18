@@ -1567,6 +1567,27 @@ foreach ($meta in $metas) {
 
 **Date:** January 17, 2026
 
+### Issue #66: Top Corner Players Overlap Players Below Them
+
+**Symptoms:** The top-left and top-right player seats overlap with the seats positioned below them on the sides.
+
+**Cause:** Seat positions at Y=0.70 for top corners were too close to the side seats at Y=0.45.
+
+**Fix:** Moved top corner seats higher (Y from 0.70 to 0.80):
+```csharp
+// Before:
+new Vector2(0.10f, 0.70f),  // Top left
+new Vector2(0.90f, 0.70f),  // Top right
+
+// After:
+new Vector2(0.08f, 0.80f),  // Top left - RAISED
+new Vector2(0.92f, 0.80f),  // Top right - RAISED
+```
+
+**Date:** January 18, 2026
+
+---
+
 ### Issue #65: Blue Rectangle at Bottom of Screen (Unity Camera Background Visible)
 
 **Symptoms:** Giant blue rectangle at the bottom of the screen, visible even when no one's at the table. The game doesn't fill the entire scene.
