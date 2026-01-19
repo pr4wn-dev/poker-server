@@ -63,29 +63,51 @@ class SocketHandler {
             });
 
             socket.on('login', async (data, callback) => {
-                if (!db.isConnected) {
-                    const error = { success: false, error: 'Database offline' };
-                    if (callback) callback(error);
-                    socket.emit('login_response', error);
-                    return;
+                try {
+                    console.log(`[Socket] Login attempt: ${data?.username || 'unknown'}`);
+                    
+                    if (!db.isConnected) {
+                        const error = { success: false, error: 'Database offline' };
+                        console.error('[Socket] Login failed: Database offline');
+                        if (callback) callback(error);
+                        socket.emit('login_response', error);
+                        return;
+                    }
+                    
+                    const { username, password } = data || {};
+                    
+                    if (!username || !password) {
+                        const error = { success: false, error: 'Username and password required' };
+                        console.error('[Socket] Login failed: Missing credentials');
+                        if (callback) callback(error);
+                        socket.emit('login_response', error);
+                        return;
+                    }
+                    
+                    const result = await userRepo.login(username, password);
+                    console.log(`[Socket] Login result for ${username}: ${result.success ? 'SUCCESS' : result.error}`);
+                    
+                    let response;
+                    if (result.success) {
+                        this.authenticateSocket(socket, result.userId, result.profile);
+                        response = {
+                            success: true,
+                            userId: result.userId,
+                            profile: result.profile
+                        };
+                    } else {
+                        response = result;
+                    }
+                    
+                    if (callback) callback(response);
+                    socket.emit('login_response', response);
+                } catch (error) {
+                    console.error('[Socket] Login error:', error.message);
+                    console.error(error.stack);
+                    const errorResponse = { success: false, error: 'Login failed: ' + error.message };
+                    if (callback) callback(errorResponse);
+                    socket.emit('login_response', errorResponse);
                 }
-                
-                const { username, password } = data;
-                const result = await userRepo.login(username, password);
-                
-                let response;
-                if (result.success) {
-                    this.authenticateSocket(socket, result.userId, result.profile);
-                    response = {
-                        success: true,
-                        userId: result.userId,
-                        profile: result.profile
-                    };
-                } else {
-                    response = result;
-                }
-                if (callback) callback(response);
-                socket.emit('login_response', response);
             });
 
             socket.on('logout', (callback) => {

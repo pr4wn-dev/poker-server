@@ -83,40 +83,55 @@ class UserRepository {
      * Login user
      */
     async login(username, password) {
-        const user = await db.queryOne(
-            'SELECT * FROM users WHERE username = ?',
-            [username]
-        );
-        
-        if (!user) {
-            return { success: false, error: 'Invalid username or password' };
+        try {
+            console.log(`[UserRepo] Login attempt for: ${username}`);
+            
+            const user = await db.queryOne(
+                'SELECT * FROM users WHERE username = ?',
+                [username]
+            );
+            
+            if (!user) {
+                console.log(`[UserRepo] Login failed: User not found: ${username}`);
+                return { success: false, error: 'Invalid username or password' };
+            }
+            
+            if (user.is_banned) {
+                console.log(`[UserRepo] Login failed: Account banned: ${username}`);
+                return { success: false, error: 'Account is banned' };
+            }
+            
+            console.log(`[UserRepo] Comparing password for: ${username}`);
+            const passwordMatch = await bcrypt.compare(password, user.password_hash);
+            
+            if (!passwordMatch) {
+                console.log(`[UserRepo] Login failed: Invalid password for: ${username}`);
+                return { success: false, error: 'Invalid username or password' };
+            }
+            
+            // Update last login
+            console.log(`[UserRepo] Updating last login for: ${username}`);
+            await db.query(
+                'UPDATE users SET last_login = NOW() WHERE id = ?',
+                [user.id]
+            );
+            
+            // Get full profile
+            console.log(`[UserRepo] Getting profile for: ${username}`);
+            const profile = await this.getFullProfile(user.id);
+            
+            console.log(`[UserRepo] User logged in successfully: ${username} (${user.id})`);
+            
+            return { 
+                success: true, 
+                userId: user.id,
+                profile 
+            };
+        } catch (error) {
+            console.error(`[UserRepo] Login error for ${username}:`, error.message);
+            console.error(error.stack);
+            return { success: false, error: 'Login failed: ' + error.message };
         }
-        
-        if (user.is_banned) {
-            return { success: false, error: 'Account is banned' };
-        }
-        
-        const passwordMatch = await bcrypt.compare(password, user.password_hash);
-        if (!passwordMatch) {
-            return { success: false, error: 'Invalid username or password' };
-        }
-        
-        // Update last login
-        await db.query(
-            'UPDATE users SET last_login = NOW() WHERE id = ?',
-            [user.id]
-        );
-        
-        // Get full profile
-        const profile = await this.getFullProfile(user.id);
-        
-        console.log(`[UserRepo] User logged in: ${username}`);
-        
-        return { 
-            success: true, 
-            userId: user.id,
-            profile 
-        };
     }
     
     /**
