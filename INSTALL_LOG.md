@@ -2430,6 +2430,33 @@ const bettingRoundComplete = allBetsEqualized && (
 
 ---
 
+### Issue #94: Players Eliminated When All-In (Still Have Money in Pot)
+
+**Symptoms:** Players are being eliminated even when they still have money in the current pot (they're all-in). They have 0 chips but their money is in the pot and they should still be in the hand.
+
+**Cause:** The elimination check in `startNewHand()` only checked if `seat.chips <= 0`, but didn't verify that the player had no money in the pot. When a player goes all-in, their chips go to 0 but `currentBet` or `totalBet` still reflects their contribution to the pot.
+
+**Fix:** Updated the elimination check to only eliminate players who have:
+1. `chips <= 0` AND
+2. `currentBet = 0` AND `totalBet = 0` (no money in pot)
+
+This ensures all-in players (who have 0 chips but money in the pot) are not eliminated until after the hand completes and pots are awarded. The check happens at `startNewHand()` which is called AFTER `awardPot()` or `calculateAndAwardSidePots()`, so chips should be accurate after the previous hand.
+
+```javascript
+// Only eliminate if they truly have 0 chips AND no money in pot
+const hasMoneyInPot = (seat.currentBet > 0) || (seat.totalBet > 0);
+if (seat.chips <= 0 && !hasMoneyInPot) {
+    // Eliminate player
+}
+```
+
+**Files Changed:**
+- `src/game/Table.js` - Updated elimination check in `startNewHand()` to verify no money in pot
+
+**Date:** January 19, 2026
+
+---
+
 ### Issue #92: Player Elimination Notifications and Menu Access
 
 **Symptoms:** 
