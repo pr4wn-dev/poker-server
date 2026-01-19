@@ -2333,6 +2333,42 @@ const canSeeCards = !isSpectating && (
 
 ---
 
+### Issue #88: Game Stuck When All Players Check
+
+**Symptoms:** When all players check (no raises, no bets), the game gets stuck and doesn't advance to the next phase. The game loops indefinitely between players even though everyone has checked and all bets are equalized.
+
+**Cause:** The betting round completion check only looked at `nextPlayer === this.lastRaiserIndex`, but didn't account for when the current player IS the last raiser. When everyone checks:
+- Player A (lastRaiserIndex) checks → advanceGame() called
+- currentPlayerIndex = A, nextPlayer = B
+- allBetsEqualized = true
+- But `nextPlayer === lastRaiserIndex` is false (B ≠ A)
+- Game continues to Player B
+- This loops until it happens to land on the right condition
+
+**Fix:** Added an additional check: if the current player IS the last raiser AND all bets are equalized, we've completed a full round:
+
+```javascript
+// If all bets are equalized, check if we've completed a full round
+const bettingRoundComplete = allBetsEqualized && (
+    nextPlayer === -1 ||  // No one can act
+    nextPlayer === this.lastRaiserIndex ||  // Next player is last raiser (completed full round)
+    (this.currentPlayerIndex === this.lastRaiserIndex && allBetsEqualized)  // Current player is last raiser and all equal (completed round)
+);
+```
+
+This handles the case where:
+1. Everyone checks (no raises)
+2. When we loop back to the first player (lastRaiserIndex) and they check
+3. After they check, `currentPlayerIndex === lastRaiserIndex` and `allBetsEqualized = true`
+4. This means everyone has had a chance to act, so we advance phase
+
+**Files Changed:**
+- `src/game/Table.js` - Fixed `advanceGame()` to detect completed betting round when current player is last raiser
+
+**Date:** January 19, 2026
+
+---
+
 ## 🤖 BOT SYSTEM
 
 ### Overview
