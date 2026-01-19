@@ -970,6 +970,9 @@ class Table {
         this.clearTurnTimer();
         this.phase = GAME_PHASES.SHOWDOWN;
         
+        // CRITICAL: Broadcast state immediately so clients see cards before showing winner
+        this.onStateChange?.();
+        
         const activePlayers = this.seats
             .map((seat, index) => seat && !seat.isFolded ? { ...seat, seatIndex: index } : null)
             .filter(p => p !== null);
@@ -1001,19 +1004,28 @@ class Table {
         }
 
         // Notify about each pot winner (for hand_result event)
+        // CRITICAL: Emit hand_result AFTER state has been broadcast so cards are visible
         if (potAwards && potAwards.length > 0 && this.onHandComplete) {
-            // Emit for the main pot winner (first award)
-            const mainWinner = potAwards[0];
-            this.onHandComplete({
-                winnerId: mainWinner.playerId,
-                winnerName: mainWinner.name,
-                handName: mainWinner.handName,
-                potAmount: potAwards.reduce((sum, a) => sum + a.amount, 0), // Total pot
-                potAwards: potAwards // All individual awards
-            });
+            // Small delay to ensure state is received before hand_result
+            setTimeout(() => {
+                // Emit for the main pot winner (first award)
+                const mainWinner = potAwards[0];
+                this.onHandComplete({
+                    winnerId: mainWinner.playerId,
+                    winnerName: mainWinner.name,
+                    handName: mainWinner.handName,
+                    potAmount: potAwards.reduce((sum, a) => sum + a.amount, 0), // Total pot
+                    potAwards: potAwards // All individual awards
+                });
+            }, 100); // Small delay to ensure state broadcast happens first
         }
 
-        setTimeout(() => this.startNewHand(), 5000);
+        // Start new hand after showing results
+        setTimeout(() => {
+            // Broadcast state one more time before starting new hand (in case chips updated)
+            this.onStateChange?.();
+            setTimeout(() => this.startNewHand(), 500);
+        }, 4000); // 4 seconds to show winner, then 0.5s transition
     }
 
     /**
@@ -1112,22 +1124,35 @@ class Table {
         }
         this.pot = 0;
         
+        // CRITICAL: Broadcast state immediately so clients see updated chips
+        this.onStateChange?.();
+        
         // Notify about the winner (for hand_result event)
+        // Small delay to ensure state is received before hand_result
         if (this.onHandComplete) {
-            this.onHandComplete({
-                winnerId: winner.playerId,
-                winnerName: winner.name,
-                handName: "Everyone Folded",
-                potAmount: potAmount,
-                potAwards: [{
-                    playerId: winner.playerId,
-                    name: winner.name,
-                    amount: potAmount,
+            setTimeout(() => {
+                this.onHandComplete({
+                    winnerId: winner.playerId,
+                    winnerName: winner.name,
                     handName: "Everyone Folded",
-                    potType: 'main'
-                }]
-            });
+                    potAmount: potAmount,
+                    potAwards: [{
+                        playerId: winner.playerId,
+                        name: winner.name,
+                        amount: potAmount,
+                        handName: "Everyone Folded",
+                        potType: 'main'
+                    }]
+                });
+            }, 100); // Small delay to ensure state broadcast happens first
         }
+        
+        // Start new hand after showing results
+        setTimeout(() => {
+            // Broadcast state one more time before starting new hand
+            this.onStateChange?.();
+            setTimeout(() => this.startNewHand(), 500);
+        }, 3000); // 3 seconds to show winner, then 0.5s transition
     }
 
     // ============ Spectators ============
@@ -1308,8 +1333,11 @@ class Table {
                 
                 // Spectators never see hole cards (except showdown)
                 // Players only see their own cards (except showdown)
-                const canSeeCards = !isSpectating && 
-                    (seat.playerId === forPlayerId || this.phase === GAME_PHASES.SHOWDOWN);
+                // During showdown, only show cards of players who are still in (not folded)
+                const canSeeCards = !isSpectating && (
+                    seat.playerId === forPlayerId || 
+                    (this.phase === GAME_PHASES.SHOWDOWN && !seat.isFolded)
+                );
                 
                 // FIX: Ensure cards are preserved - don't lose them if array is null/undefined
                 let cards = [];

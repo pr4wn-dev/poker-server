@@ -2276,6 +2276,63 @@ if (bettingRoundComplete) {
 
 ---
 
+### Issue #87: Game Lags/Stuck at End of Hand, Doesn't Show Winner or Cards
+
+**Symptoms:** 
+1. Game lags or gets stuck for a minute at the end of some hands
+2. Doesn't show who won or any information
+3. After delay, goes straight to new hand
+4. When showing winner, doesn't show cards of players still in the hand (should show all active players' cards, but not folded/out players)
+
+**Cause:** 
+1. `showdown()` and `awardPot()` didn't call `onStateChange()` immediately after setting phase, so clients didn't get state updates with visible cards
+2. Cards were shown for ALL players during showdown, including folded players
+3. `hand_result` event was emitted before state was broadcast, causing clients to not see cards
+4. No proper delay sequence between showing cards, announcing winner, and starting new hand
+
+**Fix:** 
+1. **Immediate state broadcast in showdown**: Call `onStateChange()` immediately after setting `GAME_PHASES.SHOWDOWN` so cards become visible
+2. **Only show cards of active players**: Modified card visibility logic to only show cards during showdown for players who are NOT folded
+3. **Proper event sequencing**: Added small delays to ensure state is broadcast before `hand_result` event
+4. **Better timing**: Reduced delay from 5s to 4s for showing winner, then 0.5s transition before new hand
+5. **State broadcast in awardPot**: Call `onStateChange()` immediately after awarding pot so chips update is visible
+
+```javascript
+// In showdown()
+this.phase = GAME_PHASES.SHOWDOWN;
+// CRITICAL: Broadcast state immediately so clients see cards before showing winner
+this.onStateChange?.();
+
+// ... evaluate hands ...
+
+// Emit hand_result AFTER state has been broadcast (small delay)
+setTimeout(() => {
+    this.onHandComplete({...});
+}, 100);
+
+// Start new hand after showing results (4s + 0.5s transition)
+setTimeout(() => {
+    this.onStateChange?.();
+    setTimeout(() => this.startNewHand(), 500);
+}, 4000);
+```
+
+Card visibility fix:
+```javascript
+// During showdown, only show cards of players who are still in (not folded)
+const canSeeCards = !isSpectating && (
+    seat.playerId === forPlayerId || 
+    (this.phase === GAME_PHASES.SHOWDOWN && !seat.isFolded)
+);
+```
+
+**Files Changed:**
+- `src/game/Table.js` - Fixed `showdown()` and `awardPot()` to broadcast state immediately, fixed card visibility during showdown
+
+**Date:** January 19, 2026
+
+---
+
 ## 🤖 BOT SYSTEM
 
 ### Overview
