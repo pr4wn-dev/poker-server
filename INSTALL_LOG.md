@@ -2148,6 +2148,92 @@ int port = isHttps ? 443 : 3000;  // HTTPS uses port 443!
 
 ---
 
+### Issue #83: Cards Disappearing Mid-Game for Players
+
+**Symptoms:** Player cards disappear mid-game, leaving players unable to see their hands. Boss and boss's husband reported cards vanished during gameplay.
+
+**Cause:** In `Table.js` `getState()`, the card visibility check was using `seat.cards.map(() => null)` which could fail if `seat.cards` was null/undefined or got reset. Also, if `canSeeCards` check failed due to playerId mismatch, cards would be lost.
+
+**Fix:** 
+1. Added proper null check and array validation before mapping cards
+2. Preserve cards structure even when hidden (use `{ rank: null, suit: null }` instead of losing array)
+3. Ensure cards array is always initialized before mapping
+
+```javascript
+// FIXED: Preserve cards array structure
+let cards = [];
+if (seat.cards && Array.isArray(seat.cards)) {
+    cards = canSeeCards ? seat.cards : seat.cards.map(() => ({ rank: null, suit: null }));
+}
+```
+
+**Files Changed:**
+- `src/game/Table.js` - Fixed getState() card visibility logic
+
+**Date:** January 19, 2026
+
+---
+
+### Issue #84: Game Stuck in Turn Loop - Not Recognizing Calls
+
+**Symptoms:** Game gets stuck bouncing between players after calls, not advancing to next phase. Players call but game doesn't recognize betting round is complete.
+
+**Cause:** `advanceGame()` only checked if `nextPlayer === this.lastRaiserIndex`, but when players only call (don't raise), `lastRaiserIndex` stays the same from a previous raise, causing the check to fail and game to loop.
+
+**Fix:** Added proper check for all bets being equalized, regardless of who raised last:
+
+```javascript
+// FIX: Check if all bets are equalized properly
+const allBetsEqualized = this.seats.every(seat => {
+    if (!seat || seat.isFolded || seat.isAllIn) return true;
+    return seat.currentBet === this.currentBet;
+});
+
+if (nextPlayer === -1 || (nextPlayer === this.lastRaiserIndex && allBetsEqualized) || (allBetsEqualized && this.lastRaiserIndex === -1)) {
+    this.advancePhase();
+}
+```
+
+**Files Changed:**
+- `src/game/Table.js` - Fixed advanceGame() to check all bets equalized
+
+**Date:** January 19, 2026
+
+---
+
+### Issue #85: Raise Button Default Value Doesn't Work
+
+**Symptoms:** When clicking raise button with default slider value, raise fails or doesn't work properly. User has to manually adjust slider for it to work.
+
+**Cause:** Slider was set to minimum valid amount, but for raises, the minimum needs to be `toCall + minRaise` (total amount), not just `minRaise`. If slider defaulted to just `minRaise`, the raise amount would be 0 (invalid).
+
+**Fix:** 
+1. Calculate slider minimum correctly: `toCall + minRaiseAmount` for raises
+2. Server-side validation: If raise amount is 0 or negative, treat as call instead of failing
+
+```csharp
+// FIX: For raises, slider minimum must be toCall + minRaise (total amount needed)
+int toCall = Math.Max(0, currentBet - myCurrentBet);
+int minRaiseAmount = state.minRaise > 0 ? state.minRaise : _minBet;
+int sliderMin = hasBet ? (toCall + minRaiseAmount) : _minBet;
+```
+
+Server-side:
+```javascript
+// FIX: If raise amount is 0, treat as call instead of failing
+if (raiseAmount <= 0) {
+    return this.call(seatIndex);
+}
+```
+
+**Files Changed:**
+- `C:\Projects\poker-client-unity\Assets\Scripts\UI\Scenes\TableScene.cs` - Fixed raise slider default calculation
+- `src/game/Table.js` - Added raise amount validation (treat 0 as call)
+
+**Date:** January 19, 2026
+
+---
+
 ## 🤖 BOT SYSTEM
 
 ### Overview
