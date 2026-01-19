@@ -2401,6 +2401,73 @@ const bettingRoundComplete = allBetsEqualized && (
 
 ---
 
+### Issue #93: Bet Bar Disappears While Adjusting Slider
+
+**Symptoms:** The bet slider/action panel disappears while the player is trying to adjust the bet amount, making it impossible to place a bet.
+
+**Cause:** 
+1. State updates (from other players or timers) were calling `OnTableStateUpdate()` frequently
+2. The action panel visibility logic was hiding the panel whenever `_isMyTurn` was false, even if it was still the player's turn
+3. The slider value was being reset on every state update, interrupting the player's interaction
+
+**Fix:**
+1. **Only hide panel when it's definitely NOT the player's turn:**
+   - Changed condition from `else if (actionPanel != null)` to `else if (actionPanel != null && !_isMyTurn)`
+   - This prevents the panel from disappearing during state updates while the player is still in their turn
+
+2. **Prevent slider reset during interaction:**
+   - Only update slider min/max if they've actually changed
+   - Only reset slider value if it's invalid (below min or above max)
+   - Don't reset slider value every time state updates - preserve player's adjustment
+
+3. **Preserve panel visibility:**
+   - Check if panel is already active before setting it active (prevents unnecessary operations)
+
+**Files Changed:**
+- `TableScene.cs` - Fixed `OnTableStateUpdate()` and `ShowActionButtons()` to prevent panel from disappearing and slider from resetting
+
+**Date:** January 19, 2026
+
+---
+
+### Issue #92: Player Elimination Notifications and Menu Access
+
+**Symptoms:** 
+1. When a player runs out of chips (eliminated), there's no notification shown to anyone
+2. Eliminated players can't easily access the menu to leave the table
+3. Eliminated players should be able to spectate but also have easy access to leave
+
+**Cause:** 
+- No event was emitted when players were eliminated
+- Client didn't have a handler for elimination notifications
+- Menu visibility wasn't explicitly handled for eliminated players
+
+**Fix:**
+1. **Server-side:**
+   - Added `onPlayerEliminated` callback to `Table.js`
+   - Emit elimination event in `startNewHand()` when a player reaches 0 chips (only once per elimination)
+   - Human players are marked as inactive but not removed (can spectate)
+   - Bots are removed completely
+
+2. **Client-side:**
+   - Added `PlayerEliminatedData` class to `NetworkModels.cs`
+   - Added `OnPlayerEliminated` event to `SocketManager.cs` and `GameService.cs`
+   - Added handler in `TableScene.cs` to show elimination notification using action announcement banner
+   - Updated `OnTableStateUpdate()` to check if player is eliminated (`chips <= 0`) and hide action panel
+   - Menu button is always accessible (part of top bar) - eliminated players can click it to leave
+
+**Files Changed:**
+- Server: `Table.js` - Added onPlayerEliminated callback, emit event in startNewHand()
+- Server: `SocketHandler.js` - Wired callback to emit `player_eliminated` event
+- Client: `NetworkModels.cs` - Added PlayerEliminatedData class
+- Client: `SocketManager.cs` - Added OnPlayerEliminated event and handler
+- Client: `GameService.cs` - Added OnPlayerEliminated event and handler
+- Client: `TableScene.cs` - Added OnPlayerEliminated handler, check for elimination in state updates
+
+**Date:** January 19, 2026
+
+---
+
 ### Issue #91: Game Bugged Out After Hand Ended - Cards Changed, Players Couldn't Bet
 
 **Symptoms:** After a hand ended, the game bugged out:
