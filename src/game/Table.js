@@ -86,6 +86,7 @@ class Table {
         this.dealerIndex = -1;
         this.currentPlayerIndex = -1;
         this.lastRaiserIndex = -1;
+        this.hasPassedLastRaiser = false;  // Track if we've passed the last raiser this betting round
 
         // Timing
         this.turnTimeout = null;
@@ -872,6 +873,21 @@ class Table {
         // Find next player who can act (not folded, not all-in)
         const nextPlayer = this.getNextActivePlayer(this.currentPlayerIndex);
         
+        // Track if we've passed the last raiser this betting round
+        // This ensures we don't advance phase too early (before everyone has acted)
+        if (this.currentPlayerIndex !== -1 && !this.hasPassedLastRaiser && this.lastRaiserIndex !== -1) {
+            const currentIndex = this.currentPlayerIndex;
+            const lastRaiser = this.lastRaiserIndex;
+            
+            // We've passed the last raiser if:
+            // 1. Current index is greater than last raiser (normal progression)
+            // 2. OR we're about to return to last raiser (meaning we've completed a full round)
+            if (currentIndex > lastRaiser || nextPlayer === lastRaiser) {
+                this.hasPassedLastRaiser = true;
+                console.log(`[Table ${this.name}] Passed last raiser (${lastRaiser}) - current: ${currentIndex}, next: ${nextPlayer}`);
+            }
+        }
+        
         // Check if betting round is complete
         // CRITICAL: Check if all active players (who can act) have matched the current bet
         // A player has matched if: folded (can ignore), all-in (already committed), or currentBet === this.currentBet
@@ -884,33 +900,21 @@ class Table {
         
         // CRITICAL FIX: A betting round is complete when:
         // 1. No one can act (all folded or all-in) - nextPlayer === -1
-        // 2. All bets are equalized AND we've completed a full round back to the last raiser
-        //    - If the next player is the last raiser, we've completed a full round (everyone has acted)
-        //    This means: after the current player acts, we're about to loop back to the last raiser
-        //    So everyone has had a chance to act, and all bets are equalized
+        // 2. All bets are equalized AND:
+        //    - We've passed the last raiser at least once (ensures everyone got a turn)
+        //    - AND we're about to return to the last raiser (completed full round)
         //
-        // IMPORTANT: We only advance phase if ALL conditions are met:
-        // - All bets are equalized (everyone has matched the bet)
-        // - We're about to return to the last raiser (meaning we've completed a full round)
-        // This ensures every player gets a turn
-        
-        // If all bets are equalized, check if we've completed a full round
-        // We've completed a full round when nextPlayer would be the last raiser
-        // OR if there's only one active player left (they win)
+        // This prevents advancing phase too early when everyone checks on the first round
         const bettingRoundComplete = allBetsEqualized && (
             nextPlayer === -1 ||  // No one can act
-            nextPlayer === this.lastRaiserIndex  // Next player is last raiser (completed full round)
+            (this.hasPassedLastRaiser && nextPlayer === this.lastRaiserIndex)  // Passed last raiser AND about to return to them
         );
         
         if (bettingRoundComplete) {
-            console.log(`[Table ${this.name}] Betting round complete - advancing phase. Last raiser: ${this.lastRaiserIndex}, Current player: ${this.currentPlayerIndex}, Next player: ${nextPlayer}, All equalized: ${allBetsEqualized}`);
+            console.log(`[Table ${this.name}] Betting round complete - advancing phase. Last raiser: ${this.lastRaiserIndex}, Current: ${this.currentPlayerIndex}, Next: ${nextPlayer}, HasPassed: ${this.hasPassedLastRaiser}, All equalized: ${allBetsEqualized}`);
+            this.hasPassedLastRaiser = false;  // Reset for next betting round
             this.advancePhase();
             return;
-        }
-        
-        // DEBUG: Log if we're skipping players
-        if (nextPlayer === -1 && !allBetsEqualized) {
-            console.warn(`[Table ${this.name}] WARNING: nextPlayer is -1 but bets not equalized. This shouldn't happen.`);
         }
         
         // If bets aren't equalized, we must continue the betting round
@@ -918,7 +922,7 @@ class Table {
         if (nextPlayer !== -1) {
             this.currentPlayerIndex = nextPlayer;
             const nextPlayerSeat = this.seats[this.currentPlayerIndex];
-            console.log(`[Table ${this.name}] Turn: ${nextPlayerSeat?.name} (seat ${this.currentPlayerIndex}, isBot: ${nextPlayerSeat?.isBot}, currentBet: ${nextPlayerSeat?.currentBet}/${this.currentBet}, lastRaiser: ${this.lastRaiserIndex})`);
+            console.log(`[Table ${this.name}] Turn: ${nextPlayerSeat?.name} (seat ${this.currentPlayerIndex}, isBot: ${nextPlayerSeat?.isBot}, currentBet: ${nextPlayerSeat?.currentBet}/${this.currentBet}, lastRaiser: ${this.lastRaiserIndex}, hasPassed: ${this.hasPassedLastRaiser})`);
             this.startTurnTimer();
             
             // CRITICAL: Broadcast state so client knows it's their turn! (Issue #58)
@@ -926,6 +930,7 @@ class Table {
         } else {
             // This shouldn't happen if betting is active, but handle it
             console.warn(`[Table ${this.name}] WARNING: nextPlayer is -1 but bets not equalized. All equalized: ${allBetsEqualized}. Forcing phase advance.`);
+            this.hasPassedLastRaiser = false;  // Reset
             this.advancePhase();
         }
     }
@@ -972,6 +977,7 @@ class Table {
         // This is used to detect when we've completed a full betting round
         // If no one raises, we'll still advance phase when we get back to this player
         this.lastRaiserIndex = this.currentPlayerIndex;
+        this.hasPassedLastRaiser = false;  // Reset flag for new betting round
         console.log(`[Table ${this.name}] New betting round (${this.phase}) - First to act: ${this.seats[this.currentPlayerIndex]?.name} (seat ${this.currentPlayerIndex})`);
         this.startTurnTimer();
         
