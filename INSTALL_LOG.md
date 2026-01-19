@@ -2234,41 +2234,43 @@ if (raiseAmount <= 0) {
 
 ---
 
-### Issue #86: Players Not Getting Turns After Calling
+### Issue #86: Game Stuck in Turn Loop - Doesn't Advance Phase After All Players Call
 
-**Symptoms:** After calling, players (like "uncle buck") don't get another turn. Game might advance phase prematurely before all players have acted, or turns get skipped.
+**Symptoms:** After all players call, the game gets stuck looping from player to player without advancing to the next phase. It keeps going in circles even though all bets are equalized.
 
-**Cause:** The `advanceGame()` logic might have been too aggressive in advancing phase, or `getNextActivePlayer()` might not be finding players correctly. The betting round completion check needed better safeguards to ensure all players get their turns.
+**Cause:** The betting round completion check was incorrect. The logic checked `nextPlayer === this.lastRaiserIndex && allBetsEqualized`, but when all players only call (don't raise), the game didn't properly detect that the betting round was complete. The condition was too complex and missed cases where all bets are equalized.
 
 **Fix:** 
-1. Added defensive checks in `advanceGame()` to ensure we never skip a player who can act
-2. Added better logging to track turn progression and betting round completion
-3. Ensured `currentPlayerIndex` is always set correctly when giving turns
-4. Added explicit check: only advance phase if `nextPlayer === -1` OR we've completed a full round (back to last raiser + all bets equalized)
+1. Simplified the betting round completion check to: `allBetsEqualized && (nextPlayer === -1 || nextPlayer === this.lastRaiserIndex)`
+2. This ensures the betting round ends when:
+   - All bets are equalized (all active players have matched the current bet), AND
+   - We've completed a full round back to the last raiser (or nextPlayer === -1 if no one can act)
+3. Added better logging to track betting round completion
 
 ```javascript
-// CRITICAL FIX: Always give players their turns
-if (shouldAdvancePhase) {
+// CRITICAL FIX: Check if betting round is complete
+const allBetsEqualized = this.seats.every(seat => {
+    if (!seat || seat.isFolded) return true;  // Folded players don't need to match
+    if (seat.isAllIn) return true;  // All-in players are already committed
+    // Active players must have matched the current bet
+    return seat.currentBet === this.currentBet;
+});
+
+// Betting round is complete when all bets are equalized AND we've gone back to last raiser
+const bettingRoundComplete = allBetsEqualized && (
+    nextPlayer === -1 ||  // No one can act
+    nextPlayer === this.lastRaiserIndex  // We've completed a full round back to last raiser
+);
+
+if (bettingRoundComplete) {
+    console.log(`[Table ${this.name}] Betting round complete - advancing phase.`);
     this.advancePhase();
-} else {
-    // CRITICAL: Always set currentPlayerIndex and give them a turn if they can act
-    // This ensures players get their turns even after calling
-    if (nextPlayer !== -1) {
-        this.currentPlayerIndex = nextPlayer;
-        const nextPlayerSeat = this.seats[this.currentPlayerIndex];
-        console.log(`[Table ${this.name}] Turn: ${nextPlayerSeat?.name} (seat ${this.currentPlayerIndex})`);
-        this.startTurnTimer();
-        this.onStateChange?.();
-    } else {
-        // This shouldn't happen, but if it does, advance phase
-        console.warn(`[Table ${this.name}] WARNING: nextPlayer is -1 but shouldn't advance phase.`);
-        this.advancePhase();
-    }
+    return;
 }
 ```
 
 **Files Changed:**
-- `src/game/Table.js` - Improved `advanceGame()` logic with defensive checks and better turn tracking
+- `src/game/Table.js` - Fixed `advanceGame()` betting round completion detection
 
 **Date:** January 19, 2026
 
