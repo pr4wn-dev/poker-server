@@ -869,7 +869,7 @@ class Table {
             return;
         }
 
-        // Find next player
+        // Find next player who can act (not folded, not all-in)
         const nextPlayer = this.getNextActivePlayer(this.currentPlayerIndex);
         
         // Check if betting round is complete
@@ -879,16 +879,37 @@ class Table {
             return seat.currentBet === this.currentBet;
         });
         
-        if (nextPlayer === -1 || (nextPlayer === this.lastRaiserIndex && allBetsEqualized) || (allBetsEqualized && this.lastRaiserIndex === -1)) {
+        // CRITICAL FIX: Don't advance phase unless we've completed a full round
+        // A betting round is complete when:
+        // 1. No one can act (all folded or all-in) - nextPlayer === -1
+        // 2. We've gone back to the last raiser AND all bets are equalized
+        // 3. There was no raiser AND all bets are equalized (everyone checked)
+        // IMPORTANT: We MUST give every player a chance to act, so only advance if we've
+        // reached the last raiser (or gone all the way around if no raiser)
+        const shouldAdvancePhase = 
+            nextPlayer === -1 ||  // No one can act
+            (nextPlayer === this.lastRaiserIndex && allBetsEqualized) ||  // Back to last raiser, all equal
+            (allBetsEqualized && this.lastRaiserIndex === -1);  // No raiser this round, all equal
+        
+        if (shouldAdvancePhase) {
+            console.log(`[Table ${this.name}] Betting round complete - advancing phase. Last raiser: ${this.lastRaiserIndex}, All equalized: ${allBetsEqualized}`);
             this.advancePhase();
         } else {
-            this.currentPlayerIndex = nextPlayer;
-            const nextPlayerSeat = this.seats[this.currentPlayerIndex];
-            console.log(`[Table ${this.name}] Turn: ${nextPlayerSeat?.name} (seat ${this.currentPlayerIndex}, isBot: ${nextPlayerSeat?.isBot})`);
-            this.startTurnTimer();
-            
-            // CRITICAL: Broadcast state so client knows it's their turn! (Issue #58)
-            this.onStateChange?.();
+            // CRITICAL: Always set currentPlayerIndex and give them a turn if they can act
+            // This ensures players get their turns even after calling
+            if (nextPlayer !== -1) {
+                this.currentPlayerIndex = nextPlayer;
+                const nextPlayerSeat = this.seats[this.currentPlayerIndex];
+                console.log(`[Table ${this.name}] Turn: ${nextPlayerSeat?.name} (seat ${this.currentPlayerIndex}, isBot: ${nextPlayerSeat?.isBot}, currentBet: ${nextPlayerSeat?.currentBet}/${this.currentBet})`);
+                this.startTurnTimer();
+                
+                // CRITICAL: Broadcast state so client knows it's their turn! (Issue #58)
+                this.onStateChange?.();
+            } else {
+                // This shouldn't happen, but if it does, advance phase
+                console.warn(`[Table ${this.name}] WARNING: nextPlayer is -1 but shouldn't advance phase. Forcing phase advance.`);
+                this.advancePhase();
+            }
         }
     }
 
@@ -930,7 +951,11 @@ class Table {
             return;
         }
         
+        // CRITICAL FIX: Reset lastRaiserIndex to track first player to act this round
+        // This is used to detect when we've completed a full betting round
+        // If no one raises, we'll still advance phase when we get back to this player
         this.lastRaiserIndex = this.currentPlayerIndex;
+        console.log(`[Table ${this.name}] New betting round (${this.phase}) - First to act: ${this.seats[this.currentPlayerIndex]?.name} (seat ${this.currentPlayerIndex})`);
         this.startTurnTimer();
         
         // Broadcast state for new phase

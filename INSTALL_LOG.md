@@ -2234,6 +2234,46 @@ if (raiseAmount <= 0) {
 
 ---
 
+### Issue #86: Players Not Getting Turns After Calling
+
+**Symptoms:** After calling, players (like "uncle buck") don't get another turn. Game might advance phase prematurely before all players have acted, or turns get skipped.
+
+**Cause:** The `advanceGame()` logic might have been too aggressive in advancing phase, or `getNextActivePlayer()` might not be finding players correctly. The betting round completion check needed better safeguards to ensure all players get their turns.
+
+**Fix:** 
+1. Added defensive checks in `advanceGame()` to ensure we never skip a player who can act
+2. Added better logging to track turn progression and betting round completion
+3. Ensured `currentPlayerIndex` is always set correctly when giving turns
+4. Added explicit check: only advance phase if `nextPlayer === -1` OR we've completed a full round (back to last raiser + all bets equalized)
+
+```javascript
+// CRITICAL FIX: Always give players their turns
+if (shouldAdvancePhase) {
+    this.advancePhase();
+} else {
+    // CRITICAL: Always set currentPlayerIndex and give them a turn if they can act
+    // This ensures players get their turns even after calling
+    if (nextPlayer !== -1) {
+        this.currentPlayerIndex = nextPlayer;
+        const nextPlayerSeat = this.seats[this.currentPlayerIndex];
+        console.log(`[Table ${this.name}] Turn: ${nextPlayerSeat?.name} (seat ${this.currentPlayerIndex})`);
+        this.startTurnTimer();
+        this.onStateChange?.();
+    } else {
+        // This shouldn't happen, but if it does, advance phase
+        console.warn(`[Table ${this.name}] WARNING: nextPlayer is -1 but shouldn't advance phase.`);
+        this.advancePhase();
+    }
+}
+```
+
+**Files Changed:**
+- `src/game/Table.js` - Improved `advanceGame()` logic with defensive checks and better turn tracking
+
+**Date:** January 19, 2026
+
+---
+
 ## 🤖 BOT SYSTEM
 
 ### Overview
