@@ -2089,6 +2089,20 @@ class SocketHandler {
                 playerName: playerName
             });
         };
+        
+        // Called when a player runs out of chips (eliminated)
+        table.onPlayerEliminated = (data) => {
+            console.log(`[SocketHandler] ${data.playerName} eliminated at table ${table.name}`);
+            
+            // Broadcast to all players that someone was eliminated
+            this.io.to(`table:${table.id}`).emit('player_eliminated', {
+                tableId: table.id,
+                playerId: data.playerId,
+                playerName: data.playerName,
+                seatIndex: data.seatIndex,
+                isBot: data.isBot || false
+            });
+        };
     }
 
     // ============ Broadcasting ============

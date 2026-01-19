@@ -123,6 +123,7 @@ class Table {
         this.onReadyPrompt = null;  // Called when ready prompt should show
         this.onPlayerNotReady = null; // Called when player doesn't ready in time
         this.onPlayerAction = null; // Called when any player (human or bot) takes an action
+        this.onPlayerEliminated = null; // Called when a player runs out of chips
     }
     
     // ============ Game Start Countdown ============
@@ -616,12 +617,28 @@ class Table {
         // Remove players with no chips
         for (let i = 0; i < this.seats.length; i++) {
             const seat = this.seats[i];
-            if (seat && seat.chips <= 0 && !seat.isBot) {
-                console.log(`[Table ${this.name}] ${seat.name} is out of chips`);
-                // Don't remove human players - let them rebuy or leave
-            } else if (seat && seat.chips <= 0 && seat.isBot) {
-                console.log(`[Table ${this.name}] Bot ${seat.name} eliminated`);
-                this.seats[i] = null;
+            if (seat && seat.chips <= 0) {
+                // Mark as inactive but don't remove - let them spectate
+                const wasAlreadyEliminated = seat.isActive === false;
+                seat.isActive = false;
+                
+                // Notify about elimination (only if they weren't already eliminated)
+                if (!wasAlreadyEliminated && this.onPlayerEliminated) {
+                    this.onPlayerEliminated({
+                        playerId: seat.playerId,
+                        playerName: seat.name,
+                        seatIndex: i,
+                        isBot: seat.isBot || false
+                    });
+                }
+                
+                if (seat.isBot) {
+                    console.log(`[Table ${this.name}] Bot ${seat.name} eliminated`);
+                    this.seats[i] = null;  // Remove bots completely
+                } else {
+                    console.log(`[Table ${this.name}] ${seat.name} is out of chips - can spectate or leave`);
+                    // Don't remove human players - let them spectate or leave
+                }
             }
         }
 
