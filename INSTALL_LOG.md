@@ -2401,6 +2401,71 @@ const bettingRoundComplete = allBetsEqualized && (
 
 ---
 
+### Issue #91: Game Bugged Out After Hand Ended - Cards Changed, Players Couldn't Bet
+
+**Symptoms:** After a hand ended, the game bugged out:
+1. Players couldn't play
+2. Cards changed after players got them
+3. Players couldn't bet
+
+**Cause:** 
+1. `startNewHand()` didn't properly reset state flags (`hasPassedLastRaiser`, `lastRaiserIndex`, `currentPlayerIndex`) before dealing new cards
+2. State was broadcast AFTER starting the turn timer, causing clients to see cards change
+3. Turn timer wasn't cleared before starting new hand, causing race conditions
+4. Cards were dealt before state flags were reset, causing confusion
+
+**Fix:**
+1. Clear turn timer at start of `startNewHand()` to prevent race conditions
+2. Reset all betting round tracking flags (`hasPassedLastRaiser`, `lastRaiserIndex`, `currentPlayerIndex`) before dealing cards
+3. Broadcast state BEFORE starting timer to ensure clients see new cards immediately
+4. Add small delay before starting timer to ensure state is received first
+
+```javascript
+startNewHand() {
+    // CRITICAL: Clear any pending turn timers first
+    this.clearTurnTimer();
+    
+    // ... reset state ...
+    
+    // CRITICAL: Reset betting round tracking flags
+    this.hasPassedLastRaiser = false;
+    this.lastRaiserIndex = -1;
+    this.currentPlayerIndex = -1;
+    
+    // Reset players (clear cards first)
+    for (const seat of this.seats) {
+        if (seat) {
+            seat.cards = [];  // Clear cards first
+            // ... reset other fields ...
+        }
+    }
+    
+    // Deal new cards
+    for (const seat of this.seats) {
+        if (seat?.isActive) {
+            seat.cards = [this.deck.draw(), this.deck.draw()];
+        }
+    }
+    
+    // CRITICAL: Broadcast state BEFORE starting timer
+    this.onStateChange?.();
+    
+    // Small delay before starting timer to ensure state is received
+    setTimeout(() => {
+        if (this.phase === GAME_PHASES.PRE_FLOP && this.currentPlayerIndex >= 0) {
+            this.startTurnTimer();
+        }
+    }, 100);
+}
+```
+
+**Files Changed:**
+- `src/game/Table.js` - Fixed `startNewHand()` to properly reset state and broadcast before starting timer
+
+**Date:** January 19, 2026
+
+---
+
 ## 🤖 BOT SYSTEM
 
 ### Overview

@@ -588,8 +588,12 @@ class Table {
     // ============ Game Flow ============
 
     startNewHand() {
+        // CRITICAL: Clear any pending turn timers first
+        this.clearTurnTimer();
+        
         if (this.getSeatedPlayerCount() < 2) {
             this.phase = GAME_PHASES.WAITING;
+            this.onStateChange?.();
             return;
         }
         
@@ -638,11 +642,16 @@ class Table {
         this.sidePots = [];
         this.currentBet = 0;
         this.minRaise = this.bigBlind;
+        
+        // CRITICAL: Reset betting round tracking flags
+        this.hasPassedLastRaiser = false;
+        this.lastRaiserIndex = -1;
+        this.currentPlayerIndex = -1;
 
         // Reset players
         for (const seat of this.seats) {
             if (seat) {
-                seat.cards = [];
+                seat.cards = [];  // Clear cards first
                 seat.currentBet = 0;
                 seat.totalBet = 0;
                 seat.isActive = seat.chips > 0;
@@ -675,15 +684,24 @@ class Table {
         this.phase = GAME_PHASES.PRE_FLOP;
         this.handsPlayed++;
         
+        // CRITICAL: Ensure hasPassedLastRaiser is reset for new hand
+        this.hasPassedLastRaiser = false;
+        
         // Debug: Log who's turn it is
         const firstPlayer = this.seats[this.currentPlayerIndex];
         console.log(`[Table ${this.name}] Hand started - First to act: ${firstPlayer?.name} (seat ${this.currentPlayerIndex}, isBot: ${firstPlayer?.isBot})`);
         
-        // Start turn timer
-        this.startTurnTimer();
-        
-        // Broadcast state for new hand
+        // CRITICAL: Broadcast state BEFORE starting timer to ensure clients see new cards
+        // This prevents cards from appearing to "change" after being dealt
         this.onStateChange?.();
+        
+        // Small delay before starting timer to ensure state is received
+        setTimeout(() => {
+            // Only start timer if we're still in the same hand/phase
+            if (this.phase === GAME_PHASES.PRE_FLOP && this.currentPlayerIndex >= 0) {
+                this.startTurnTimer();
+            }
+        }, 100);
 
         return this.getState();
     }
