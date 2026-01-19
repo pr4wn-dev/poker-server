@@ -2369,6 +2369,38 @@ This handles the case where:
 
 ---
 
+### Issue #89: Players Not Getting Turns After Check Fix
+
+**Symptoms:** After fixing Issue #88 (game stuck when all players check), some players aren't getting turns at all. The game advances phase before all players have had a chance to act.
+
+**Cause:** The fix for Issue #88 added a check `currentPlayerIndex === this.lastRaiserIndex && allBetsEqualized` to detect completed betting rounds. However, this condition could trigger immediately when:
+- The last raiser is the first player to act in a phase
+- All bets are already equalized (from previous betting round or blinds)
+- The last raiser checks
+- Immediately: `currentPlayerIndex === lastRaiserIndex` is true, `allBetsEqualized` is true
+- Phase advances BEFORE other players get a turn
+
+**Fix:** Removed the problematic condition. Now we only advance phase when:
+1. All bets are equalized, AND
+2. The next player would be the last raiser (meaning we've completed a full round)
+
+This ensures we only advance phase after EVERYONE has had a chance to act:
+
+```javascript
+// Only advance when we've completed a full round (nextPlayer === lastRaiserIndex)
+const bettingRoundComplete = allBetsEqualized && (
+    nextPlayer === -1 ||  // No one can act
+    nextPlayer === this.lastRaiserIndex  // Next player is last raiser (completed full round)
+);
+```
+
+**Files Changed:**
+- `src/game/Table.js` - Removed premature phase advance check that skipped players
+
+**Date:** January 19, 2026
+
+---
+
 ## 🤖 BOT SYSTEM
 
 ### Overview

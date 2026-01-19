@@ -884,23 +884,33 @@ class Table {
         
         // CRITICAL FIX: A betting round is complete when:
         // 1. No one can act (all folded or all-in) - nextPlayer === -1
-        // 2. All bets are equalized AND we've completed a full round:
+        // 2. All bets are equalized AND we've completed a full round back to the last raiser
         //    - If the next player is the last raiser, we've completed a full round (everyone has acted)
-        //    - OR if the current player IS the last raiser and all bets are equalized, everyone has acted
-        // This handles the case where everyone checks (no raises) - when we loop back to the first player
-        // who acted, we know everyone has had a chance to act
+        //    This means: after the current player acts, we're about to loop back to the last raiser
+        //    So everyone has had a chance to act, and all bets are equalized
+        //
+        // IMPORTANT: We only advance phase if ALL conditions are met:
+        // - All bets are equalized (everyone has matched the bet)
+        // - We're about to return to the last raiser (meaning we've completed a full round)
+        // This ensures every player gets a turn
         
         // If all bets are equalized, check if we've completed a full round
+        // We've completed a full round when nextPlayer would be the last raiser
+        // OR if there's only one active player left (they win)
         const bettingRoundComplete = allBetsEqualized && (
             nextPlayer === -1 ||  // No one can act
-            nextPlayer === this.lastRaiserIndex ||  // Next player is last raiser (completed full round)
-            (this.currentPlayerIndex === this.lastRaiserIndex && allBetsEqualized)  // Current player is last raiser and all equal (completed round)
+            nextPlayer === this.lastRaiserIndex  // Next player is last raiser (completed full round)
         );
         
         if (bettingRoundComplete) {
             console.log(`[Table ${this.name}] Betting round complete - advancing phase. Last raiser: ${this.lastRaiserIndex}, Current player: ${this.currentPlayerIndex}, Next player: ${nextPlayer}, All equalized: ${allBetsEqualized}`);
             this.advancePhase();
             return;
+        }
+        
+        // DEBUG: Log if we're skipping players
+        if (nextPlayer === -1 && !allBetsEqualized) {
+            console.warn(`[Table ${this.name}] WARNING: nextPlayer is -1 but bets not equalized. This shouldn't happen.`);
         }
         
         // If bets aren't equalized, we must continue the betting round
