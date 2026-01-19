@@ -812,8 +812,15 @@ class Table {
         const toCall = this.currentBet - player.currentBet;
         const raiseAmount = amount - toCall;
 
+        // FIX: Validate that raise amount is actually a raise (more than minRaise) or all-in
+        // If amount equals toCall, treat as call, not raise
+        if (raiseAmount <= 0) {
+            // Amount is just the call amount - treat as call instead
+            return this.call(seatIndex);
+        }
+
         if (raiseAmount < this.minRaise && amount !== player.chips) {
-            return { success: false, error: `Minimum raise is ${this.minRaise}` };
+            return { success: false, error: `Minimum raise is ${this.minRaise}. You need to bet at least ${toCall + this.minRaise} total.` };
         }
 
         player.chips -= amount;
@@ -866,7 +873,13 @@ class Table {
         const nextPlayer = this.getNextActivePlayer(this.currentPlayerIndex);
         
         // Check if betting round is complete
-        if (nextPlayer === this.lastRaiserIndex || nextPlayer === -1) {
+        // FIX: Properly check if all bets are equalized, not just if we've reached the last raiser
+        const allBetsEqualized = this.seats.every(seat => {
+            if (!seat || seat.isFolded || seat.isAllIn) return true;
+            return seat.currentBet === this.currentBet;
+        });
+        
+        if (nextPlayer === -1 || (nextPlayer === this.lastRaiserIndex && allBetsEqualized) || (allBetsEqualized && this.lastRaiserIndex === -1)) {
             this.advancePhase();
         } else {
             this.currentPlayerIndex = nextPlayer;
@@ -1269,6 +1282,12 @@ class Table {
                 const canSeeCards = !isSpectating && 
                     (seat.playerId === forPlayerId || this.phase === GAME_PHASES.SHOWDOWN);
                 
+                // FIX: Ensure cards are preserved - don't lose them if array is null/undefined
+                let cards = [];
+                if (seat.cards && Array.isArray(seat.cards)) {
+                    cards = canSeeCards ? seat.cards : seat.cards.map(() => ({ rank: null, suit: null }));
+                }
+                
                 return {
                     index,
                     playerId: seat.playerId,
@@ -1282,7 +1301,7 @@ class Table {
                     isSittingOut: seat.isSittingOut || false,
                     isReady: seat.isReady || false,
                     inSidePot: this.itemSidePot.isParticipating(seat.playerId),
-                    cards: canSeeCards ? seat.cards : seat.cards.map(() => null)
+                    cards: cards
                 };
             })
         };
