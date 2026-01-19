@@ -679,12 +679,22 @@ class Table {
         this.currentPlayerIndex = -1;
 
         // Reset players
+        // CRITICAL: Only reset isActive if player HAS chips
+        // If player is already eliminated (isActive = false), don't re-activate them even if they get chips from pots
         for (const seat of this.seats) {
             if (seat) {
                 seat.cards = [];  // Clear cards first
                 seat.currentBet = 0;
                 seat.totalBet = 0;
-                seat.isActive = seat.chips > 0;
+                // CRITICAL FIX: Only set isActive to true if they have chips AND weren't already eliminated
+                // Once eliminated (isActive = false), they stay eliminated even if they win chips
+                // This prevents eliminated players from re-entering the game
+                if (seat.chips > 0 && seat.isActive !== false) {
+                    seat.isActive = true;
+                } else if (seat.chips <= 0) {
+                    seat.isActive = false; // Ensure 0 chips = inactive
+                }
+                // If seat.isActive is already false (eliminated), keep it false
                 seat.isFolded = false;
                 seat.isAllIn = false;
             }
@@ -1194,11 +1204,17 @@ class Table {
         }
         
         // Award the pots
+        // CRITICAL: Eliminated players don't get chips back - they're out!
         for (const award of potAwards) {
             const seat = this.seats.find(s => s?.playerId === award.playerId);
-            if (seat) {
+            if (seat && seat.isActive !== false) {
+                // Only award chips to active (non-eliminated) players
                 seat.chips += award.amount;
                 console.log(`[Table ${this.name}] ${award.name} wins ${award.amount} from ${award.potType} pot with ${award.handName}`);
+            } else if (seat && seat.isActive === false) {
+                // Player is eliminated - don't give them chips, pot goes to remaining players or is lost
+                console.log(`[Table ${this.name}] ${award.name} is eliminated - ${award.amount} chips from pot are forfeited`);
+                // Note: In a real game, this shouldn't happen, but handle it gracefully
             }
         }
         
@@ -1213,11 +1229,18 @@ class Table {
 
     awardPot(winner) {
         // Simple case - everyone folded, winner takes pot
+        // CRITICAL: Eliminated players don't get chips back - they're out!
         const seat = this.seats.find(s => s?.playerId === winner.playerId);
         const potAmount = this.pot;
         
-        if (seat) {
+        if (seat && seat.isActive !== false) {
+            // Only award chips to active (non-eliminated) players
             seat.chips += potAmount;
+        } else if (seat && seat.isActive === false) {
+            // Player is eliminated - don't give them chips
+            console.log(`[Table ${this.name}] ${seat.name} is eliminated - pot forfeited`);
+            // In a real game, this shouldn't happen (eliminated players shouldn't win)
+            // But handle it gracefully - pot is lost
         }
         this.pot = 0;
         
