@@ -59,6 +59,7 @@ class SimulationManager {
             bigBlind = 50,
             buyIn = 20000000,
             turnTimeLimit = 5000, // Faster for simulation
+            blindIncreaseInterval = 0, // Round timer in ms (0 = OFF)
             socketBotRatio = 0.5
         } = options;
         
@@ -75,7 +76,7 @@ class SimulationManager {
             isPrivate: true,
             practiceMode: true,
             turnTimeLimit,
-            blindIncreaseInterval: 0, // No blind increases for simulation
+            blindIncreaseInterval, // Round timer from options (0 = OFF)
             creatorId
         });
         

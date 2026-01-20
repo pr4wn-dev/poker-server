@@ -213,6 +213,7 @@ class SocketHandler {
                     bigBlind = 50,
                     buyIn = 20000000,
                     turnTimeLimit = 5000,
+                    blindIncreaseInterval = 0,
                     socketBotRatio = 0.5
                 } = data;
                 
@@ -225,6 +226,7 @@ class SocketHandler {
                         bigBlind,
                         buyIn,
                         turnTimeLimit,
+                        blindIncreaseInterval,
                         socketBotRatio: Math.min(Math.max(socketBotRatio, 0), 1)
                     });
                     
