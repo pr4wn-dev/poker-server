@@ -1081,11 +1081,35 @@ class Table {
             }
         }
         
+        // CRITICAL FIX: Handle all-in players correctly
+        // If all remaining players are all-in, we can't continue the betting round
+        // All-in players can't act, so if nextPlayer is -1, we should advance phase
+        if (nextPlayer === -1) {
+            // No one can act - all players are all-in or folded
+            if (allBetsEqualized) {
+                // All bets equalized and no one can act - advance phase immediately
+                console.log(`[Table ${this.name}] All players all-in or folded, all bets equalized - advancing phase`);
+                this.hasPassedLastRaiser = false;
+                this.advancePhase();
+                return;
+            } else {
+                // This shouldn't happen - if no one can act, bets should be equalized
+                console.warn(`[Table ${this.name}] WARNING: nextPlayer is -1 but bets not equalized. All equalized: ${allBetsEqualized}. Forcing phase advance.`);
+                this.hasPassedLastRaiser = false;
+                this.advancePhase();
+                return;
+            }
+        }
+        
         // CRITICAL: If all bets are equalized but we HAVEN'T completed a round yet,
         // we MUST continue - some players haven't had their turn yet!
         if (allBetsEqualized && !bettingRoundComplete && nextPlayer !== -1) {
             console.log(`[Table ${this.name}] All bets equalized but round not complete - continuing. Current: ${this.currentPlayerIndex}, Next: ${nextPlayer}, LastRaiser: ${this.lastRaiserIndex}, NoRaises: ${noRaises}`);
             // Continue to next player - they need their turn!
+            this.currentPlayerIndex = nextPlayer;
+            this.startTurnTimer();
+            this.onStateChange?.();
+            return;
         }
         
         if (bettingRoundComplete) {
