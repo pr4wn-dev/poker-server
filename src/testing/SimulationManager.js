@@ -65,7 +65,8 @@ class SimulationManager {
         this.log('INFO', 'Starting simulation...', options);
         
         // Create the table in practice mode
-        const tableResult = this.gameManager.createTable({
+        // GameManager.createTable returns the table object directly (not { success, tableId, table })
+        const table = this.gameManager.createTable({
             name: `[SIM] ${tableName}`,
             maxPlayers,
             smallBlind,
@@ -78,13 +79,12 @@ class SimulationManager {
             creatorId
         });
         
-        if (!tableResult.success) {
-            this.log('ERROR', 'Failed to create simulation table', { error: tableResult.error });
-            return { success: false, error: tableResult.error };
+        if (!table || !table.id) {
+            this.log('ERROR', 'Failed to create simulation table', { error: 'createTable returned null or invalid table' });
+            return { success: false, error: 'Failed to create table' };
         }
         
-        const tableId = tableResult.tableId;
-        const table = tableResult.table;
+        const tableId = table.id;
         
         this.log('INFO', 'Simulation table created', { tableId, tableName: table.name });
         
