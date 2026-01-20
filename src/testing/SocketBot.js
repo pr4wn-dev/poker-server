@@ -66,6 +66,18 @@ class SocketBot {
             readyPrompt: 0
         };
         
+        // Turn verification tracking
+        this.turnTracking = {
+            turnHistory: [],           // Array of { currentPlayerId, phase, timestamp, pot }
+            myTurnCount: 0,            // How many times it was my turn
+            turnAfterDisconnect: null, // Who had turn when I disconnected
+            turnOnReconnect: null,     // Who had turn when I reconnected
+            stuckTurnDetected: false,  // Same player for too long
+            invalidTurnDetected: false, // Turn to folded/disconnected player
+            turnSkipDetected: false,   // A player was skipped
+            lastSeenPlayers: new Map() // playerId -> last seen state
+        };
+        
         // Logging
         this.logFile = options.logFile || path.join(__dirname, '../../logs/socketbot.log');
         this.enableLogging = options.enableLogging !== false;
@@ -179,6 +191,104 @@ class SocketBot {
                         reject(new Error(response?.error || 'Rejoin failed'));
                     }
                 });
+            });
+        }
+    }
+    
+    /**
+     * Verify turn logic is working correctly
+     */
+    _verifyTurnLogic(state) {
+        const now = Date.now();
+        const currentPlayerId = state.currentPlayerId;
+        const phase = state.phase;
+        
+        // Skip non-betting phases
+        if (!['preflop', 'flop', 'turn', 'river'].includes(phase)) {
+            return;
+        }
+        
+        // Track turn history
+        const lastTurn = this.turnTracking.turnHistory[this.turnTracking.turnHistory.length - 1];
+        
+        // Only add if turn actually changed or first entry
+        if (!lastTurn || lastTurn.currentPlayerId !== currentPlayerId || lastTurn.phase !== phase) {
+            this.turnTracking.turnHistory.push({
+                currentPlayerId,
+                phase,
+                timestamp: now,
+                pot: state.pot
+            });
+        }
+        
+        // Count my turns
+        if (currentPlayerId === this.userId) {
+            this.turnTracking.myTurnCount++;
+        }
+        
+        // Update last seen players
+        if (state.seats) {
+            for (const seat of state.seats) {
+                if (seat && seat.oderId) {
+                    this.turnTracking.lastSeenPlayers.set(seat.oderId, {
+                        name: seat.name,
+                        isFolded: seat.isFolded,
+                        isAllIn: seat.isAllIn,
+                        isConnected: seat.isConnected,
+                        chips: seat.chips
+                    });
+                }
+            }
+        }
+        
+        // VERIFICATION 1: Detect stuck turns (same player for 3+ consecutive states)
+        if (this.turnTracking.turnHistory.length >= 3) {
+            const last3 = this.turnTracking.turnHistory.slice(-3);
+            const allSamePlayer = last3.every(t => t.currentPlayerId === last3[0].currentPlayerId);
+            const allSamePhase = last3.every(t => t.phase === last3[0].phase);
+            
+            if (allSamePlayer && allSamePhase && last3[0].currentPlayerId) {
+                const duration = now - last3[0].timestamp;
+                if (duration > 5000) { // More than 5 seconds stuck
+                    if (!this.turnTracking.stuckTurnDetected) {
+                        this.turnTracking.stuckTurnDetected = true;
+                        this.log('VERIFY_FAIL', `STUCK TURN DETECTED: ${last3[0].currentPlayerId} for ${duration}ms`, {
+                            playerId: last3[0].currentPlayerId,
+                            phase: last3[0].phase,
+                            duration
+                        });
+                    }
+                }
+            }
+        }
+        
+        // VERIFICATION 2: Detect turn to invalid player (folded, disconnected, all-in with no action needed)
+        if (currentPlayerId) {
+            const playerState = this.turnTracking.lastSeenPlayers.get(currentPlayerId);
+            if (playerState) {
+                if (playerState.isFolded) {
+                    this.turnTracking.invalidTurnDetected = true;
+                    this.log('VERIFY_FAIL', `INVALID TURN: It's ${playerState.name}'s turn but they FOLDED`, {
+                        playerId: currentPlayerId,
+                        playerName: playerState.name
+                    });
+                }
+                
+                if (playerState.isConnected === false) {
+                    this.log('VERIFY_WARN', `Turn to DISCONNECTED player: ${playerState.name}`, {
+                        playerId: currentPlayerId,
+                        playerName: playerState.name
+                    });
+                }
+            }
+        }
+        
+        // VERIFICATION 3: After reconnect, check turn is reasonable
+        if (this.turnTracking.turnOnReconnect === null && this.reconnectCount > 0) {
+            this.turnTracking.turnOnReconnect = currentPlayerId;
+            this.log('VERIFY', `Turn on reconnect: ${currentPlayerId}`, {
+                wasMyTurnBefore: this.turnTracking.turnAfterDisconnect === this.userId,
+                isMyTurnNow: currentPlayerId === this.userId
             });
         }
     }
@@ -357,8 +467,12 @@ class SocketBot {
             this.gameState = state;
             this.eventsReceived.tableState++;
             
+            // TURN VERIFICATION: Track turn changes
+            this._verifyTurnLogic(state);
+            
             // CHAOS MODE: Random disconnect check
             if (this._shouldDisconnect()) {
+                this.turnTracking.turnAfterDisconnect = state.currentPlayerId;
                 this._simulateDisconnect();
                 return; // Don't process this state, we're disconnecting
             }
@@ -587,6 +701,14 @@ class SocketBot {
                 playerLeaves: this.eventsReceived.playerLeft.length,
                 disconnections: this.eventsReceived.playerDisconnected.length,
                 reconnections: this.eventsReceived.playerReconnected.length
+            },
+            turnVerification: {
+                myTurnCount: this.turnTracking.myTurnCount,
+                totalTurnChanges: this.turnTracking.turnHistory.length,
+                stuckTurnDetected: this.turnTracking.stuckTurnDetected,
+                invalidTurnDetected: this.turnTracking.invalidTurnDetected,
+                turnAfterDisconnect: this.turnTracking.turnAfterDisconnect,
+                turnOnReconnect: this.turnTracking.turnOnReconnect
             }
         };
     }
@@ -601,21 +723,56 @@ class SocketBot {
         // Verification checks
         const issues = [];
         
+        // Reconnection issues
         if (summary.chaos.disconnects > 0 && summary.chaos.reconnects < summary.chaos.disconnects) {
-            issues.push(`FAILED TO RECONNECT: ${summary.chaos.disconnects - summary.chaos.reconnects} times`);
+            issues.push(`RECONNECT_FAIL: Failed to reconnect ${summary.chaos.disconnects - summary.chaos.reconnects} times`);
         }
         
+        // Event issues
         if (summary.events.statesReceived === 0) {
-            issues.push('NO TABLE STATES RECEIVED');
+            issues.push('NO_STATES: Never received any table state updates');
+        }
+        
+        // Turn verification issues
+        if (summary.turnVerification.stuckTurnDetected) {
+            issues.push('STUCK_TURN: Same player had turn for too long (game might be stuck)');
+        }
+        
+        if (summary.turnVerification.invalidTurnDetected) {
+            issues.push('INVALID_TURN: Turn was given to a folded player');
+        }
+        
+        if (summary.turnVerification.myTurnCount === 0 && summary.events.statesReceived > 10) {
+            issues.push('NEVER_MY_TURN: Received many states but never got a turn (might be excluded from game)');
+        }
+        
+        // Disconnect during turn verification
+        if (summary.turnVerification.turnAfterDisconnect === this.userId) {
+            // I disconnected on my turn - verify game handled it
+            if (summary.chaos.reconnects > 0) {
+                this.log('VERIFY', 'Disconnected on MY turn, successfully reconnected');
+            } else {
+                issues.push('DISCONNECT_ON_TURN: Disconnected on my turn and failed to reconnect');
+            }
         }
         
         if (issues.length > 0) {
-            this.log('VERIFY_FAIL', `Issues found for ${this.name}`, { issues });
+            this.log('VERIFY_FAIL', `${issues.length} issues found for ${this.name}`, { issues });
         } else {
-            this.log('VERIFY_OK', `All checks passed for ${this.name}`);
+            this.log('VERIFY_OK', `All ${this._getVerificationCount()} checks passed for ${this.name}`);
         }
         
         return { summary, issues };
+    }
+    
+    _getVerificationCount() {
+        // Count how many things we verified
+        let count = 0;
+        if (this.eventsReceived.tableState > 0) count++;
+        if (this.turnTracking.turnHistory.length > 0) count++;
+        if (this.disconnectCount > 0) count++; // Verified reconnection
+        if (this.turnTracking.myTurnCount > 0) count++; // Verified turn assignment
+        return count;
     }
 }
 
