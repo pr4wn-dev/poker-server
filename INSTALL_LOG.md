@@ -3334,3 +3334,15 @@ The game is a skeleton. Previous sessions marked things as "working" but actual 
  4 .   R e s e t   c a r d   p o s i t i o n   t o   o r i g i n a l   w h e n   a n i m a t i o n   i s   s t o p p e d 
  5 .   A d d e d   c o m p r e h e n s i v e   l o g g i n g   f o r   c a r d   s t a t e   c h a n g e s  
  
+ 
+ # # #   I s s u e   # 1 2 2 :   T i m e r   C l e a n u p   B u g   i n   S i m u l a t i o n   R e s t a r t 
+ * * D a t e : * *   2 0 2 6 - 0 1 - 2 0   0 4 : 4 7 
+ * * P r o b l e m : * *   B l i n d s   e s c a l a t e d   t o   m i l l i o n s   ( L e v e l   1 5 :   8 1 9 2 0 0 0 / 1 6 3 8 4 0 0 0 )   a f t e r   s i m u l a t i o n   r e s t a r t ,   w i p i n g   o u t   a l l   p l a y e r s   i n s t a n t l y .   G a m e s   e n d e d   w i t h   ' U n k n o w n '   w i n n e r . 
+ * * R o o t   C a u s e : * *   S i m u l a t i o n M a n a g e r . _ r e s t a r t G a m e ( )   w a s   u s i n g   w r o n g   p r o p e r t y   n a m e s   f o r   t i m e r   c l e a n u p : 
+ -   U s e d   ' t a b l e . t u r n T i m e r '   i n s t e a d   o f   ' t a b l e . t u r n T i m e o u t ' 
+ -   U s e d   ' t a b l e . b l i n d T i m e r '   i n s t e a d   o f   ' t a b l e . b l i n d I n c r e a s e T i m e r ' 
+ -   U s e d   c l e a r I n t e r v a l   i n s t e a d   o f   c l e a r T i m e o u t 
+ * * F i l e s   M o d i f i e d : * * 
+ -   p o k e r - s e r v e r :   s r c / t e s t i n g / S i m u l a t i o n M a n a g e r . j s 
+ * * S o l u t i o n : * *   U s e   c o r r e c t   T a b l e . j s   p r o p e r t y   n a m e s   a n d   c l e a r T i m e o u t  
+ 

@@ -441,15 +441,24 @@ class SimulationManager {
         table.bigBlind = originalBigBlind;
         table.blindLevel = 1; // Reset blind level
         
-        // Clear any pending timers
-        if (table.turnTimer) {
-            clearTimeout(table.turnTimer);
-            table.turnTimer = null;
+        // Clear any pending timers - use correct property names from Table.js
+        if (table.turnTimeout) {
+            clearTimeout(table.turnTimeout);
+            table.turnTimeout = null;
         }
-        if (table.blindTimer) {
-            clearInterval(table.blindTimer);
-            table.blindTimer = null;
+        if (table.blindIncreaseTimer) {
+            clearTimeout(table.blindIncreaseTimer);
+            table.blindIncreaseTimer = null;
         }
+        // Reset blind-related state
+        table.nextBlindIncreaseAt = null;
+        
+        this.log('INFO', 'Timers cleared, blinds reset', {
+            tableId,
+            originalSmall: originalSmallBlind,
+            originalBig: originalBigBlind,
+            blindLevel: table.blindLevel
+        });
         
         // Broadcast reset to spectators
         if (table.onStateChange) {
