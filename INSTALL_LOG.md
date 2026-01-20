@@ -2725,6 +2725,31 @@ GameService.Instance.GetAvailableBots(bots => { });
 
 ---
 
+### Issue #100: Countdown Beeps Not Playing (Blocked by Ready to Rumble)
+
+**Symptoms:** Ready to Rumble played but countdown beeps (10, 9, 8...) didn't play.
+
+**Root Cause:** 
+1. Ready to Rumble audio is 7 seconds long
+2. Countdown beeps were trying to play while Ready to Rumble was still playing
+3. No delay logic to wait for rumble to finish before starting beeps
+
+**Fix:**
+1. Added `_rumbleStartTime` tracking when Ready to Rumble starts
+2. Added `RUMBLE_DURATION = 7f` constant
+3. Beeps only play after `Time.time - _rumbleStartTime >= RUMBLE_DURATION`
+4. Also added `countdownBeep` field and `PlayCountdownBeep()` method to AudioManager
+5. Removed placeholder `ready_to_rumble.ogg` (12KB) - kept real `ready_to_rumble.mp3` (177KB)
+
+**Files Changed:**
+- `AudioManager.cs` - Added countdownBeep field, loading, and PlayCountdownBeep() method
+- `TableScene.cs` - Added _rumbleStartTime tracking and timing logic for beeps
+
+**Date:** January 19, 2026
+**Status:** ✅ FIXED
+
+---
+
 ## 📁 KEY FILE LOCATIONS
 
 ### Server
