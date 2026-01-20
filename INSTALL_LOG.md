@@ -70,12 +70,16 @@ This found the `simulation_started` vs `start_simulation_response` bug in 30 sec
 
 > **READ THIS FILE AT START OF EVERY SESSION**
 > 
-> **Last Updated:** January 19, 2026 (Session 13 - POST-DEMO FIXES)
-> **Session:** 13 - BOSS DEMO NIGHT FIXES
-> **Status:** ✅ All issues from boss demo fixed
-> **Goal:** Fix issues discovered during Monday demo at boss's place
+> **Last Updated:** January 20, 2026 (Session 14 - SOCKET BOT SIMULATION)
+> **Session:** 14 - SOCKET BOT SIMULATION SYSTEM
+> **Status:** ✅ Fixed critical bug - simulation tables now broadcast state
+> **Goal:** Create simulation system for testing with mix of regular bots and socket bots
 >
-> ### 🔴 KEY FIXES THIS SESSION (Session 13 - Jan 19, 2026)
+> ### 🔴 KEY FIXES THIS SESSION (Session 14 - Jan 20, 2026)
+> 1. **Issue #104 - Socket Bot Simulation System**: Created SocketBot.js and SimulationManager.js for automated testing
+> 2. **Issue #105 - CRITICAL BUG FIX**: Simulation tables weren't broadcasting state to players - socket bots saw countdown but then timed out every turn. ROOT CAUSE: `setupTableCallbacks()` was never called for simulation tables, so `table.onStateChange` was null and no broadcasts happened. FIX: Call `setupTableCallbacks(simTable)` in SocketHandler after SimulationManager creates the table.
+>
+> ### 🔵 PREVIOUS SESSION FIXES (Session 13 - Jan 19, 2026)
 > 1. **Issue #99 - Ready to Rumble Sound**: Audio file was missing - added ready_to_rumble.mp3 to Resources, added PlayReadyToRumble() method, triggers when countdown phase starts
 > 2. **Issue #100 - Countdown Beep Timing**: Beeps now wait for 7-second Ready to Rumble audio to finish before playing
 > 3. **Issue #101 - Turn Time Slider Restored**: Re-added the 5-60 second turn time slider to Create Table panel

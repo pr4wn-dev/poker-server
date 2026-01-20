@@ -231,6 +231,14 @@ class SocketHandler {
                     console.log('[SocketHandler] start_simulation result:', result);
                     
                     if (result.success) {
+                        // CRITICAL: Set up table callbacks for state broadcasting
+                        // Without this, simulation tables won't broadcast state to players!
+                        const simTable = this.gameManager.getTable(result.tableId);
+                        if (simTable) {
+                            this.setupTableCallbacks(simTable);
+                            console.log(`[SocketHandler] Set up callbacks for simulation table ${result.tableId}`);
+                        }
+                        
                         // Join creator as spectator
                         socket.join(`table:${result.tableId}`);
                         socket.join(`spectator:${result.tableId}`);
