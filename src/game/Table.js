@@ -50,6 +50,7 @@ class Table {
         
         // New: Creator/Host
         this.creatorId = options.creatorId || null;
+        this.isSimulation = options.isSimulation || false;
         this.createdAt = Date.now();
         
         // New: House Rules
@@ -2015,6 +2016,7 @@ class Table {
             lastPotAwards: this.phase === GAME_PHASES.SHOWDOWN ? this.lastPotAwards : null,
             isSpectating: isSpectating,
             creatorId: this.creatorId,
+            isSimulation: this.isSimulation,
             practiceMode: this.practiceMode,
             houseRules: this.houseRules?.toJSON?.() || null,
             sidePot: this.getSidePotState(forPlayerId),

@@ -77,7 +77,8 @@ class SimulationManager {
             practiceMode: true,
             turnTimeLimit,
             blindIncreaseInterval, // Round timer from options (0 = OFF)
-            creatorId
+            creatorId,
+            isSimulation: true
         });
         
         if (!table || !table.id) {
