@@ -308,18 +308,39 @@ class Table {
     checkAllReady() {
         if (this.phase !== GAME_PHASES.READY_UP) return;
         
-        // Debug: log each seat's ready status
-        const seatStatuses = this.seats.map((s, i) => s ? `${i}:${s.name}(isBot=${s.isBot},isReady=${s.isReady})` : `${i}:empty`);
-        console.log(`[Table ${this.name}] Checking ready: ${seatStatuses.join(', ')}`);
+        // Log each seat's ready status for ALL tables
+        const seatStatuses = this.seats.map((s, i) => s ? {
+            seat: i,
+            name: s.name,
+            isBot: s.isBot,
+            isReady: s.isReady,
+            playerId: s.playerId
+        } : null).filter(Boolean);
+        
+        gameLogger.readyUp(this.name, 'Checking ready status', {
+            isSimulation: this.isSimulation,
+            seats: seatStatuses,
+            phase: this.phase
+        });
         
         const allReady = this.seats.every(s => !s || s.isReady);
         
         if (allReady) {
-            console.log(`[Table ${this.name}] All players ready! Starting final countdown`);
+            gameLogger.readyUp(this.name, 'All players ready! Starting final countdown', {
+                isSimulation: this.isSimulation,
+                playerCount: seatStatuses.length
+            });
             this.startFinalCountdown();
         } else {
-            const notReady = this.seats.filter(s => s && !s.isReady).map(s => s.name);
-            console.log(`[Table ${this.name}] Not all ready yet. Waiting for: ${notReady.join(', ')}`);
+            const notReady = this.seats.filter(s => s && !s.isReady).map(s => ({
+                name: s.name,
+                isBot: s.isBot,
+                playerId: s.playerId
+            }));
+            gameLogger.readyUp(this.name, 'Not all ready yet', {
+                isSimulation: this.isSimulation,
+                waitingFor: notReady
+            });
         }
     }
     
@@ -1898,18 +1919,29 @@ class Table {
     // ============ Spectators ============
 
     addSpectator(userId, name, socketId) {
-        console.log(`[Table ${this.name}] addSpectator called: userId=${userId}, name=${name}, allowSpectators=${this.allowSpectators}`);
+        gameLogger.spectator(this.name, 'addSpectator called', {
+            userId, name, socketId, 
+            allowSpectators: this.allowSpectators,
+            currentSpectators: this.spectators.size,
+            maxSpectators: this.maxSpectators,
+            isSimulation: this.isSimulation
+        });
+        
         if (!this.allowSpectators) {
-            console.log(`[Table ${this.name}] addSpectator REJECTED: spectators not allowed`);
+            gameLogger.spectator(this.name, 'addSpectator REJECTED: spectators not allowed', { userId, name });
             return { success: false, error: 'Spectators not allowed' };
         }
         if (this.spectators.size >= this.maxSpectators) {
-            console.log(`[Table ${this.name}] addSpectator REJECTED: limit reached`);
+            gameLogger.spectator(this.name, 'addSpectator REJECTED: limit reached', { userId, name });
             return { success: false, error: 'Spectator limit reached' };
         }
         
         this.spectators.set(userId, { oderId: userId, playerName: name, socketId });
-        console.log(`[Table ${this.name}] ${name} (${userId}) is now spectating. Total spectators: ${this.spectators.size}`);
+        gameLogger.spectator(this.name, 'Spectator added successfully', {
+            userId, name,
+            totalSpectators: this.spectators.size,
+            allSpectatorIds: Array.from(this.spectators.keys())
+        });
         return { success: true };
     }
 
@@ -1923,10 +1955,13 @@ class Table {
 
     isSpectator(userId) {
         const result = this.spectators.has(userId);
-        // Debug for simulation
-        if (this.isSimulation) {
-            console.log(`[Table ${this.name}] isSpectator(${userId}) = ${result}, spectators: [${Array.from(this.spectators.keys()).join(', ')}]`);
-        }
+        // Log for ALL tables so we can compare normal vs simulation
+        gameLogger.spectator(this.name, `isSpectator check`, {
+            userId,
+            result,
+            isSimulation: this.isSimulation,
+            spectatorIds: Array.from(this.spectators.keys())
+        });
         return result;
     }
 
@@ -2046,6 +2081,16 @@ class Table {
         const isSpectating = this.isSpectator(forPlayerId);
         const currentPlayer = this.currentPlayerIndex >= 0 ? this.seats[this.currentPlayerIndex] : null;
         
+        // Log state request for ALL tables
+        gameLogger.stateBroadcast(this.name, 'getState called', {
+            forPlayerId,
+            isSpectating,
+            isSimulation: this.isSimulation,
+            phase: this.phase,
+            spectatorIds: Array.from(this.spectators.keys()),
+            currentPlayerId: currentPlayer?.playerId || null
+        });
+        
         return {
             id: this.id,
             name: this.name,
@@ -2096,9 +2141,17 @@ class Table {
                     cards = canSeeCards ? seat.cards : seat.cards.map(() => ({ rank: null, suit: null }));
                 }
                 
-                // DEBUG: Log card visibility for simulation
-                if (this.isSimulation && isSpectating && seat.cards?.length > 0) {
-                    console.log(`[SIM-CARDS] ${seat.name}: canSeeCards=${canSeeCards}, cards=${JSON.stringify(cards)}`);
+                // DEBUG: Log card visibility for ALL tables (not just simulation)
+                if (seat.cards?.length > 0) {
+                    gameLogger.cardVisibility(this.name, `${seat.name} cards for viewer ${forPlayerId}`, {
+                        isSimulation: this.isSimulation,
+                        isSpectating,
+                        canSeeCards,
+                        viewerId: forPlayerId,
+                        playerId: seat.playerId,
+                        phase: this.phase,
+                        cardsVisible: canSeeCards ? seat.cards : 'HIDDEN'
+                    });
                 }
                 
                 return {

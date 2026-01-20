@@ -154,6 +154,48 @@ class GameLogger {
     debug(tableName, message, data = null) {
         this.writeLog('DEBUG', tableName, message, data);
     }
+    
+    /**
+     * Log card visibility (who can see what)
+     */
+    cardVisibility(tableName, message, data = null) {
+        this.writeLog('CARDS', tableName, message, data);
+    }
+    
+    /**
+     * Log state broadcast (when state is sent to clients)
+     */
+    stateBroadcast(tableName, message, data = null) {
+        this.writeLog('BROADCAST', tableName, message, data);
+    }
+    
+    /**
+     * Log player connection events
+     */
+    playerConnection(tableName, message, data = null) {
+        this.writeLog('CONNECTION', tableName, message, data);
+    }
+    
+    /**
+     * Log ready-up events
+     */
+    readyUp(tableName, message, data = null) {
+        this.writeLog('READY', tableName, message, data);
+    }
+    
+    /**
+     * Log visual/animation timing events
+     */
+    visual(tableName, message, data = null) {
+        this.writeLog('VISUAL', tableName, message, data);
+    }
+    
+    /**
+     * Log spectator events
+     */
+    spectator(tableName, message, data = null) {
+        this.writeLog('SPECTATOR', tableName, message, data);
+    }
 }
 
 // Singleton instance
