@@ -709,12 +709,23 @@ class Table {
         for (let i = 0; i < this.seats.length; i++) {
             const seat = this.seats[i];
             if (seat && seat.chips <= 0) {
-                // Player has 0 chips - they're eliminated
+                // Player has 0 chips - check if they were already eliminated
                 const wasAlreadyEliminated = seat.isActive === false;
+                
+                // Skip if already eliminated (prevents duplicate messages and notifications)
+                if (wasAlreadyEliminated) {
+                    // Already handled - just remove bot if still lingering
+                    if (seat.isBot) {
+                        this.seats[i] = null;
+                    }
+                    continue;
+                }
+                
+                // Mark as eliminated
                 seat.isActive = false;
                 
-                // Notify about elimination (only if they weren't already eliminated)
-                if (!wasAlreadyEliminated && this.onPlayerEliminated) {
+                // Notify about elimination
+                if (this.onPlayerEliminated) {
                     this.onPlayerEliminated({
                         playerId: seat.playerId,
                         playerName: seat.name,
@@ -1435,16 +1446,36 @@ class Table {
         // EXIT POINT 0: LOOP PREVENTION - Only one player can act
         // If nextPlayer === currentPlayerIndex, it means we've wrapped around and only ONE player can act
         // This happens when everyone else is folded, all-in, or busted (0 chips)
-        // In this case, the remaining player wins by default - advance phase immediately
         if (nextPlayer === this.currentPlayerIndex && this.currentPlayerIndex !== -1) {
-            gameLogger.gameEvent(this.name, 'EXIT POINT 0: LOOP PREVENTION - Only one player can act', {
+            // CRITICAL CHECK: Count how many players are actually still in the hand (not folded, isActive)
+            const playersStillInHand = this.seats.filter(s => s && s.isActive && !s.isFolded);
+            
+            if (playersStillInHand.length <= 1) {
+                // Only 1 player remains in the hand - they win by default!
+                const winner = playersStillInHand[0] || this.seats[this.currentPlayerIndex];
+                gameLogger.gameEvent(this.name, 'EXIT POINT 0a: ONLY ONE PLAYER REMAINS - Winner by default', {
+                    winnerName: winner?.name,
+                    playersStillInHand: playersStillInHand.length,
+                    phase: this.phase
+                });
+                console.log(`[Table ${this.name}] ONLY ONE PLAYER REMAINS: ${winner?.name} wins by default!`);
+                this.clearTurnTimer();
+                this.awardPot(winner);
+                setTimeout(() => this.startNewHand(), 3000);
+                return;  // GUARANTEED EXIT - game over
+            }
+            
+            // Multiple players still in hand, but only 1 can act (others all-in)
+            // Advance phase but don't end the game
+            gameLogger.gameEvent(this.name, 'EXIT POINT 0b: Only one player can act, others all-in - advancing phase', {
                 currentPlayerIndex: this.currentPlayerIndex,
                 nextPlayer,
                 playerName: this.seats[this.currentPlayerIndex]?.name,
+                playersStillInHand: playersStillInHand.length,
                 allBetsEqualized,
                 phase: this.phase
             });
-            console.log(`[Table ${this.name}] LOOP PREVENTION: Only one player (${this.seats[this.currentPlayerIndex]?.name}) can act - advancing phase`);
+            console.log(`[Table ${this.name}] LOOP PREVENTION: Only one player (${this.seats[this.currentPlayerIndex]?.name}) can act, ${playersStillInHand.length} still in hand - advancing phase`);
             this.hasPassedLastRaiser = false;
             this.advancePhase();
             return;  // GUARANTEED EXIT - prevents infinite loop
@@ -1707,8 +1738,14 @@ class Table {
         // CRITICAL: Broadcast state immediately so clients see cards before showing winner
         this.onStateChange?.();
         
+        // CRITICAL: Only include players who are:
+        // 1. Still seated (seat !== null)
+        // 2. Active (isActive !== false) - not eliminated
+        // 3. Not folded this hand
+        // 4. Have cards to evaluate
         const activePlayers = this.seats
-            .map((seat, index) => seat && !seat.isFolded ? { ...seat, seatIndex: index } : null)
+            .map((seat, index) => seat && seat.isActive !== false && !seat.isFolded && seat.cards?.length >= 2 
+                ? { ...seat, seatIndex: index } : null)
             .filter(p => p !== null);
 
         // Evaluate hands

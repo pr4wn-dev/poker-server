@@ -274,6 +274,13 @@ class BotManager {
             return;
         }
         
+        // CRITICAL: Don't trigger bot turns during non-betting phases
+        const validPhases = ['preflop', 'flop', 'turn', 'river'];
+        if (!validPhases.includes(table.phase)) {
+            // Showdown, waiting, ready_up, countdown - bots don't act
+            return;
+        }
+        
         const currentSeat = table.seats[table.currentPlayerIndex];
         if (!currentSeat) {
             return;
