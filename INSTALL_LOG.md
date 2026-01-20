@@ -3312,3 +3312,10 @@ The game is a skeleton. Previous sessions marked things as "working" but actual 
 - Reset `blindLevel`, `currentPlayerIndex`, `lastRaiserIndex`
 **Files:** src/testing/SimulationManager.js
 
+## Issue #120: Bots Timing Out After Simulation Restart
+**Date:** 2026-01-20
+**Symptom:** After Game 1 completes and restarts, bots just sit there until turn timer runs out and auto-folds them. `currentPlayerId: null` in state updates.
+**Root Cause:** `_restartGame()` was NOT resetting `seat.isActive = true`. Players marked as eliminated (`isActive = false`) at end of Game 1 stayed inactive. When `getNextActivePlayer()` ran, it couldn't find any active players, so `currentPlayerIndex` stayed -1.
+**Fix:** Added `seat.isActive = true` and `seat.totalBet = 0` to the restart reset loop.
+**Files:** src/testing/SimulationManager.js
+
