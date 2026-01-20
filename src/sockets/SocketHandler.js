@@ -244,7 +244,7 @@ class SocketHandler {
                             status: result.status
                         };
                         if (callback) callback(response);
-                        socket.emit('simulation_started', response);
+                        socket.emit('start_simulation_response', response);
                     } else {
                         if (callback) callback(result);
                     }
