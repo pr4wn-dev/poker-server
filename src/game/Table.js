@@ -869,6 +869,19 @@ class Table {
     raise(seatIndex, amount) {
         const player = this.seats[seatIndex];
         const toCall = this.currentBet - player.currentBet;
+        const totalNeeded = toCall + (this.minRaise || this.bigBlind);
+        
+        // CRITICAL: Validate amount is not more than player has
+        if (amount > player.chips) {
+            return { success: false, error: `You don't have enough chips. You have ${player.chips}.` };
+        }
+        
+        // If player is raising all their chips, it's an all-in, not a raise
+        if (amount === player.chips && amount < totalNeeded) {
+            // Player doesn't have enough for a proper raise - treat as all-in
+            return this.allIn(seatIndex);
+        }
+        
         const raiseAmount = amount - toCall;
 
         // FIX: Validate that raise amount is actually a raise (more than minRaise) or all-in
@@ -878,8 +891,14 @@ class Table {
             return this.call(seatIndex);
         }
 
+        // CRITICAL: Validate minimum raise (unless it's an all-in)
         if (raiseAmount < this.minRaise && amount !== player.chips) {
-            return { success: false, error: `Minimum raise is ${this.minRaise}. You need to bet at least ${toCall + this.minRaise} total.` };
+            return { success: false, error: `Minimum raise is ${this.minRaise}. You need to bet at least ${totalNeeded} total (${toCall} to call + ${this.minRaise} to raise).` };
+        }
+
+        // CRITICAL: Don't allow raising more than player has (should already be caught above, but double-check)
+        if (amount > player.chips) {
+            return { success: false, error: `You don't have enough chips. You have ${player.chips}.` };
         }
 
         player.chips -= amount;
@@ -887,7 +906,7 @@ class Table {
         player.totalBet += amount;
         this.pot += amount;
         this.currentBet = player.currentBet;
-        this.minRaise = raiseAmount;
+        this.minRaise = Math.max(raiseAmount, this.minRaise);  // Keep the larger raise amount
         this.lastRaiserIndex = seatIndex;
 
         if (player.chips === 0) {
@@ -935,7 +954,7 @@ class Table {
         // This ensures we don't advance phase too early (before everyone has acted)
         // CRITICAL: We've passed the last raiser if:
         // 1. Current index is greater than last raiser (normal progression, no wrap)
-        // 2. OR we've wrapped around (current < lastRaiser and we've gone past maxPlayers)
+        // 2. OR we've wrapped around (current < lastRaiser and nextPlayer wraps back)
         // 3. OR we're about to return to last raiser (nextPlayer === lastRaiser)
         if (this.currentPlayerIndex !== -1 && !this.hasPassedLastRaiser && this.lastRaiserIndex !== -1) {
             const currentIndex = this.currentPlayerIndex;
@@ -947,19 +966,24 @@ class Table {
             if (currentIndex > lastRaiser) {
                 // Normal progression: current player is after last raiser
                 passed = true;
-            } else if (currentIndex < lastRaiser && nextPlayer !== -1) {
-                // We might have wrapped around - check if next player is before or at last raiser
-                // If nextPlayer is close to or at lastRaiser, we've likely completed a round
-                if (nextPlayer === lastRaiser) {
+            } else if (currentIndex < lastRaiser) {
+                // We're before the last raiser - check if we've wrapped around
+                if (nextPlayer === -1) {
+                    // No one left to act - we've effectively passed everyone
+                    passed = true;
+                } else if (nextPlayer === lastRaiser) {
                     // We're about to return to last raiser - we've completed a round
                     passed = true;
-                } else if (nextPlayer > currentIndex && nextPlayer < lastRaiser) {
-                    // Still in normal progression
+                } else if (nextPlayer > currentIndex && nextPlayer <= lastRaiser) {
+                    // Still progressing normally toward last raiser
                     passed = false;
-                } else if (nextPlayer <= currentIndex) {
-                    // We've wrapped around (nextPlayer is before currentIndex means we wrapped)
+                } else if (nextPlayer <= currentIndex || nextPlayer > lastRaiser) {
+                    // We've wrapped around (nextPlayer is before current OR after lastRaiser means we wrapped)
                     passed = true;
                 }
+            } else if (currentIndex === lastRaiser && nextPlayer !== -1 && nextPlayer !== lastRaiser) {
+                // We're at the last raiser and moving to someone else - we've passed
+                passed = true;
             }
             
             if (passed) {
@@ -978,23 +1002,45 @@ class Table {
             return seat.currentBet === this.currentBet;
         });
         
-        // CRITICAL FIX: A betting round is complete ONLY when:
-        // 1. No one can act (all folded or all-in) - nextPlayer === -1
-        // 2. All bets are equalized AND we've COMPLETED a full round:
-        //    - We MUST have passed the last raiser at least once (proves everyone has had a chance)
-        //    - AND we're about to return to the last raiser (next player is them)
-        //
-        // DO NOT advance phase if we haven't passed the last raiser yet - this ensures
-        // everyone gets a turn even if bets happen to be equalized early
-        const bettingRoundComplete = allBetsEqualized && (
-            nextPlayer === -1 ||  // No one can act
-            (this.hasPassedLastRaiser && nextPlayer === this.lastRaiserIndex)  // MUST have passed last raiser AND about to return
-        );
+        // CRITICAL FIX: Handle case where everyone checks (no raises)
+        // After blinds, lastRaiserIndex is set to bbIndex. If no one raises, it stays that way.
+        // If currentBet is still at bigBlind and lastRaiserIndex is bbIndex (or equal to dealer), no one raised.
+        // Also check if we're past the dealer position - that means we've gone around once.
+        const bbIndex = this.getNextActivePlayer(this.getNextActivePlayer(this.dealerIndex));
+        const noRaisesHappened = this.currentBet <= this.bigBlind && 
+                                 (this.lastRaiserIndex === bbIndex || this.lastRaiserIndex === this.dealerIndex);
         
-        // CRITICAL: If all bets are equalized but we HAVEN'T passed the last raiser yet,
+        // A betting round is complete when:
+        // 1. No one can act (all folded or all-in) - nextPlayer === -1
+        // 2. All bets are equalized AND:
+        //    a. No raises happened (everyone checked) AND we've completed a full round (passed dealer/bb)
+        //    b. OR someone raised AND we've passed the last raiser AND we're about to return to them
+        let bettingRoundComplete = false;
+        
+        if (allBetsEqualized) {
+            if (nextPlayer === -1) {
+                // No one can act - round is complete
+                bettingRoundComplete = true;
+            } else if (noRaisesHappened) {
+                // No raises happened - everyone checked
+                // Round is complete when we've passed the big blind (or dealer) once
+                // Check if we've wrapped around: nextPlayer is at or before the bbIndex/dealer
+                const hasCompletedRound = nextPlayer === bbIndex || 
+                                         nextPlayer === this.dealerIndex ||
+                                         (this.currentPlayerIndex > bbIndex && nextPlayer <= bbIndex) ||
+                                         (this.currentPlayerIndex > this.dealerIndex && nextPlayer <= this.dealerIndex);
+                bettingRoundComplete = hasCompletedRound;
+                console.log(`[Table ${this.name}] No raises - checking if round complete. Current: ${this.currentPlayerIndex}, Next: ${nextPlayer}, BB: ${bbIndex}, Dealer: ${this.dealerIndex}, Complete: ${hasCompletedRound}`);
+            } else {
+                // Someone raised - must have passed last raiser AND be about to return to them
+                bettingRoundComplete = this.hasPassedLastRaiser && nextPlayer === this.lastRaiserIndex;
+            }
+        }
+        
+        // CRITICAL: If all bets are equalized but we HAVEN'T completed a round yet,
         // we MUST continue - some players haven't had their turn yet!
-        if (allBetsEqualized && !this.hasPassedLastRaiser && nextPlayer !== -1 && nextPlayer !== this.lastRaiserIndex) {
-            console.log(`[Table ${this.name}] All bets equalized but haven't passed last raiser yet - continuing to give all players turns. Current: ${this.currentPlayerIndex}, Next: ${nextPlayer}, LastRaiser: ${this.lastRaiserIndex}`);
+        if (allBetsEqualized && !bettingRoundComplete && nextPlayer !== -1) {
+            console.log(`[Table ${this.name}] All bets equalized but round not complete - continuing. Current: ${this.currentPlayerIndex}, Next: ${nextPlayer}, LastRaiser: ${this.lastRaiserIndex}, NoRaises: ${noRaises}`);
             // Continue to next player - they need their turn!
         }
         
