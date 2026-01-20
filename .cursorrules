@@ -66,19 +66,32 @@ Pattern: When one side works but the other is stuck → MISMATCH. Grep both side
 
 If you have to ask "what happened?" → YOU HAVE FAILED.
 
-Logging must capture EVERYTHING:
+**BEFORE asking user ANYTHING about a bug:**
+1. Check server console logs
+2. Check application logs (simulation.log, socketbot.log, game.log)
+3. Check Unity console output
+4. Grep the codebase for the exact feature/flag involved
+5. Trace the data flow from creation → storage → broadcast → client
+
+**Logging must capture EVERYTHING:**
 1. Every user action - log state and parameters
 2. Every state change - log before/after
 3. Every request/response - log params, response, errors
 4. Every phase/mode transition - log from/to
+5. Every flag/option - log when set and when read
 
-Before testing, verify services are running:
+**Before testing, verify services are running:**
 ```powershell
-# Check if server/services are running
 Get-Process node -ErrorAction SilentlyContinue
 ```
 
-If logging is insufficient to diagnose a problem → ADD MORE LOGGING before asking user.
+**If a flag isn't working, trace the FULL path:**
+- Where is it set? (e.g., SimulationManager sets isSimulation: true)
+- Is it passed through all layers? (e.g., GameManager.createTable must forward it)
+- Is it included in state broadcast? (e.g., Table.getState must include it)
+- Does client model have the field? (e.g., NetworkModels.TableState)
+
+If logging is insufficient → ADD MORE LOGGING. Never ask user to describe.
 
 ---
 
