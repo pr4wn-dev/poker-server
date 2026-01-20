@@ -1056,7 +1056,29 @@ class Table {
                 console.log(`[Table ${this.name}] No raises - checking if round complete. Current: ${this.currentPlayerIndex}, Next: ${nextPlayer}, BB: ${bbIndex}, Dealer: ${this.dealerIndex}, Complete: ${hasCompletedRound}`);
             } else {
                 // Someone raised - must have passed last raiser AND be about to return to them
-                bettingRoundComplete = this.hasPassedLastRaiser && nextPlayer === this.lastRaiserIndex;
+                // CRITICAL FIX: Pre-flop is special - big blind ALWAYS gets LAST action
+                // In standard poker, pre-flop: UTG acts first, BB acts LAST
+                // If someone raises, they become the last raiser, but BB still needs their turn
+                // Round completes when: we've passed BB AND passed the last raiser (if different) AND are about to return to last raiser
+                if (this.phase === GAME_PHASES.PRE_FLOP) {
+                    // Pre-flop: BB must get their turn if someone raised after them
+                    const someoneRaisedAfterBB = this.lastRaiserIndex !== bbIndex && this.lastRaiserIndex !== -1;
+                    
+                    if (someoneRaisedAfterBB) {
+                        // Someone raised after BB - they're the last raiser
+                        // BB needs to get a turn to call/raise/fold
+                        // Round completes when: we've passed BB AND passed the last raiser AND next player is the last raiser
+                        const hasPassedBB = this.hasPassedLastRaiser || (this.currentPlayerIndex > bbIndex && this.currentPlayerIndex !== this.lastRaiserIndex) || (nextPlayer === bbIndex && this.currentPlayerIndex !== bbIndex);
+                        bettingRoundComplete = hasPassedBB && this.hasPassedLastRaiser && nextPlayer === this.lastRaiserIndex;
+                    } else {
+                        // No one raised after BB (or lastRaiserIndex is still BB)
+                        // Round completes when we've gone around and next player would be BB
+                        bettingRoundComplete = nextPlayer === bbIndex && this.hasPassedLastRaiser;
+                    }
+                } else {
+                    // Post-flop: normal betting round rules
+                    bettingRoundComplete = this.hasPassedLastRaiser && nextPlayer === this.lastRaiserIndex;
+                }
             }
         }
         
