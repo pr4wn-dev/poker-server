@@ -112,15 +112,18 @@ class SimulationManager {
         this.activeSimulations.set(tableId, simulation);
         
         // Add regular bots first
+        // Must use creatorId as inviterId - only table creator can invite bots
         const botProfiles = ['tex', 'lazy_larry', 'pickles', 'maxine', 'bluffs', 'shark', 'rookie', 'calculator', 'wildcard'];
         for (let i = 0; i < regularBotCount; i++) {
             const botProfile = botProfiles[i % botProfiles.length];
-            const result = await this.gameManager.inviteBot(tableId, botProfile, 'simulation', buyIn);
+            const result = await this.gameManager.inviteBot(tableId, botProfile, creatorId, buyIn);
             
             if (result.success && result.seatIndex !== undefined) {
                 // Auto-approve bots for simulation
-                this.gameManager.approveBot(tableId, result.seatIndex, 'simulation');
+                this.gameManager.approveBot(tableId, result.seatIndex, creatorId);
                 this.log('INFO', `Regular bot added: ${botProfile}`, { seatIndex: result.seatIndex });
+            } else {
+                this.log('WARN', `Failed to add regular bot: ${botProfile}`, { error: result.error });
             }
             
             // Small delay between bot additions
