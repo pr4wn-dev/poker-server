@@ -3450,3 +3450,28 @@ The game is a skeleton. Previous sessions marked things as "working" but actual 
  
  * * F i l e s : * *   S i m u l a t i o n M a n a g e r . j s ,   B o t M a n a g e r . j s ,   G a m e M a n a g e r . j s ,   L o b b y S c e n e . c s  
  
+ 
+ # # #   C o m p r e h e n s i v e   S i m u l a t i o n   L o g g i n g   -   2 0 2 6 - 0 1 - 2 0   0 5 : 5 9 
+ 
+ * * A d d e d   d e t a i l e d   l o g g i n g   f o r   s i m u l a t i o n   d e b u g g i n g : * * 
+ 
+ * * S e r v e r   ( T a b l e . j s ) : * * 
+ -   [ T I M E R ]   T u r n   t i m e r   s t a r t / s t o p / t i m e o u t   w i t h   p l a y e r   n a m e ,   p h a s e ,   r e m a i n i n g   t i m e 
+ -   [ B L I N D _ T I M E R ]   B l i n d   t i m e r   s t a r t / s t o p / i n c r e a s e   w i t h   l e v e l   a n d   b l i n d   v a l u e s 
+ -   [ P O T ]   P o t   a w a r d s   w i t h   c h i p   c a l c u l a t i o n   v e r i f i c a t i o n   ( c h i p s B e f o r e   +   p o t   =   c h i p s A f t e r ) 
+ -   [ H A N D _ E V A L ]   H a n d   e v a l u a t i o n   w i t h   h o l e   c a r d s ,   c o m m u n i t y   c a r d s ,   h a n d   r a n k ,   b e s t   5   c a r d s 
+ 
+ * * S e r v e r   ( S i m u l a t i o n M a n a g e r . j s ) : * * 
+ -   S t a r t i n g   s i m u l a t i o n   w i t h   A C T U A L   s e t t i n g s   ( s o u r c e :   c l i e n t   v s   r a n d o m ) 
+ -   T a b l e   c r e a t e d   w i t h   s e t t i n g s   v e r i f i c a t i o n   ( t a b l e B u y I n   m a t c h e s   r e q u e s t e d B u y I n ) 
+ 
+ * * C l i e n t   ( A u d i o M a n a g e r . c s ) : * * 
+ -   [ A U D I O ]   P l a y S F X   l o g s :   c l i p   n a m e ,   d u r a t i o n ,   v o l u m e ,   t i m e 
+ 
+ * * C l i e n t   ( P o k e r T a b l e V i e w . c s ) : * * 
+ -   [ A N I M ]   C a r d R e v e a l   a n i m a t i o n   s t a r t / e n d   w i t h   p o s i t i o n ,   d u r a t i o n ,   p a r e n t 
+ 
+ * * C l i e n t   ( T a b l e S c e n e . c s ) : * * 
+ -   [ P H A S E - C H A N G E ]   P h a s e   t r a n s i t i o n s   w i t h   t i m e ,   p o t ,   b l i n d   l e v e l 
+  
+ 
