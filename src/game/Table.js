@@ -92,8 +92,10 @@ class Table {
         // Loop detection - prevent infinite loops
         this.turnsThisPhase = 0;  // Count turns in current phase
         this.playerTurnCounts = {};  // Track how many times each player has acted this phase
-        this.MAX_TURNS_PER_PHASE = 20;  // Safety valve - force advance if exceeded
-        this.MAX_SAME_PLAYER_TURNS = 3;  // Warn if same player acts 3+ times in a phase
+        this.lastActingPlayer = null;  // Track last player to detect consecutive same-player turns
+        this.consecutiveSamePlayerTurns = 0;  // Detect if same player keeps getting turn without others acting
+        this.MAX_TURNS_PER_PHASE = 30;  // Safety valve - force advance if exceeded (raised for heads-up with lots of raising)
+        this.MAX_CONSECUTIVE_SAME_PLAYER = 3;  // ONLY warn if same player acts 3x IN A ROW without anyone else acting
 
         // Timing
         this.turnTimeout = null;
@@ -688,6 +690,8 @@ class Table {
         // Reset loop detection counters
         this.turnsThisPhase = 0;
         this.playerTurnCounts = {};
+        this.lastActingPlayer = null;
+        this.consecutiveSamePlayerTurns = 0;
 
         // Reset players
         // CRITICAL: Only reset isActive if player HAS chips
@@ -1437,16 +1441,26 @@ class Table {
         const playerId = nextPlayerSeat?.playerId || `seat_${nextPlayer}`;
         this.playerTurnCounts[playerId] = (this.playerTurnCounts[playerId] || 0) + 1;
         
-        // Check for same player acting too many times
-        if (this.playerTurnCounts[playerId] >= this.MAX_SAME_PLAYER_TURNS) {
-            gameLogger.gameEvent(this.name, `WARNING: POSSIBLE LOOP - Same player acting ${this.playerTurnCounts[playerId]} times this phase`, {
+        // Track CONSECUTIVE same-player turns (not total per phase)
+        // A player acting multiple times is normal if there are raises in between
+        // But the SAME player getting the turn multiple times IN A ROW is suspicious
+        if (this.lastActingPlayer === playerId) {
+            this.consecutiveSamePlayerTurns++;
+        } else {
+            this.consecutiveSamePlayerTurns = 1;
+            this.lastActingPlayer = playerId;
+        }
+        
+        // Only warn if same player acts consecutively without anyone else acting
+        if (this.consecutiveSamePlayerTurns >= this.MAX_CONSECUTIVE_SAME_PLAYER) {
+            gameLogger.gameEvent(this.name, `WARNING: POSSIBLE LOOP - Same player acting ${this.consecutiveSamePlayerTurns} times CONSECUTIVELY`, {
                 player: nextPlayerSeat?.name,
                 playerId,
+                consecutiveTurns: this.consecutiveSamePlayerTurns,
                 turnsThisPhase: this.turnsThisPhase,
-                phase: this.phase,
-                playerTurnCounts: this.playerTurnCounts
+                phase: this.phase
             });
-            console.warn(`[Table ${this.name}] WARNING: ${nextPlayerSeat?.name} has acted ${this.playerTurnCounts[playerId]} times in ${this.phase} phase - possible loop!`);
+            console.warn(`[Table ${this.name}] WARNING: ${nextPlayerSeat?.name} has acted ${this.consecutiveSamePlayerTurns} times IN A ROW - possible loop!`);
         }
         
         // Safety valve - force advance if too many turns
@@ -1519,6 +1533,8 @@ class Table {
         // Reset loop detection counters for new phase
         this.turnsThisPhase = 0;
         this.playerTurnCounts = {};
+        this.lastActingPlayer = null;
+        this.consecutiveSamePlayerTurns = 0;
         
         // Reset betting for new round
         for (const seat of this.seats) {
