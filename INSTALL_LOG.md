@@ -2750,6 +2750,29 @@ GameService.Instance.GetAvailableBots(bots => { });
 
 ---
 
+### Issue #101: Turn Time Slider Missing from Create Table Panel
+
+**Symptoms:** User reported "missing controls on create table" - the Turn Time slider that was documented in Session 12 notes was not actually in the UI.
+
+**Root Cause:** The Turn Time slider was never added to LobbyScene.cs despite being documented as a feature.
+
+**Fix:**
+1. Added `turnTimeSlider` and `turnTimeValue` fields to LobbyScene.cs
+2. Added Turn Time row in BuildCreateTablePanel() with slider (5-60 seconds, default 20)
+3. Increased panel height from 360px to 400px to fit new row
+4. Updated OnCreateTableClick to get turn time from slider and convert to milliseconds
+5. Updated GameService.CreateTable() to accept turnTimeLimit parameter
+6. Server already handled turnTimeLimit via spread operator in create_table handler
+
+**Files Changed:**
+- `LobbyScene.cs` - Added Turn Time slider UI row
+- `GameService.cs` - Added turnTimeLimit parameter to CreateTable()
+
+**Date:** January 19, 2026
+**Status:** ✅ FIXED
+
+---
+
 ## 📁 KEY FILE LOCATIONS
 
 ### Server
