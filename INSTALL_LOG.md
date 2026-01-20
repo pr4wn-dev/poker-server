@@ -3226,3 +3226,15 @@ The game is a skeleton. Previous sessions marked things as "working" but actual 
 - Session 2: Singleton pattern fixes
 - Session 1: Initial setup
 
+
+## Issue #113: Player Loop Bug (Busted Players + Single Player Scenarios)
+**Date:** 2026-01-20
+**Symptom:** Players getting stuck in infinite loop - same player asked to act repeatedly
+**Root Cause:** Two bugs:
+1. Players with 0 chips (busted) weren't treated as 'matched' in betting round check - they could never call but weren't skipped
+2. When only ONE player could act (nextPlayer === currentPlayerIndex), game didn't auto-complete the round
+**Fix:** 
+- Added \seat.chips <= 0\ to allBetsEqualized check - busted players are now treated as matched
+- Added EXIT POINT 0 in advanceGame() to detect when nextPlayer === currentPlayerIndex and auto-advance phase
+**Files:** src/game/Table.js
+
