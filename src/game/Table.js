@@ -88,6 +88,12 @@ class Table {
         this.currentPlayerIndex = -1;
         this.lastRaiserIndex = -1;
         this.hasPassedLastRaiser = false;  // Track if we've passed the last raiser this betting round
+        
+        // Loop detection - prevent infinite loops
+        this.turnsThisPhase = 0;  // Count turns in current phase
+        this.playerTurnCounts = {};  // Track how many times each player has acted this phase
+        this.MAX_TURNS_PER_PHASE = 20;  // Safety valve - force advance if exceeded
+        this.MAX_SAME_PLAYER_TURNS = 3;  // Warn if same player acts 3+ times in a phase
 
         // Timing
         this.turnTimeout = null;
@@ -678,6 +684,10 @@ class Table {
         this.hasPassedLastRaiser = false;
         this.lastRaiserIndex = -1;
         this.currentPlayerIndex = -1;
+        
+        // Reset loop detection counters
+        this.turnsThisPhase = 0;
+        this.playerTurnCounts = {};
 
         // Reset players
         // CRITICAL: Only reset isActive if player HAS chips
@@ -801,6 +811,18 @@ class Table {
     // ============ Actions ============
 
     handleAction(playerId, action, amount = 0) {
+        // CRITICAL: No betting allowed during showdown - just evaluate hands
+        if (this.phase === GAME_PHASES.SHOWDOWN) {
+            gameLogger.bettingAction(this.name, playerId || 'unknown', `Action rejected: No betting during showdown`);
+            return { success: false, error: 'No betting during showdown' };
+        }
+        
+        // CRITICAL: No betting allowed during waiting/ready_up/countdown phases
+        if (this.phase === GAME_PHASES.WAITING || this.phase === GAME_PHASES.READY_UP || this.phase === GAME_PHASES.COUNTDOWN) {
+            gameLogger.bettingAction(this.name, playerId || 'unknown', `Action rejected: Game not in progress (phase: ${this.phase})`);
+            return { success: false, error: 'Game not in progress' };
+        }
+        
         const seatIndex = this.seats.findIndex(s => s?.playerId === playerId);
         if (seatIndex === -1 || seatIndex !== this.currentPlayerIndex) {
             gameLogger.bettingAction(this.name, playerId || 'unknown', `Action rejected: Not your turn (seat ${seatIndex}, current ${this.currentPlayerIndex})`);
@@ -1410,6 +1432,62 @@ class Table {
         this.currentPlayerIndex = nextPlayer;
         const nextPlayerSeat = this.seats[this.currentPlayerIndex];
         
+        // ============ LOOP DETECTION ============
+        this.turnsThisPhase++;
+        const playerId = nextPlayerSeat?.playerId || `seat_${nextPlayer}`;
+        this.playerTurnCounts[playerId] = (this.playerTurnCounts[playerId] || 0) + 1;
+        
+        // Check for same player acting too many times
+        if (this.playerTurnCounts[playerId] >= this.MAX_SAME_PLAYER_TURNS) {
+            gameLogger.gameEvent(this.name, `WARNING: POSSIBLE LOOP - Same player acting ${this.playerTurnCounts[playerId]} times this phase`, {
+                player: nextPlayerSeat?.name,
+                playerId,
+                turnsThisPhase: this.turnsThisPhase,
+                phase: this.phase,
+                playerTurnCounts: this.playerTurnCounts
+            });
+            console.warn(`[Table ${this.name}] WARNING: ${nextPlayerSeat?.name} has acted ${this.playerTurnCounts[playerId]} times in ${this.phase} phase - possible loop!`);
+        }
+        
+        // Safety valve - force advance if too many turns
+        if (this.turnsThisPhase >= this.MAX_TURNS_PER_PHASE) {
+            gameLogger.gameEvent(this.name, `CRITICAL: LOOP DETECTED - Force advancing phase after ${this.turnsThisPhase} turns`, {
+                phase: this.phase,
+                turnsThisPhase: this.turnsThisPhase,
+                playerTurnCounts: this.playerTurnCounts
+            });
+            console.error(`[Table ${this.name}] CRITICAL: Force advancing phase after ${this.turnsThisPhase} turns - loop detected!`);
+            this.hasPassedLastRaiser = false;
+            this.advancePhase();
+            return;
+        }
+        
+        // Check for stuck scenario: only one player has chips, others all-in
+        const playersWithChips = this.seats.filter(s => s && !s.isFolded && !s.isAllIn && s.chips > 0);
+        const allInPlayers = this.seats.filter(s => s && !s.isFolded && s.isAllIn);
+        if (playersWithChips.length === 1 && allInPlayers.length > 0) {
+            gameLogger.gameEvent(this.name, `WARNING: Only one player with chips, ${allInPlayers.length} all-in - checking if round should auto-complete`, {
+                playerWithChips: playersWithChips[0]?.name,
+                allInCount: allInPlayers.length,
+                phase: this.phase
+            });
+            console.warn(`[Table ${this.name}] WARNING: Only ${playersWithChips[0]?.name} has chips, ${allInPlayers.length} players all-in`);
+            
+            // If bets are equalized, force advance
+            const allBetsMatch = this.seats.every(s => !s || s.isFolded || s.isAllIn || s.currentBet === this.currentBet);
+            if (allBetsMatch) {
+                gameLogger.gameEvent(this.name, `Auto-advancing: All bets equalized, only one player can act`, {
+                    phase: this.phase,
+                    currentBet: this.currentBet
+                });
+                console.log(`[Table ${this.name}] Auto-advancing - all bets equalized, only one player can act`);
+                this.hasPassedLastRaiser = false;
+                this.advancePhase();
+                return;
+            }
+        }
+        // ============ END LOOP DETECTION ============
+        
         gameLogger.turnChange(this.name, oldCurrentPlayer || `Seat ${this.currentPlayerIndex}`, nextPlayerSeat?.name || `Seat ${nextPlayer}`, {
             fromSeat: this.currentPlayerIndex !== nextPlayer ? this.currentPlayerIndex : null,
             toSeat: nextPlayer,
@@ -1417,10 +1495,12 @@ class Table {
             currentBet: this.currentBet,
             playerBet: nextPlayerSeat?.currentBet,
             lastRaiserIndex: this.lastRaiserIndex,
-            hasPassedLastRaiser: this.hasPassedLastRaiser
+            hasPassedLastRaiser: this.hasPassedLastRaiser,
+            turnsThisPhase: this.turnsThisPhase,
+            playerTurnCount: this.playerTurnCounts[playerId]
         });
         
-        console.log(`[Table ${this.name}] Turn: ${nextPlayerSeat?.name} (seat ${this.currentPlayerIndex}, isBot: ${nextPlayerSeat?.isBot}, currentBet: ${nextPlayerSeat?.currentBet}/${this.currentBet}, lastRaiser: ${this.lastRaiserIndex}, hasPassed: ${this.hasPassedLastRaiser})`);
+        console.log(`[Table ${this.name}] Turn: ${nextPlayerSeat?.name} (seat ${this.currentPlayerIndex}, isBot: ${nextPlayerSeat?.isBot}, currentBet: ${nextPlayerSeat?.currentBet}/${this.currentBet}, lastRaiser: ${this.lastRaiserIndex}, hasPassed: ${this.hasPassedLastRaiser}, turnsThisPhase: ${this.turnsThisPhase})`);
         this.startTurnTimer();
         this.onStateChange?.();
         // GUARANTEED EXIT - function always returns here if we reach this point
@@ -1432,8 +1512,13 @@ class Table {
         gameLogger.phaseChange(this.name, oldPhase, 'ADVANCING', {
             currentBet: this.currentBet,
             pot: this.pot,
-            currentPlayerIndex: this.currentPlayerIndex
+            currentPlayerIndex: this.currentPlayerIndex,
+            turnsThisPhase: this.turnsThisPhase
         });
+        
+        // Reset loop detection counters for new phase
+        this.turnsThisPhase = 0;
+        this.playerTurnCounts = {};
         
         // Reset betting for new round
         for (const seat of this.seats) {
