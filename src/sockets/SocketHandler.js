@@ -548,26 +548,33 @@ class SocketHandler {
             // Start the game (table creator only) - initiates ready-up phase
             socket.on('start_game', (data, callback) => {
                 const respond = (response) => {
+                    console.log(`[SocketHandler] START_GAME RESPONSE | success=${response.success}, error=${response.error || 'none'}`);
                     if (callback) callback(response);
                     socket.emit('start_game_response', response);
                 };
                 
                 const user = this.getAuthenticatedUser(socket);
                 if (!user) {
+                    console.log('[SocketHandler] START_GAME FAILED | Not authenticated');
                     return respond({ success: false, error: 'Not authenticated' });
                 }
                 
                 const { tableId } = data;
+                console.log(`[SocketHandler] START_GAME REQUEST | userId=${user.userId}, tableId=${tableId}`);
+                
                 const table = this.gameManager.getTable(tableId);
                 
                 if (!table) {
+                    console.log(`[SocketHandler] START_GAME FAILED | Table not found: ${tableId}`);
                     return respond({ success: false, error: 'Table not found' });
                 }
+                
+                console.log(`[SocketHandler] START_GAME TABLE INFO | phase=${table.phase}, creatorId=${table.creatorId}, isSimulation=${table.isSimulation}, players=${table.getSeatedPlayerCount()}`);
                 
                 const result = table.startReadyUp(user.userId);
                 
                 if (result.success) {
-                    console.log(`[SocketHandler] Ready-up phase started at table ${table.name}`);
+                    console.log(`[SocketHandler] START_GAME SUCCESS | Ready-up phase started at table ${table.name}`);
                     
                     // Broadcast ready prompt to all players
                     this.io.to(`table:${tableId}`).emit('ready_prompt', {
@@ -577,6 +584,8 @@ class SocketHandler {
                     
                     // Broadcast updated state
                     this.broadcastTableState(tableId);
+                } else {
+                    console.log(`[SocketHandler] START_GAME FAILED | ${result.error}`);
                 }
                 
                 respond(result);
