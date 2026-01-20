@@ -1303,12 +1303,14 @@ class Table {
             isAllIn: seat?.isAllIn,
             currentBet: seat?.currentBet,
             requiredBet: this.currentBet,
-            matched: !seat || seat.isFolded || seat.isAllIn || seat.currentBet === this.currentBet
+            // CRITICAL FIX: Players with 0 chips are "busted" - they can never match any bet
+            matched: !seat || seat.isFolded || seat.isAllIn || seat.chips <= 0 || seat.currentBet === this.currentBet
         }));
         
         const allBetsEqualized = this.seats.every(seat => {
             if (!seat || seat.isFolded) return true;  // Folded players don't need to match
             if (seat.isAllIn) return true;  // All-in players are already committed
+            if (seat.chips <= 0) return true;  // CRITICAL FIX: Busted players (0 chips) can't call - treat as matched
             // Active players must have matched the current bet
             return seat.currentBet === this.currentBet;
         });
@@ -1442,6 +1444,24 @@ class Table {
         // ============ CRITICAL: GUARANTEED EXIT POINTS ============
         // These checks MUST happen in order to prevent ANY loop scenarios
         // Each path has a GUARANTEED return statement
+        
+        // EXIT POINT 0: LOOP PREVENTION - Only one player can act
+        // If nextPlayer === currentPlayerIndex, it means we've wrapped around and only ONE player can act
+        // This happens when everyone else is folded, all-in, or busted (0 chips)
+        // In this case, the remaining player wins by default - advance phase immediately
+        if (nextPlayer === this.currentPlayerIndex && this.currentPlayerIndex !== -1) {
+            gameLogger.gameEvent(this.name, 'EXIT POINT 0: LOOP PREVENTION - Only one player can act', {
+                currentPlayerIndex: this.currentPlayerIndex,
+                nextPlayer,
+                playerName: this.seats[this.currentPlayerIndex]?.name,
+                allBetsEqualized,
+                phase: this.phase
+            });
+            console.log(`[Table ${this.name}] LOOP PREVENTION: Only one player (${this.seats[this.currentPlayerIndex]?.name}) can act - advancing phase`);
+            this.hasPassedLastRaiser = false;
+            this.advancePhase();
+            return;  // GUARANTEED EXIT - prevents infinite loop
+        }
         
         // EXIT POINT 1: No one can act (all all-in or folded)
         // MUST check this FIRST before any complex logic
