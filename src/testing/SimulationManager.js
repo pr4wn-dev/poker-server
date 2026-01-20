@@ -74,9 +74,9 @@ class SimulationManager {
         const turnTimeSeconds = Math.floor(Math.random() * 26) + 5; // 5 to 30
         const turnTimeLimit = turnTimeSeconds * 1000;
         
-        // Random blind increase interval (0=OFF, or 5-20 minutes)
-        const useBlindIncrease = Math.random() > 0.5; // 50% chance
-        const blindIncreaseMinutes = useBlindIncrease ? Math.floor(Math.random() * 16) + 5 : 0; // 5 to 20 or 0
+        // Blind increase interval - ALWAYS enabled for simulation to test timer functionality
+        // Use shorter intervals (1-5 minutes) for simulation so changes are visible during testing
+        const blindIncreaseMinutes = Math.floor(Math.random() * 5) + 1; // 1 to 5 minutes
         const blindIncreaseInterval = blindIncreaseMinutes * 60 * 1000;
         
         return {
