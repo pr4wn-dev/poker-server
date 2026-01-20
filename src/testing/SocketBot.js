@@ -688,22 +688,36 @@ class SocketBot {
         this.log('DECISION', 'Evaluating...', {
             toCall,
             myChips,
+            myCurrentBet: mySeat.currentBet || 0,
             currentBet: state.currentBet,
+            minRaise: state.minRaise,
             pot: state.pot,
-            potOdds: potOdds.toFixed(2)
+            potOdds: potOdds.toFixed(2),
+            phase: state.phase
         });
         
         let action, amount = 0;
         
         // Simple decision logic
+        // CRITICAL FIX: toCall === 0 means we've matched, but we can only BET if currentBet === 0
+        // If currentBet > 0 and toCall === 0, we must CHECK or RAISE (not bet)
         if (toCall === 0) {
             // Can check for free
             if (Math.random() < this.aggressiveness) {
-                // Bet
-                action = 'bet';
-                amount = Math.floor(state.pot * (0.5 + Math.random() * 0.5));
-                amount = Math.min(amount, myChips);
-                amount = Math.max(amount, state.minBet || state.bigBlind || 50);
+                // Want to be aggressive - check if we can bet or need to raise
+                if (state.currentBet === 0) {
+                    // No bets yet - we can open with a bet
+                    action = 'bet';
+                    amount = Math.floor(state.pot * (0.5 + Math.random() * 0.5));
+                    amount = Math.min(amount, myChips);
+                    amount = Math.max(amount, state.minBet || state.bigBlind || 50);
+                } else {
+                    // There's already a bet - we must RAISE, not bet
+                    action = 'raise';
+                    const minRaise = state.minRaise || state.bigBlind || 50;
+                    amount = state.currentBet + minRaise + Math.floor(Math.random() * state.pot * 0.5);
+                    amount = Math.min(amount, myChips);
+                }
             } else {
                 action = 'check';
             }
