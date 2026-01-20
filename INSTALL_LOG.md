@@ -3246,3 +3246,14 @@ The game is a skeleton. Previous sessions marked things as "working" but actual 
 **Fix:** Added check for state.currentBet === 0 before using 'bet' action, otherwise use 'raise'
 **Files:** src/testing/SocketBot.js
 
+## Issue #115: Reconnection "Table full" Bug + Bot Turn Detection
+**Date:** 2026-01-20
+**Symptom 1:** During chaos mode, disconnected bots fail to rejoin with "Table full" error, even though their seat is being held for reconnection.
+**Root Cause 1:** `GameManager.joinTable()` tried to find an empty seat for reconnecting players. Since the disconnected player's seat is still occupied (by their own held seat), it reported "Table full" instead of recognizing the reconnection scenario.
+**Fix 1:** Added reconnection check at the start of `GameManager.joinTable()` - if player already has a seat at this table, just update `isConnected` and return success.
+
+**Symptom 2:** Socket bots stop responding to turns after a new hand starts if it's still their turn (e.g., player was last to act in previous hand, first to act in new hand).
+**Root Cause 2:** `_handleTableState()` only scheduled actions when `isMyTurn && !wasMyTurn`. When the same player's turn continued across hands, `wasMyTurn` was still true, so no action was scheduled.
+**Fix 2:** Added `isNewHand` detection by tracking phase transitions (showdown→preflop) and handNumber changes. If `isNewHand && isMyTurn`, schedule action even if `wasMyTurn` was true.
+**Files:** src/game/GameManager.js, src/testing/SocketBot.js
+
