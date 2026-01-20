@@ -17,8 +17,10 @@ If user says "get files" or "update" or starts a new session → PULL BOTH REPOS
 
 Not one. BOTH. Every time. No exceptions.
 
-## LAW 2: READ THIS LOG BEFORE CODING
-Check for existing solutions before debugging. The answer is probably already here.
+## LAW 2: CHECK PAST PROBLEMS FIRST
+Before solving ANY problem, search this log for matching issues. The solution probably already exists.
+`Ctrl+F` the error message, the symptom, the feature name. If it's been solved before, use that solution.
+Don't reinvent. Don't guess. CHECK FIRST.
 
 ## LAW 3: DOCUMENT FIXES IMMEDIATELY  
 When you fix ANY bug → add it to this log BEFORE moving on. Not later. NOW.
