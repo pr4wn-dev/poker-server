@@ -41,6 +41,22 @@ Find the last working commit: `git log --oneline`
 Reset to it: `git reset --hard <commit>`
 Don't waste hours on what takes 30 seconds.
 
+## LAW 8: SOCKET.IO EVENT NAMING PATTERN
+**Unity client expects: `eventName + "_response"`**
+
+When server emits to Unity, ALWAYS use this pattern:
+- Client calls: `socket.emit("create_table", data)`  
+- Server responds: `socket.emit("create_table_response", result)` ✅
+- NOT: `socket.emit("table_created", result)` ❌
+
+The `SocketManager.Emit<T>()` method auto-subscribes to `eventName_response`.
+Wrong event name = callback never fires = client stuck forever.
+
+**Quick check when client is "stuck on loading":**
+1. Server logs show success? → Event name mismatch
+2. Search server for what it emits: `grep "socket.emit" SocketHandler.js`
+3. Ensure it matches `{original_event}_response`
+
 ---
 **SESSION 13 VIOLATION: I broke Laws 1 and 7. Cost: 2+ hours, thousands of tokens, user's trust.**
 
