@@ -1898,15 +1898,18 @@ class Table {
     // ============ Spectators ============
 
     addSpectator(userId, name, socketId) {
+        console.log(`[Table ${this.name}] addSpectator called: userId=${userId}, name=${name}, allowSpectators=${this.allowSpectators}`);
         if (!this.allowSpectators) {
+            console.log(`[Table ${this.name}] addSpectator REJECTED: spectators not allowed`);
             return { success: false, error: 'Spectators not allowed' };
         }
         if (this.spectators.size >= this.maxSpectators) {
+            console.log(`[Table ${this.name}] addSpectator REJECTED: limit reached`);
             return { success: false, error: 'Spectator limit reached' };
         }
         
         this.spectators.set(userId, { oderId: userId, playerName: name, socketId });
-        console.log(`[Table ${this.name}] ${name} is now spectating`);
+        console.log(`[Table ${this.name}] ${name} (${userId}) is now spectating. Total spectators: ${this.spectators.size}`);
         return { success: true };
     }
 
@@ -1919,7 +1922,12 @@ class Table {
     }
 
     isSpectator(userId) {
-        return this.spectators.has(userId);
+        const result = this.spectators.has(userId);
+        // Debug for simulation
+        if (this.isSimulation) {
+            console.log(`[Table ${this.name}] isSpectator(${userId}) = ${result}, spectators: [${Array.from(this.spectators.keys()).join(', ')}]`);
+        }
+        return result;
     }
 
     // ============ Password ============
