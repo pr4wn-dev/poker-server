@@ -121,8 +121,9 @@ class SocketBot {
             
             this.socket.emit('register', { username: this.name, email, password }, (response) => {
                 if (response && response.success) {
-                    this.userId = response.user.id;
-                    this.chips = response.user.chips;
+                    // Server returns userId and profile, not user object
+                    this.userId = response.userId || response.profile?.id;
+                    this.chips = response.profile?.chips || 20000000;
                     this.log('INFO', 'Registration successful', { userId: this.userId, chips: this.chips });
                     resolve(response);
                 } else {
@@ -145,8 +146,9 @@ class SocketBot {
             
             this.socket.emit('login', { username: this.name, password }, (response) => {
                 if (response && response.success) {
-                    this.userId = response.user.id;
-                    this.chips = response.user.chips;
+                    // Server returns userId and profile, not user object
+                    this.userId = response.userId || response.profile?.id;
+                    this.chips = response.profile?.chips || 20000000;
                     this.log('INFO', 'Login successful', { userId: this.userId, chips: this.chips });
                     resolve(response);
                 } else {
