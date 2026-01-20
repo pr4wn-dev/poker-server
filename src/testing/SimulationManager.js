@@ -89,9 +89,12 @@ class SimulationManager {
         this.log('INFO', 'Simulation table created', { tableId, tableName: table.name });
         
         // Calculate bot distribution
+        // NOTE: Only 3 regular bot profiles exist (tex, lazy_larry, pickles)
+        // So we cap regular bots at 3 and fill the rest with socket bots
         const totalBots = maxPlayers;
-        const socketBotCount = Math.floor(totalBots * socketBotRatio);
-        const regularBotCount = totalBots - socketBotCount;
+        const idealRegularBots = Math.floor(totalBots * (1 - socketBotRatio));
+        const regularBotCount = Math.min(idealRegularBots, 3); // Cap at 3 available profiles
+        const socketBotCount = totalBots - regularBotCount;
         
         this.log('INFO', 'Bot distribution', { 
             totalBots, 
@@ -132,60 +135,60 @@ class SimulationManager {
      */
     async _spawnBotsInBackground(simulation, creatorId, buyIn) {
         const { tableId, regularBotCount, socketBotCount } = simulation;
-        const botProfiles = ['tex', 'lazy_larry', 'pickles', 'maxine', 'bluffs', 'shark', 'rookie', 'calculator', 'wildcard'];
+        // Only these 3 bot profiles exist in BotPlayer.js
+        const botProfiles = ['tex', 'lazy_larry', 'pickles'];
         
         this.log('INFO', 'Starting background bot spawn', { tableId, regularBots: regularBotCount, socketBots: socketBotCount });
         
-        // Mix regular bots and socket bots for variety
-        // Alternate between them so it looks natural
+        // IMPORTANT: Add regular bots FIRST before socket bots join
+        // This is because socket bots count as "human players" and would block bot approval
+        // Regular bots auto-approve when only the creator is at the table
+        
         let regularAdded = 0;
         let socketAdded = 0;
-        const totalToAdd = regularBotCount + socketBotCount;
         
-        for (let i = 0; i < totalToAdd; i++) {
-            // Alternate: add regular bot, then socket bot, etc.
-            const addRegular = (regularAdded < regularBotCount) && 
-                               (socketAdded >= socketBotCount || i % 2 === 0);
+        // Phase 1: Add all regular bots first
+        for (let i = 0; i < regularBotCount && i < botProfiles.length; i++) {
+            const botProfile = botProfiles[i % botProfiles.length];
+            const result = await this.gameManager.inviteBot(tableId, botProfile, creatorId, buyIn);
             
-            if (addRegular && regularAdded < regularBotCount) {
-                // Add a regular bot
-                const botProfile = botProfiles[regularAdded % botProfiles.length];
-                const result = await this.gameManager.inviteBot(tableId, botProfile, creatorId, buyIn);
-                
-                if (result.success && result.seatIndex !== undefined) {
-                    this.gameManager.approveBot(tableId, result.seatIndex, creatorId);
-                    this.log('INFO', `Regular bot joined: ${botProfile}`, { seatIndex: result.seatIndex });
-                } else {
-                    this.log('WARN', `Failed to add regular bot: ${botProfile}`, { error: result.error });
-                }
+            if (result.success && result.seatIndex !== undefined) {
+                // For simulation tables, bots auto-approve when only creator exists
+                this.log('INFO', `Regular bot joined: ${botProfile}`, { seatIndex: result.seatIndex });
                 regularAdded++;
-            } else if (socketAdded < socketBotCount) {
-                // Add a socket bot
-                try {
-                    const bot = new SocketBot({
-                        serverUrl: this.serverUrl,
-                        name: `NetPlayer_${socketAdded + 1}`,
-                        minDelay: 800,
-                        maxDelay: 2500,
-                        aggressiveness: 0.2 + Math.random() * 0.4,
-                        logFile: path.join(__dirname, '../../logs/socketbot.log')
-                    });
-                    
-                    await bot.connect();
-                    await bot.register();
-                    await bot.joinTable(tableId, buyIn);
-                    
-                    simulation.socketBots.push(bot);
-                    this.log('INFO', `Socket bot joined: ${bot.name}`, { seatIndex: bot.seatIndex });
-                } catch (error) {
-                    this.log('ERROR', `Failed to add socket bot`, { error: error.message });
-                }
-                socketAdded++;
+            } else {
+                this.log('WARN', `Failed to add regular bot: ${botProfile}`, { error: result.error });
             }
             
-            // 1-2 second delay between each bot joining (visible to spectators)
-            const delay = 1000 + Math.random() * 1000;
-            await new Promise(r => setTimeout(r, delay));
+            // Small delay between bots
+            await new Promise(r => setTimeout(r, 800 + Math.random() * 500));
+        }
+        
+        // Phase 2: Add socket bots after regular bots
+        for (let i = 0; i < socketBotCount; i++) {
+            try {
+                const bot = new SocketBot({
+                    serverUrl: this.serverUrl,
+                    name: `NetPlayer_${i + 1}`,
+                    minDelay: 800,
+                    maxDelay: 2500,
+                    aggressiveness: 0.2 + Math.random() * 0.4,
+                    logFile: path.join(__dirname, '../../logs/socketbot.log')
+                });
+                
+                await bot.connect();
+                await bot.register();
+                await bot.joinTable(tableId, buyIn);
+                
+                simulation.socketBots.push(bot);
+                this.log('INFO', `Socket bot joined: ${bot.name}`, { seatIndex: bot.seatIndex });
+                socketAdded++;
+            } catch (error) {
+                this.log('ERROR', `Failed to add socket bot`, { error: error.message });
+            }
+            
+            // 1-2 second delay between socket bots
+            await new Promise(r => setTimeout(r, 1000 + Math.random() * 1000));
         }
         
         simulation.status = 'ready';
