@@ -206,7 +206,9 @@ class SimulationManager {
             buyIn,
             status: 'spawning',
             gamesPlayed: 0,
-            fastMode: this.fastMode
+            fastMode: this.fastMode,
+            originalSmallBlind: smallBlind,  // Store original blinds for reset
+            originalBigBlind: bigBlind
         };
         this.activeSimulations.set(tableId, simulation);
         
@@ -405,6 +407,14 @@ class SimulationManager {
         
         this.log('INFO', 'Restarting game - resetting all chips', { tableId, buyIn });
         
+        // Store original blinds (before any increases)
+        const originalSmallBlind = simulation.originalSmallBlind || table.smallBlind;
+        const originalBigBlind = simulation.originalBigBlind || table.bigBlind;
+        if (!simulation.originalSmallBlind) {
+            simulation.originalSmallBlind = table.smallBlind;
+            simulation.originalBigBlind = table.bigBlind;
+        }
+        
         // Reset all players to starting buy-in
         for (const seat of table.seats) {
             if (seat) {
@@ -413,27 +423,48 @@ class SimulationManager {
                 seat.isAllIn = false;
                 seat.currentBet = 0;
                 seat.cards = [];
+                seat.isReady = false; // Reset ready status for new game
             }
         }
         
-        // Reset table state
+        // Reset table state completely
         table.phase = 'waiting';
         table.pot = 0;
         table.currentBet = 0;
         table.communityCards = [];
+        table.currentPlayerIndex = -1;
+        table.dealerIndex = (table.dealerIndex + 1) % table.maxPlayers; // Rotate dealer
+        table.lastRaiserIndex = -1;
+        table.smallBlind = originalSmallBlind; // Reset blinds to original
+        table.bigBlind = originalBigBlind;
+        table.blindLevel = 1; // Reset blind level
+        
+        // Clear any pending timers
+        if (table.turnTimer) {
+            clearTimeout(table.turnTimer);
+            table.turnTimer = null;
+        }
+        if (table.blindTimer) {
+            clearInterval(table.blindTimer);
+            table.blindTimer = null;
+        }
         
         // Broadcast reset to spectators
         if (table.onStateChange) {
             table.onStateChange();
         }
         
-        // Auto-start the new game
+        // Auto-start the new game and continue checking for game over
         const startDelay = simulation.fastMode ? 500 : 2000;
         setTimeout(() => {
             if (table.phase === 'waiting') {
                 const result = table.startReadyUp(creatorId);
                 if (result.success) {
                     this.log('INFO', `Game ${simulation.gamesPlayed + 1} starting...`, { tableId });
+                    // Continue the game-over check loop
+                    this._setupAutoRestart(table, simulation);
+                } else {
+                    this.log('ERROR', `Failed to start game ${simulation.gamesPlayed + 1}`, { error: result.error });
                 }
             }
         }, startDelay);
