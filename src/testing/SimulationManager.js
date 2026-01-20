@@ -353,18 +353,38 @@ class SimulationManager {
         const tableId = table.id;
         
         // Hook into the game over scenario
-        // Check periodically if only 1 player has chips (game over)
+        // CRITICAL: Only check for game over when in WAITING phase (hand fully completed)
+        // Don't interrupt hands in progress - players with 0 chips may be all-in with money in pot
         const checkGameOver = () => {
             if (!this.activeSimulations.has(tableId)) return; // Simulation stopped
             
             const currentTable = this.gameManager.tables.get(tableId);
             if (!currentTable) return;
             
-            // Count players with chips
-            const playersWithChips = currentTable.seats.filter(s => s && s.chips > 0);
+            // CRITICAL FIX: Only check during waiting phase (hand complete, no active game)
+            // During active phases, players may have 0 chips but still be all-in
+            if (currentTable.phase !== 'waiting') {
+                // Hand in progress - check again later
+                const checkInterval = simulation.fastMode ? 500 : 2000;
+                setTimeout(checkGameOver, checkInterval);
+                return;
+            }
             
-            if (playersWithChips.length <= 1 && currentTable.phase !== 'waiting') {
-                // Game over - one winner!
+            // Count ACTIVE players with chips (not eliminated, not spectating)
+            // A player is "out of the game" only if chips = 0 AND isActive = false
+            const activePlayers = currentTable.seats.filter(s => s && s.isActive !== false);
+            const playersWithChips = activePlayers.filter(s => s.chips > 0);
+            
+            this.log('DEBUG', 'Game over check', {
+                tableId,
+                phase: currentTable.phase,
+                activePlayers: activePlayers.length,
+                playersWithChips: playersWithChips.length,
+                playerDetails: activePlayers.map(s => ({ name: s.name, chips: s.chips, isActive: s.isActive }))
+            });
+            
+            if (playersWithChips.length <= 1 && activePlayers.length >= 2) {
+                // Game over - one winner! (only if we had a real game with 2+ players)
                 simulation.gamesPlayed++;
                 this.log('INFO', `Game ${simulation.gamesPlayed} COMPLETE - Resetting for next game`, {
                     tableId,
