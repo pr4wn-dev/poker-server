@@ -2039,6 +2039,11 @@ class Table {
                     cards = canSeeCards ? seat.cards : seat.cards.map(() => ({ rank: null, suit: null }));
                 }
                 
+                // DEBUG: Log card visibility for simulation
+                if (this.isSimulation && isSpectating && seat.cards?.length > 0) {
+                    console.log(`[SIM-CARDS] ${seat.name}: canSeeCards=${canSeeCards}, cards=${JSON.stringify(cards)}`);
+                }
+                
                 return {
                     index,
                     playerId: seat.playerId,

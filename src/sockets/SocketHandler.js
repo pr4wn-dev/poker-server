@@ -241,9 +241,11 @@ class SocketHandler {
                             console.log(`[SocketHandler] Set up callbacks for simulation table ${result.tableId}`);
                         }
                         
-                        // Join creator as spectator
+                        // Join creator as spectator - MUST add to table.spectators for card visibility
+                        simTable.addSpectator(user.userId, user.profile?.username || 'Creator', socket.id);
                         socket.join(`table:${result.tableId}`);
                         socket.join(`spectator:${result.tableId}`);
+                        console.log(`[SocketHandler] Added ${user.userId} as spectator for simulation table`);
                         
                         const response = {
                             success: true,
