@@ -1,5 +1,49 @@
 # POKER GAME - MASTER PROJECT LOG
 
+---
+# 🚨🚨🚨 THE LAWS - READ FIRST, OBEY ALWAYS 🚨🚨🚨
+---
+
+**THESE ARE NON-NEGOTIABLE. VIOLATION = THEFT OF USER'S TIME AND MONEY.**
+
+## LAW 1: PULL BOTH REPOS FIRST
+```powershell
+cd C:\Projects\poker-server; git pull
+cd C:\Projects\poker-client-unity; git pull
+```
+**This happens BEFORE you respond to the user. BEFORE you do anything else. FIRST.**
+
+If user says "get files" or "update" or starts a new session → PULL BOTH REPOS.
+
+Not one. BOTH. Every time. No exceptions.
+
+## LAW 2: READ THIS LOG BEFORE CODING
+Check for existing solutions before debugging. The answer is probably already here.
+
+## LAW 3: DOCUMENT FIXES IMMEDIATELY  
+When you fix ANY bug → add it to this log BEFORE moving on. Not later. NOW.
+
+## LAW 4: COMMIT AUTOMATICALLY
+After code changes: `git add -A; git commit -m "message"; git push`
+Don't wait to be asked.
+
+## LAW 5: NO BANDAIDS
+Fix root causes. Install real dependencies. No mock mode. No workarounds.
+
+## LAW 6: ONE LOG FILE
+All notes go here. Not in separate files.
+
+## LAW 7: WHEN STUCK, RESET
+If you're patching errors one-by-one for more than 15 minutes, STOP.
+Find the last working commit: `git log --oneline`
+Reset to it: `git reset --hard <commit>`
+Don't waste hours on what takes 30 seconds.
+
+---
+**SESSION 13 VIOLATION: I broke Laws 1 and 7. Cost: 2+ hours, thousands of tokens, user's trust.**
+
+---
+
 > **READ THIS FILE AT START OF EVERY SESSION**
 > 
 > **Last Updated:** January 19, 2026 (Session 13 - POST-DEMO FIXES)
