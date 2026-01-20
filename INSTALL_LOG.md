@@ -3296,3 +3296,19 @@ The game is a skeleton. Previous sessions marked things as "working" but actual 
 4. **Control:** `set_simulation_speed { fastMode: true/false }` socket event
 **Files:** src/testing/SimulationManager.js, src/testing/SocketBot.js, src/sockets/SocketHandler.js
 
+## Issue #119: Simulation Auto-Restart Gets Stuck
+**Date:** 2026-01-20
+**Symptom:** After Game 1 completes and resets, Game 2 starts but gets stuck with `currentPlayerId: null`. Blinds keep increasing (Level 60+) but no gameplay occurs.
+**Root Cause:** Multiple issues in `_restartGame()`:
+1. `seat.isReady` not reset - bots stayed "ready" from previous game
+2. `checkGameOver` loop not restarted after game reset
+3. Blinds not reset to original values (kept escalating)
+4. Timers (turn/blind) not cleared before restart
+**Fix:**
+- Reset `isReady = false` for all seats
+- Store original blinds and reset them on restart
+- Clear all pending timers before restart
+- Call `_setupAutoRestart()` again after each game starts
+- Reset `blindLevel`, `currentPlayerIndex`, `lastRaiserIndex`
+**Files:** src/testing/SimulationManager.js
+
