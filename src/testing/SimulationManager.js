@@ -193,12 +193,25 @@ class SimulationManager {
         
         simulation.status = 'ready';
         const table = this.gameManager.tables.get(tableId);
-        this.log('INFO', 'All bots joined, waiting for game start', {
+        this.log('INFO', 'All bots joined, auto-starting game...', {
             tableId,
             seatedPlayers: table?.getSeatedPlayerCount() || 0,
             regularBots: regularAdded,
             socketBots: socketAdded
         });
+        
+        // Auto-start the game after a short delay for spectators to see all bots
+        setTimeout(() => {
+            if (table && table.phase === 'waiting') {
+                // Start ready-up phase (bots and socket bots will auto-ready)
+                const result = table.startReadyUp(creatorId);
+                if (result.success) {
+                    this.log('INFO', 'Ready-up phase started automatically', { tableId });
+                } else {
+                    this.log('WARN', 'Failed to auto-start ready-up', { error: result.error });
+                }
+            }
+        }, 2000); // 2 second delay so spectator can see all players seated
     }
     
     /**

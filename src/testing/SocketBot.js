@@ -334,9 +334,8 @@ class SocketBot {
     _sendAction(action, amount = 0) {
         this.log('ACTION', `Sending: ${action}${amount > 0 ? ' ' + amount : ''}`, { action, amount });
         
-        this.socket.emit('player_action', {
-            tableId: this.tableId,
-            oderId: this.oderId,
+        // Server listens for 'action' event, not 'player_action'
+        this.socket.emit('action', {
             action,
             amount
         }, (response) => {
