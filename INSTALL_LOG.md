@@ -3238,3 +3238,11 @@ The game is a skeleton. Previous sessions marked things as "working" but actual 
 - Added EXIT POINT 0 in advanceGame() to detect when nextPlayer === currentPlayerIndex and auto-advance phase
 **Files:** src/game/Table.js
 
+
+## Issue #114: Socket Bots Using Wrong Action (bet vs raise)
+**Date:** 2026-01-20
+**Symptom:** Socket bots repeatedly failing with 'Cannot bet - current bet is X. Use raise or call.'
+**Root Cause:** Bot decision logic used 'bet' when toCall===0, but bet is only valid when currentBet===0. When currentBet>0 and toCall===0 (player has matched), bot should RAISE not BET.
+**Fix:** Added check for state.currentBet === 0 before using 'bet' action, otherwise use 'raise'
+**Files:** src/testing/SocketBot.js
+
