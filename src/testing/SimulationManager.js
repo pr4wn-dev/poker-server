@@ -165,7 +165,20 @@ class SimulationManager {
         }
         
         // Phase 2: Add socket bots after regular bots
+        // Each bot gets different network conditions to simulate real-world variety
+        const networkProfiles = [
+            { name: 'GoodConnection', latency: 30, jitter: 20, disconnectChance: 0.005 },
+            { name: 'AverageConnection', latency: 80, jitter: 50, disconnectChance: 0.01 },
+            { name: 'PoorConnection', latency: 150, jitter: 100, disconnectChance: 0.02 },
+            { name: 'MobileConnection', latency: 200, jitter: 150, disconnectChance: 0.03 },
+            { name: 'UnstableConnection', latency: 100, jitter: 200, disconnectChance: 0.05 },
+            { name: 'VPNConnection', latency: 250, jitter: 80, disconnectChance: 0.015 },
+        ];
+        
         for (let i = 0; i < socketBotCount; i++) {
+            // Assign network profile (cycles through profiles)
+            const profile = networkProfiles[i % networkProfiles.length];
+            
             try {
                 const bot = new SocketBot({
                     serverUrl: this.serverUrl,
@@ -173,7 +186,21 @@ class SimulationManager {
                     minDelay: 800,
                     maxDelay: 2500,
                     aggressiveness: 0.2 + Math.random() * 0.4,
+                    // Network simulation
+                    networkLatency: profile.latency,
+                    latencyJitter: profile.jitter,
+                    disconnectChance: profile.disconnectChance,
+                    reconnectMinTime: 3000,
+                    reconnectMaxTime: 15000,
+                    enableChaos: true, // Enable random disconnects
                     logFile: path.join(__dirname, '../../logs/socketbot.log')
+                });
+                
+                this.log('INFO', `Creating socket bot with ${profile.name} profile`, {
+                    name: bot.name,
+                    latency: profile.latency,
+                    jitter: profile.jitter,
+                    disconnectChance: `${(profile.disconnectChance * 100).toFixed(1)}%`
                 });
                 
                 await bot.connect();
@@ -276,6 +303,59 @@ class SimulationManager {
             simulations.push(this.getSimulationStatus(tableId));
         }
         return simulations;
+    }
+    
+    /**
+     * Get full simulation report with verification results
+     */
+    getSimulationReport(tableId) {
+        const simulation = this.activeSimulations.get(tableId);
+        if (!simulation) {
+            return { success: false, error: 'Simulation not found' };
+        }
+        
+        const table = this.gameManager.tables.get(tableId);
+        const botSummaries = [];
+        let totalIssues = [];
+        
+        // Collect summaries from all socket bots
+        for (const bot of simulation.socketBots) {
+            const result = bot.logSummary();
+            botSummaries.push(result.summary);
+            if (result.issues.length > 0) {
+                totalIssues.push({
+                    bot: bot.name,
+                    issues: result.issues
+                });
+            }
+        }
+        
+        const report = {
+            tableId,
+            tableName: table?.name,
+            duration: Date.now() - simulation.startTime,
+            handsPlayed: table?.handsPlayed || 0,
+            status: simulation.status,
+            bots: {
+                regular: simulation.regularBotCount,
+                socket: simulation.socketBots.length
+            },
+            verification: {
+                passed: totalIssues.length === 0,
+                issueCount: totalIssues.length,
+                issues: totalIssues
+            },
+            socketBotSummaries: botSummaries
+        };
+        
+        this.log('REPORT', 'Simulation report generated', {
+            tableId,
+            handsPlayed: report.handsPlayed,
+            duration: `${Math.floor(report.duration / 1000)}s`,
+            issues: totalIssues.length
+        });
+        
+        return report;
     }
 }
 

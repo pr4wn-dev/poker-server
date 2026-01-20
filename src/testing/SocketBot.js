@@ -32,6 +32,14 @@ class SocketBot {
         this.maxDelay = options.maxDelay || 2000; // Max delay before action (ms)
         this.aggressiveness = options.aggressiveness || 0.3; // 0-1, higher = more raises
         
+        // Network simulation settings
+        this.networkLatency = options.networkLatency || 50; // Base latency in ms
+        this.latencyJitter = options.latencyJitter || 100;  // Random variance in ms
+        this.disconnectChance = options.disconnectChance || 0.02; // 2% chance per state update to disconnect
+        this.reconnectMinTime = options.reconnectMinTime || 3000;  // Min time before reconnect (ms)
+        this.reconnectMaxTime = options.reconnectMaxTime || 15000; // Max time before reconnect (ms)
+        this.enableChaos = options.enableChaos !== false; // Enable random disconnects
+        
         this.socket = null;
         this.userId = null;
         this.tableId = null;
@@ -40,6 +48,23 @@ class SocketBot {
         this.isMyTurn = false;
         this.isConnected = false;
         this.chips = 0;
+        
+        // Chaos tracking
+        this.disconnectCount = 0;
+        this.reconnectCount = 0;
+        this.isReconnecting = false;
+        this.lastDisconnectTime = null;
+        
+        // Event verification tracking
+        this.eventsReceived = {
+            playerJoined: [],
+            playerLeft: [],
+            playerDisconnected: [],
+            playerReconnected: [],
+            tableState: 0,
+            handResult: 0,
+            readyPrompt: 0
+        };
         
         // Logging
         this.logFile = options.logFile || path.join(__dirname, '../../logs/socketbot.log');
@@ -52,6 +77,109 @@ class SocketBot {
         const logDir = path.dirname(this.logFile);
         if (!fs.existsSync(logDir)) {
             fs.mkdirSync(logDir, { recursive: true });
+        }
+    }
+    
+    /**
+     * Simulate network latency
+     */
+    _getNetworkLatency() {
+        return this.networkLatency + Math.floor(Math.random() * this.latencyJitter);
+    }
+    
+    /**
+     * Execute action with simulated network latency
+     */
+    async _withLatency(fn) {
+        const latency = this._getNetworkLatency();
+        await new Promise(r => setTimeout(r, latency));
+        return fn();
+    }
+    
+    /**
+     * Check if we should randomly disconnect (chaos mode)
+     */
+    _shouldDisconnect() {
+        if (!this.enableChaos) return false;
+        if (this.isReconnecting) return false;
+        if (this.disconnectCount >= 3) return false; // Max 3 disconnects per session
+        return Math.random() < this.disconnectChance;
+    }
+    
+    /**
+     * Simulate a random disconnect and later reconnect
+     */
+    async _simulateDisconnect() {
+        if (this.isReconnecting) return;
+        
+        this.isReconnecting = true;
+        this.disconnectCount++;
+        this.lastDisconnectTime = Date.now();
+        
+        this.log('CHAOS', `Simulating disconnect #${this.disconnectCount}...`);
+        
+        // Actually disconnect
+        if (this.socket) {
+            this.socket.disconnect();
+        }
+        this.isConnected = false;
+        
+        // Wait random time before reconnecting
+        const reconnectDelay = this.reconnectMinTime + 
+            Math.floor(Math.random() * (this.reconnectMaxTime - this.reconnectMinTime));
+        
+        this.log('CHAOS', `Will reconnect in ${reconnectDelay}ms...`);
+        
+        await new Promise(r => setTimeout(r, reconnectDelay));
+        
+        // Reconnect
+        try {
+            await this.reconnect();
+            this.reconnectCount++;
+            this.log('CHAOS', `Reconnect #${this.reconnectCount} successful!`, {
+                disconnectDuration: Date.now() - this.lastDisconnectTime
+            });
+        } catch (error) {
+            this.log('ERROR', `Reconnect failed: ${error.message}`);
+        }
+        
+        this.isReconnecting = false;
+    }
+    
+    /**
+     * Reconnect to the server and rejoin the table
+     */
+    async reconnect() {
+        this.log('RECONNECT', 'Attempting to reconnect...');
+        
+        // Reconnect socket
+        await this.connect();
+        
+        // Login (account already exists)
+        await this.login();
+        
+        // Rejoin the table we were at
+        if (this.tableId) {
+            this.log('RECONNECT', `Rejoining table ${this.tableId}...`);
+            
+            return new Promise((resolve, reject) => {
+                this.socket.emit('join_table', { 
+                    tableId: this.tableId, 
+                    oderId: this.oderId, 
+                    buyIn: 0 // 0 = rejoin, don't rebuy
+                }, (response) => {
+                    if (response && response.success) {
+                        this.seatIndex = response.seatIndex;
+                        this.log('RECONNECT', 'Rejoined table successfully!', { 
+                            seatIndex: this.seatIndex 
+                        });
+                        resolve(response);
+                    } else {
+                        this.log('ERROR', 'Failed to rejoin table', { error: response?.error });
+                        reject(new Error(response?.error || 'Rejoin failed'));
+                    }
+                });
+            });
         }
     }
     
@@ -99,6 +227,32 @@ class SocketBot {
             this.socket.on('hand_result', (result) => this._handleHandResult(result));
             this.socket.on('game_over', (data) => this._handleGameOver(data));
             this.socket.on('player_eliminated', (data) => this._handlePlayerEliminated(data));
+            
+            // Player presence events (for verification)
+            this.socket.on('player_joined', (data) => {
+                this.eventsReceived.playerJoined.push(data);
+                this.log('EVENT', `Player joined: ${data.name}`, data);
+            });
+            
+            this.socket.on('player_left', (data) => {
+                this.eventsReceived.playerLeft.push(data);
+                this.log('EVENT', `Player left: ${data.userId}`, data);
+            });
+            
+            this.socket.on('player_disconnected', (data) => {
+                this.eventsReceived.playerDisconnected.push(data);
+                this.log('EVENT', `Player disconnected: ${data.playerId}`, data);
+            });
+            
+            this.socket.on('player_reconnected', (data) => {
+                this.eventsReceived.playerReconnected.push(data);
+                this.log('EVENT', `Player reconnected: ${data.playerId}`, data);
+            });
+            
+            this.socket.on('ready_prompt', (data) => {
+                this.eventsReceived.readyPrompt++;
+                this.log('EVENT', 'Ready prompt received', data);
+            });
             
             // Set timeout for connection
             setTimeout(() => {
@@ -201,6 +355,13 @@ class SocketBot {
     _handleTableState(state) {
         try {
             this.gameState = state;
+            this.eventsReceived.tableState++;
+            
+            // CHAOS MODE: Random disconnect check
+            if (this._shouldDisconnect()) {
+                this._simulateDisconnect();
+                return; // Don't process this state, we're disconnecting
+            }
             
             // Check if it's our turn
             const wasMyTurn = this.isMyTurn;
@@ -216,19 +377,22 @@ class SocketBot {
                     myTurn: this.isMyTurn,
                     turnTimeRemaining: state.turnTimeRemaining,
                     currentPlayerId: state.currentPlayerId,
-                    myUserId: this.userId
+                    myUserId: this.userId,
+                    latency: this.networkLatency,
+                    statesReceived: this.eventsReceived.tableState
                 });
             }
             
             // If it just became our turn, make a decision
             if (this.isMyTurn && !wasMyTurn) {
-                this.log('ACTION', `>>> IT'S MY TURN! Scheduling action...`);
+                this.log('ACTION', `>>> IT'S MY TURN! Scheduling action with ${this.networkLatency}ms base latency...`);
                 this._scheduleAction();
             }
             
-            // Auto-ready during ready_up phase
+            // Auto-ready during ready_up phase (with latency simulation)
             if (state.phase === 'ready_up') {
-                setTimeout(() => this.ready(), this._getRandomDelay());
+                const delay = this._getRandomDelay() + this._getNetworkLatency();
+                setTimeout(() => this.ready(), delay);
             }
         } catch (error) {
             this.log('ERROR', `_handleTableState CRASHED: ${error.message}`, { error: error.stack });
@@ -394,6 +558,64 @@ class SocketBot {
             this.socket.disconnect();
             this.isConnected = false;
         }
+    }
+    
+    /**
+     * Get a summary of this bot's session (for verification)
+     */
+    getSummary() {
+        return {
+            name: this.name,
+            oderId: this.oderId,
+            seatIndex: this.seatIndex,
+            isConnected: this.isConnected,
+            networkProfile: {
+                latency: this.networkLatency,
+                jitter: this.latencyJitter,
+                disconnectChance: this.disconnectChance
+            },
+            chaos: {
+                disconnects: this.disconnectCount,
+                reconnects: this.reconnectCount,
+                chaosEnabled: this.enableChaos
+            },
+            events: {
+                statesReceived: this.eventsReceived.tableState,
+                handResults: this.eventsReceived.handResult,
+                readyPrompts: this.eventsReceived.readyPrompt,
+                playerJoins: this.eventsReceived.playerJoined.length,
+                playerLeaves: this.eventsReceived.playerLeft.length,
+                disconnections: this.eventsReceived.playerDisconnected.length,
+                reconnections: this.eventsReceived.playerReconnected.length
+            }
+        };
+    }
+    
+    /**
+     * Log the full session summary
+     */
+    logSummary() {
+        const summary = this.getSummary();
+        this.log('SUMMARY', `Session complete for ${this.name}`, summary);
+        
+        // Verification checks
+        const issues = [];
+        
+        if (summary.chaos.disconnects > 0 && summary.chaos.reconnects < summary.chaos.disconnects) {
+            issues.push(`FAILED TO RECONNECT: ${summary.chaos.disconnects - summary.chaos.reconnects} times`);
+        }
+        
+        if (summary.events.statesReceived === 0) {
+            issues.push('NO TABLE STATES RECEIVED');
+        }
+        
+        if (issues.length > 0) {
+            this.log('VERIFY_FAIL', `Issues found for ${this.name}`, { issues });
+        } else {
+            this.log('VERIFY_OK', `All checks passed for ${this.name}`);
+        }
+        
+        return { summary, issues };
     }
 }
 
