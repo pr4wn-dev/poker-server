@@ -20,10 +20,10 @@ class SimulationManager {
         this.activeSimulations = new Map(); // tableId -> simulation data
         this.logFile = path.join(__dirname, '../../logs/simulation.log');
         
-        // Default settings
-        this.fastMode = false;      // Fast forward mode (10x speed)
+        // Default settings - simulations always run in fast mode
+        this.fastMode = true;       // Fast forward mode (10x speed) - ON by default for simulations
         this.autoRestart = true;    // Auto-start new game when one ends
-        this.maxGames = 100;        // Max games per simulation before auto-stop
+        this.maxGames = 10;         // Max games per simulation before auto-stop (10 for testing)
         
         this._ensureLogDir();
     }
