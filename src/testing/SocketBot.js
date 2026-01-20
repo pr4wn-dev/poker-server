@@ -28,8 +28,13 @@ class SocketBot {
     constructor(options = {}) {
         this.serverUrl = options.serverUrl || 'http://localhost:3000';
         this.name = options.name || BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)] + '_' + Date.now().toString().slice(-4);
-        this.minDelay = options.minDelay || 500;  // Min delay before action (ms)
-        this.maxDelay = options.maxDelay || 2000; // Max delay before action (ms)
+        
+        // Fast mode - reduce all delays for rapid simulation
+        this.fastMode = options.fastMode || false;
+        const speedMultiplier = this.fastMode ? 0.1 : 1; // 10x faster in fast mode
+        
+        this.minDelay = Math.floor((options.minDelay || 500) * speedMultiplier);  // Min delay before action (ms)
+        this.maxDelay = Math.floor((options.maxDelay || 2000) * speedMultiplier); // Max delay before action (ms)
         this.aggressiveness = options.aggressiveness || 0.3; // 0-1, higher = more raises
         
         // Network simulation settings

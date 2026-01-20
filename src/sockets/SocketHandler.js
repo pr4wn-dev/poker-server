@@ -297,6 +297,23 @@ class SocketHandler {
                 const simulations = this.simulationManager.getActiveSimulations();
                 if (callback) callback({ simulations });
             });
+            
+            socket.on('set_simulation_speed', (data, callback) => {
+                console.log('[SocketHandler] set_simulation_speed received:', JSON.stringify(data));
+                const { fastMode } = data;
+                this.simulationManager.setFastMode(fastMode === true);
+                if (callback) callback({ 
+                    success: true, 
+                    fastMode: this.simulationManager.fastMode,
+                    message: fastMode ? 'Fast mode enabled (10x speed)' : 'Normal speed enabled'
+                });
+            });
+            
+            socket.on('get_simulation_report', (data, callback) => {
+                const { tableId } = data;
+                const report = this.simulationManager.getSimulationReport(tableId);
+                if (callback) callback(report);
+            });
 
             // ============ Table Actions ============
             

@@ -20,7 +20,34 @@ class SimulationManager {
         this.activeSimulations = new Map(); // tableId -> simulation data
         this.logFile = path.join(__dirname, '../../logs/simulation.log');
         
+        // Default settings
+        this.fastMode = false;      // Fast forward mode (10x speed)
+        this.autoRestart = true;    // Auto-start new game when one ends
+        this.maxGames = 100;        // Max games per simulation before auto-stop
+        
         this._ensureLogDir();
+    }
+    
+    /**
+     * Enable/disable fast mode for all future simulations
+     */
+    setFastMode(enabled) {
+        this.fastMode = enabled;
+        this.log('INFO', `Fast mode ${enabled ? 'ENABLED (10x speed)' : 'DISABLED'}`);
+        
+        // Update existing socket bots
+        for (const [tableId, sim] of this.activeSimulations) {
+            for (const bot of sim.socketBots) {
+                bot.fastMode = enabled;
+                if (enabled) {
+                    bot.minDelay = 50;
+                    bot.maxDelay = 200;
+                } else {
+                    bot.minDelay = 500;
+                    bot.maxDelay = 2000;
+                }
+            }
+        }
     }
     
     _ensureLogDir() {
@@ -125,6 +152,7 @@ class SimulationManager {
         
         // Create the table in practice mode
         // GameManager.createTable returns the table object directly (not { success, tableId, table })
+        // In fast mode, shorten all timers significantly
         const table = this.gameManager.createTable({
             name: `[SIM] ${tableName}`,
             maxPlayers,
@@ -133,8 +161,10 @@ class SimulationManager {
             buyIn,
             isPrivate: true,
             practiceMode: true,
-            turnTimeLimit,
-            blindIncreaseInterval, // Round timer from options (0 = OFF)
+            turnTimeLimit: this.fastMode ? Math.min(turnTimeLimit, 5000) : turnTimeLimit, // 5 sec max in fast mode
+            blindIncreaseInterval: this.fastMode ? 30000 : blindIncreaseInterval, // 30 sec blind increase in fast mode
+            readyUpDuration: this.fastMode ? 5000 : 60000, // 5 sec ready-up in fast mode
+            countdownDuration: this.fastMode ? 3000 : 10000, // 3 sec countdown in fast mode
             creatorId,
             isSimulation: true
         });
@@ -174,9 +204,14 @@ class SimulationManager {
             regularBotCount,
             socketBotCount,
             buyIn,
-            status: 'spawning'
+            status: 'spawning',
+            gamesPlayed: 0,
+            fastMode: this.fastMode
         };
         this.activeSimulations.set(tableId, simulation);
+        
+        // Set up auto-restart callback on the table
+        this._setupAutoRestart(table, simulation);
         
         // Spawn bots in BACKGROUND - don't wait, return immediately so user sees the table
         // Bots will join one by one with visible delays
@@ -246,16 +281,17 @@ class SimulationManager {
                 const bot = new SocketBot({
                     serverUrl: this.serverUrl,
                     name: `NetPlayer_${i + 1}`,
-                    minDelay: 800,
-                    maxDelay: 2500,
+                    minDelay: simulation.fastMode ? 50 : 800,
+                    maxDelay: simulation.fastMode ? 200 : 2500,
                     aggressiveness: 0.2 + Math.random() * 0.4,
-                    // Network simulation
-                    networkLatency: profile.latency,
-                    latencyJitter: profile.jitter,
-                    disconnectChance: profile.disconnectChance,
+                    fastMode: simulation.fastMode,
+                    // Network simulation (reduced in fast mode)
+                    networkLatency: simulation.fastMode ? 10 : profile.latency,
+                    latencyJitter: simulation.fastMode ? 5 : profile.jitter,
+                    disconnectChance: simulation.fastMode ? 0 : profile.disconnectChance, // No chaos in fast mode
                     reconnectMinTime: 3000,
                     reconnectMaxTime: 15000,
-                    enableChaos: true, // Enable random disconnects
+                    enableChaos: !simulation.fastMode, // Disable chaos in fast mode for speed
                     logFile: path.join(__dirname, '../../logs/socketbot.log')
                 });
                 
@@ -291,6 +327,7 @@ class SimulationManager {
         });
         
         // Auto-start the game after a short delay for spectators to see all bots
+        const startDelay = simulation.fastMode ? 500 : 2000;
         setTimeout(() => {
             if (table && table.phase === 'waiting') {
                 // Start ready-up phase (bots and socket bots will auto-ready)
@@ -301,7 +338,105 @@ class SimulationManager {
                     this.log('WARN', 'Failed to auto-start ready-up', { error: result.error });
                 }
             }
-        }, 2000); // 2 second delay so spectator can see all players seated
+        }, startDelay);
+    }
+    
+    /**
+     * Set up auto-restart when a game ends (winner determined)
+     * This allows simulation to play multiple games continuously
+     */
+    _setupAutoRestart(table, simulation) {
+        if (!this.autoRestart) return;
+        
+        const tableId = table.id;
+        
+        // Hook into the game over scenario
+        // Check periodically if only 1 player has chips (game over)
+        const checkGameOver = () => {
+            if (!this.activeSimulations.has(tableId)) return; // Simulation stopped
+            
+            const currentTable = this.gameManager.tables.get(tableId);
+            if (!currentTable) return;
+            
+            // Count players with chips
+            const playersWithChips = currentTable.seats.filter(s => s && s.chips > 0);
+            
+            if (playersWithChips.length <= 1 && currentTable.phase !== 'waiting') {
+                // Game over - one winner!
+                simulation.gamesPlayed++;
+                this.log('INFO', `Game ${simulation.gamesPlayed} COMPLETE - Resetting for next game`, {
+                    tableId,
+                    winner: playersWithChips[0]?.name || 'Unknown',
+                    gamesPlayed: simulation.gamesPlayed
+                });
+                
+                if (simulation.gamesPlayed >= this.maxGames) {
+                    this.log('INFO', `Reached max games (${this.maxGames}), stopping simulation`, { tableId });
+                    this.stopSimulation(tableId);
+                    return;
+                }
+                
+                // Reset all players to starting chips
+                const restartDelay = simulation.fastMode ? 1000 : 3000;
+                setTimeout(() => this._restartGame(simulation), restartDelay);
+            } else {
+                // Check again in a bit
+                const checkInterval = simulation.fastMode ? 500 : 2000;
+                setTimeout(checkGameOver, checkInterval);
+            }
+        };
+        
+        // Start checking after first game begins
+        const initialDelay = simulation.fastMode ? 5000 : 15000;
+        setTimeout(checkGameOver, initialDelay);
+    }
+    
+    /**
+     * Restart the game with fresh chips for everyone
+     */
+    _restartGame(simulation) {
+        const { tableId, buyIn, creatorId } = simulation;
+        const table = this.gameManager.tables.get(tableId);
+        
+        if (!table) {
+            this.log('ERROR', 'Cannot restart - table not found', { tableId });
+            return;
+        }
+        
+        this.log('INFO', 'Restarting game - resetting all chips', { tableId, buyIn });
+        
+        // Reset all players to starting buy-in
+        for (const seat of table.seats) {
+            if (seat) {
+                seat.chips = buyIn;
+                seat.isFolded = false;
+                seat.isAllIn = false;
+                seat.currentBet = 0;
+                seat.cards = [];
+            }
+        }
+        
+        // Reset table state
+        table.phase = 'waiting';
+        table.pot = 0;
+        table.currentBet = 0;
+        table.communityCards = [];
+        
+        // Broadcast reset to spectators
+        if (table.onStateChange) {
+            table.onStateChange();
+        }
+        
+        // Auto-start the new game
+        const startDelay = simulation.fastMode ? 500 : 2000;
+        setTimeout(() => {
+            if (table.phase === 'waiting') {
+                const result = table.startReadyUp(creatorId);
+                if (result.success) {
+                    this.log('INFO', `Game ${simulation.gamesPlayed + 1} starting...`, { tableId });
+                }
+            }
+        }, startDelay);
     }
     
     /**
