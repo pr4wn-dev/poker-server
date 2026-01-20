@@ -2773,6 +2773,39 @@ GameService.Instance.GetAvailableBots(bots => { });
 
 ---
 
+### Issue #102: CRITICAL - Turn Timer and Blind Timer Features Lost in Merge
+
+**Symptoms:** User noticed turn timer, round timer, and pulsing colors were missing after earlier fixes.
+
+**Root Cause:** 
+When resolving a merge conflict in TableScene.cs, I used `git checkout --theirs` which took MY old version instead of the REMOTE version that had all the features added at the boss's place tonight.
+
+**Lost Features (Restored):**
+1. `_localTurnTimeRemaining` - Smooth local countdown between server updates
+2. `_isGamePhaseActive` - Tracking when game is in active phase
+3. `_timerNormalColor` / `_timerUrgentColor` - Pulsing timer that goes red when <10 seconds
+4. `blindTimerText` - Shows blind level and time until next increase
+5. `_localBlindTimeRemaining` - Local countdown for blind timer
+6. `UpdateBlindTimerDisplay()` - UI updates for blind timer
+7. Smooth countdown animation in Update() loop
+
+**Fix:**
+1. Restored TableScene.cs from commit 47568ec (the remote version with all features)
+2. Re-added rumble timing logic on top:
+   - `_rumbleStartTime` - Tracks when Ready to Rumble started
+   - `RUMBLE_DURATION = 7f` - Constant for rumble length
+   - Beeps only play after rumble finishes
+
+**Lesson Learned:** When resolving merge conflicts, `--theirs` means the INCOMING changes (remote), `--ours` means your LOCAL changes. I got this backwards and lost all the work done at boss's place. ALWAYS verify what's being kept after a merge.
+
+**Files Changed:**
+- `TableScene.cs` - Restored 627 lines of features + added rumble timing
+
+**Date:** January 19, 2026
+**Status:** ✅ RESTORED
+
+---
+
 ## 📁 KEY FILE LOCATIONS
 
 ### Server
