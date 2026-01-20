@@ -225,7 +225,16 @@ class SimulationManager {
             tableName: table.name,
             regularBots: regularBotCount,
             socketBots: socketBotCount,
-            status: 'spawning' // Bots are joining in background
+            status: 'spawning', // Bots are joining in background
+            // CRITICAL: Send actual random values so client can display them
+            settings: {
+                maxPlayers,
+                smallBlind,
+                bigBlind,
+                buyIn,
+                turnTimeLimit: this.fastMode ? Math.min(turnTimeLimit, 5000) : turnTimeLimit,
+                blindIncreaseInterval: this.fastMode ? 30000 : blindIncreaseInterval
+            }
         };
     }
     
@@ -481,6 +490,7 @@ class SimulationManager {
             }
             
             // Reset the seat
+            const oldChips = seat.chips;
             seat.chips = buyIn;
             seat.isFolded = false;
             seat.isAllIn = false;
@@ -491,6 +501,14 @@ class SimulationManager {
             // CRITICAL FIX: In simulation, all bots (regular and socket) should auto-ready
             // Regular bots have isBot=true, socket bots don't but we control them
             seat.isReady = seat.isBot || (seat.name && seat.name.startsWith('NetPlayer'));
+            
+            this.log('DEBUG', `Reset chips for ${seat.name}`, { 
+                seatIndex: i, 
+                oldChips, 
+                newChips: seat.chips, 
+                buyIn,
+                isActive: seat.isActive 
+            });
         }
         
         // Reset table state completely
