@@ -591,6 +591,10 @@ class SocketBot {
      */
     _handleTableState(state) {
         try {
+            // Track previous state for comparison
+            const prevPhase = this.gameState?.phase;
+            const prevHandNumber = this.gameState?.handNumber;
+            
             this.gameState = state;
             this.eventsReceived.tableState++;
             
@@ -611,6 +615,11 @@ class SocketBot {
             const wasMyTurn = this.isMyTurn;
             this.isMyTurn = state.currentPlayerId === this.userId;
             
+            // Detect new hand - phase went from showdown/waiting to preflop, or handNumber changed
+            const isNewHand = (prevPhase === 'showdown' && state.phase === 'preflop') ||
+                              (prevHandNumber !== undefined && state.handNumber !== prevHandNumber) ||
+                              (prevPhase && !['preflop', 'flop', 'turn', 'river'].includes(prevPhase) && state.phase === 'preflop');
+            
             // Log EVERY state during active phases for debugging
             const isActiveBettingPhase = ['preflop', 'flop', 'turn', 'river'].includes(state.phase);
             if (isActiveBettingPhase || state.phase === 'ready_up' || state.phase === 'countdown') {
@@ -623,13 +632,17 @@ class SocketBot {
                     currentPlayerId: state.currentPlayerId,
                     myUserId: this.userId,
                     latency: this.networkLatency,
-                    statesReceived: this.eventsReceived.tableState
+                    statesReceived: this.eventsReceived.tableState,
+                    isNewHand: isNewHand
                 });
             }
             
-            // If it just became our turn, make a decision
-            if (this.isMyTurn && !wasMyTurn) {
-                this.log('ACTION', `>>> IT'S MY TURN! Scheduling action with ${this.networkLatency}ms base latency...`);
+            // If it just became our turn, OR it's a new hand and it's our turn, make a decision
+            // CRITICAL FIX: Also check isNewHand to handle back-to-back turns across hands
+            if (this.isMyTurn && (!wasMyTurn || isNewHand)) {
+                this.log('ACTION', `>>> IT'S MY TURN! Scheduling action with ${this.networkLatency}ms base latency...`, { 
+                    reason: !wasMyTurn ? 'turn_started' : 'new_hand_my_turn' 
+                });
                 this._scheduleAction();
             }
             

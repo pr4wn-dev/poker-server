@@ -116,6 +116,24 @@ class GameManager {
             return { success: false, error: 'Invalid player or table' };
         }
 
+        // CRITICAL: Check if player already has a seat at THIS table (reconnection scenario)
+        const existingSeatIndex = table.seats.findIndex(s => s?.playerId === playerId);
+        if (existingSeatIndex !== -1) {
+            const existingSeat = table.seats[existingSeatIndex];
+            console.log(`[GameManager] Player ${player.name} RECONNECTING to seat ${existingSeatIndex} at table ${table.name}`);
+            
+            // Reconnect them - just update their connection status
+            existingSeat.isConnected = true;
+            player.currentTableId = tableId;
+            
+            return { 
+                success: true, 
+                seatIndex: existingSeatIndex, 
+                reconnected: true,
+                chips: existingSeat.chips
+            };
+        }
+
         // Check if player has enough chips for the buy-in
         const buyIn = table.buyIn || 20000000;
         let isPracticePlayer = false;
