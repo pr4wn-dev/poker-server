@@ -1255,19 +1255,32 @@ class Table {
                 });
             } else if (noRaisesHappened) {
                 // No raises happened - everyone checked/called
-                // CRITICAL FIX: Pre-flop is special - round completes when we return to BB (last raiser)
-                // Post-flop: round completes when we return to dealer (last raiser)
-                // The key is: if all bets equalized AND we're about to return to the last raiser, round is complete
+                // CRITICAL FIX: When everyone checks, we need to ensure we've completed a FULL round
+                // The round completes when we're about to return to the first player to act (dealer post-flop, BB pre-flop)
+                // AND we've passed that player at least once
                 if (this.phase === GAME_PHASES.PRE_FLOP) {
-                    // Pre-flop: round completes when next player would be BB (the last raiser, since no one raised)
-                    bettingRoundComplete = nextPlayer === bbIndex || 
-                                         (this.currentPlayerIndex === bbIndex && nextPlayer !== bbIndex) ||
-                                         (this.currentPlayerIndex > bbIndex && nextPlayer <= bbIndex);
+                    // Pre-flop: round completes when we're about to return to BB AND we've passed them
+                    // We've passed BB if current > bbIndex OR we've wrapped around
+                    const hasPassedBB = this.currentPlayerIndex > bbIndex || 
+                                       (this.currentPlayerIndex < bbIndex && (nextPlayer === -1 || nextPlayer > bbIndex || nextPlayer <= this.currentPlayerIndex));
+                    bettingRoundComplete = hasPassedBB && nextPlayer === bbIndex;
+                    
+                    // Fallback: if we're at BB and next player is different, we've completed the round
+                    if (!bettingRoundComplete && this.currentPlayerIndex === bbIndex && nextPlayer !== bbIndex && nextPlayer !== -1) {
+                        bettingRoundComplete = true;
+                    }
                 } else {
-                    // Post-flop: round completes when next player would be dealer/first to act
-                    bettingRoundComplete = nextPlayer === this.lastRaiserIndex || 
-                                         (this.currentPlayerIndex === this.lastRaiserIndex && nextPlayer !== this.lastRaiserIndex) ||
-                                         (this.currentPlayerIndex > this.lastRaiserIndex && nextPlayer <= this.lastRaiserIndex);
+                    // Post-flop: round completes when we're about to return to dealer/first to act
+                    // AND we've passed them at least once
+                    const firstToAct = this.getNextActivePlayer(this.dealerIndex);
+                    const hasPassedFirst = this.currentPlayerIndex > firstToAct || 
+                                          (this.currentPlayerIndex < firstToAct && (nextPlayer === -1 || nextPlayer > firstToAct || nextPlayer <= this.currentPlayerIndex));
+                    bettingRoundComplete = hasPassedFirst && nextPlayer === firstToAct;
+                    
+                    // Fallback: if we're at first to act and next player is different, we've completed the round
+                    if (!bettingRoundComplete && this.currentPlayerIndex === firstToAct && nextPlayer !== firstToAct && nextPlayer !== -1) {
+                        bettingRoundComplete = true;
+                    }
                 }
                 gameLogger.bettingRoundCheck(this.name, 'BETTING_ROUND_COMPLETE (no raises)', bettingRoundComplete ? 'TRUE' : 'FALSE', {
                     phase: this.phase,
@@ -1275,7 +1288,8 @@ class Table {
                     nextPlayer,
                     bbIndex,
                     dealerIndex: this.dealerIndex,
-                    lastRaiserIndex: this.lastRaiserIndex
+                    lastRaiserIndex: this.lastRaiserIndex,
+                    hasPassedLastRaiser: this.hasPassedLastRaiser
                 });
                 console.log(`[Table ${this.name}] No raises - checking if round complete. Current: ${this.currentPlayerIndex}, Next: ${nextPlayer}, BB: ${bbIndex}, Dealer: ${this.dealerIndex}, LastRaiser: ${this.lastRaiserIndex}, Complete: ${bettingRoundComplete}`);
             } else {
