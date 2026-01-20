@@ -255,7 +255,7 @@ class SimulationManager {
                     disconnectChance: profile.disconnectChance,
                     reconnectMinTime: 3000,
                     reconnectMaxTime: 15000,
-                    enableChaos: false, // DISABLED for stability - re-enable after core issues fixed
+                    enableChaos: true, // Enable random disconnects
                     logFile: path.join(__dirname, '../../logs/socketbot.log')
                 });
                 

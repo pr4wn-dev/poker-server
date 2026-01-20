@@ -66,6 +66,20 @@ Pattern: When one side works but the other is stuck → MISMATCH. Grep both side
 
 If you have to ask "what happened?" → YOU HAVE FAILED.
 
+---
+
+## LAW 10: NEVER DELETE FEATURES TO "FIX" PROBLEMS
+
+**Disabling or removing existing functionality is NOT a fix. It's theft.**
+
+- NEVER disable a feature to make an error go away
+- NEVER comment out working code to avoid debugging it
+- NEVER remove options/settings to simplify a problem
+- NEVER reduce functionality as a "temporary" solution
+
+If something is broken, FIX THE ROOT CAUSE. The user paid for those features.
+Deleting them and pretending the problem is solved = STEALING.
+
 **BEFORE asking user ANYTHING about a bug:**
 1. Check server console logs
 2. Check application logs (simulation.log, socketbot.log, game.log)
