@@ -2,12 +2,21 @@
 
 > **READ THIS FILE AT START OF EVERY SESSION**
 > 
-> **Last Updated:** January 18, 2026 (Session 12 - READY FOR MONDAY!)
-> **Session:** 12 - MULTIPLAYER POLISH & STABILITY
-> **Status:** ✅ READY FOR MONDAY DEMO - Works on cellular without port forwarding!
-> **Goal:** Get poker game running for Monday demo - ACHIEVED!
+> **Last Updated:** January 19, 2026 (Session 13 - POST-DEMO FIXES)
+> **Session:** 13 - BOSS DEMO NIGHT FIXES
+> **Status:** ✅ All issues from boss demo fixed
+> **Goal:** Fix issues discovered during Monday demo at boss's place
 >
-> ### 🔴 KEY FIXES THIS SESSION
+> ### 🔴 KEY FIXES THIS SESSION (Session 13 - Jan 19, 2026)
+> 1. **Issue #99 - Ready to Rumble Sound**: Audio file was missing - added ready_to_rumble.mp3 to Resources, added PlayReadyToRumble() method, triggers when countdown phase starts
+> 2. **Issue #100 - Countdown Beep Timing**: Beeps now wait for 7-second Ready to Rumble audio to finish before playing
+> 3. **Issue #101 - Turn Time Slider Restored**: Re-added the 5-60 second turn time slider to Create Table panel
+> 4. **Issue #102 - CRITICAL RESTORE**: Accidentally deleted 627 lines of features during bad merge - restored turn timer, blind timer, pulsing colors, all features from boss demo night
+> 
+> ### ⚠️ LESSON LEARNED FROM SESSION 13
+> **ALWAYS PULL BOTH REPOS AT SESSION START!** I only pulled poker-server and forgot poker-client-unity. This caused merge conflicts and I lost 627 lines of work. See Step 0 in Pre-Flight Checklist.
+>
+> ### 🔵 SESSION 12 FIXES (Jan 18, 2026)
 > 1. **Turn Timer Display**: Timer now counts down locally (smooth animation) and shows on screen during player turns
 > 2. **Configurable Turn Time**: 20 second default, adjustable from 5s-60s when creating table
 > 3. **Pulsing Timer**: Timer pulses red when 10 seconds or less - clear visual urgency
@@ -79,6 +88,13 @@
 ## 🚨 MANDATORY PRE-FLIGHT CHECKLIST (DO THIS EVERY SESSION START)
 
 Before writing ANY code, complete these steps:
+
+### Step 0: PULL BOTH REPOS FIRST!!! (Issue #102)
+```powershell
+cd C:\Projects\poker-server; git pull
+cd C:\Projects\poker-client-unity; git pull
+```
+**⚠️ DO NOT SKIP THIS STEP** - In Session 13, I only pulled poker-server and forgot poker-client-unity. This caused a merge conflict later, and when resolving it I got --theirs/--ours backwards and DELETED 627 LINES OF WORK from tonight's session. The user had to wait while I re-did everything. ALWAYS PULL BOTH REPOS.
 
 ### Step 1: Read Critical Issues
 - [ ] Read Issue #1: SocketIOUnity GetValue<T>() - USE JsonUtility.FromJson
