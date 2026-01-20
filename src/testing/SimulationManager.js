@@ -86,6 +86,9 @@ class SimulationManager {
             return { success: false, error: 'Failed to create table' };
         }
         
+        // Verify isSimulation flag was set
+        this.log('INFO', 'Table isSimulation flag', { tableId: table.id, isSimulation: table.isSimulation });
+        
         const tableId = table.id;
         
         this.log('INFO', 'Simulation table created', { tableId, tableName: table.name });

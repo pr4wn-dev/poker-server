@@ -92,7 +92,8 @@ class GameManager {
             isPrivate: options.isPrivate || false,
             creatorId: options.creatorId || null,
             turnTimeLimit: options.turnTimeLimit || 20000, // Turn time in ms (default 20 seconds)
-            blindIncreaseInterval: options.blindIncreaseInterval || 0 // 0 = disabled, otherwise ms between blind increases
+            blindIncreaseInterval: options.blindIncreaseInterval || 0, // 0 = disabled, otherwise ms between blind increases
+            isSimulation: options.isSimulation || false // Simulation tables hide Start Game button
         });
 
         this.tables.set(tableId, table);
