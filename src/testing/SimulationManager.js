@@ -132,17 +132,19 @@ class SimulationManager {
     async startSimulation(options) {
         const { creatorId, socketBotRatio = 0.5 } = options;
         
-        // Generate random table settings for simulation
+        // Generate random table settings as FALLBACK only
         const randomSettings = this._generateRandomSettings();
         
-        // Use random settings (ignore user-provided values for simulation)
-        const tableName = randomSettings.tableName;
-        const maxPlayers = randomSettings.maxPlayers;
-        const smallBlind = randomSettings.smallBlind;
-        const bigBlind = randomSettings.bigBlind;
-        const buyIn = randomSettings.buyIn;
-        const turnTimeLimit = randomSettings.turnTimeLimit;
-        const blindIncreaseInterval = randomSettings.blindIncreaseInterval;
+        // USE client-provided values if they exist, otherwise use random
+        // Client UI randomizes values and shows them to user - we use THOSE values
+        const tableName = options.tableName || randomSettings.tableName;
+        const maxPlayers = options.maxPlayers || randomSettings.maxPlayers;
+        const smallBlind = options.smallBlind || randomSettings.smallBlind;
+        const bigBlind = options.bigBlind || randomSettings.bigBlind;
+        const buyIn = options.buyIn || randomSettings.buyIn;
+        const turnTimeLimit = options.turnTimeLimit || randomSettings.turnTimeLimit;
+        const blindIncreaseInterval = options.blindIncreaseInterval !== undefined 
+            ? options.blindIncreaseInterval : randomSettings.blindIncreaseInterval;
         
         this.log('INFO', 'Starting simulation with RANDOM settings...', {
             creatorId,
