@@ -3319,3 +3319,18 @@ The game is a skeleton. Previous sessions marked things as "working" but actual 
 **Fix:** Added `seat.isActive = true` and `seat.totalBet = 0` to the restart reset loop.
 **Files:** src/testing/SimulationManager.js
 
+
+ 
+ # # #   I s s u e   # 1 2 1 :   C a r d   P l a c e h o l d e r   A n i m a t i o n   B u g   f o r   F o l d e d   P l a y e r s 
+ * * D a t e : * *   2 0 2 6 - 0 1 - 2 0   0 4 : 3 8 
+ * * P r o b l e m : * *   C a r d   p l a c e h o l d e r s   k e p t   a n i m a t i n g   f o r   p l a y e r s   w h o   f o l d e d   o r   w e r e   o u t   o f   h a n d 
+ * * R o o t   C a u s e : * *   R a c e   c o n d i t i o n   i n   P l a y e r I n f o V i e w . U p d a t e F r o m S t a t e ( )   -   c a r d s   w e r e   b e i n g   s e t   ( s t a r t i n g   a n i m a t i o n s )   B E F O R E   c h e c k i n g   i s F o l d e d   s t a t u s ,   t h e n   S e t E m p t y ( )   w a s   c a l l e d   b u t   a n i m a t i o n   c o r o u t i n e s   w e r e   a l r e a d y   r u n n i n g 
+ * * F i l e s   M o d i f i e d : * * 
+ -   p o k e r - c l i e n t - u n i t y :   A s s e t s / S c r i p t s / U I / C o m p o n e n t s / P o k e r T a b l e V i e w . c s 
+ * * S o l u t i o n : * * 
+ 1 .   C h e c k   i s F o l d e d   F I R S T   b e f o r e   a n y   c a r d   o p e r a t i o n s 
+ 2 .   I f   f o l d e d ,   c a l l   S e t E m p t y ( )   i m m e d i a t e l y   w i t h o u t   t o u c h i n g   S e t C a r d / S e t H i d d e n 
+ 3 .   A d d e d   a n i m a t i o n   s t o p p i n g   l o g i c   t o   S e t E m p t y ( )   a n d   S e t H i d d e n ( )   m e t h o d s 
+ 4 .   R e s e t   c a r d   p o s i t i o n   t o   o r i g i n a l   w h e n   a n i m a t i o n   i s   s t o p p e d 
+ 5 .   A d d e d   c o m p r e h e n s i v e   l o g g i n g   f o r   c a r d   s t a t e   c h a n g e s  
+ 
