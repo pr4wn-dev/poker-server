@@ -1707,6 +1707,16 @@ class Table {
         this.clearTurnTimer();
         this.phase = GAME_PHASES.SHOWDOWN;
         
+        gameLogger.gameEvent(this.name, 'SHOWDOWN STARTED', {
+            pot: this.pot,
+            communityCards: this.communityCards?.map(c => `${c.rank}${c.suit}`),
+            activePlayers: this.seats.filter(s => s && !s.isFolded).map(s => ({
+                name: s.name,
+                chips: s.chips,
+                isAllIn: s.isAllIn
+            }))
+        });
+        
         // CRITICAL: Broadcast state immediately so clients see cards before showing winner
         this.onStateChange?.();
         
@@ -1771,6 +1781,16 @@ class Table {
             }
         }
 
+        // Log pot awards for debugging
+        gameLogger.gameEvent(this.name, 'POT AWARDS CALCULATED', {
+            totalPot: potAwards?.reduce((sum, a) => sum + a.amount, 0) || 0,
+            awards: potAwards?.map(a => ({
+                name: a.name,
+                amount: a.amount,
+                handName: a.handName
+            })) || []
+        });
+        
         // Notify about each pot winner (for hand_result event)
         // CRITICAL: Emit hand_result AFTER state has been broadcast so cards are visible
         if (potAwards && potAwards.length > 0 && this.onHandComplete) {
