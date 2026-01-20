@@ -129,13 +129,19 @@ class BotPlayer {
                 return { action: 'fold' };
             }
         } else {
-            // No bet to call - can check or bet
+            // toCall === 0: Either no bet exists OR we've already matched
+            // CRITICAL: Only use 'bet' if currentBet === 0. If currentBet > 0, we must 'raise' or 'check'.
             if (effectiveStrength >= this.traits.raiseThreshold || shouldBluff) {
                 if (Math.random() < this.traits.aggression) {
-                    // Bet
                     const betAmount = this.calculateBetAmount(minRaise, maxBet, pot, effectiveStrength);
                     if (betAmount > 0) {
-                        return { action: 'bet', amount: betAmount };
+                        if (currentBet === 0) {
+                            // No bet on table - we can open with a bet
+                            return { action: 'bet', amount: betAmount };
+                        } else {
+                            // Already a bet on table (we've matched it) - must raise, not bet
+                            return { action: 'raise', amount: betAmount };
+                        }
                     }
                 }
             }
