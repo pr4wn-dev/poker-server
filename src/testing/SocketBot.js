@@ -244,6 +244,9 @@ class SocketBot {
         
         // PREFLOP started - card dealing animation
         if (phase === 'preflop' && lastPhase === 'countdown') {
+            // Re-enable chaos now that game has actually started
+            this._chaosEnabled = this.enableChaos;
+            
             this.clientTiming.cardDealStart = now;
             this._addCriticalWindow('ANIMATION_CARD_DEAL', now, now + 3000, 
                 'Card dealing animation - rapid state updates');
@@ -631,7 +634,10 @@ class SocketBot {
             }
             
             // Auto-ready during ready_up phase (with latency simulation)
+            // NOTE: Chaos mode (random disconnects) is disabled until game is actively playing
+            // to prevent disrupting the ready-up flow
             if (state.phase === 'ready_up') {
+                this._chaosEnabled = false; // Disable chaos during ready-up
                 const delay = this._getRandomDelay() + this._getNetworkLatency();
                 setTimeout(() => this.ready(), delay);
             }

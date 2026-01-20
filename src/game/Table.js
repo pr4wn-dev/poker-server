@@ -235,6 +235,48 @@ class Table {
     }
     
     /**
+     * Called when ready-up timer expires
+     * Forces game to start - players who aren't ready become spectators
+     */
+    handleReadyUpTimeout() {
+        if (this.phase !== GAME_PHASES.READY_UP) return;
+        
+        console.log(`[Table ${this.name}] Ready-up timeout! Forcing game start.`);
+        
+        // Get not-ready players
+        const notReadyPlayers = this.seats.filter(s => s && !s.isReady);
+        
+        if (notReadyPlayers.length > 0) {
+            console.log(`[Table ${this.name}] Moving ${notReadyPlayers.length} not-ready players to spectators: ${notReadyPlayers.map(s => s.name).join(', ')}`);
+            
+            // Move not-ready players to spectators
+            for (const seat of notReadyPlayers) {
+                const seatIndex = this.seats.indexOf(seat);
+                if (seatIndex >= 0) {
+                    // Add to spectators
+                    this.addSpectator(seat.playerId, seat.name, seat.socketId);
+                    // Remove from seat
+                    this.seats[seatIndex] = null;
+                    // Notify about removal
+                    this.onPlayerNotReady?.(seat.playerId, seat.name);
+                }
+            }
+        }
+        
+        // Check if we still have enough players
+        const remainingPlayers = this.seats.filter(s => s !== null).length;
+        if (remainingPlayers >= 2) {
+            // Start final countdown with remaining ready players
+            this.startFinalCountdown();
+        } else {
+            console.log(`[Table ${this.name}] Not enough ready players (${remainingPlayers}). Cancelling game.`);
+            this.phase = GAME_PHASES.WAITING;
+            this.readyUpActive = false;
+            this.onStateChange?.();
+        }
+    }
+    
+    /**
      * Called when a player clicks "Ready"
      */
     playerReady(playerId) {
@@ -266,11 +308,18 @@ class Table {
     checkAllReady() {
         if (this.phase !== GAME_PHASES.READY_UP) return;
         
+        // Debug: log each seat's ready status
+        const seatStatuses = this.seats.map((s, i) => s ? `${i}:${s.name}(isBot=${s.isBot},isReady=${s.isReady})` : `${i}:empty`);
+        console.log(`[Table ${this.name}] Checking ready: ${seatStatuses.join(', ')}`);
+        
         const allReady = this.seats.every(s => !s || s.isReady);
         
         if (allReady) {
             console.log(`[Table ${this.name}] All players ready! Starting final countdown`);
             this.startFinalCountdown();
+        } else {
+            const notReady = this.seats.filter(s => s && !s.isReady).map(s => s.name);
+            console.log(`[Table ${this.name}] Not all ready yet. Waiting for: ${notReady.join(', ')}`);
         }
     }
     
