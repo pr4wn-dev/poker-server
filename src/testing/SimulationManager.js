@@ -107,70 +107,95 @@ class SimulationManager {
             socketBots: [],
             regularBotCount,
             socketBotCount,
-            status: 'starting'
+            buyIn,
+            status: 'spawning'
         };
         this.activeSimulations.set(tableId, simulation);
         
-        // Add regular bots first
-        // Must use creatorId as inviterId - only table creator can invite bots
-        const botProfiles = ['tex', 'lazy_larry', 'pickles', 'maxine', 'bluffs', 'shark', 'rookie', 'calculator', 'wildcard'];
-        for (let i = 0; i < regularBotCount; i++) {
-            const botProfile = botProfiles[i % botProfiles.length];
-            const result = await this.gameManager.inviteBot(tableId, botProfile, creatorId, buyIn);
-            
-            if (result.success && result.seatIndex !== undefined) {
-                // Auto-approve bots for simulation
-                this.gameManager.approveBot(tableId, result.seatIndex, creatorId);
-                this.log('INFO', `Regular bot added: ${botProfile}`, { seatIndex: result.seatIndex });
-            } else {
-                this.log('WARN', `Failed to add regular bot: ${botProfile}`, { error: result.error });
-            }
-            
-            // Small delay between bot additions
-            await new Promise(r => setTimeout(r, 200));
-        }
-        
-        // Add socket bots
-        for (let i = 0; i < socketBotCount; i++) {
-            try {
-                const bot = new SocketBot({
-                    serverUrl: this.serverUrl,
-                    name: `NetPlayer_${i + 1}`,
-                    minDelay: 800,
-                    maxDelay: 2500,
-                    aggressiveness: 0.2 + Math.random() * 0.4,
-                    logFile: path.join(__dirname, '../../logs/socketbot.log')
-                });
-                
-                await bot.connect();
-                await bot.register();
-                await bot.joinTable(tableId, buyIn);
-                
-                simulation.socketBots.push(bot);
-                this.log('INFO', `Socket bot added: ${bot.name}`, { seatIndex: bot.seatIndex });
-                
-                // Small delay between connections
-                await new Promise(r => setTimeout(r, 300));
-            } catch (error) {
-                this.log('ERROR', `Failed to add socket bot ${i + 1}`, { error: error.message });
-            }
-        }
-        
-        simulation.status = 'ready';
-        this.log('INFO', 'All bots added, simulation ready', {
-            tableId,
-            seatedPlayers: table.getSeatedPlayerCount(),
-            maxPlayers
-        });
+        // Spawn bots in BACKGROUND - don't wait, return immediately so user sees the table
+        // Bots will join one by one with visible delays
+        this._spawnBotsInBackground(simulation, creatorId, buyIn);
         
         return {
             success: true,
             tableId,
             tableName: table.name,
             regularBots: regularBotCount,
-            socketBots: simulation.socketBots.length,
-            status: 'ready'
+            socketBots: socketBotCount,
+            status: 'spawning' // Bots are joining in background
         };
+    }
+    
+    /**
+     * Spawn bots in background with visible delays
+     * Called after startSimulation returns so user sees bots join one by one
+     */
+    async _spawnBotsInBackground(simulation, creatorId, buyIn) {
+        const { tableId, regularBotCount, socketBotCount } = simulation;
+        const botProfiles = ['tex', 'lazy_larry', 'pickles', 'maxine', 'bluffs', 'shark', 'rookie', 'calculator', 'wildcard'];
+        
+        this.log('INFO', 'Starting background bot spawn', { tableId, regularBots: regularBotCount, socketBots: socketBotCount });
+        
+        // Mix regular bots and socket bots for variety
+        // Alternate between them so it looks natural
+        let regularAdded = 0;
+        let socketAdded = 0;
+        const totalToAdd = regularBotCount + socketBotCount;
+        
+        for (let i = 0; i < totalToAdd; i++) {
+            // Alternate: add regular bot, then socket bot, etc.
+            const addRegular = (regularAdded < regularBotCount) && 
+                               (socketAdded >= socketBotCount || i % 2 === 0);
+            
+            if (addRegular && regularAdded < regularBotCount) {
+                // Add a regular bot
+                const botProfile = botProfiles[regularAdded % botProfiles.length];
+                const result = await this.gameManager.inviteBot(tableId, botProfile, creatorId, buyIn);
+                
+                if (result.success && result.seatIndex !== undefined) {
+                    this.gameManager.approveBot(tableId, result.seatIndex, creatorId);
+                    this.log('INFO', `Regular bot joined: ${botProfile}`, { seatIndex: result.seatIndex });
+                } else {
+                    this.log('WARN', `Failed to add regular bot: ${botProfile}`, { error: result.error });
+                }
+                regularAdded++;
+            } else if (socketAdded < socketBotCount) {
+                // Add a socket bot
+                try {
+                    const bot = new SocketBot({
+                        serverUrl: this.serverUrl,
+                        name: `NetPlayer_${socketAdded + 1}`,
+                        minDelay: 800,
+                        maxDelay: 2500,
+                        aggressiveness: 0.2 + Math.random() * 0.4,
+                        logFile: path.join(__dirname, '../../logs/socketbot.log')
+                    });
+                    
+                    await bot.connect();
+                    await bot.register();
+                    await bot.joinTable(tableId, buyIn);
+                    
+                    simulation.socketBots.push(bot);
+                    this.log('INFO', `Socket bot joined: ${bot.name}`, { seatIndex: bot.seatIndex });
+                } catch (error) {
+                    this.log('ERROR', `Failed to add socket bot`, { error: error.message });
+                }
+                socketAdded++;
+            }
+            
+            // 1-2 second delay between each bot joining (visible to spectators)
+            const delay = 1000 + Math.random() * 1000;
+            await new Promise(r => setTimeout(r, delay));
+        }
+        
+        simulation.status = 'ready';
+        const table = this.gameManager.tables.get(tableId);
+        this.log('INFO', 'All bots joined, waiting for game start', {
+            tableId,
+            seatedPlayers: table?.getSeatedPlayerCount() || 0,
+            regularBots: regularAdded,
+            socketBots: socketAdded
+        });
     }
     
     /**
