@@ -3257,3 +3257,10 @@ The game is a skeleton. Previous sessions marked things as "working" but actual 
 **Fix 2:** Added `isNewHand` detection by tracking phase transitions (showdown→preflop) and handNumber changes. If `isNewHand && isMyTurn`, schedule action even if `wasMyTurn` was true.
 **Files:** src/game/GameManager.js, src/testing/SocketBot.js
 
+## Issue #116: Regular Bots (Tex, Pickles, Larry) Using Wrong Action
+**Date:** 2026-01-20
+**Symptom:** Regular bots repeatedly failing with 'Cannot bet - current bet is X. Use raise or call.'
+**Root Cause:** `BotPlayer.decide()` used 'bet' when `toCall === 0`, but 'bet' is only valid when `currentBet === 0`. When `currentBet > 0` and the bot has already matched (toCall === 0), it should 'raise' or 'check', not 'bet'.
+**Fix:** Added check for `currentBet === 0` before using 'bet' action. If `currentBet > 0`, use 'raise' instead.
+**Files:** src/game/BotPlayer.js
+
