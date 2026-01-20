@@ -7,6 +7,7 @@ const userRepo = require('../database/UserRepository');
 const db = require('../database/Database');
 const AdventureManager = require('../adventure/AdventureManager');
 const TournamentManager = require('../game/TournamentManager');
+const SimulationManager = require('../testing/SimulationManager');
 
 class SocketHandler {
     constructor(io, gameManager) {
@@ -14,6 +15,7 @@ class SocketHandler {
         this.gameManager = gameManager;
         this.adventureManager = new AdventureManager(userRepo);
         this.tournamentManager = new TournamentManager(userRepo);
+        this.simulationManager = new SimulationManager(gameManager);
         
         // Track authenticated users: userId -> { userId, socketId, profile }
         this.authenticatedUsers = new Map();
@@ -191,6 +193,97 @@ class SocketHandler {
                 
                 // Broadcast new table to lobby
                 this.io.emit('table_created', table.getPublicInfo());
+            });
+
+            // ============ Simulation Mode ============
+            
+            socket.on('start_simulation', async (data, callback) => {
+                console.log('[SocketHandler] start_simulation received:', JSON.stringify(data));
+                const user = this.getAuthenticatedUser(socket);
+                if (!user) {
+                    const error = { success: false, error: 'Not authenticated' };
+                    if (callback) callback(error);
+                    return;
+                }
+                
+                const {
+                    tableName = 'Simulation Game',
+                    maxPlayers = 6,
+                    smallBlind = 25,
+                    bigBlind = 50,
+                    buyIn = 20000000,
+                    turnTimeLimit = 5000,
+                    socketBotRatio = 0.5
+                } = data;
+                
+                try {
+                    const result = await this.simulationManager.startSimulation({
+                        creatorId: user.userId,
+                        tableName,
+                        maxPlayers: Math.min(Math.max(maxPlayers, 3), 9),
+                        smallBlind,
+                        bigBlind,
+                        buyIn,
+                        turnTimeLimit,
+                        socketBotRatio: Math.min(Math.max(socketBotRatio, 0), 1)
+                    });
+                    
+                    console.log('[SocketHandler] start_simulation result:', result);
+                    
+                    if (result.success) {
+                        // Join creator as spectator
+                        socket.join(`table:${result.tableId}`);
+                        socket.join(`spectator:${result.tableId}`);
+                        
+                        const response = {
+                            success: true,
+                            tableId: result.tableId,
+                            tableName: result.tableName,
+                            socketBots: result.socketBots,
+                            regularBots: result.regularBots,
+                            status: result.status
+                        };
+                        if (callback) callback(response);
+                        socket.emit('simulation_started', response);
+                    } else {
+                        if (callback) callback(result);
+                    }
+                } catch (error) {
+                    console.error('[SocketHandler] start_simulation error:', error);
+                    const errorResponse = { success: false, error: error.message };
+                    if (callback) callback(errorResponse);
+                }
+            });
+            
+            socket.on('stop_simulation', (data, callback) => {
+                console.log('[SocketHandler] stop_simulation received:', JSON.stringify(data));
+                const user = this.getAuthenticatedUser(socket);
+                if (!user) {
+                    const error = { success: false, error: 'Not authenticated' };
+                    if (callback) callback(error);
+                    return;
+                }
+                
+                const { tableId } = data;
+                const result = this.simulationManager.stopSimulation(tableId);
+                
+                console.log('[SocketHandler] stop_simulation result:', result);
+                if (callback) callback(result);
+                
+                if (result.success) {
+                    this.io.emit('simulation_stopped', { tableId });
+                }
+            });
+            
+            socket.on('get_simulation_status', (data, callback) => {
+                const { tableId } = data;
+                const status = this.simulationManager.getSimulationStatus(tableId);
+                if (callback) callback(status || { error: 'Simulation not found' });
+            });
+            
+            socket.on('get_active_simulations', (data, callback) => {
+                const simulations = this.simulationManager.getActiveSimulations();
+                if (callback) callback({ simulations });
             });
 
             // ============ Table Actions ============
