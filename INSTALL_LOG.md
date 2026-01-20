@@ -2887,6 +2887,33 @@ When resolving a merge conflict in TableScene.cs, I used `git checkout --theirs`
 
 ---
 
+### Issue #103: Loop Detection and Showdown Betting Prevention
+
+**Symptoms:** 
+1. Betting was allowed during showdown phase (should just compare hands)
+2. No detection for infinite loops where same player keeps getting turns
+3. No safety valve if betting round never completes
+4. Scenario where everyone is all-in except one player could cause stuck game
+
+**Root Cause:** Missing validation and safety checks in game logic.
+
+**Fix:**
+1. **Showdown betting blocked** - handleAction() now rejects all actions during showdown, waiting, ready_up, countdown phases
+2. **Loop detection** - Track turns per phase and per player:
+   - `turnsThisPhase` counter resets when phase changes
+   - `playerTurnCounts` tracks how many times each player acts per phase
+   - Warns if same player acts 3+ times in one phase
+3. **Safety valve** - Force advance phase after 20 turns (prevents infinite loops)
+4. **Stuck player detection** - If only one player has chips and all bets equalized, auto-advance
+
+**Files Changed:**
+- `Table.js` - Added phase/turn validation, loop detection counters, safety valve logic
+
+**Date:** January 20, 2026
+**Status:** ✅ FIXED
+
+---
+
 ## 📁 KEY FILE LOCATIONS
 
 ### Server
