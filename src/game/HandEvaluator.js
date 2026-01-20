@@ -35,12 +35,15 @@ class HandEvaluator {
         let bestHand = null;
         for (const combo of combinations) {
             const hand = this.evaluateFiveCards(combo);
+            // Skip invalid hands (rank 0)
+            if (hand.rank === 0) continue;
             if (!bestHand || this.compare(hand, bestHand) > 0) {
                 bestHand = hand;
             }
         }
 
-        return bestHand;
+        // If no valid hand found, return invalid
+        return bestHand || { rank: 0, name: 'Invalid', values: [] };
     }
 
     /**

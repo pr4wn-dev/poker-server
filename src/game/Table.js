@@ -1097,10 +1097,26 @@ class Table {
                 continue;
             }
             
+            // CRITICAL: Deduplicate cards by rank+suit to prevent duplicate card evaluation bugs
             const allCards = [...playerCards, ...communityCards];
-            console.log(`[Table ${this.name}] Evaluating hand for ${player.name}: ${allCards.map(c => `${c.rank}${c.suit}`).join(' ')}`);
+            const seen = new Set();
+            const uniqueCards = allCards.filter(card => {
+                const key = `${card.rank}-${card.suit}`;
+                if (seen.has(key)) {
+                    console.warn(`[Table ${this.name}] DUPLICATE CARD DETECTED for ${player.name}: ${card.rank}${card.suit}`);
+                    return false;
+                }
+                seen.add(key);
+                return true;
+            });
             
-            player.handResult = HandEvaluator.evaluate(allCards);
+            if (uniqueCards.length !== allCards.length) {
+                console.error(`[Table ${this.name}] CARD DUPLICATES DETECTED for ${player.name}: had ${allCards.length}, now ${uniqueCards.length}`);
+            }
+            
+            console.log(`[Table ${this.name}] Evaluating hand for ${player.name}: ${uniqueCards.map(c => `${c.rank}${c.suit}`).join(' ')}`);
+            
+            player.handResult = HandEvaluator.evaluate(uniqueCards);
             console.log(`[Table ${this.name}] ${player.name} has: ${player.handResult.name} (rank ${player.handResult.rank})`);
         }
 
