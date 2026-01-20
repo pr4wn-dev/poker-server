@@ -791,19 +791,42 @@ class Table {
                 result = this.fold(seatIndex);
                 break;
             case ACTIONS.CHECK:
-                result = toCall === 0 ? this.check(seatIndex) : { success: false, error: 'Cannot check' };
+                if (toCall > 0) {
+                    result = { success: false, error: `Cannot check - need to call ${toCall}` };
+                } else {
+                    result = this.check(seatIndex);
+                }
                 break;
             case ACTIONS.CALL:
-                result = this.call(seatIndex);
+                if (toCall === 0) {
+                    // Can't call if there's nothing to call - treat as check
+                    result = this.check(seatIndex);
+                } else if (toCall > player.chips) {
+                    // Can't call more than you have - treat as all-in
+                    result = this.allIn(seatIndex);
+                } else {
+                    result = this.call(seatIndex);
+                }
                 break;
             case ACTIONS.BET:
-                result = this.currentBet === 0 ? this.bet(seatIndex, amount) : { success: false, error: 'Use raise' };
+                if (this.currentBet > 0) {
+                    result = { success: false, error: `Cannot bet - current bet is ${this.currentBet}. Use raise or call.` };
+                } else if (amount < this.bigBlind) {
+                    result = { success: false, error: `Minimum bet is ${this.bigBlind}` };
+                } else if (amount > player.chips) {
+                    result = { success: false, error: `You don't have enough chips. You have ${player.chips}.` };
+                } else {
+                    result = this.bet(seatIndex, amount);
+                }
                 break;
             case ACTIONS.RAISE:
                 result = this.raise(seatIndex, amount);
                 break;
             case ACTIONS.ALL_IN:
                 result = this.allIn(seatIndex);
+                break;
+            default:
+                result = { success: false, error: `Unknown action: ${action}` };
                 break;
         }
 
