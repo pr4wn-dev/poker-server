@@ -2914,6 +2914,63 @@ When resolving a merge conflict in TableScene.cs, I used `git checkout --theirs`
 
 ---
 
+### Issue #104: Socket Bot Simulation System
+
+**Request:** Create a way to run automated games with bots that connect via real sockets (like real players would), allowing testing of socket-related edge cases.
+
+**Implementation:**
+
+**1. SocketBot.js** (`src/testing/SocketBot.js`)
+- Connects to server via socket.io-client (real WebSocket, just like Unity)
+- Registers/logs in with unique credentials
+- Joins tables and plays full games automatically
+- Configurable delays (simulates network latency and thinking time)
+- Configurable aggressiveness (affects raise/bet frequency)
+- Makes decisions based on pot odds and current bet
+- All actions logged to `logs/socketbot.log`
+
+**2. SimulationManager.js** (`src/testing/SimulationManager.js`)
+- Creates practice mode tables with mix of bot types:
+  - Regular bots (internal, fast, no socket overhead)
+  - Socket bots (connect via WebSocket, test real network paths)
+- Configurable socket bot ratio (0-100%)
+- Creator automatically joins as spectator
+- Tracks active simulations
+- All events logged to `logs/simulation.log`
+
+**3. Server Socket Handlers**
+- `start_simulation` - Creates table, spawns bots, creator spectates
+- `stop_simulation` - Disconnects socket bots, closes table
+- `get_simulation_status` - Current state of a simulation
+- `get_active_simulations` - List all running simulations
+
+**4. Unity UI Updates**
+- "Simulation" toggle in Create Table panel
+- "Socket Bots" ratio slider (0-100%, shown when simulation enabled)
+- Auto-enables practice mode when simulation is selected
+- Loads TableScene as spectator after starting simulation
+
+**Usage:**
+1. In lobby, click "Create Table"
+2. Enable "Simulation" toggle
+3. Adjust socket bot ratio (50% = half socket bots, half regular bots)
+4. Click "Create" - you'll spectate as bots play automatically
+5. Check logs for debugging: `logs/socketbot.log`, `logs/simulation.log`
+
+**CLI Usage (without Unity):**
+```bash
+node src/testing/SocketBot.js <tableId> [botCount]
+```
+
+**Files Changed:**
+- Server: `SocketBot.js`, `SimulationManager.js`, `SocketHandler.js`
+- Unity: `LobbyScene.cs`, `GameService.cs`, `NetworkModels.cs`
+
+**Date:** January 20, 2026
+**Status:** ✅ IMPLEMENTED
+
+---
+
 ## 📁 KEY FILE LOCATIONS
 
 ### Server
