@@ -1081,60 +1081,52 @@ class Table {
             }
         }
         
-        // CRITICAL FIX: Handle all-in players correctly
-        // If all remaining players are all-in, we can't continue the betting round
-        // All-in players can't act, so if nextPlayer is -1, we should advance phase
+        // ============ CRITICAL: GUARANTEED EXIT POINTS ============
+        // These checks MUST happen in order to prevent ANY loop scenarios
+        // Each path has a GUARANTEED return statement
+        
+        // EXIT POINT 1: No one can act (all all-in or folded)
+        // MUST check this FIRST before any complex logic
         if (nextPlayer === -1) {
             // No one can act - all players are all-in or folded
-            if (allBetsEqualized) {
-                // All bets equalized and no one can act - advance phase immediately
-                console.log(`[Table ${this.name}] All players all-in or folded, all bets equalized - advancing phase`);
-                this.hasPassedLastRaiser = false;
-                this.advancePhase();
-                return;
-            } else {
-                // This shouldn't happen - if no one can act, bets should be equalized
-                console.warn(`[Table ${this.name}] WARNING: nextPlayer is -1 but bets not equalized. All equalized: ${allBetsEqualized}. Forcing phase advance.`);
-                this.hasPassedLastRaiser = false;
-                this.advancePhase();
-                return;
-            }
+            // If no one can act, betting round MUST be complete regardless of bets
+            console.log(`[Table ${this.name}] No active players (all all-in or folded) - advancing phase. All bets equalized: ${allBetsEqualized}`);
+            this.hasPassedLastRaiser = false;
+            this.advancePhase();
+            return;  // GUARANTEED EXIT - prevents loop
         }
         
-        // CRITICAL: If all bets are equalized but we HAVEN'T completed a round yet,
-        // we MUST continue - some players haven't had their turn yet!
-        if (allBetsEqualized && !bettingRoundComplete && nextPlayer !== -1) {
-            console.log(`[Table ${this.name}] All bets equalized but round not complete - continuing. Current: ${this.currentPlayerIndex}, Next: ${nextPlayer}, LastRaiser: ${this.lastRaiserIndex}, NoRaises: ${noRaises}`);
-            // Continue to next player - they need their turn!
-            this.currentPlayerIndex = nextPlayer;
-            this.startTurnTimer();
-            this.onStateChange?.();
-            return;
-        }
-        
+        // EXIT POINT 2: Betting round complete
+        // If betting round is complete, we MUST advance phase
         if (bettingRoundComplete) {
             console.log(`[Table ${this.name}] Betting round complete - advancing phase. Last raiser: ${this.lastRaiserIndex}, Current: ${this.currentPlayerIndex}, Next: ${nextPlayer}, HasPassed: ${this.hasPassedLastRaiser}, All equalized: ${allBetsEqualized}`);
             this.hasPassedLastRaiser = false;  // Reset for next betting round
             this.advancePhase();
-            return;
+            return;  // GUARANTEED EXIT - prevents loop
         }
         
-        // If bets aren't equalized, we must continue the betting round
-        // Give the next player a turn
-        if (nextPlayer !== -1) {
-            this.currentPlayerIndex = nextPlayer;
-            const nextPlayerSeat = this.seats[this.currentPlayerIndex];
-            console.log(`[Table ${this.name}] Turn: ${nextPlayerSeat?.name} (seat ${this.currentPlayerIndex}, isBot: ${nextPlayerSeat?.isBot}, currentBet: ${nextPlayerSeat?.currentBet}/${this.currentBet}, lastRaiser: ${this.lastRaiserIndex}, hasPassed: ${this.hasPassedLastRaiser})`);
-            this.startTurnTimer();
-            
-            // CRITICAL: Broadcast state so client knows it's their turn! (Issue #58)
-            this.onStateChange?.();
+        // EXIT POINT 3: Continue to next player (DEFAULT case)
+        // If we reach here:
+        // 1. nextPlayer !== -1 (checked in EXIT POINT 1)
+        // 2. bettingRoundComplete === false (didn't return in EXIT POINT 2)
+        // 3. Therefore we MUST continue to next player
+        // This is the ONLY remaining path - guaranteed to execute
+        
+        if (allBetsEqualized && !bettingRoundComplete) {
+            // All bets equalized but round not complete - give next player their turn
+            console.log(`[Table ${this.name}] All bets equalized but round not complete - continuing to next player. Current: ${this.currentPlayerIndex}, Next: ${nextPlayer}, LastRaiser: ${this.lastRaiserIndex}`);
         } else {
-            // This shouldn't happen if betting is active, but handle it
-            console.warn(`[Table ${this.name}] WARNING: nextPlayer is -1 but bets not equalized. All equalized: ${allBetsEqualized}. Forcing phase advance.`);
-            this.hasPassedLastRaiser = false;  // Reset
-            this.advancePhase();
+            // Bets not equalized - continue betting round
+            console.log(`[Table ${this.name}] Bets not equalized - continuing betting round. Current: ${this.currentPlayerIndex}, Next: ${nextPlayer}`);
         }
+        
+        // GUARANTEED: nextPlayer is valid (checked in EXIT POINT 1)
+        this.currentPlayerIndex = nextPlayer;
+        const nextPlayerSeat = this.seats[this.currentPlayerIndex];
+        console.log(`[Table ${this.name}] Turn: ${nextPlayerSeat?.name} (seat ${this.currentPlayerIndex}, isBot: ${nextPlayerSeat?.isBot}, currentBet: ${nextPlayerSeat?.currentBet}/${this.currentBet}, lastRaiser: ${this.lastRaiserIndex}, hasPassed: ${this.hasPassedLastRaiser})`);
+        this.startTurnTimer();
+        this.onStateChange?.();
+        // GUARANTEED EXIT - function always returns here if we reach this point
     }
 
     advancePhase() {
