@@ -1045,15 +1045,22 @@ class Table {
                 // No one can act - round is complete
                 bettingRoundComplete = true;
             } else if (noRaisesHappened) {
-                // No raises happened - everyone checked
-                // Round is complete when we've passed the big blind (or dealer) once
-                // Check if we've wrapped around: nextPlayer is at or before the bbIndex/dealer
-                const hasCompletedRound = nextPlayer === bbIndex || 
-                                         nextPlayer === this.dealerIndex ||
-                                         (this.currentPlayerIndex > bbIndex && nextPlayer <= bbIndex) ||
-                                         (this.currentPlayerIndex > this.dealerIndex && nextPlayer <= this.dealerIndex);
-                bettingRoundComplete = hasCompletedRound;
-                console.log(`[Table ${this.name}] No raises - checking if round complete. Current: ${this.currentPlayerIndex}, Next: ${nextPlayer}, BB: ${bbIndex}, Dealer: ${this.dealerIndex}, Complete: ${hasCompletedRound}`);
+                // No raises happened - everyone checked/called
+                // CRITICAL FIX: Pre-flop is special - round completes when we return to BB (last raiser)
+                // Post-flop: round completes when we return to dealer (last raiser)
+                // The key is: if all bets equalized AND we're about to return to the last raiser, round is complete
+                if (this.phase === GAME_PHASES.PRE_FLOP) {
+                    // Pre-flop: round completes when next player would be BB (the last raiser, since no one raised)
+                    bettingRoundComplete = nextPlayer === bbIndex || 
+                                         (this.currentPlayerIndex === bbIndex && nextPlayer !== bbIndex) ||
+                                         (this.currentPlayerIndex > bbIndex && nextPlayer <= bbIndex);
+                } else {
+                    // Post-flop: round completes when next player would be dealer/first to act
+                    bettingRoundComplete = nextPlayer === this.lastRaiserIndex || 
+                                         (this.currentPlayerIndex === this.lastRaiserIndex && nextPlayer !== this.lastRaiserIndex) ||
+                                         (this.currentPlayerIndex > this.lastRaiserIndex && nextPlayer <= this.lastRaiserIndex);
+                }
+                console.log(`[Table ${this.name}] No raises - checking if round complete. Current: ${this.currentPlayerIndex}, Next: ${nextPlayer}, BB: ${bbIndex}, Dealer: ${this.dealerIndex}, LastRaiser: ${this.lastRaiserIndex}, Complete: ${bettingRoundComplete}`);
             } else {
                 // Someone raised - must have passed last raiser AND be about to return to them
                 // CRITICAL FIX: Pre-flop is special - big blind ALWAYS gets LAST action
