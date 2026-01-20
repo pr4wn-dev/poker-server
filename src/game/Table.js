@@ -1068,19 +1068,21 @@ class Table {
                 // If someone raises, they become the last raiser, but BB still needs their turn
                 // Round completes when: we've passed BB AND passed the last raiser (if different) AND are about to return to last raiser
                 if (this.phase === GAME_PHASES.PRE_FLOP) {
-                    // Pre-flop: BB always gets LAST action
-                    // If someone raised after BB, they become lastRaiser, but BB still needs their turn
-                    // Round completes when:
-                    // 1. All bets equalized
-                    // 2. We've passed BB at least once (proves BB got their turn)
-                    // 3. We've passed the last raiser at least once (proves everyone acted)
-                    // 4. Next player would be the last raiser (completed full round)
-                    const hasPassedBB = this.currentPlayerIndex > bbIndex || (this.currentPlayerIndex < bbIndex && nextPlayer !== -1 && nextPlayer > bbIndex) || (this.currentPlayerIndex === bbIndex && nextPlayer !== bbIndex);
-                    const hasPassedRaiser = this.hasPassedLastRaiser || (this.lastRaiserIndex === bbIndex && hasPassedBB);
+                    // Pre-flop: Round completes when we've passed last raiser AND about to return to them
+                    // The hasPassedLastRaiser flag already tracks if we've completed a full round
+                    bettingRoundComplete = this.hasPassedLastRaiser && nextPlayer === this.lastRaiserIndex;
                     
-                    bettingRoundComplete = hasPassedBB && hasPassedRaiser && nextPlayer === this.lastRaiserIndex;
+                    // Special case: If BB is the last raiser (no one raised after them), 
+                    // round completes when we're about to return to BB after everyone acted
+                    if (!bettingRoundComplete && this.lastRaiserIndex === bbIndex) {
+                        // Check if we've passed BB (everyone has acted)
+                        const hasPassedBB = this.currentPlayerIndex > bbIndex || 
+                                          (this.currentPlayerIndex < bbIndex && nextPlayer > bbIndex) ||
+                                          (this.currentPlayerIndex === bbIndex && nextPlayer !== bbIndex);
+                        bettingRoundComplete = hasPassedBB && nextPlayer === bbIndex;
+                    }
                     
-                    console.log(`[Table ${this.name}] Pre-flop betting check: hasPassedBB=${hasPassedBB}, hasPassedRaiser=${hasPassedRaiser}, nextPlayer=${nextPlayer}, lastRaiser=${this.lastRaiserIndex}, BB=${bbIndex}, complete=${bettingRoundComplete}`);
+                    console.log(`[Table ${this.name}] Pre-flop with raises - hasPassedLastRaiser=${this.hasPassedLastRaiser}, nextPlayer=${nextPlayer}, lastRaiser=${this.lastRaiserIndex}, BB=${bbIndex}, complete=${bettingRoundComplete}`);
                 } else {
                     // Post-flop: normal betting round rules
                     bettingRoundComplete = this.hasPassedLastRaiser && nextPlayer === this.lastRaiserIndex;
