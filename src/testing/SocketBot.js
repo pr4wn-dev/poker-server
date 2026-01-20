@@ -199,28 +199,39 @@ class SocketBot {
      * Handle incoming table state
      */
     _handleTableState(state) {
-        this.gameState = state;
-        
-        // Check if it's our turn
-        const wasMyTurn = this.isMyTurn;
-        this.isMyTurn = state.currentPlayerId === this.userId;
-        
-        this.log('STATE', `Phase: ${state.phase}, Pot: ${state.pot}, Current: ${state.currentPlayerId}, MyTurn: ${this.isMyTurn}`, {
-            phase: state.phase,
-            pot: state.pot,
-            currentBet: state.currentBet,
-            myTurn: this.isMyTurn,
-            turnTimeRemaining: state.turnTimeRemaining
-        });
-        
-        // If it just became our turn, make a decision
-        if (this.isMyTurn && !wasMyTurn) {
-            this._scheduleAction();
-        }
-        
-        // Auto-ready during ready_up phase
-        if (state.phase === 'ready_up') {
-            setTimeout(() => this.ready(), this._getRandomDelay());
+        try {
+            this.gameState = state;
+            
+            // Check if it's our turn
+            const wasMyTurn = this.isMyTurn;
+            this.isMyTurn = state.currentPlayerId === this.userId;
+            
+            // Log EVERY state during active phases for debugging
+            const isActiveBettingPhase = ['preflop', 'flop', 'turn', 'river'].includes(state.phase);
+            if (isActiveBettingPhase || state.phase === 'ready_up' || state.phase === 'countdown') {
+                this.log('STATE', `Phase: ${state.phase}, Pot: ${state.pot}, CurrentPlayerId: ${state.currentPlayerId}, MyUserId: ${this.userId}, MyTurn: ${this.isMyTurn}`, {
+                    phase: state.phase,
+                    pot: state.pot,
+                    currentBet: state.currentBet,
+                    myTurn: this.isMyTurn,
+                    turnTimeRemaining: state.turnTimeRemaining,
+                    currentPlayerId: state.currentPlayerId,
+                    myUserId: this.userId
+                });
+            }
+            
+            // If it just became our turn, make a decision
+            if (this.isMyTurn && !wasMyTurn) {
+                this.log('ACTION', `>>> IT'S MY TURN! Scheduling action...`);
+                this._scheduleAction();
+            }
+            
+            // Auto-ready during ready_up phase
+            if (state.phase === 'ready_up') {
+                setTimeout(() => this.ready(), this._getRandomDelay());
+            }
+        } catch (error) {
+            this.log('ERROR', `_handleTableState CRASHED: ${error.message}`, { error: error.stack });
         }
     }
     
