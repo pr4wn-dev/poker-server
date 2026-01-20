@@ -31,6 +31,11 @@ class BotManager {
             return { success: false, error: 'Table not found' };
         }
         
+        // CRITICAL: If buyIn was passed as 0 or undefined, use table's buyIn setting
+        // This ensures bots get correct chips for the table they're joining
+        const actualBuyIn = buyIn > 0 ? buyIn : (table.buyIn || 20000000);
+        console.log(`[BotManager] inviteBot called: profile=${botProfile}, requestedBuyIn=${buyIn}, tableBuyIn=${table.buyIn}, actualBuyIn=${actualBuyIn}`);
+        
         // Only table creator can invite bots
         if (table.creatorId !== inviterId) {
             return { success: false, error: 'Only the table creator can invite bots' };
@@ -64,9 +69,10 @@ class BotManager {
         
         // Create bot
         const bot = createBot(botProfile);
-        bot.chips = buyIn;
+        bot.chips = actualBuyIn;  // Use actualBuyIn, not the parameter
         bot.seatIndex = emptySeat;
         bot.tableId = tableId;
+        console.log(`[BotManager] Bot ${bot.name} created with ${actualBuyIn} chips at seat ${emptySeat}`);
         
         // Get list of human players who need to approve
         const humanPlayers = table.seats

@@ -136,6 +136,7 @@ class GameManager {
 
         // Check if player has enough chips for the buy-in
         const buyIn = table.buyIn || 20000000;
+        console.log(`[GameManager] joinTable: player=${player.name}, table.buyIn=${table.buyIn}, usingBuyIn=${buyIn}, practiceMode=${table.practiceMode}`);
         let isPracticePlayer = false;
         
         if (player.chips < buyIn) {

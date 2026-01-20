@@ -146,10 +146,25 @@ class SimulationManager {
         const blindIncreaseInterval = options.blindIncreaseInterval !== undefined 
             ? options.blindIncreaseInterval : randomSettings.blindIncreaseInterval;
         
-        this.log('INFO', 'Starting simulation with RANDOM settings...', {
+        // Log ACTUAL values being used (not randomSettings which may differ!)
+        this.log('INFO', 'Starting simulation with ACTUAL settings...', {
             creatorId,
-            ...randomSettings,
-            socketBotRatio
+            tableName,
+            maxPlayers,
+            smallBlind,
+            bigBlind,
+            buyIn,  // ACTUAL buy-in being used
+            turnTimeLimit,
+            blindIncreaseInterval,
+            socketBotRatio,
+            source: {
+                tableName: options.tableName ? 'client' : 'random',
+                maxPlayers: options.maxPlayers ? 'client' : 'random',
+                smallBlind: options.smallBlind ? 'client' : 'random',
+                bigBlind: options.bigBlind ? 'client' : 'random',
+                buyIn: options.buyIn ? 'client' : 'random',
+                turnTimeLimit: options.turnTimeLimit ? 'client' : 'random'
+            }
         });
         
         // Create the table in practice mode
@@ -176,8 +191,14 @@ class SimulationManager {
             return { success: false, error: 'Failed to create table' };
         }
         
-        // Verify isSimulation flag was set
-        this.log('INFO', 'Table isSimulation flag', { tableId: table.id, isSimulation: table.isSimulation });
+        // Verify table settings were set correctly
+        this.log('INFO', 'Table created with settings', { 
+            tableId: table.id, 
+            isSimulation: table.isSimulation,
+            tableBuyIn: table.buyIn,  // VERIFY this matches our buyIn
+            requestedBuyIn: buyIn,
+            match: table.buyIn === buyIn
+        });
         
         const tableId = table.id;
         
