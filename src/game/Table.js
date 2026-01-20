@@ -2023,13 +2023,15 @@ class Table {
             seats: this.seats.map((seat, index) => {
                 if (!seat) return null;
                 
-                // Spectators never see hole cards (except showdown)
+                // Spectators never see hole cards (except showdown) - UNLESS simulation mode
                 // Players only see their own cards (except showdown)
                 // During showdown, only show cards of players who are still in (not folded)
-                const canSeeCards = !isSpectating && (
-                    seat.playerId === forPlayerId || 
-                    (this.phase === GAME_PHASES.SHOWDOWN && !seat.isFolded)
-                );
+                // SIMULATION MODE: Spectators (including creator) can see ALL cards for debugging
+                const canSeeCards = (this.isSimulation && isSpectating) || 
+                    (!isSpectating && (
+                        seat.playerId === forPlayerId || 
+                        (this.phase === GAME_PHASES.SHOWDOWN && !seat.isFolded)
+                    ));
                 
                 // FIX: Ensure cards are preserved - don't lose them if array is null/undefined
                 let cards = [];
