@@ -3275,3 +3275,24 @@ The game is a skeleton. Previous sessions marked things as "working" but actual 
 **Why not caught earlier:** Normal mode rarely has folded players visible long enough; simulation's rapid state updates exposed the missing cleanup.
 **Files:** poker-client-unity/Assets/Scripts/UI/Components/PlayerSeat.cs
 
+## Feature #118: Fast Mode Simulation + Auto-Restart
+**Date:** 2026-01-20
+**Request:** Speed up simulation to play more games faster, auto-restart when a game ends.
+**Implementation:**
+1. **Fast Mode (10x Speed):**
+   - Socket bots: 50-200ms delays instead of 800-2500ms
+   - Ready-up: 5 seconds instead of 60
+   - Countdown: 3 seconds instead of 10
+   - Turn timer: max 5 seconds
+   - Blind increases: every 30 seconds
+   - Chaos mode disabled (no random disconnects in fast mode)
+2. **Auto-Restart:**
+   - Detects when only 1 player has chips (game over)
+   - Resets all players to starting buy-in
+   - Auto-starts new game
+   - Tracks games played per simulation
+   - Max 100 games before auto-stop
+3. **Spectators:** Stay connected watching games continuously
+4. **Control:** `set_simulation_speed { fastMode: true/false }` socket event
+**Files:** src/testing/SimulationManager.js, src/testing/SocketBot.js, src/sockets/SocketHandler.js
+
