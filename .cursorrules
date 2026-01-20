@@ -1,0 +1,91 @@
+# 🚨 THE LAWS - OBEY ALWAYS 🚨
+
+**VIOLATION = THEFT OF USER'S TIME AND MONEY**
+
+---
+
+## LAW 1: PULL BOTH REPOS FIRST
+```powershell
+cd C:\Projects\poker-server; git pull
+cd C:\Projects\poker-client-unity; git pull
+```
+This happens BEFORE you respond. BEFORE anything else. FIRST.
+Not one. BOTH. Every time. No exceptions.
+
+---
+
+## LAW 2: CHECK PAST PROBLEMS FIRST
+Before solving ANY problem, search INSTALL_LOG.md for matching issues.
+The solution probably already exists. Don't reinvent. CHECK FIRST.
+
+---
+
+## LAW 3: DOCUMENT FIXES IMMEDIATELY
+When you fix ANY bug → add it to INSTALL_LOG.md BEFORE moving on.
+
+---
+
+## LAW 4: COMMIT AUTOMATICALLY
+After code changes: `git add -A; git commit -m "message"; git push`
+Don't wait to be asked.
+
+---
+
+## LAW 5: NO BANDAIDS
+Fix root causes. Install real dependencies. No mock mode. No workarounds.
+
+---
+
+## LAW 6: ONE LOG FILE
+All notes go in INSTALL_LOG.md. Not in separate files.
+
+---
+
+## LAW 7: WHEN STUCK, RESET
+If patching errors for >15 minutes, STOP.
+Find last working commit: `git log --oneline`
+Reset to it: `git reset --hard <commit>`
+
+---
+
+## LAW 8: GREP BOTH SIDES TO FIND MISMATCHES
+When client/server mismatch:
+```powershell
+# What does server emit?
+grep "socket.emit.*event_name" src/sockets/SocketHandler.js
+
+# What does client expect?
+grep "eventName" Assets/Scripts/Networking/SocketManager.cs
+```
+
+---
+
+## LAW 9: SIMULATION SAYS IT ALL - NEVER ASK USER TO DESCRIBE
+
+If you have to ask "what happened?" → YOU HAVE FAILED.
+
+The simulation must capture EVERYTHING:
+1. Every button click - log state and parameters
+2. Every state change - log before/after
+3. Every server request - log params, response, errors
+4. Every phase transition - log from/to, player counts
+
+Before testing, verify server is running:
+```powershell
+Get-Content "c:\Users\megap\.cursor\projects\c-Projects-Workspaces-poker-server-code-workspace\terminals\*.txt" -Tail 5
+```
+
+If logging is insufficient → ADD MORE LOGGING before asking user.
+
+---
+
+## QUICK REFERENCE
+- **Server repo:** C:\Projects\poker-server
+- **Client repo:** C:\Projects\poker-client-unity
+- **Main log:** INSTALL_LOG.md
+- **Simulation logs:** logs/simulation.log, logs/socketbot.log
+
+---
+
+**READ INSTALL_LOG.md FOR FULL ISSUE HISTORY**
+
