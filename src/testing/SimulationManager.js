@@ -448,17 +448,49 @@ class SimulationManager {
         }
         
         // Reset all players to starting buy-in
-        for (const seat of table.seats) {
-            if (seat) {
-                seat.chips = buyIn;
-                seat.isFolded = false;
-                seat.isAllIn = false;
-                seat.isActive = true;  // CRITICAL: Re-activate eliminated players!
-                seat.currentBet = 0;
-                seat.totalBet = 0;
-                seat.cards = [];
-                seat.isReady = false; // Reset ready status for new game
+        // Track which socket bots are still connected
+        const connectedSocketBotIds = new Set(
+            simulation.socketBots
+                .filter(bot => bot.socket && bot.socket.connected)
+                .map(bot => bot.userId)
+        );
+        
+        // Clean up disconnected socket bots from simulation tracking
+        simulation.socketBots = simulation.socketBots.filter(bot => {
+            if (!bot.socket || !bot.socket.connected) {
+                this.log('WARN', `Removing disconnected socket bot: ${bot.name}`, { userId: bot.userId });
+                return false;
             }
+            return true;
+        });
+        
+        for (let i = 0; i < table.seats.length; i++) {
+            const seat = table.seats[i];
+            if (!seat) continue;
+            
+            // Check if this is a disconnected socket bot
+            const isSocketBot = seat.playerId && seat.playerId.startsWith && !seat.isBot;
+            const isDisconnectedSocketBot = isSocketBot && 
+                !connectedSocketBotIds.has(seat.playerId) && 
+                seat.name && seat.name.startsWith('NetPlayer');
+            
+            if (isDisconnectedSocketBot) {
+                this.log('WARN', `Removing seat for disconnected socket bot: ${seat.name}`, { seatIndex: i });
+                table.seats[i] = null;
+                continue;
+            }
+            
+            // Reset the seat
+            seat.chips = buyIn;
+            seat.isFolded = false;
+            seat.isAllIn = false;
+            seat.isActive = true;  // CRITICAL: Re-activate eliminated players!
+            seat.currentBet = 0;
+            seat.totalBet = 0;
+            seat.cards = [];
+            // CRITICAL FIX: In simulation, all bots (regular and socket) should auto-ready
+            // Regular bots have isBot=true, socket bots don't but we control them
+            seat.isReady = seat.isBot || (seat.name && seat.name.startsWith('NetPlayer'));
         }
         
         // Reset table state completely

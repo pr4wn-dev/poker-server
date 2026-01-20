@@ -208,9 +208,16 @@ class Table {
         this.readyUpStartTime = Date.now();
         
         // Mark all players as not ready initially (except bots - they're always ready)
+        // In simulation mode, ALL players are auto-ready since we control them
         for (const seat of this.seats) {
             if (seat) {
-                seat.isReady = seat.isBot ? true : false;
+                if (this.isSimulation) {
+                    // In simulation, everyone is auto-ready (we control all players)
+                    seat.isReady = true;
+                } else {
+                    // Normal mode: only bots auto-ready
+                    seat.isReady = seat.isBot ? true : false;
+                }
             }
         }
         
