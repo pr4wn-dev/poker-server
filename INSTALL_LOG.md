@@ -3264,3 +3264,14 @@ The game is a skeleton. Previous sessions marked things as "working" but actual 
 **Fix:** Added check for `currentBet === 0` before using 'bet' action. If `currentBet > 0`, use 'raise' instead.
 **Files:** src/game/BotPlayer.js
 
+## Issue #117: Folded Player Card Placeholders Bugging Out (Simulation)
+**Date:** 2026-01-20
+**Symptom:** When players fold in simulation mode, their card placeholders bug out visually. This doesn't happen in normal mode.
+**Root Cause:** `PlayerSeat.SetPlayer()` only called `SetCards()` if cards existed, but had NO else clause to clear cards when: (1) player folds, (2) cards become null/empty. Old card GameObjects persisted and caused visual glitches.
+**Fix:** Added proper card clearing logic:
+- If `isFolded` → `ClearCards()`
+- Else if cards exist → `SetCards()`
+- Else → `ClearCards()`
+**Why not caught earlier:** Normal mode rarely has folded players visible long enough; simulation's rapid state updates exposed the missing cleanup.
+**Files:** poker-client-unity/Assets/Scripts/UI/Components/PlayerSeat.cs
+
