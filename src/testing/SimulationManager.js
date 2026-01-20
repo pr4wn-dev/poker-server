@@ -421,7 +421,9 @@ class SimulationManager {
                 seat.chips = buyIn;
                 seat.isFolded = false;
                 seat.isAllIn = false;
+                seat.isActive = true;  // CRITICAL: Re-activate eliminated players!
                 seat.currentBet = 0;
+                seat.totalBet = 0;
                 seat.cards = [];
                 seat.isReady = false; // Reset ready status for new game
             }
