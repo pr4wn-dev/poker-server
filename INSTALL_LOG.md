@@ -63,6 +63,30 @@ grep "class.*Response" Assets/Scripts/Networking/NetworkModels.cs -A 10
 
 This found the `simulation_started` vs `start_simulation_response` bug in 30 seconds.
 
+## LAW 9: SIMULATION SAYS IT ALL - NEVER ASK USER TO DESCRIBE
+
+The simulation system must capture EVERYTHING. If you have to ask the user "what happened?" or "can you describe the bug?", **YOU HAVE FAILED.**
+
+**Required logging for every feature:**
+1. **Every button click** - log what was clicked, current state, parameters
+2. **Every state change** - log before/after values
+3. **Every server request** - log request params, response, errors
+4. **Every phase transition** - log from/to phase, player counts, timers
+
+**When something bugs out:**
+1. Check server console logs FIRST
+2. Check Unity console logs SECOND
+3. Check simulation.log and socketbot.log THIRD
+4. The logs MUST tell you what went wrong
+
+**Before testing:** Always verify server is running:
+```powershell
+Get-Content "c:\Users\megap\.cursor\projects\c-Projects-Workspaces-poker-server-code-workspace\terminals\*.txt" -Tail 5
+# Should show "POKER SERVER ONLINE"
+```
+
+If logging is insufficient to diagnose a problem → ADD MORE LOGGING before asking user.
+
 ---
 **SESSION 13 VIOLATION: I broke Laws 1 and 7. Cost: 2+ hours, thousands of tokens, user's trust.**
 
