@@ -78,6 +78,26 @@ class SocketBot {
             lastSeenPlayers: new Map() // playerId -> last seen state
         };
         
+        // Client-side timing markers (for correlating issues with animations/audio)
+        this.clientTiming = {
+            // Audio timing
+            readyToRumbleStart: null,    // When "Ready to Rumble" would start (7 sec duration)
+            readyToRumbleEnd: null,      // When it would end
+            countdownBeepsStart: null,   // When countdown beeps would start
+            
+            // Animation timing
+            cardDealStart: null,         // When card dealing animation starts
+            lastActionTime: null,        // When last action animation played
+            showdownStart: null,         // When showdown reveal animation starts
+            winnerCelebrationStart: null,// When winner celebration plays
+            
+            // Critical windows (when issues are likely related to client-side)
+            criticalWindows: [],         // Array of { type, start, end, description }
+            
+            // Error correlation
+            errorsInCriticalWindows: []  // Errors that occurred during animations/audio
+        };
+        
         // Logging
         this.logFile = options.logFile || path.join(__dirname, '../../logs/socketbot.log');
         this.enableLogging = options.enableLogging !== false;
@@ -196,6 +216,109 @@ class SocketBot {
     }
     
     /**
+     * Track client-side timing windows for error correlation
+     */
+    _trackClientTiming(state) {
+        const now = Date.now();
+        const phase = state.phase;
+        const lastPhase = this.turnTracking.turnHistory.length > 0 
+            ? this.turnTracking.turnHistory[this.turnTracking.turnHistory.length - 1].phase 
+            : null;
+        
+        // COUNTDOWN phase started - Ready to Rumble audio would play
+        if (phase === 'countdown' && lastPhase !== 'countdown') {
+            this.clientTiming.readyToRumbleStart = now;
+            this.clientTiming.readyToRumbleEnd = now + 7000; // 7 second audio
+            this.clientTiming.countdownBeepsStart = now + 7000; // Beeps after audio
+            
+            this._addCriticalWindow('AUDIO_READY_TO_RUMBLE', now, now + 7000, 
+                'Ready to Rumble audio playing - UI may be blocked');
+            this._addCriticalWindow('AUDIO_COUNTDOWN_BEEPS', now + 7000, now + 17000, 
+                'Countdown beeps playing (10 seconds)');
+                
+            this.log('TIMING', 'Countdown started - audio/animation window open', {
+                readyToRumble: '0-7s',
+                countdownBeeps: '7-17s'
+            });
+        }
+        
+        // PREFLOP started - card dealing animation
+        if (phase === 'preflop' && lastPhase === 'countdown') {
+            this.clientTiming.cardDealStart = now;
+            this._addCriticalWindow('ANIMATION_CARD_DEAL', now, now + 3000, 
+                'Card dealing animation - rapid state updates');
+                
+            this.log('TIMING', 'Cards being dealt - animation window', { duration: '~3s' });
+        }
+        
+        // SHOWDOWN - reveal animations
+        if (phase === 'showdown' && lastPhase !== 'showdown') {
+            this.clientTiming.showdownStart = now;
+            this._addCriticalWindow('ANIMATION_SHOWDOWN', now, now + 5000, 
+                'Showdown card reveal animations');
+                
+            this.log('TIMING', 'Showdown started - reveal animations', { duration: '~5s' });
+        }
+        
+        // Track action timing
+        if (state.currentPlayerId && state.currentPlayerId !== this.userId) {
+            // Someone else is acting - their action animation will play
+            this.clientTiming.lastActionTime = now;
+        }
+    }
+    
+    /**
+     * Add a critical timing window
+     */
+    _addCriticalWindow(type, start, end, description) {
+        this.clientTiming.criticalWindows.push({ type, start, end, description });
+        
+        // Keep only last 20 windows
+        if (this.clientTiming.criticalWindows.length > 20) {
+            this.clientTiming.criticalWindows.shift();
+        }
+    }
+    
+    /**
+     * Check if current time is in a critical window (for error correlation)
+     */
+    _isInCriticalWindow() {
+        const now = Date.now();
+        return this.clientTiming.criticalWindows.filter(w => now >= w.start && now <= w.end);
+    }
+    
+    /**
+     * Log an error with critical window correlation
+     */
+    _logErrorWithCorrelation(errorType, message, data = {}) {
+        const activeWindows = this._isInCriticalWindow();
+        
+        if (activeWindows.length > 0) {
+            // Error occurred during a critical animation/audio window
+            const correlation = {
+                errorType,
+                message,
+                timestamp: Date.now(),
+                activeWindows: activeWindows.map(w => ({
+                    type: w.type,
+                    description: w.description,
+                    timeIntoWindow: Date.now() - w.start
+                }))
+            };
+            
+            this.clientTiming.errorsInCriticalWindows.push(correlation);
+            
+            this.log('ERROR_CORRELATED', `${errorType} during ${activeWindows[0].type}`, {
+                ...data,
+                correlation: activeWindows.map(w => w.type).join(', '),
+                possibleCause: activeWindows[0].description
+            });
+        } else {
+            this.log('ERROR', message, data);
+        }
+    }
+    
+    /**
      * Verify turn logic is working correctly
      */
     _verifyTurnLogic(state) {
@@ -252,7 +375,8 @@ class SocketBot {
                 if (duration > 5000) { // More than 5 seconds stuck
                     if (!this.turnTracking.stuckTurnDetected) {
                         this.turnTracking.stuckTurnDetected = true;
-                        this.log('VERIFY_FAIL', `STUCK TURN DETECTED: ${last3[0].currentPlayerId} for ${duration}ms`, {
+                        this._logErrorWithCorrelation('STUCK_TURN', 
+                            `STUCK TURN DETECTED: ${last3[0].currentPlayerId} for ${duration}ms`, {
                             playerId: last3[0].currentPlayerId,
                             phase: last3[0].phase,
                             duration
@@ -466,6 +590,9 @@ class SocketBot {
         try {
             this.gameState = state;
             this.eventsReceived.tableState++;
+            
+            // CLIENT TIMING: Track when animations/audio would be playing
+            this._trackClientTiming(state);
             
             // TURN VERIFICATION: Track turn changes
             this._verifyTurnLogic(state);
@@ -709,6 +836,11 @@ class SocketBot {
                 invalidTurnDetected: this.turnTracking.invalidTurnDetected,
                 turnAfterDisconnect: this.turnTracking.turnAfterDisconnect,
                 turnOnReconnect: this.turnTracking.turnOnReconnect
+            },
+            clientTimingCorrelation: {
+                errorsInCriticalWindows: this.clientTiming.errorsInCriticalWindows.length,
+                criticalWindowsTracked: this.clientTiming.criticalWindows.length,
+                errorDetails: this.clientTiming.errorsInCriticalWindows
             }
         };
     }
@@ -754,6 +886,14 @@ class SocketBot {
             } else {
                 issues.push('DISCONNECT_ON_TURN: Disconnected on my turn and failed to reconnect');
             }
+        }
+        
+        // Client timing correlation issues
+        if (summary.clientTimingCorrelation.errorsInCriticalWindows > 0) {
+            const errorTypes = summary.clientTimingCorrelation.errorDetails
+                .map(e => `${e.errorType} during ${e.activeWindows[0]?.type}`)
+                .join(', ');
+            issues.push(`ANIMATION_CORRELATED: ${summary.clientTimingCorrelation.errorsInCriticalWindows} errors during animations/audio: ${errorTypes}`);
         }
         
         if (issues.length > 0) {
