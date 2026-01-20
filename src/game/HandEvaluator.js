@@ -47,8 +47,21 @@ class HandEvaluator {
      * Evaluate exactly 5 cards
      */
     static evaluateFiveCards(cards) {
-        const values = cards.map(c => RANK_VALUES[c.rank]).sort((a, b) => b - a);
-        const suits = cards.map(c => c.suit);
+        // CRITICAL: Validate cards before processing
+        if (!cards || cards.length !== 5) {
+            return { rank: 0, name: 'Invalid', values: [] };
+        }
+        
+        // Filter out invalid cards (null/undefined or missing rank/suit)
+        const validCards = cards.filter(c => c && c.rank && c.suit && RANK_VALUES[c.rank]);
+        if (validCards.length !== 5) {
+            console.error(`[HandEvaluator] Invalid cards passed: expected 5, got ${validCards.length}`);
+            console.error(`[HandEvaluator] Cards:`, cards);
+            return { rank: 0, name: 'Invalid', values: [] };
+        }
+        
+        const values = validCards.map(c => RANK_VALUES[c.rank]).sort((a, b) => b - a);
+        const suits = validCards.map(c => c.suit);
         
         const isFlush = suits.every(s => s === suits[0]);
         const isStraight = this.checkStraight(values);
@@ -124,14 +137,25 @@ class HandEvaluator {
         const kickers = [];
 
         const sortedValues = Object.entries(counts)
-            .sort((a, b) => b[1] - a[1] || b[0] - a[0]);
+            .sort((a, b) => {
+                // Sort by count first (descending), then by value (descending)
+                const countDiff = parseInt(b[1]) - parseInt(a[1]);
+                if (countDiff !== 0) return countDiff;
+                return parseInt(b[0]) - parseInt(a[0]);
+            });
 
         for (const [value, count] of sortedValues) {
             const v = parseInt(value);
-            if (count === 4) four = v;
-            else if (count === 3) three = v;
-            else if (count === 2) pairs.push(v);
-            else kickers.push(v);
+            const countNum = parseInt(count);
+            if (countNum === 4) {
+                four = v;
+            } else if (countNum === 3) {
+                three = v;
+            } else if (countNum === 2) {
+                pairs.push(v);
+            } else if (countNum === 1) {
+                kickers.push(v);
+            }
         }
 
         pairs.sort((a, b) => b - a);

@@ -1085,8 +1085,23 @@ class Table {
             .filter(p => p !== null);
 
         // Evaluate hands
+        // CRITICAL: Filter out null/undefined cards before evaluation
         for (const player of activePlayers) {
-            player.handResult = HandEvaluator.evaluate([...player.cards, ...this.communityCards]);
+            // Filter out any null/undefined cards (shouldn't happen, but safety check)
+            const playerCards = (player.cards || []).filter(c => c && c.rank && c.suit);
+            const communityCards = (this.communityCards || []).filter(c => c && c.rank && c.suit);
+            
+            if (playerCards.length < 2 || communityCards.length < 3) {
+                console.error(`[Table ${this.name}] Invalid cards for ${player.name}: player=${playerCards.length}, community=${communityCards.length}`);
+                player.handResult = { rank: 0, name: 'Invalid', values: [] };
+                continue;
+            }
+            
+            const allCards = [...playerCards, ...communityCards];
+            console.log(`[Table ${this.name}] Evaluating hand for ${player.name}: ${allCards.map(c => `${c.rank}${c.suit}`).join(' ')}`);
+            
+            player.handResult = HandEvaluator.evaluate(allCards);
+            console.log(`[Table ${this.name}] ${player.name} has: ${player.handResult.name} (rank ${player.handResult.rank})`);
         }
 
         // Calculate and award side pots
