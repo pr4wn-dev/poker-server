@@ -39,6 +39,58 @@ class SimulationManager {
     }
     
     /**
+     * Generate random table settings for simulation
+     * Always uses practice mode so bots get chips
+     */
+    _generateRandomSettings() {
+        // Random table names
+        const tableNames = [
+            'Chaos Test', 'Bot Battle', 'Stress Test', 'Showdown', 'All-In Madness',
+            'High Stakes', 'Low Roller', 'Mixed Nuts', 'River Rats', 'Bluff City',
+            'Fold Mountain', 'Call Station', 'Raise Factory', 'Check Valley', 'Pot Luck'
+        ];
+        
+        // Random max players (3-9)
+        const maxPlayers = Math.floor(Math.random() * 7) + 3; // 3 to 9
+        
+        // Random blind levels
+        const blindLevels = [
+            { small: 5, big: 10 },
+            { small: 10, big: 20 },
+            { small: 25, big: 50 },
+            { small: 50, big: 100 },
+            { small: 100, big: 200 },
+            { small: 250, big: 500 },
+            { small: 500, big: 1000 },
+            { small: 1000, big: 2000 }
+        ];
+        const blindLevel = blindLevels[Math.floor(Math.random() * blindLevels.length)];
+        
+        // Random buy-in (20x to 200x big blind)
+        const buyInMultiplier = Math.floor(Math.random() * 181) + 20; // 20 to 200
+        const buyIn = blindLevel.big * buyInMultiplier;
+        
+        // Random turn time (5-30 seconds)
+        const turnTimeSeconds = Math.floor(Math.random() * 26) + 5; // 5 to 30
+        const turnTimeLimit = turnTimeSeconds * 1000;
+        
+        // Random blind increase interval (0=OFF, or 5-20 minutes)
+        const useBlindIncrease = Math.random() > 0.5; // 50% chance
+        const blindIncreaseMinutes = useBlindIncrease ? Math.floor(Math.random() * 16) + 5 : 0; // 5 to 20 or 0
+        const blindIncreaseInterval = blindIncreaseMinutes * 60 * 1000;
+        
+        return {
+            tableName: tableNames[Math.floor(Math.random() * tableNames.length)],
+            maxPlayers,
+            smallBlind: blindLevel.small,
+            bigBlind: blindLevel.big,
+            buyIn,
+            turnTimeLimit,
+            blindIncreaseInterval
+        };
+    }
+    
+    /**
      * Start a simulation
      * @param {Object} options - Simulation options
      * @param {string} options.creatorId - User ID of the creator (will spectate)
@@ -51,19 +103,25 @@ class SimulationManager {
      * @param {number} options.socketBotRatio - Ratio of socket bots (0-1, e.g. 0.5 = 50% socket bots)
      */
     async startSimulation(options) {
-        const {
-            creatorId,
-            tableName = 'Simulation Table',
-            maxPlayers = 6,
-            smallBlind = 25,
-            bigBlind = 50,
-            buyIn = 20000000,
-            turnTimeLimit = 5000, // Faster for simulation
-            blindIncreaseInterval = 0, // Round timer in ms (0 = OFF)
-            socketBotRatio = 0.5
-        } = options;
+        const { creatorId, socketBotRatio = 0.5 } = options;
         
-        this.log('INFO', 'Starting simulation...', options);
+        // Generate random table settings for simulation
+        const randomSettings = this._generateRandomSettings();
+        
+        // Use random settings (ignore user-provided values for simulation)
+        const tableName = randomSettings.tableName;
+        const maxPlayers = randomSettings.maxPlayers;
+        const smallBlind = randomSettings.smallBlind;
+        const bigBlind = randomSettings.bigBlind;
+        const buyIn = randomSettings.buyIn;
+        const turnTimeLimit = randomSettings.turnTimeLimit;
+        const blindIncreaseInterval = randomSettings.blindIncreaseInterval;
+        
+        this.log('INFO', 'Starting simulation with RANDOM settings...', {
+            creatorId,
+            ...randomSettings,
+            socketBotRatio
+        });
         
         // Create the table in practice mode
         // GameManager.createTable returns the table object directly (not { success, tableId, table })
