@@ -3396,3 +3396,21 @@ The game is a skeleton. Previous sessions marked things as "working" but actual 
  3 .   B o t M a n a g e r . c h e c k B o t T u r n :   S k i p   n o n - b e t t i n g   p h a s e s   ( s h o w d o w n ,   w a i t i n g ,   e t c . ) 
  4 .   E l i m i n a t i o n   c h e c k :   S k i p   p l a y e r s   a l r e a d y   e l i m i n a t e d   ( w a s A l r e a d y E l i m i n a t e d )  
  
+ 
+ # # #   I s s u e   # 1 2 6 :   S i m u l a t i o n   R e s t a r t   S t u c k   i n   R e a d y - U p 
+ * * D a t e : * *   2 0 2 6 - 0 1 - 2 0   0 5 : 1 8 
+ * * P r o b l e m : * *   A f t e r   s i m u l a t i o n   G a m e   1   c o m p l e t e d ,   G a m e   2   g o t   s t u c k   i n   r e a d y _ u p   p h a s e   f o r   6 0 s   w a i t i n g   f o r   d i s c o n n e c t e d   s o c k e t   b o t s   t o   r e a d y   u p .   U s e r   w a s   a s k e d   t o   l e a v e   t a b l e   a f t e r   t i m e o u t . 
+ 
+ * * R o o t   C a u s e : * * 
+ 1 .   ` s t a r t R e a d y U p ( ) `   r e s e t s   ` i s R e a d y   =   f a l s e `   f o r   a l l   n o n - b o t s 
+ 2 .   E l i m i n a t e d   s o c k e t   b o t s   d i s c o n n e c t   b u t   t h e i r   s e a t s   r e m a i n 
+ 3 .   T a b l e   w a i t s   6 0 s   f o r   t h e m   t o   r e a d y   u p ,   t h e y   n e v e r   r e s p o n d 
+ 4 .   T i m e o u t   k i c k s   r e m a i n i n g   p l a y e r s   t o   s p e c t a t o r s 
+ 
+ * * F i l e s   M o d i f i e d : * *   T a b l e . j s ,   S i m u l a t i o n M a n a g e r . j s 
+ 
+ * * F i x e s : * * 
+ 1 .   ` T a b l e . s t a r t R e a d y U p ( ) ` :   I n   s i m u l a t i o n   m o d e ,   a u t o - r e a d y   A L L   p l a y e r s   ( n o t   j u s t   b o t s ) 
+ 2 .   ` S i m u l a t i o n M a n a g e r . _ r e s t a r t G a m e ( ) ` :   D e t e c t   a n d   r e m o v e   d i s c o n n e c t e d   s o c k e t   b o t   s e a t s 
+ 3 .   N o w   s i m u l a t i o n s   r e s t a r t   i m m e d i a t e l y   w i t h o u t   w a i t i n g  
+ 
