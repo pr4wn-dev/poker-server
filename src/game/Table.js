@@ -481,9 +481,21 @@ class Table {
     startTurnTimer() {
         this.clearTurnTimer();
         
-        if (this.currentPlayerIndex < 0) return;
+        if (this.currentPlayerIndex < 0) {
+            gameLogger.debug(this.name, '[TIMER] startTurnTimer skipped - no current player', { currentPlayerIndex: this.currentPlayerIndex });
+            return;
+        }
         
+        const player = this.seats[this.currentPlayerIndex];
         this.turnStartTime = Date.now();
+        
+        gameLogger.debug(this.name, '[TIMER] Turn timer STARTED', {
+            player: player?.name,
+            seatIndex: this.currentPlayerIndex,
+            turnTimeLimit: this.turnTimeLimit,
+            turnStartTime: this.turnStartTime,
+            phase: this.phase
+        });
         
         this.turnTimeout = setTimeout(() => {
             this.handleTurnTimeout();
@@ -491,10 +503,22 @@ class Table {
     }
     
     clearTurnTimer() {
+        const wasActive = !!this.turnTimeout;
+        const elapsed = this.turnStartTime ? Date.now() - this.turnStartTime : 0;
+        
         if (this.turnTimeout) {
             clearTimeout(this.turnTimeout);
             this.turnTimeout = null;
         }
+        
+        if (wasActive) {
+            gameLogger.debug(this.name, '[TIMER] Turn timer CLEARED', {
+                wasActive,
+                elapsedMs: elapsed,
+                phase: this.phase
+            });
+        }
+        
         this.turnStartTime = null;
     }
     
@@ -507,8 +531,17 @@ class Table {
     
     handleTurnTimeout() {
         const player = this.seats[this.currentPlayerIndex];
-        if (!player) return;
+        if (!player) {
+            gameLogger.debug(this.name, '[TIMER] Timeout triggered but no player at index', { currentPlayerIndex: this.currentPlayerIndex });
+            return;
+        }
         
+        gameLogger.gameEvent(this.name, '[TIMER] TURN TIMEOUT - auto-folding', {
+            player: player.name,
+            seatIndex: this.currentPlayerIndex,
+            turnTimeLimit: this.turnTimeLimit,
+            phase: this.phase
+        });
         console.log(`[Table ${this.name}] ${player.name} timed out - auto-folding`);
         
         // Auto-fold
@@ -534,6 +567,7 @@ class Table {
         this.stopBlindTimer();
         
         if (this.blindIncreaseInterval <= 0) {
+            gameLogger.debug(this.name, '[BLIND_TIMER] Disabled (interval=0)', { blindIncreaseInterval: this.blindIncreaseInterval });
             return; // Blind increases disabled
         }
         
@@ -543,13 +577,23 @@ class Table {
             this.increaseBlinds();
         }, this.blindIncreaseInterval);
         
+        gameLogger.debug(this.name, '[BLIND_TIMER] Started', {
+            blindLevel: this.blindLevel,
+            currentBlinds: `${this.smallBlind}/${this.bigBlind}`,
+            intervalMs: this.blindIncreaseInterval,
+            nextIncreaseAt: new Date(this.nextBlindIncreaseAt).toISOString()
+        });
         console.log(`[Table ${this.name}] Blind timer started - next increase in ${this.blindIncreaseInterval / 60000} minutes`);
     }
     
     stopBlindTimer() {
+        const wasActive = !!this.blindIncreaseTimer;
         if (this.blindIncreaseTimer) {
             clearTimeout(this.blindIncreaseTimer);
             this.blindIncreaseTimer = null;
+        }
+        if (wasActive) {
+            gameLogger.debug(this.name, '[BLIND_TIMER] Stopped', { wasActive });
         }
         this.nextBlindIncreaseAt = null;
     }
@@ -563,12 +607,21 @@ class Table {
     }
     
     increaseBlinds() {
+        const oldBlinds = { small: this.smallBlind, big: this.bigBlind, level: this.blindLevel };
+        
         // Double the blinds
         this.blindLevel++;
         this.smallBlind = this.smallBlind * 2;
         this.bigBlind = this.bigBlind * 2;
         this.minRaise = this.bigBlind;
         
+        gameLogger.gameEvent(this.name, '[BLIND_TIMER] BLINDS INCREASED', {
+            oldLevel: oldBlinds.level,
+            newLevel: this.blindLevel,
+            oldBlinds: `${oldBlinds.small}/${oldBlinds.big}`,
+            newBlinds: `${this.smallBlind}/${this.bigBlind}`,
+            minRaise: this.minRaise
+        });
         console.log(`[Table ${this.name}] BLINDS INCREASED to Level ${this.blindLevel}: ${this.smallBlind}/${this.bigBlind}`);
         
         // Notify via callback
@@ -1788,6 +1841,18 @@ class Table {
             console.log(`[Table ${this.name}] Evaluating hand for ${player.name}: ${uniqueCards.map(c => `${c.rank}${c.suit}`).join(' ')}`);
             
             player.handResult = HandEvaluator.evaluate(uniqueCards);
+            
+            // Detailed hand evaluation logging
+            gameLogger.debug(this.name, '[HAND_EVAL] Hand evaluated', {
+                player: player.name,
+                seatIndex: player.seatIndex,
+                holeCards: playerCards.map(c => `${c.rank}${c.suit}`),
+                communityCards: communityCards.map(c => `${c.rank}${c.suit}`),
+                handName: player.handResult.name,
+                handRank: player.handResult.rank,
+                handValues: player.handResult.values,
+                bestFiveCards: player.handResult.cards?.map(c => `${c.rank}${c.suit}`) || 'N/A'
+            });
             console.log(`[Table ${this.name}] ${player.name} has: ${player.handResult.name} (rank ${player.handResult.rank})`);
         }
 
@@ -1944,12 +2009,35 @@ class Table {
         // CRITICAL: Eliminated players don't get chips back - they're out!
         const seat = this.seats.find(s => s?.playerId === winner.playerId);
         const potAmount = this.pot;
+        const chipsBefore = seat?.chips || 0;
+        
+        gameLogger.gameEvent(this.name, '[POT] Awarding pot (everyone folded)', {
+            winner: winner?.name,
+            potAmount,
+            chipsBefore,
+            seatIndex: seat ? this.seats.indexOf(seat) : -1,
+            isActive: seat?.isActive,
+            phase: this.phase
+        });
         
         if (seat && seat.isActive !== false) {
             // Only award chips to active (non-eliminated) players
             seat.chips += potAmount;
+            
+            gameLogger.gameEvent(this.name, '[POT] Chips awarded', {
+                winner: winner.name,
+                potAmount,
+                chipsBefore,
+                chipsAfter: seat.chips,
+                calculationCheck: chipsBefore + potAmount === seat.chips ? 'CORRECT' : 'ERROR'
+            });
         } else if (seat && seat.isActive === false) {
             // Player is eliminated - don't give them chips
+            gameLogger.gameEvent(this.name, '[POT] ELIMINATED WINNER - pot forfeited', {
+                winner: winner.name,
+                potAmount,
+                reason: 'Player was eliminated'
+            });
             console.log(`[Table ${this.name}] ${seat.name} is eliminated - pot forfeited`);
             // In a real game, this shouldn't happen (eliminated players shouldn't win)
             // But handle it gracefully - pot is lost
