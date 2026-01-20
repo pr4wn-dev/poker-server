@@ -3359,3 +3359,22 @@ The game is a skeleton. Previous sessions marked things as "working" but actual 
  3 .   A d d e d   D E B U G   l o g g i n g   f o r   g a m e - o v e r   c h e c k s 
  4 .   P r e v e n t   r e s t a r t   d u r i n g   a c t i v e   h a n d s  
  
+ 
+ # # #   I s s u e   # 1 2 4 :   I n v a l i d   C a r d s   a t   S h o w d o w n   +   U n k n o w n   W i n n e r 
+ * * D a t e : * *   2 0 2 6 - 0 1 - 2 0   0 4 : 5 9 
+ * * P r o b l e m s : * * 
+ 1 .   ' I n v a l i d   c a r d s   f o r   [ p l a y e r ] :   p l a y e r = 0 ,   c o m m u n i t y = 5 '   -   p l a y e r s   w i t h   0   c a r d s   a t   s h o w d o w n 
+ 2 .   ' U n k n o w n '   w i n n e r   w h e n   g a m e   e n d s 
+ 
+ * * R o o t   C a u s e s : * * 
+ 1 .   I n   s t a r t N e w H a n d ( ) ,   t h e   e l i m i n a t i o n   c h e c k   u s e d   s t a l e   c u r r e n t B e t / t o t a l B e t   v a l u e s   f r o m   P R E V I O U S   h a n d   t o   d e t e r m i n e   i f   p l a y e r   w a s   ' a l l - i n ' .   T h e n   t h e   r e s e t   l o o p   s e t   i s A c t i v e = f a l s e   f o r   0 - c h i p   p l a y e r s .   R e s u l t :   a l l - i n   p l a y e r s   f r o m   p r e v i o u s   h a n d   g o t   n o   c a r d s   d e a l t   i n   n e w   h a n d . 
+ 2 .   W i n n e r   d e t e c t i o n   u s e d   p l a y e r s W i t h C h i p s [ 0 ]   w h i c h   c o u l d   b e   u n d e f i n e d   i f   0   p l a y e r s   h a d   c h i p s 
+ 
+ * * F i l e s   M o d i f i e d : * * 
+ -   p o k e r - s e r v e r :   s r c / g a m e / T a b l e . j s ,   s r c / t e s t i n g / S i m u l a t i o n M a n a g e r . j s 
+ 
+ * * S o l u t i o n : * * 
+ 1 .   C l e a r   c u r r e n t B e t / t o t a l B e t   B E F O R E   e l i m i n a t i o n   c h e c k ,   n o t   a f t e r 
+ 2 .   S i m p l i f i e d   e l i m i n a t i o n   c h e c k   -   0   c h i p s   =   e l i m i n a t e d   ( n o   s t a l e   p o t   c h e c k s ) 
+ 3 .   I m p r o v e d   w i n n e r   d e t e c t i o n   t o   f i n d   p l a y e r   w i t h   m o s t   c h i p s   a s   f a l l b a c k  
+ 

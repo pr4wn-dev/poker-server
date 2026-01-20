@@ -375,20 +375,32 @@ class SimulationManager {
             const activePlayers = currentTable.seats.filter(s => s && s.isActive !== false);
             const playersWithChips = activePlayers.filter(s => s.chips > 0);
             
+            // Find the winner - the player with the most chips
+            // This handles edge cases where playersWithChips might be empty
+            const allSeatedPlayers = currentTable.seats.filter(s => s);
+            const sortedByChips = [...allSeatedPlayers].sort((a, b) => (b.chips || 0) - (a.chips || 0));
+            const likelyWinner = sortedByChips[0];
+            
             this.log('DEBUG', 'Game over check', {
                 tableId,
                 phase: currentTable.phase,
                 activePlayers: activePlayers.length,
                 playersWithChips: playersWithChips.length,
-                playerDetails: activePlayers.map(s => ({ name: s.name, chips: s.chips, isActive: s.isActive }))
+                likelyWinner: likelyWinner?.name,
+                likelyWinnerChips: likelyWinner?.chips,
+                playerDetails: allSeatedPlayers.map(s => ({ name: s.name, chips: s.chips, isActive: s.isActive }))
             });
             
             if (playersWithChips.length <= 1 && activePlayers.length >= 2) {
                 // Game over - one winner! (only if we had a real game with 2+ players)
                 simulation.gamesPlayed++;
+                
+                // Get winner name: prefer player with chips, fallback to player with most chips
+                const winnerName = playersWithChips[0]?.name || likelyWinner?.name || 'Unknown';
+                
                 this.log('INFO', `Game ${simulation.gamesPlayed} COMPLETE - Resetting for next game`, {
                     tableId,
-                    winner: playersWithChips[0]?.name || 'Unknown',
+                    winner: winnerName,
                     gamesPlayed: simulation.gamesPlayed
                 });
                 

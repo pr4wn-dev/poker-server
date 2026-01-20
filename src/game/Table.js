@@ -695,42 +695,40 @@ class Table {
         }
         
         // Remove players with no chips
-        // CRITICAL: Only eliminate players who have 0 chips AND no money in the pot
-        // Players who are all-in have 0 chips but still have currentBet/totalBet in the pot
-        // We only check for elimination at the START of a new hand (after previous hand's pots are awarded)
+        // FIRST: Clear all betting state from the previous hand
+        // This MUST happen before elimination check to get accurate chip counts
+        for (const seat of this.seats) {
+            if (seat) {
+                seat.currentBet = 0;
+                seat.totalBet = 0;
+            }
+        }
+        
+        // NOW check for eliminated players (0 chips with no pending pot money)
+        // At this point, currentBet and totalBet are 0, so we just check chips
         for (let i = 0; i < this.seats.length; i++) {
             const seat = this.seats[i];
             if (seat && seat.chips <= 0) {
-                // Check if player has any money still in the current pot (shouldn't happen at start of new hand, but safety check)
-                const hasMoneyInPot = (seat.currentBet > 0) || (seat.totalBet > 0);
+                // Player has 0 chips - they're eliminated
+                const wasAlreadyEliminated = seat.isActive === false;
+                seat.isActive = false;
                 
-                // Only eliminate if they truly have 0 chips AND no money in pot
-                // At the start of a new hand, currentBet and totalBet should be 0, so this is safe
-                if (!hasMoneyInPot) {
-                    // Mark as inactive but don't remove - let them spectate
-                    const wasAlreadyEliminated = seat.isActive === false;
-                    seat.isActive = false;
-                    
-                    // Notify about elimination (only if they weren't already eliminated)
-                    if (!wasAlreadyEliminated && this.onPlayerEliminated) {
-                        this.onPlayerEliminated({
-                            playerId: seat.playerId,
-                            playerName: seat.name,
-                            seatIndex: i,
-                            isBot: seat.isBot || false
-                        });
-                    }
-                    
-                    if (seat.isBot) {
-                        console.log(`[Table ${this.name}] Bot ${seat.name} eliminated`);
-                        this.seats[i] = null;  // Remove bots completely
-                    } else {
-                        console.log(`[Table ${this.name}] ${seat.name} is out of chips - can spectate or leave`);
-                        // Don't remove human players - let them spectate or leave
-                    }
+                // Notify about elimination (only if they weren't already eliminated)
+                if (!wasAlreadyEliminated && this.onPlayerEliminated) {
+                    this.onPlayerEliminated({
+                        playerId: seat.playerId,
+                        playerName: seat.name,
+                        seatIndex: i,
+                        isBot: seat.isBot || false
+                    });
+                }
+                
+                if (seat.isBot) {
+                    console.log(`[Table ${this.name}] Bot ${seat.name} eliminated (0 chips)`);
+                    this.seats[i] = null;  // Remove bots completely
                 } else {
-                    // Player has 0 chips but money in pot - they're all-in, don't eliminate yet
-                    console.log(`[Table ${this.name}] ${seat.name} has 0 chips but ${seat.currentBet || seat.totalBet} in pot - not eliminating (all-in)`);
+                    console.log(`[Table ${this.name}] ${seat.name} eliminated (0 chips) - can spectate or leave`);
+                    // Don't remove human players - let them spectate or leave
                 }
             }
         }
@@ -764,25 +762,14 @@ class Table {
         this.lastActingPlayer = null;
         this.consecutiveSamePlayerTurns = 0;
 
-        // Reset players
-        // CRITICAL: Only reset isActive if player HAS chips
-        // If player is already eliminated (isActive = false), don't re-activate them even if they get chips from pots
+        // Reset players for new hand
+        // Note: currentBet and totalBet already cleared above before elimination check
         for (const seat of this.seats) {
             if (seat) {
-                seat.cards = [];  // Clear cards first
-                seat.currentBet = 0;
-                seat.totalBet = 0;
-                // CRITICAL FIX: Only set isActive to true if they have chips AND weren't already eliminated
-                // Once eliminated (isActive = false), they stay eliminated even if they win chips
-                // This prevents eliminated players from re-entering the game
-                if (seat.chips > 0 && seat.isActive !== false) {
-                    seat.isActive = true;
-                } else if (seat.chips <= 0) {
-                    seat.isActive = false; // Ensure 0 chips = inactive
-                }
-                // If seat.isActive is already false (eliminated), keep it false
+                seat.cards = [];  // Clear cards from previous hand
                 seat.isFolded = false;
                 seat.isAllIn = false;
+                // isActive was already set correctly during elimination check above
             }
         }
 
