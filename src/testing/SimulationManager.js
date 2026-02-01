@@ -404,26 +404,32 @@ class SimulationManager {
             
             // Count ACTIVE players with chips (not eliminated, not spectating)
             // A player is "out of the game" only if chips = 0 AND isActive = false
-            const activePlayers = currentTable.seats.filter(s => s && s.isActive !== false);
-            const playersWithChips = activePlayers.filter(s => s.chips > 0);
-            
-            // Find the winner - the player with the most chips
-            // This handles edge cases where playersWithChips might be empty
+            // CRITICAL: Use Table's getActivePlayerCount() method instead of manual filtering
+            // This ensures we use the same logic the game uses
+            const activePlayerCount = currentTable.getActivePlayerCount();
             const allSeatedPlayers = currentTable.seats.filter(s => s);
+            const playersWithChips = allSeatedPlayers.filter(s => s && s.chips > 0);
             const sortedByChips = [...allSeatedPlayers].sort((a, b) => (b.chips || 0) - (a.chips || 0));
             const likelyWinner = sortedByChips[0];
             
             this.log('DEBUG', 'Game over check', {
                 tableId,
                 phase: currentTable.phase,
-                activePlayers: activePlayers.length,
+                activePlayers: activePlayerCount,
                 playersWithChips: playersWithChips.length,
                 likelyWinner: likelyWinner?.name,
                 likelyWinnerChips: likelyWinner?.chips,
-                playerDetails: allSeatedPlayers.map(s => ({ name: s.name, chips: s.chips, isActive: s.isActive }))
+                playerDetails: allSeatedPlayers.map(s => ({ 
+                    name: s.name, 
+                    chips: s.chips, 
+                    isActive: s.isActive,
+                    isFolded: s.isFolded,
+                    isAllIn: s.isAllIn,
+                    isSittingOut: s.isSittingOut
+                }))
             });
             
-            if (playersWithChips.length <= 1 && activePlayers.length >= 2) {
+            if (playersWithChips.length <= 1 && activePlayerCount >= 2) {
                 // Game over - one winner! (only if we had a real game with 2+ players)
                 simulation.gamesPlayed++;
                 
