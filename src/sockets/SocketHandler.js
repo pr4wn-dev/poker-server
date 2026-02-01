@@ -2248,12 +2248,27 @@ class SocketHandler {
             console.log(`[SocketHandler] ${data.playerName} eliminated at table ${table.name}`);
             
             // Broadcast to all players that someone was eliminated
+            // CRITICAL: Only send to actual players, not spectators
+            // Spectators should never receive elimination prompts
             this.io.to(`table:${table.id}`).emit('player_eliminated', {
                 tableId: table.id,
                 playerId: data.playerId,
                 playerName: data.playerName,
                 seatIndex: data.seatIndex,
-                isBot: data.isBot || false
+                isBot: data.isBot || false,
+                // Add flag to indicate this is informational only (not a prompt to leave)
+                isInformational: false
+            });
+            
+            // Also send to spectators but with informational flag (they're just watching)
+            // This way they see the elimination notification but don't get prompted to leave
+            this.io.to(`spectator:${table.id}`).emit('player_eliminated', {
+                tableId: table.id,
+                playerId: data.playerId,
+                playerName: data.playerName,
+                seatIndex: data.seatIndex,
+                isBot: data.isBot || false,
+                isInformational: true  // Spectators get informational only - no leave prompt
             });
         };
     }
@@ -2264,13 +2279,26 @@ class SocketHandler {
         const table = this.gameManager.getTable(tableId);
         if (!table) return;
 
+        // Broadcast to players in seats
         const sockets = this.io.sockets.adapter.rooms.get(`table:${tableId}`);
-        if (!sockets) return;
-
-        for (const socketId of sockets) {
-            const userId = this.socketToUser.get(socketId);
-            const state = table.getState(userId);
-            this.io.to(socketId).emit('table_state', state);
+        if (sockets) {
+            for (const socketId of sockets) {
+                const userId = this.socketToUser.get(socketId);
+                const state = table.getState(userId);
+                this.io.to(socketId).emit('table_state', state);
+            }
+        }
+        
+        // CRITICAL: Also broadcast to spectators (they're in a separate room)
+        // In simulation mode, spectators need to see all cards
+        const spectatorSockets = this.io.sockets.adapter.rooms.get(`spectator:${tableId}`);
+        if (spectatorSockets) {
+            for (const socketId of spectatorSockets) {
+                const userId = this.socketToUser.get(socketId);
+                // Pass userId so isSpectator check works correctly
+                const state = table.getState(userId);
+                this.io.to(socketId).emit('table_state', state);
+            }
         }
     }
 }

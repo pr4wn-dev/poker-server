@@ -2393,16 +2393,24 @@ class Table {
                 // Players only see their own cards (except showdown)
                 // During showdown, only show cards of players who are still in (not folded)
                 // SIMULATION MODE: Spectators (including creator) can see ALL cards for debugging
-                const canSeeCards = (this.isSimulation && isSpectating) || 
+                // CRITICAL FIX: In simulation mode, if forPlayerId is null (broadcast), still show cards to spectators
+                // Check if viewer is a spectator by checking if they're in spectators map
+                const viewerIsSpectator = forPlayerId ? this.isSpectator(forPlayerId) : false;
+                const canSeeCards = (this.isSimulation && (isSpectating || viewerIsSpectator)) || 
                     (!isSpectating && (
                         seat.playerId === forPlayerId || 
                         (this.phase === GAME_PHASES.SHOWDOWN && !seat.isFolded)
                     ));
                 
                 // FIX: Ensure cards are preserved - don't lose them if array is null/undefined
+                // CRITICAL: In simulation mode, always preserve card structure even when hidden
                 let cards = [];
-                if (seat.cards && Array.isArray(seat.cards)) {
+                if (seat.cards && Array.isArray(seat.cards) && seat.cards.length > 0) {
+                    // Cards exist - show or hide based on visibility
                     cards = canSeeCards ? seat.cards : seat.cards.map(() => ({ rank: null, suit: null }));
+                } else if (this.isSimulation && isSpectating) {
+                    // Simulation mode spectator - preserve empty array structure if cards haven't been dealt yet
+                    cards = [];
                 }
                 
                 // DEBUG: Log card visibility for ALL tables (not just simulation)
