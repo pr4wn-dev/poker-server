@@ -82,6 +82,39 @@ If logging is insufficient to diagnose a problem → ADD MORE LOGGING before ask
 
 ---
 
+## LAW 10: USE STATE COMPARISON TO FIND BUGS
+
+**CRITICAL:** Simulation and real games use the SAME code path. Comparing them finds bugs automatically.
+
+**When debugging game logic issues:**
+1. **Enable state snapshots**: `$env:ENABLE_STATE_SNAPSHOTS="true"; npm start`
+2. **Run simulation** with the bug scenario
+3. **Play real game** with same table settings
+4. **Compare states**: `npm run compare-states <tableId>`
+5. **Review differences** - they show exactly where logic diverges
+
+**State snapshots capture:**
+- Pot amounts, bets, blinds
+- Community cards, seat states
+- Turn order, phase transitions
+- All state changes in structured JSON
+
+**Comparison finds:**
+- Pot calculation errors
+- Betting logic bugs
+- Card dealing issues
+- Turn order problems
+- Any state divergence
+
+**Files:**
+- `logs/state_snapshots/` - State JSON files
+- `logs/comparisons/` - Comparison reports
+- `TESTING.md` - Full testing guide
+
+**If simulation and real game diverge → BUG FOUND. Fix the code, don't compare code paths (they're the same).**
+
+---
+
 ## 🚨 MANDATORY PRE-FLIGHT CHECKLIST (DO THIS EVERY SESSION START)
 
 Before writing ANY code, complete these steps:
@@ -111,6 +144,12 @@ cd C:\Projects\poker-client-unity; git pull
 ### Step 4: Before Committing
 - [ ] Did I document any new issues/solutions in CHANGELOG.md?
 - [ ] Did I commit and push changes?
+
+### Step 5: When Debugging Game Logic
+- [ ] Did I enable state snapshots? (`ENABLE_STATE_SNAPSHOTS=true`)
+- [ ] Did I run simulation to reproduce the bug?
+- [ ] Did I compare simulation vs real game states?
+- [ ] Did I check comparison report for differences?
 
 ---
 

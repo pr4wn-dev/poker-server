@@ -2,6 +2,19 @@
 
 This file tracks all issues encountered and their solutions. **Search this file first** before debugging.
 
+## Testing System
+
+**State Comparison System** - Compare simulation vs real game states to find bugs automatically.
+
+- Enable: `ENABLE_STATE_SNAPSHOTS=true npm start`
+- Compare: `npm run compare-states <tableId>`
+- See `TESTING.md` for full guide
+
+**Unit Tests** - Jest tests for core game logic.
+
+- Run: `npm test`
+- Coverage: `npm run test:coverage`
+
 ## Quick Search Guide
 - **Compilation errors**: Search error code (e.g., "CS0103", "CS1660")
 - **Runtime errors**: Search symptom (e.g., "cards disappearing", "connection failed")
