@@ -459,9 +459,10 @@ class SimulationManager {
     
     /**
      * Restart the game with fresh chips for everyone
+     * NEW: Randomizes settings and bot count for each new game
      */
-    _restartGame(simulation) {
-        const { tableId, buyIn, creatorId } = simulation;
+    async _restartGame(simulation) {
+        const { tableId, creatorId } = simulation;
         const table = this.gameManager.tables.get(tableId);
         
         if (!table) {
@@ -469,52 +470,130 @@ class SimulationManager {
             return;
         }
         
-        this.log('INFO', 'Restarting game - resetting all chips', { tableId, buyIn });
+        this.log('INFO', `Restarting game ${simulation.gamesPlayed + 1} - randomizing settings and bots`, { tableId });
         
-        // Store original blinds (before any increases)
-        const originalSmallBlind = simulation.originalSmallBlind || table.smallBlind;
-        const originalBigBlind = simulation.originalBigBlind || table.bigBlind;
-        if (!simulation.originalSmallBlind) {
-            simulation.originalSmallBlind = table.smallBlind;
-            simulation.originalBigBlind = table.bigBlind;
+        // Generate NEW random settings for this game
+        const newSettings = this._generateRandomSettings();
+        const newMaxPlayers = newSettings.maxPlayers;
+        const newBuyIn = newSettings.buyIn;
+        const newSmallBlind = newSettings.smallBlind;
+        const newBigBlind = newSettings.bigBlind;
+        const newTurnTimeLimit = newSettings.turnTimeLimit;
+        const newBlindIncreaseInterval = newSettings.blindIncreaseInterval;
+        
+        // Randomize socket bot ratio for this game (0.3 to 0.7)
+        const newSocketBotRatio = 0.3 + Math.random() * 0.4;
+        
+        // Calculate NEW bot distribution for this game
+        const newTotalBots = newMaxPlayers;
+        const botProfiles = ['tex', 'lazy_larry', 'pickles'];
+        const idealRegularBots = Math.floor(newTotalBots * (1 - newSocketBotRatio));
+        const newRegularBotCount = Math.min(idealRegularBots, botProfiles.length);
+        const newSocketBotCount = newTotalBots - newRegularBotCount;
+        
+        this.log('INFO', 'New game settings', {
+            gameNumber: simulation.gamesPlayed + 1,
+            maxPlayers: newMaxPlayers,
+            smallBlind: newSmallBlind,
+            bigBlind: newBigBlind,
+            buyIn: newBuyIn,
+            regularBots: newRegularBotCount,
+            socketBots: newSocketBotCount,
+            socketBotRatio: newSocketBotRatio.toFixed(2)
+        });
+        
+        // Update table settings
+        table.maxPlayers = newMaxPlayers;
+        table.smallBlind = newSmallBlind;
+        table.bigBlind = newBigBlind;
+        table.buyIn = newBuyIn;
+        table.turnTimeLimit = newTurnTimeLimit;
+        table.blindIncreaseInterval = newBlindIncreaseInterval;
+        table.minRaise = newBigBlind;
+        
+        // Update simulation tracking
+        simulation.buyIn = newBuyIn;
+        simulation.originalSmallBlind = newSmallBlind;
+        simulation.originalBigBlind = newBigBlind;
+        
+        // Adjust table seats array size if maxPlayers changed
+        if (table.seats.length !== newMaxPlayers) {
+            if (table.seats.length > newMaxPlayers) {
+                // Remove excess seats (from the end)
+                for (let i = newMaxPlayers; i < table.seats.length; i++) {
+                    const seat = table.seats[i];
+                    if (seat) {
+                        // If it's a socket bot, disconnect it
+                        if (!seat.isBot && seat.name && seat.name.startsWith('NetPlayer')) {
+                            const bot = simulation.socketBots.find(b => b.userId === seat.playerId);
+                            if (bot) {
+                                this.log('INFO', `Disconnecting excess socket bot: ${seat.name}`, { seatIndex: i });
+                                bot.disconnect();
+                            }
+                        }
+                        // If it's a regular bot, remove it
+                        if (seat.isBot) {
+                            this.log('INFO', `Removing excess regular bot: ${seat.name}`, { seatIndex: i });
+                            this.gameManager.removePlayerFromTable(tableId, seat.playerId);
+                        }
+                    }
+                }
+                table.seats = table.seats.slice(0, newMaxPlayers);
+            } else {
+                // Expand seats array if maxPlayers increased
+                while (table.seats.length < newMaxPlayers) {
+                    table.seats.push(null);
+                }
+            }
         }
         
-        // Reset all players to starting buy-in
-        // Track which socket bots are still connected
-        const connectedSocketBotIds = new Set(
-            simulation.socketBots
-                .filter(bot => bot.socket && bot.socket.connected)
-                .map(bot => bot.userId)
-        );
+        // Track current bots
+        const currentRegularBots = table.seats.filter(s => s && s.isBot).length;
+        const connectedSocketBots = simulation.socketBots.filter(bot => bot.socket && bot.socket.connected);
+        const currentSocketBotCount = connectedSocketBots.length;
+        
+        // Remove excess regular bots if we have too many
+        if (currentRegularBots > newRegularBotCount) {
+            const regularBotsToRemove = currentRegularBots - newRegularBotCount;
+            let removed = 0;
+            for (let i = 0; i < table.seats.length && removed < regularBotsToRemove; i++) {
+                const seat = table.seats[i];
+                if (seat && seat.isBot) {
+                    this.log('INFO', `Removing excess regular bot: ${seat.name}`, { seatIndex: i });
+                    this.gameManager.removePlayerFromTable(tableId, seat.playerId);
+                    removed++;
+                }
+            }
+        }
+        
+        // Remove excess socket bots if we have too many
+        if (currentSocketBotCount > newSocketBotCount) {
+            const socketBotsToRemove = currentSocketBotCount - newSocketBotCount;
+            for (let i = 0; i < socketBotsToRemove; i++) {
+                const bot = connectedSocketBots[i];
+                if (bot) {
+                    this.log('INFO', `Disconnecting excess socket bot: ${bot.name}`, { userId: bot.userId });
+                    bot.disconnect();
+                }
+            }
+        }
         
         // Clean up disconnected socket bots from simulation tracking
         simulation.socketBots = simulation.socketBots.filter(bot => {
             if (!bot.socket || !bot.socket.connected) {
-                this.log('WARN', `Removing disconnected socket bot: ${bot.name}`, { userId: bot.userId });
                 return false;
             }
             return true;
         });
         
+        // Reset all existing players to new buy-in
         for (let i = 0; i < table.seats.length; i++) {
             const seat = table.seats[i];
             if (!seat) continue;
             
-            // Check if this is a disconnected socket bot
-            const isSocketBot = seat.playerId && seat.playerId.startsWith && !seat.isBot;
-            const isDisconnectedSocketBot = isSocketBot && 
-                !connectedSocketBotIds.has(seat.playerId) && 
-                seat.name && seat.name.startsWith('NetPlayer');
-            
-            if (isDisconnectedSocketBot) {
-                this.log('WARN', `Removing seat for disconnected socket bot: ${seat.name}`, { seatIndex: i });
-                table.seats[i] = null;
-                continue;
-            }
-            
             // Reset the seat
             const oldChips = seat.chips;
-            seat.chips = buyIn;
+            seat.chips = newBuyIn;
             seat.isFolded = false;
             seat.isAllIn = false;
             seat.isActive = true;  // CRITICAL: Re-activate eliminated players!
@@ -522,17 +601,51 @@ class SimulationManager {
             seat.totalBet = 0;
             seat.cards = [];
             // CRITICAL FIX: In simulation, all bots (regular and socket) should auto-ready
-            // Regular bots have isBot=true, socket bots don't but we control them
             seat.isReady = seat.isBot || (seat.name && seat.name.startsWith('NetPlayer'));
             
             this.log('DEBUG', `Reset chips for ${seat.name}`, { 
                 seatIndex: i, 
                 oldChips, 
                 newChips: seat.chips, 
-                buyIn,
+                buyIn: newBuyIn, 
                 isActive: seat.isActive 
             });
         }
+        
+        // Add missing regular bots
+        const botProfiles = ['tex', 'lazy_larry', 'pickles'];
+        const currentRegularCount = table.seats.filter(s => s && s.isBot).length;
+        if (currentRegularCount < newRegularBotCount) {
+            const regularBotsNeeded = newRegularBotCount - currentRegularCount;
+            this.log('INFO', `Adding ${regularBotsNeeded} regular bot(s)`, { tableId });
+            
+            for (let i = 0; i < regularBotsNeeded; i++) {
+                const profileIndex = currentRegularCount + i;
+                if (profileIndex < botProfiles.length) {
+                    const botProfile = botProfiles[profileIndex];
+                    const result = await this.gameManager.inviteBot(tableId, botProfile, creatorId, newBuyIn);
+                    if (result.success) {
+                        this.log('INFO', `Added regular bot: ${botProfile}`, { seatIndex: result.seatIndex });
+                    } else {
+                        this.log('WARN', `Failed to add regular bot: ${botProfile}`, { error: result.error });
+                    }
+                    await new Promise(r => setTimeout(r, 500));
+                }
+            }
+        }
+        
+        // Add missing socket bots
+        const currentSocketCount = simulation.socketBots.filter(b => b.socket && b.socket.connected).length;
+        if (currentSocketCount < newSocketBotCount) {
+            const socketBotsNeeded = newSocketBotCount - currentSocketCount;
+            this.log('INFO', `Adding ${socketBotsNeeded} socket bot(s)`, { tableId });
+            
+            await this._addSocketBots(simulation, socketBotsNeeded, newBuyIn);
+        }
+        
+        // Update simulation tracking
+        simulation.regularBotCount = newRegularBotCount;
+        simulation.socketBotCount = newSocketBotCount;
         
         // Reset table state completely
         table.phase = 'waiting';
@@ -540,13 +653,11 @@ class SimulationManager {
         table.currentBet = 0;
         table.communityCards = [];
         table.currentPlayerIndex = -1;
-        table.dealerIndex = (table.dealerIndex + 1) % table.maxPlayers; // Rotate dealer
+        table.dealerIndex = (table.dealerIndex + 1) % newMaxPlayers; // Rotate dealer
         table.lastRaiserIndex = -1;
-        table.smallBlind = originalSmallBlind; // Reset blinds to original
-        table.bigBlind = originalBigBlind;
         table.blindLevel = 1; // Reset blind level
         
-        // Clear any pending timers - use correct property names from Table.js
+        // Clear any pending timers
         if (table.turnTimeout) {
             clearTimeout(table.turnTimeout);
             table.turnTimeout = null;
@@ -555,13 +666,11 @@ class SimulationManager {
             clearTimeout(table.blindIncreaseTimer);
             table.blindIncreaseTimer = null;
         }
-        // Reset blind-related state
         table.nextBlindIncreaseAt = null;
         
-        this.log('INFO', 'Timers cleared, blinds reset', {
+        this.log('INFO', 'Timers cleared, table reset', {
             tableId,
-            originalSmall: originalSmallBlind,
-            originalBig: originalBigBlind,
+            newBlinds: `${newSmallBlind}/${newBigBlind}`,
             blindLevel: table.blindLevel
         });
         
@@ -570,13 +679,19 @@ class SimulationManager {
             table.onStateChange();
         }
         
-        // Auto-start the new game and continue checking for game over
-        const startDelay = simulation.fastMode ? 500 : 2000;
+        // Auto-start the new game after bots are added
+        const startDelay = simulation.fastMode ? 1000 : 3000;
         setTimeout(() => {
             if (table.phase === 'waiting') {
                 const result = table.startReadyUp(creatorId);
                 if (result.success) {
-                    this.log('INFO', `Game ${simulation.gamesPlayed + 1} starting...`, { tableId });
+                    this.log('INFO', `Game ${simulation.gamesPlayed + 1} starting with new settings...`, { 
+                        tableId,
+                        maxPlayers: newMaxPlayers,
+                        blinds: `${newSmallBlind}/${newBigBlind}`,
+                        buyIn: newBuyIn,
+                        bots: `${newRegularBotCount} regular + ${newSocketBotCount} socket`
+                    });
                     // Continue the game-over check loop
                     this._setupAutoRestart(table, simulation);
                 } else {
@@ -584,6 +699,58 @@ class SimulationManager {
                 }
             }
         }, startDelay);
+    }
+    
+    /**
+     * Add socket bots to a simulation table
+     */
+    async _addSocketBots(simulation, count, buyIn) {
+        const { tableId } = simulation;
+        const networkProfiles = [
+            { name: 'GoodConnection', latency: 30, jitter: 20, disconnectChance: 0.005 },
+            { name: 'AverageConnection', latency: 80, jitter: 50, disconnectChance: 0.01 },
+            { name: 'PoorConnection', latency: 150, jitter: 100, disconnectChance: 0.02 },
+            { name: 'MobileConnection', latency: 200, jitter: 150, disconnectChance: 0.03 },
+            { name: 'UnstableConnection', latency: 100, jitter: 200, disconnectChance: 0.05 },
+            { name: 'VPNConnection', latency: 250, jitter: 80, disconnectChance: 0.015 },
+        ];
+        
+        const currentSocketCount = simulation.socketBots.filter(b => b.socket && b.socket.connected).length;
+        
+        for (let i = 0; i < count; i++) {
+            const profileIndex = (currentSocketCount + i) % networkProfiles.length;
+            const profile = networkProfiles[profileIndex];
+            
+            try {
+                const bot = new SocketBot({
+                    serverUrl: this.serverUrl,
+                    name: `NetPlayer_${currentSocketCount + i + 1}`,
+                    minDelay: simulation.fastMode ? 50 : 800,
+                    maxDelay: simulation.fastMode ? 200 : 2500,
+                    aggressiveness: 0.2 + Math.random() * 0.4,
+                    fastMode: simulation.fastMode,
+                    networkLatency: simulation.fastMode ? 10 : profile.latency,
+                    latencyJitter: simulation.fastMode ? 5 : profile.jitter,
+                    disconnectChance: simulation.fastMode ? 0 : profile.disconnectChance,
+                    reconnectMinTime: 3000,
+                    reconnectMaxTime: 15000,
+                    enableChaos: !simulation.fastMode,
+                    logFile: path.join(__dirname, '../../logs/socketbot.log')
+                });
+                
+                await bot.connect();
+                await bot.register();
+                await bot.joinTable(tableId, buyIn);
+                
+                simulation.socketBots.push(bot);
+                this.log('INFO', `Added socket bot: ${bot.name}`, { seatIndex: bot.seatIndex });
+            } catch (error) {
+                this.log('ERROR', `Failed to add socket bot`, { error: error.message });
+            }
+            
+            // Small delay between bots
+            await new Promise(r => setTimeout(r, 500 + Math.random() * 500));
+        }
     }
     
     /**
