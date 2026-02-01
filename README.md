@@ -2,6 +2,12 @@
 
 Real-time multiplayer Texas Hold'em poker server built with Node.js and Socket.IO.
 
+## Documentation
+
+- **[INSTALL.md](INSTALL.md)** - Setup and installation guide
+- **[AGENT_RULES.md](AGENT_RULES.md)** - Rules for AI agents working on this project
+- **[CHANGELOG.md](CHANGELOG.md)** - Issues encountered and solutions (search this first!)
+
 ## Features
 
 - 🎴 Full Texas Hold'em game logic

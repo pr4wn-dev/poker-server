@@ -1,0 +1,118 @@
+# 🚨 AGENT RULES - READ FIRST, OBEY ALWAYS 🚨
+
+**THESE ARE NON-NEGOTIABLE. VIOLATION = THEFT OF USER'S TIME AND MONEY.**
+
+## LAW 1: PULL BOTH REPOS FIRST
+```powershell
+cd C:\Projects\poker-server; git pull
+cd C:\Projects\poker-client-unity; git pull
+```
+**This happens BEFORE you respond to the user. BEFORE you do anything else. FIRST.**
+
+If user says "get files" or "update" or starts a new session → PULL BOTH REPOS.
+
+Not one. BOTH. Every time. No exceptions.
+
+## LAW 2: CHECK PAST PROBLEMS FIRST
+Before solving ANY problem, search CHANGELOG.md for matching issues. The solution probably already exists.
+`Ctrl+F` the error message, the symptom, the feature name. If it's been solved before, use that solution.
+Don't reinvent. Don't guess. CHECK FIRST.
+
+## LAW 3: DOCUMENT FIXES IMMEDIATELY  
+When you fix ANY bug → add it to CHANGELOG.md BEFORE moving on. Not later. NOW.
+
+## LAW 4: COMMIT AUTOMATICALLY
+After code changes: `git add -A; git commit -m "message"; git push`
+Don't wait to be asked.
+
+## LAW 5: NO BANDAIDS
+Fix root causes. Install real dependencies. No mock mode. No workarounds.
+
+## LAW 6: ONE LOG FILE
+All fixes and issues go in CHANGELOG.md. Not in separate files.
+
+## LAW 7: WHEN STUCK, RESET
+If you're patching errors one-by-one for more than 15 minutes, STOP.
+Find the last working commit: `git log --oneline`
+Reset to it: `git reset --hard <commit>`
+Don't waste hours on what takes 30 seconds.
+
+## LAW 8: GREP BOTH SIDES TO FIND MISMATCHES
+When something isn't working between client and server, **grep both codebases** for the exact strings involved.
+
+**The commands that find answers fast:**
+```powershell
+# What does server ACTUALLY emit?
+grep "socket.emit.*event_name" src/sockets/SocketHandler.js
+
+# What does client ACTUALLY expect?
+grep "eventName.*response" Assets/Scripts/Networking/SocketManager.cs -A 10
+
+# What response format does server send?
+grep "callback.*success" src/sockets/SocketHandler.js -A 5
+
+# What response format does client expect?
+grep "class.*Response" Assets/Scripts/Networking/NetworkModels.cs -A 10
+```
+
+**Pattern:** When client is stuck, server logs show success → MISMATCH between what server sends and what client listens for. Grep both sides, compare the exact strings.
+
+## LAW 9: SIMULATION SAYS IT ALL - NEVER ASK USER TO DESCRIBE
+
+The simulation system must capture EVERYTHING. If you have to ask the user "what happened?" or "can you describe the bug?", **YOU HAVE FAILED.**
+
+**Required logging for every feature:**
+1. **Every button click** - log what was clicked, current state, parameters
+2. **Every state change** - log before/after values
+3. **Every server request** - log request params, response, errors
+4. **Every phase transition** - log from/to phase, player counts, timers
+
+**When something bugs out:**
+1. Check server console logs FIRST
+2. Check Unity console logs SECOND
+3. Check simulation.log and socketbot.log THIRD
+4. The logs MUST tell you what went wrong
+
+**Before testing:** Always verify server is running:
+```powershell
+Get-Process node -ErrorAction SilentlyContinue
+```
+
+If logging is insufficient to diagnose a problem → ADD MORE LOGGING before asking user.
+
+---
+
+## 🚨 MANDATORY PRE-FLIGHT CHECKLIST (DO THIS EVERY SESSION START)
+
+Before writing ANY code, complete these steps:
+
+### 🚨 Step 0: PULL BOTH REPOS FIRST!!! 🚨
+```powershell
+cd C:\Projects\poker-server; git pull
+cd C:\Projects\poker-client-unity; git pull
+```
+
+### Step 1: Read Critical Issues
+- [ ] Check CHANGELOG.md for similar issues
+- [ ] Search for error messages in CHANGELOG.md
+- [ ] Check if solution already exists
+
+### Step 2: Verify Patterns Before Coding
+- [ ] Check Socket.IO event naming: `event_name` → `event_name_response`
+- [ ] Verify response format: `{ success, error?, ...data }`
+- [ ] Check Unity client pattern for Emit calls
+
+### Step 3: Before Any Socket.IO Work
+- [ ] Is `SOCKET_IO_AVAILABLE` in Scripting Define Symbols for current platform?
+- [ ] Am I adding response classes to NetworkModels.cs (not GameService.cs)?
+- [ ] Am I using the `Emit<T>` pattern that uses JsonUtility?
+- [ ] Does the server emit BOTH callback() AND socket.emit('event_response')?
+
+### Step 4: Before Committing
+- [ ] Did I document any new issues/solutions in CHANGELOG.md?
+- [ ] Did I commit and push changes?
+
+---
+
+**FAILURE TO COMPLETE THIS CHECKLIST = REPEATING PAST MISTAKES = WASTING USER'S TIME AND MONEY**
+
