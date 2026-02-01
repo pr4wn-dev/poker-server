@@ -912,9 +912,12 @@ class Table {
 
         // Reset players for new hand
         // Note: currentBet and totalBet already cleared above before elimination check
+        // CRITICAL: Don't clear cards yet - wait until we're ready to deal new ones
+        // This prevents cards from disappearing in state broadcasts
         for (const seat of this.seats) {
             if (seat) {
-                seat.cards = [];  // Clear cards from previous hand
+                // Keep cards until we deal new ones (prevents disappearing mid-hand)
+                // seat.cards will be replaced when we deal below
                 seat.isFolded = false;
                 seat.isAllIn = false;
                 // isActive was already set correctly during elimination check above
@@ -932,10 +935,25 @@ class Table {
         this.postBlind(bbIndex, this.bigBlind);
         this.currentBet = this.bigBlind;
 
-        // Deal hole cards
+        // Deal hole cards - REPLACE old cards, don't clear first
+        // This ensures cards are never empty in state broadcasts
         for (const seat of this.seats) {
             if (seat?.isActive) {
-                seat.cards = [this.deck.draw(), this.deck.draw()];
+                // CRITICAL: Replace cards atomically - no empty state
+                const newCards = [this.deck.draw(), this.deck.draw()];
+                seat.cards = newCards;
+                
+                // Log for debugging
+                if (this.isSimulation) {
+                    gameLogger.cardVisibility(this.name, `Dealt cards to ${seat.name}`, {
+                        playerId: seat.playerId,
+                        cards: newCards,
+                        phase: 'preflop'
+                    });
+                }
+            } else if (seat) {
+                // Inactive players - clear their cards
+                seat.cards = [];
             }
         }
 
@@ -2393,24 +2411,37 @@ class Table {
                 // Players only see their own cards (except showdown)
                 // During showdown, only show cards of players who are still in (not folded)
                 // SIMULATION MODE: Spectators (including creator) can see ALL cards for debugging
-                // CRITICAL FIX: In simulation mode, if forPlayerId is null (broadcast), still show cards to spectators
-                // Check if viewer is a spectator by checking if they're in spectators map
-                const viewerIsSpectator = forPlayerId ? this.isSpectator(forPlayerId) : false;
-                const canSeeCards = (this.isSimulation && (isSpectating || viewerIsSpectator)) || 
+                // CRITICAL FIX: In simulation mode, spectators always see all cards
+                const canSeeCards = (this.isSimulation && isSpectating) || 
                     (!isSpectating && (
                         seat.playerId === forPlayerId || 
                         (this.phase === GAME_PHASES.SHOWDOWN && !seat.isFolded)
                     ));
                 
-                // FIX: Ensure cards are preserved - don't lose them if array is null/undefined
-                // CRITICAL: In simulation mode, always preserve card structure even when hidden
+                // CRITICAL: Always preserve card structure - never return null/undefined cards
+                // If cards exist, show or hide based on visibility
+                // If cards don't exist yet, return empty array (not null)
                 let cards = [];
-                if (seat.cards && Array.isArray(seat.cards) && seat.cards.length > 0) {
-                    // Cards exist - show or hide based on visibility
-                    cards = canSeeCards ? seat.cards : seat.cards.map(() => ({ rank: null, suit: null }));
-                } else if (this.isSimulation && isSpectating) {
-                    // Simulation mode spectator - preserve empty array structure if cards haven't been dealt yet
-                    cards = [];
+                if (seat.cards && Array.isArray(seat.cards)) {
+                    if (seat.cards.length > 0) {
+                        // Cards exist - show or hide based on visibility
+                        cards = canSeeCards ? seat.cards : seat.cards.map(() => ({ rank: null, suit: null }));
+                    }
+                    // If cards.length === 0, keep cards as empty array (cards haven't been dealt yet)
+                }
+                // If seat.cards is null/undefined, cards stays as empty array
+                
+                // DEBUG: Log when cards are missing but should exist
+                if (this.isSimulation && isSpectating && seat.isActive && 
+                    ['preflop', 'flop', 'turn', 'river', 'showdown'].includes(this.phase) &&
+                    (!seat.cards || seat.cards.length === 0)) {
+                    gameLogger.cardVisibility(this.name, `WARNING: Missing cards for active player ${seat.name}`, {
+                        playerId: seat.playerId,
+                        phase: this.phase,
+                        isActive: seat.isActive,
+                        cardsExists: !!seat.cards,
+                        cardsLength: seat.cards?.length || 0
+                    });
                 }
                 
                 // DEBUG: Log card visibility for ALL tables (not just simulation)
