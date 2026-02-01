@@ -6,6 +6,7 @@ const Deck = require('./Deck');
 const HandEvaluator = require('./HandEvaluator');
 const SidePot = require('./SidePot');
 const gameLogger = require('../utils/GameLogger');
+const StateSnapshot = require('../testing/StateSnapshot');
 
 const GAME_PHASES = {
     WAITING: 'waiting',
@@ -127,13 +128,26 @@ class Table {
         this.readyUpInterval = null;
         
         // Event callbacks (set by SocketHandler)
-        this.onStateChange = null;  // Called when state changes, for broadcasting
+        // onStateChange will be set externally, but we'll wrap it to capture snapshots
+        this._onStateChangeCallback = null;
+        Object.defineProperty(this, 'onStateChange', {
+            get: () => this._onStateChangeCallback,
+            set: (callback) => {
+                this._onStateChangeCallback = callback;
+            }
+        });
         this.onAutoFold = null;     // Called when player auto-folds on timeout
         this.onCountdownUpdate = null; // Called when countdown changes
         this.onReadyPrompt = null;  // Called when ready prompt should show
         this.onPlayerNotReady = null; // Called when player doesn't ready in time
         this.onPlayerAction = null; // Called when any player (human or bot) takes an action
         this.onPlayerEliminated = null; // Called when a player runs out of chips
+        
+        // State snapshot for testing/comparison (optional)
+        this.stateSnapshot = null;
+        if (process.env.ENABLE_STATE_SNAPSHOTS === 'true') {
+            this.stateSnapshot = new StateSnapshot(this.id, this.name, this.isSimulation);
+        }
     }
     
     // ============ Game Start Countdown ============
@@ -170,7 +184,16 @@ class Table {
                 this.readyPlayers.clear();
             }
             
-            this.onStateChange?.();
+            // Capture snapshot before broadcasting
+            if (this.stateSnapshot) {
+                const state = this.getState(null);
+                this.stateSnapshot.capture(state, {
+                    phase: this.phase,
+                    handsPlayed: this.handsPlayed,
+                    reason: 'state_change'
+                });
+            }
+            this._onStateChangeCallback?.();
         }
     }
     
@@ -228,7 +251,16 @@ class Table {
         
         // Broadcast updates every second
         this.readyUpInterval = setInterval(() => {
-            this.onStateChange?.();
+            // Capture snapshot before broadcasting
+            if (this.stateSnapshot) {
+                const state = this.getState(null);
+                this.stateSnapshot.capture(state, {
+                    phase: this.phase,
+                    handsPlayed: this.handsPlayed,
+                    reason: 'state_change'
+                });
+            }
+            this._onStateChangeCallback?.();
         }, 1000);
         
         // Notify all players to show ready prompt
@@ -279,7 +311,16 @@ class Table {
             console.log(`[Table ${this.name}] Not enough ready players (${remainingPlayers}). Cancelling game.`);
             this.phase = GAME_PHASES.WAITING;
             this.readyUpActive = false;
-            this.onStateChange?.();
+            // Capture snapshot before broadcasting
+            if (this.stateSnapshot) {
+                const state = this.getState(null);
+                this.stateSnapshot.capture(state, {
+                    phase: this.phase,
+                    handsPlayed: this.handsPlayed,
+                    reason: 'state_change'
+                });
+            }
+            this._onStateChangeCallback?.();
         }
     }
     
@@ -386,7 +427,16 @@ class Table {
         this.countdownInterval = setInterval(() => {
             const remaining = this.getStartCountdownRemaining();
             if (remaining > 0) {
-                this.onStateChange?.();
+                // Capture snapshot before broadcasting
+            if (this.stateSnapshot) {
+                const state = this.getState(null);
+                this.stateSnapshot.capture(state, {
+                    phase: this.phase,
+                    handsPlayed: this.handsPlayed,
+                    reason: 'state_change'
+                });
+            }
+            this._onStateChangeCallback?.();
             }
         }, 1000);
         
@@ -438,7 +488,16 @@ class Table {
             console.log(`[Table ${this.name}] Not enough ready players, returning to waiting`);
             this.phase = GAME_PHASES.WAITING;
             this.readyUpActive = false;
-            this.onStateChange?.();
+            // Capture snapshot before broadcasting
+            if (this.stateSnapshot) {
+                const state = this.getState(null);
+                this.stateSnapshot.capture(state, {
+                    phase: this.phase,
+                    handsPlayed: this.handsPlayed,
+                    reason: 'state_change'
+                });
+            }
+            this._onStateChangeCallback?.();
             return;
         }
         
@@ -734,7 +793,16 @@ class Table {
         
         if (this.getSeatedPlayerCount() < 2) {
             this.phase = GAME_PHASES.WAITING;
-            this.onStateChange?.();
+            // Capture snapshot before broadcasting
+            if (this.stateSnapshot) {
+                const state = this.getState(null);
+                this.stateSnapshot.capture(state, {
+                    phase: this.phase,
+                    handsPlayed: this.handsPlayed,
+                    reason: 'state_change'
+                });
+            }
+            this._onStateChangeCallback?.();
             return;
         }
         
@@ -750,7 +818,16 @@ class Table {
             if (this.onGameOver) {
                 this.onGameOver(winner);
             }
-            this.onStateChange?.();
+            // Capture snapshot before broadcasting
+            if (this.stateSnapshot) {
+                const state = this.getState(null);
+                this.stateSnapshot.capture(state, {
+                    phase: this.phase,
+                    handsPlayed: this.handsPlayed,
+                    reason: 'state_change'
+                });
+            }
+            this._onStateChangeCallback?.();
             return;
         }
         
@@ -1750,7 +1827,16 @@ class Table {
                 dealerIndex: this.dealerIndex
             });
             console.log(`[Table ${this.name}] No active players - running out board`);
-            this.onStateChange?.();
+            // Capture snapshot before broadcasting
+            if (this.stateSnapshot) {
+                const state = this.getState(null);
+                this.stateSnapshot.capture(state, {
+                    phase: this.phase,
+                    handsPlayed: this.handsPlayed,
+                    reason: 'state_change'
+                });
+            }
+            this._onStateChangeCallback?.();
             // Short delay before next phase for visual effect
             setTimeout(() => this.advancePhase(), 1000);
             return;
@@ -1907,7 +1993,16 @@ class Table {
         // Start new hand after showing results
         setTimeout(() => {
             // Broadcast state one more time before starting new hand (in case chips updated)
-            this.onStateChange?.();
+            // Capture snapshot before broadcasting
+            if (this.stateSnapshot) {
+                const state = this.getState(null);
+                this.stateSnapshot.capture(state, {
+                    phase: this.phase,
+                    handsPlayed: this.handsPlayed,
+                    reason: 'state_change'
+                });
+            }
+            this._onStateChangeCallback?.();
             setTimeout(() => this.startNewHand(), 500);
         }, 4000); // 4 seconds to show winner, then 0.5s transition
     }
@@ -2070,7 +2165,16 @@ class Table {
         // Start new hand after showing results
         setTimeout(() => {
             // Broadcast state one more time before starting new hand
-            this.onStateChange?.();
+            // Capture snapshot before broadcasting
+            if (this.stateSnapshot) {
+                const state = this.getState(null);
+                this.stateSnapshot.capture(state, {
+                    phase: this.phase,
+                    handsPlayed: this.handsPlayed,
+                    reason: 'state_change'
+                });
+            }
+            this._onStateChangeCallback?.();
             setTimeout(() => this.startNewHand(), 500);
         }, 3000); // 3 seconds to show winner, then 0.5s transition
     }
@@ -2250,7 +2354,7 @@ class Table {
             currentPlayerId: currentPlayer?.playerId || null
         });
         
-        return {
+        const state = {
             id: this.id,
             name: this.name,
             phase: this.phase,
@@ -2273,6 +2377,7 @@ class Table {
             readyPlayerCount: this.getReadyPlayerCount(),
             totalPlayerCount: this.getActivePlayerCount(),
             handsPlayed: this.handsPlayed,
+            handNumber: this.handsPlayed, // For snapshot comparison
             spectatorCount: this.getSpectatorCount(),
             lastPotAwards: this.phase === GAME_PHASES.SHOWDOWN ? this.lastPotAwards : null,
             isSpectating: isSpectating,
@@ -2330,6 +2435,27 @@ class Table {
                 };
             })
         };
+        
+        // Capture state snapshot if enabled (for testing/comparison)
+        if (this.stateSnapshot && forPlayerId === null) {
+            // Only capture when broadcasting to all (not player-specific views)
+            this.stateSnapshot.capture(state, {
+                phase: this.phase,
+                handsPlayed: this.handsPlayed
+            });
+        }
+        
+        return state;
+    }
+    
+    /**
+     * Save state snapshots to file (called when table is destroyed)
+     */
+    saveStateSnapshots() {
+        if (this.stateSnapshot) {
+            return this.stateSnapshot.save();
+        }
+        return false;
     }
 }
 

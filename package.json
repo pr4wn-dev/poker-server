@@ -7,7 +7,10 @@
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
     "setup": "node src/setup.js",
-    "test": "jest"
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "compare-states": "node scripts/compare-states.js"
   },
   "keywords": [
     "poker",
@@ -29,6 +32,7 @@
     "uuid": "^9.0.0"
   },
   "devDependencies": {
+    "jest": "^30.2.0",
     "nodemon": "^3.0.1"
   }
 }
