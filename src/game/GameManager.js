@@ -239,6 +239,11 @@ class GameManager {
                 }
             }
             
+            // Save state snapshots before deleting
+            if (table.saveStateSnapshots) {
+                table.saveStateSnapshots();
+            }
+            
             // Delete the table
             this.tables.delete(tableId);
             console.log(`[GameManager] Table ${tableId} closed`);

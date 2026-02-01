@@ -613,7 +613,6 @@ class SimulationManager {
         }
         
         // Add missing regular bots
-        const botProfiles = ['tex', 'lazy_larry', 'pickles'];
         const currentRegularCount = table.seats.filter(s => s && s.isBot).length;
         if (currentRegularCount < newRegularBotCount) {
             const regularBotsNeeded = newRegularBotCount - currentRegularCount;

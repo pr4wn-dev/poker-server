@@ -10,7 +10,8 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "compare-states": "node scripts/compare-states.js"
+    "compare-states": "node scripts/compare-states.js",
+    "analyze-state": "node scripts/analyze-state.js"
   },
   "keywords": [
     "poker",
