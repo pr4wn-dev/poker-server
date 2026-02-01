@@ -941,19 +941,28 @@ class Table {
             if (seat?.isActive) {
                 // CRITICAL: Replace cards atomically - no empty state
                 const newCards = [this.deck.draw(), this.deck.draw()];
+                const oldCards = seat.cards ? [...seat.cards] : null;
                 seat.cards = newCards;
                 
-                // Log for debugging
-                if (this.isSimulation) {
-                    gameLogger.cardVisibility(this.name, `Dealt cards to ${seat.name}`, {
-                        playerId: seat.playerId,
-                        cards: newCards,
-                        phase: 'preflop'
-                    });
-                }
+                // CRITICAL: Log EVERY card deal for debugging
+                console.log(`[Table ${this.name}] DEALT CARDS to ${seat.name} (${seat.playerId}):`, 
+                    JSON.stringify(newCards), 
+                    `(was: ${oldCards ? JSON.stringify(oldCards) : 'null'})`);
+                gameLogger.cardVisibility(this.name, `DEALT cards to ${seat.name}`, {
+                    playerId: seat.playerId,
+                    seatIndex: this.seats.indexOf(seat),
+                    cards: newCards,
+                    oldCards: oldCards,
+                    phase: 'preflop',
+                    isActive: seat.isActive
+                });
             } else if (seat) {
                 // Inactive players - clear their cards
+                const oldCards = seat.cards ? [...seat.cards] : null;
                 seat.cards = [];
+                if (oldCards) {
+                    console.log(`[Table ${this.name}] CLEARED cards for inactive ${seat.name}:`, JSON.stringify(oldCards));
+                }
             }
         }
 
@@ -1147,11 +1156,19 @@ class Table {
 
     fold(seatIndex) {
         const player = this.seats[seatIndex];
+        const cardsBeforeFold = player.cards ? [...player.cards] : null;
         player.isFolded = true;
+        // CRITICAL: DO NOT clear cards on fold - they should remain visible until showdown or new hand
+        // Cards will be cleared in startNewHand when appropriate
+        
+        console.log(`[Table ${this.name}] ${player.name} FOLDED - cards preserved:`, 
+            cardsBeforeFold ? JSON.stringify(cardsBeforeFold) : 'null');
+        
         gameLogger.bettingAction(this.name, player.name || `Seat ${seatIndex}`, 'FOLD', {
             seatIndex,
             phase: this.phase,
-            pot: this.pot
+            pot: this.pot,
+            cardsPreserved: cardsBeforeFold
         });
         return { success: true, action: 'fold' };
     }
@@ -2422,30 +2439,51 @@ class Table {
                 // If cards exist, show or hide based on visibility
                 // If cards don't exist yet, return empty array (not null)
                 let cards = [];
-                if (seat.cards && Array.isArray(seat.cards)) {
-                    if (seat.cards.length > 0) {
+                const seatCardsRaw = seat.cards;
+                const seatCardsLength = seatCardsRaw?.length || 0;
+                
+                if (seatCardsRaw && Array.isArray(seatCardsRaw)) {
+                    if (seatCardsLength > 0) {
                         // Cards exist - show or hide based on visibility
-                        cards = canSeeCards ? seat.cards : seat.cards.map(() => ({ rank: null, suit: null }));
+                        cards = canSeeCards ? seatCardsRaw : seatCardsRaw.map(() => ({ rank: null, suit: null }));
                     }
                     // If cards.length === 0, keep cards as empty array (cards haven't been dealt yet)
                 }
                 // If seat.cards is null/undefined, cards stays as empty array
                 
-                // DEBUG: Log when cards are missing but should exist
-                if (this.isSimulation && isSpectating && seat.isActive && 
-                    ['preflop', 'flop', 'turn', 'river', 'showdown'].includes(this.phase) &&
-                    (!seat.cards || seat.cards.length === 0)) {
-                    gameLogger.cardVisibility(this.name, `WARNING: Missing cards for active player ${seat.name}`, {
-                        playerId: seat.playerId,
-                        phase: this.phase,
-                        isActive: seat.isActive,
-                        cardsExists: !!seat.cards,
-                        cardsLength: seat.cards?.length || 0
-                    });
+                // CRITICAL: Log EVERY state request to track card visibility
+                if (this.isSimulation && seat.isActive && 
+                    ['preflop', 'flop', 'turn', 'river', 'showdown'].includes(this.phase)) {
+                    const cardStatus = seatCardsRaw ? 
+                        `${seatCardsLength} cards (${canSeeCards ? 'VISIBLE' : 'HIDDEN'})` : 
+                        'NO CARDS';
+                    
+                    if (!seatCardsRaw || seatCardsLength === 0) {
+                        // CRITICAL ERROR: Cards missing for active player
+                        console.error(`[Table ${this.name}] ⚠️ CARDS MISSING for ${seat.name} (${seat.playerId}) in phase ${this.phase}!`, {
+                            seatIndex: index,
+                            playerId: seat.playerId,
+                            isActive: seat.isActive,
+                            phase: this.phase,
+                            cardsExists: !!seatCardsRaw,
+                            cardsLength: seatCardsLength,
+                            viewerId: forPlayerId,
+                            isSpectating,
+                            canSeeCards
+                        });
+                    } else {
+                        console.log(`[Table ${this.name}] State for ${seat.name}: ${cardStatus}`, {
+                            seatIndex: index,
+                            viewerId: forPlayerId,
+                            isSpectating,
+                            canSeeCards,
+                            cardsRaw: seatCardsRaw
+                        });
+                    }
                 }
                 
                 // DEBUG: Log card visibility for ALL tables (not just simulation)
-                if (seat.cards?.length > 0) {
+                if (seatCardsRaw?.length > 0) {
                     gameLogger.cardVisibility(this.name, `${seat.name} cards for viewer ${forPlayerId}`, {
                         isSimulation: this.isSimulation,
                         isSpectating,
@@ -2453,7 +2491,8 @@ class Table {
                         viewerId: forPlayerId,
                         playerId: seat.playerId,
                         phase: this.phase,
-                        cardsVisible: canSeeCards ? seat.cards : 'HIDDEN'
+                        cardsVisible: canSeeCards ? seatCardsRaw : 'HIDDEN',
+                        cardsCount: seatCardsLength
                     });
                 }
                 
