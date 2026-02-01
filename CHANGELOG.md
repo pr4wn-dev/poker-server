@@ -2,6 +2,20 @@
 
 This file tracks all issues encountered and their solutions. **Search this file first** before debugging.
 
+## Card Visibility & UI Issues
+
+### Cards Disappearing (Fixed)
+- **Issue**: Cards would disappear during hand transitions, especially in simulation mode
+- **Root Cause**: Cards were being cleared before new ones were dealt, causing empty state in broadcasts
+- **Fix**: Cards are now replaced atomically - old cards remain until new ones are ready
+- **Files**: `src/game/Table.js` (startNewHand method)
+
+### Cards Covering Names/Money (Unity Client Issue)
+- **Issue**: Player cards are visually covering player names and chip amounts in Unity UI
+- **Note**: This is a Unity client-side rendering/layout issue, not a server problem
+- **Server Data**: Cards are sent correctly in the `cards` array within each seat object
+- **Unity Fix Needed**: Adjust card UI positioning/z-order in Unity to ensure names/money render above cards
+
 ## Testing System
 
 **State Comparison System** - Compare simulation vs real game states to find bugs automatically.
