@@ -2161,6 +2161,9 @@ class SocketHandler {
         };
         
         // Called when game ends (one player has all the chips)
+        // CRITICAL: Preserve any existing onGameOver callback (e.g., from SimulationManager)
+        // The existing callback should run AFTER SocketHandler notifies clients
+        const originalOnGameOver = table.onGameOver;
         table.onGameOver = (winner) => {
             console.log(`[SocketHandler] Game over at table ${table.name} - Winner: ${winner.name}`);
             
@@ -2205,6 +2208,12 @@ class SocketHandler {
                 isBot: winner.isBot || false,
                 isInformational: true  // Spectators get informational only - no leave prompt
             });
+            
+            // Call original callback AFTER notifying clients (e.g., SimulationManager auto-restart)
+            // This ensures clients are notified before the game restarts
+            if (originalOnGameOver) {
+                originalOnGameOver(winner);
+            }
         };
         
         // Called when ANY player (human or bot) takes an action
