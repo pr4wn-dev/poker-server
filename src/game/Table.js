@@ -573,20 +573,15 @@ class Table {
         this.clearTurnTimer();
         
         if (this.currentPlayerIndex < 0) {
-            gameLogger.debug(this.name, '[TIMER] startTurnTimer skipped - no current player', { currentPlayerIndex: this.currentPlayerIndex });
+            // Timer debug logging removed - too verbose
             return;
         }
         
         const player = this.seats[this.currentPlayerIndex];
         this.turnStartTime = Date.now();
         
-        gameLogger.debug(this.name, '[TIMER] Turn timer STARTED', {
-            player: player?.name,
-            seatIndex: this.currentPlayerIndex,
-            turnTimeLimit: this.turnTimeLimit,
-            turnStartTime: this.turnStartTime,
-            phase: this.phase
-        });
+        // Timer start logging removed - too verbose (logs every turn)
+        // Only log timer errors or timeouts
         
         this.turnTimeout = setTimeout(() => {
             this.handleTurnTimeout();
@@ -602,13 +597,7 @@ class Table {
             this.turnTimeout = null;
         }
         
-        if (wasActive) {
-            gameLogger.debug(this.name, '[TIMER] Turn timer CLEARED', {
-                wasActive,
-                elapsedMs: elapsed,
-                phase: this.phase
-            });
-        }
+        // Timer clear logging removed - too verbose
         
         this.turnStartTime = null;
     }
@@ -623,26 +612,20 @@ class Table {
     handleTurnTimeout() {
         const player = this.seats[this.currentPlayerIndex];
         if (!player) {
-            gameLogger.debug(this.name, '[TIMER] Timeout triggered but no player at index', { currentPlayerIndex: this.currentPlayerIndex });
+            // Timer debug logging removed - only log errors
             return;
         }
         
         // CRITICAL FIX: Check if already folded or all-in (shouldn't happen, but protect against it)
         if (player.isFolded) {
-            gameLogger.debug(this.name, '[TIMER] Timeout triggered but player already folded', { 
-                currentPlayerIndex: this.currentPlayerIndex,
-                playerName: player.name 
-            });
+            // Timer debug logging removed - only log errors
             // Just advance game - player already folded
             this.advanceGame();
             return;
         }
         
         if (player.isAllIn) {
-            gameLogger.debug(this.name, '[TIMER] Timeout triggered but player already all-in', { 
-                currentPlayerIndex: this.currentPlayerIndex,
-                playerName: player.name 
-            });
+            // Timer debug logging removed - only log errors
             // All-in players can't fold - just advance game
             this.advanceGame();
             return;
@@ -691,7 +674,7 @@ class Table {
         this.stopBlindTimer();
         
         if (this.blindIncreaseInterval <= 0) {
-            gameLogger.debug(this.name, '[BLIND_TIMER] Disabled (interval=0)', { blindIncreaseInterval: this.blindIncreaseInterval });
+            // Blind timer debug logging removed - only log errors
             return; // Blind increases disabled
         }
         
@@ -701,13 +684,7 @@ class Table {
             this.increaseBlinds();
         }, this.blindIncreaseInterval);
         
-        gameLogger.debug(this.name, '[BLIND_TIMER] Started', {
-            blindLevel: this.blindLevel,
-            currentBlinds: `${this.smallBlind}/${this.bigBlind}`,
-            intervalMs: this.blindIncreaseInterval,
-            nextIncreaseAt: new Date(this.nextBlindIncreaseAt).toISOString()
-        });
-        console.log(`[Table ${this.name}] Blind timer started - next increase in ${this.blindIncreaseInterval / 60000} minutes`);
+        // Blind timer start logging removed - too verbose
     }
     
     stopBlindTimer() {
@@ -716,9 +693,7 @@ class Table {
             clearTimeout(this.blindIncreaseTimer);
             this.blindIncreaseTimer = null;
         }
-        if (wasActive) {
-            gameLogger.debug(this.name, '[BLIND_TIMER] Stopped', { wasActive });
-        }
+        // Blind timer stop logging removed - too verbose
         this.nextBlindIncreaseAt = null;
     }
     
@@ -736,10 +711,7 @@ class Table {
         if (this.phase === GAME_PHASES.WAITING || 
             this.phase === GAME_PHASES.READY_UP || 
             this.phase === GAME_PHASES.COUNTDOWN) {
-            gameLogger.debug(this.name, '[BLIND_TIMER] Skipping blind increase - game not in progress', {
-                phase: this.phase,
-                blindLevel: this.blindLevel
-            });
+            // Blind timer skip logging removed - too verbose
             // Reschedule for later (don't let timer accumulate)
             this.startBlindTimer();
             return;
@@ -1039,17 +1011,8 @@ class Table {
                 seat.cards = newCards;
                 
                 // CRITICAL: Log EVERY card deal for debugging
-                console.log(`[Table ${this.name}] DEALT CARDS to ${seat.name} (${seat.playerId}):`, 
-                    JSON.stringify(newCards), 
-                    `(was: ${oldCards ? JSON.stringify(oldCards) : 'null'})`);
-                gameLogger.cardVisibility(this.name, `DEALT cards to ${seat.name}`, {
-                    playerId: seat.playerId,
-                    seatIndex: this.seats.indexOf(seat),
-                    cards: newCards,
-                    oldCards: oldCards,
-                    phase: 'preflop',
-                    isActive: seat.isActive
-                });
+                // Card dealing verbose logging removed - too verbose (logs every card dealt)
+                // Only log errors (missing cards, invalid cards, etc.)
             } else if (seat) {
                 // Inactive players - clear their cards
                 const oldCards = seat.cards ? [...seat.cards] : null;
@@ -1540,15 +1503,8 @@ class Table {
         const totalNeeded = toCall + (this.minRaise || this.bigBlind);
         const raiseAmount = amount - toCall;
         
-        gameLogger.debug(this.name, `RAISE VALIDATION`, {
-            seatIndex,
-            playerName: player.name,
-            amount,
-            toCall,
-            totalNeeded,
-            raiseAmount,
-            minRaise: this.minRaise,
-            playerChips: player.chips,
+        // Raise validation debug logging removed - too verbose
+        // Only log errors or invalid raises
             currentBet: this.currentBet,
             playerBet: player.currentBet,
             raisesThisRound: this.raisesThisRound,
@@ -1572,7 +1528,7 @@ class Table {
         // If player is raising all their chips, it's an all-in, not a raise
         if (amount === player.chips && amount < totalNeeded) {
             // Player doesn't have enough for a proper raise - treat as all-in
-            gameLogger.debug(this.name, `RAISE converted to ALL-IN (insufficient chips for proper raise)`);
+            // Debug logging removed - only log errors
             return this.allIn(seatIndex);
         }
 
@@ -1580,7 +1536,7 @@ class Table {
         // If amount equals toCall, treat as call, not raise
         if (raiseAmount <= 0) {
             // Amount is just the call amount - treat as call instead
-            gameLogger.debug(this.name, `RAISE converted to CALL (raiseAmount <= 0)`);
+            // Debug logging removed - only log errors
             return this.call(seatIndex);
         }
 
@@ -1733,12 +1689,7 @@ class Table {
         // Find next player who can act (not folded, not all-in)
         const nextPlayer = this.getNextActivePlayer(this.currentPlayerIndex);
         
-        gameLogger.debug(this.name, 'Next player calculation', {
-            currentPlayerIndex: this.currentPlayerIndex,
-            nextPlayer,
-            lastRaiserIndex: this.lastRaiserIndex,
-            hasPassedLastRaiser: this.hasPassedLastRaiser
-        });
+        // Next player calculation debug logging removed - too verbose
         
         // Track if we've passed the last raiser this betting round
         // This ensures we don't advance phase too early (before everyone has acted)
@@ -1928,12 +1879,7 @@ class Table {
                                           (this.currentPlayerIndex < bbIndex && nextPlayer > bbIndex) ||
                                           (this.currentPlayerIndex === bbIndex && nextPlayer !== bbIndex);
                         bettingRoundComplete = hasPassedBB && nextPlayer === bbIndex;
-                        gameLogger.debug(this.name, 'PRE_FLOP BB check', {
-                            hasPassedBB,
-                            currentPlayerIndex: this.currentPlayerIndex,
-                            nextPlayer,
-                            bbIndex,
-                            lastRaiserIndex: this.lastRaiserIndex,
+                        // Pre-flop BB check debug logging removed - too verbose
                             bettingRoundComplete
                         });
                     }
@@ -2312,17 +2258,8 @@ class Table {
             
             player.handResult = HandEvaluator.evaluate(uniqueCards);
             
-            // Detailed hand evaluation logging
-            gameLogger.debug(this.name, '[HAND_EVAL] Hand evaluated', {
-                player: player.name,
-                seatIndex: player.seatIndex,
-                holeCards: playerCards.map(c => `${c.rank}${c.suit}`),
-                communityCards: communityCards.map(c => `${c.rank}${c.suit}`),
-                handName: player.handResult.name,
-                handRank: player.handResult.rank,
-                handValues: player.handResult.values,
-                bestFiveCards: player.handResult.cards?.map(c => `${c.rank}${c.suit}`) || 'N/A'
-            });
+            // Hand evaluation debug logging removed - too verbose (logs every hand for every player)
+            // Only log errors or critical hand evaluation issues
             console.log(`[Table ${this.name}] ${player.name} has: ${player.handResult.name} (rank ${player.handResult.rank})`);
         }
 
@@ -2790,13 +2727,8 @@ class Table {
 
     isSpectator(userId) {
         const result = this.spectators.has(userId);
-        // Log for ALL tables so we can compare normal vs simulation
-        gameLogger.spectator(this.name, `isSpectator check`, {
-            userId,
-            result,
-            isSimulation: this.isSimulation,
-            spectatorIds: Array.from(this.spectators.keys())
-        });
+        // Spectator check logging removed - too verbose (called on every state request)
+        // Only log when spectator status changes (add/remove spectator)
         return result;
     }
 
@@ -2922,15 +2854,8 @@ class Table {
         const isSpectating = this.isSpectator(forPlayerId);
         const currentPlayer = this.currentPlayerIndex >= 0 ? this.seats[this.currentPlayerIndex] : null;
         
-        // Log state request for ALL tables
-        gameLogger.stateBroadcast(this.name, 'getState called', {
-            forPlayerId,
-            isSpectating,
-            isSimulation: this.isSimulation,
-            phase: this.phase,
-            spectatorIds: Array.from(this.spectators.keys()),
-            currentPlayerId: currentPlayer?.playerId || null
-        });
+        // State broadcast logging removed - too verbose (called on every state update)
+        // Only log errors or critical state changes
         
         const state = {
             id: this.id,
@@ -3014,30 +2939,12 @@ class Table {
                             isSpectating,
                             canSeeCards
                         });
-                    } else {
-                        console.log(`[Table ${this.name}] State for ${seat.name}: ${cardStatus}`, {
-                            seatIndex: index,
-                            viewerId: forPlayerId,
-                            isSpectating,
-                            canSeeCards,
-                            cardsRaw: seatCardsRaw
-                        });
                     }
+                    // Verbose state logging removed - only log errors (missing cards)
                 }
                 
-                // DEBUG: Log card visibility for ALL tables (not just simulation)
-                if (seatCardsRaw?.length > 0) {
-                    gameLogger.cardVisibility(this.name, `${seat.name} cards for viewer ${forPlayerId}`, {
-                        isSimulation: this.isSimulation,
-                        isSpectating,
-                        canSeeCards,
-                        viewerId: forPlayerId,
-                        playerId: seat.playerId,
-                        phase: this.phase,
-                        cardsVisible: canSeeCards ? seatCardsRaw : 'HIDDEN',
-                        cardsCount: seatCardsLength
-                    });
-                }
+                // Card visibility logging removed - too verbose (logs for every seat, every viewer, every state update)
+                // Only log card visibility errors (missing cards for active players) - see error logging above
                 
                 return {
                     index,
