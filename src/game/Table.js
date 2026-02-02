@@ -2378,8 +2378,22 @@ class Table {
             const seat = this.seats.find(s => s?.playerId === award.playerId);
             if (seat && seat.isActive !== false) {
                 // Only award chips to active (non-eliminated) players
+                const chipsBefore = seat.chips;
                 seat.chips += award.amount;
-                console.log(`[Table ${this.name}] ${award.name} wins ${award.amount} from ${award.potType} pot with ${award.handName}`);
+                const chipsAfter = seat.chips;
+                
+                console.log(`[Table ${this.name}] ${award.name} wins ${award.amount} from ${award.potType} pot with ${award.handName} (chips: ${chipsBefore} → ${chipsAfter})`);
+                
+                // CRITICAL: Log chip award for debugging
+                gameLogger.gameEvent(this.name, '[POT] Awarded chips', {
+                    winner: award.name,
+                    amount: award.amount,
+                    potType: award.potType,
+                    handName: award.handName,
+                    chipsBefore,
+                    chipsAfter,
+                    calculationCheck: chipsBefore + award.amount === chipsAfter ? 'CORRECT' : 'ERROR'
+                });
             } else if (seat && seat.isActive === false) {
                 // Player is eliminated - don't give them chips, pot goes to remaining players or is lost
                 console.log(`[Table ${this.name}] ${award.name} is eliminated - ${award.amount} chips from pot are forfeited`);
