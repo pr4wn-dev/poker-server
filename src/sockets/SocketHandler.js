@@ -253,49 +253,37 @@ class SocketHandler {
                     });
                     console.log(`[SocketHandler] Table created: ${table.id}`);
                     
-                    // Send response IMMEDIATELY - before any other operations
-                    const immediateResponse = {
-                        success: true,
-                        tableId: table.id,
-                        table: {
-                            id: table.id,
-                            name: table.name,
-                            maxPlayers: table.maxPlayers,
-                            playerCount: 0
-                        },
-                        seatIndex: -1,
-                        state: {
-                            id: table.id,
-                            name: table.name,
-                            phase: 'waiting'
-                        }
+                    // Set up table callbacks for state broadcasting
+                    this.setupTableCallbacks(table);
+                    
+                    // Auto-join the creator to seat 0
+                    const joinResult = this.gameManager.joinTable(user.userId, table.id, 0);
+                    if (joinResult.success) {
+                        socket.join(`table:${table.id}`);
+                    }
+                    
+                    // Get state and public info
+                    const state = table.getState(user.userId);
+                    const publicInfo = table.getPublicInfo();
+                    
+                    // Build and send response
+                    const response = { 
+                        success: true, 
+                        tableId: table.id, 
+                        table: publicInfo,
+                        seatIndex: joinResult.success ? joinResult.seatIndex : -1,
+                        state 
                     };
                     
                     responseSent = true;
-                    if (callback) callback(immediateResponse);
-                    socket.emit('create_table_response', immediateResponse);
-                    console.log('[SocketHandler] Response sent immediately after table creation');
+                    completed = true;
+                    clearTimeout(timeoutHandle);
                     
-                    // Do everything else asynchronously
-                    setImmediate(() => {
-                        try {
-                            this.setupTableCallbacks(table);
-                            const joinResult = this.gameManager.joinTable(user.userId, table.id, 0);
-                            if (joinResult.success) {
-                                socket.join(`table:${table.id}`);
-                            }
-                            const fullState = table.getState(user.userId);
-                            const fullPublicInfo = table.getPublicInfo();
-                            socket.emit('table_state', fullState);
-                            this.io.emit('table_created', fullPublicInfo);
-                            completed = true;
-                            clearTimeout(timeoutHandle);
-                        } catch (err) {
-                            console.error('[SocketHandler] Error in async setup:', err);
-                            completed = true;
-                            clearTimeout(timeoutHandle);
-                        }
-                    });
+                    if (callback) callback(response);
+                    socket.emit('create_table_response', response);
+                    
+                    // Broadcast new table to lobby
+                    this.io.emit('table_created', publicInfo);
                     
                     // Get full state asynchronously and send update
                     setImmediate(() => {
