@@ -387,10 +387,14 @@ class SimulationManager {
         // CRITICAL: Hook into onGameOver callback instead of polling
         // This is more reliable and immediate
         const originalOnGameOver = table.onGameOver;
+        this.log('INFO', `Setting up auto-restart callback. Original onGameOver: ${originalOnGameOver ? 'EXISTS' : 'NONE'}`, { tableId });
         table.onGameOver = (winner) => {
             // Call original callback if it exists (for SocketHandler)
             if (originalOnGameOver) {
+                this.log('INFO', 'Calling original onGameOver callback (SocketHandler)', { tableId, winner: winner.name });
                 originalOnGameOver(winner);
+            } else {
+                this.log('WARN', 'No original onGameOver callback found - SocketHandler may not be set up yet', { tableId, winner: winner.name });
             }
             
             // Check if simulation is still active

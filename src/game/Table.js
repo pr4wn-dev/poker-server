@@ -154,6 +154,7 @@ class Table {
         this.onPlayerNotReady = null; // Called when player doesn't ready in time
         this.onPlayerAction = null; // Called when any player (human or bot) takes an action
         this.onPlayerEliminated = null; // Called when a player runs out of chips
+        this.onGameOver = null;     // Called when game ends (one player has all chips) - CRITICAL for simulation restart and client notifications
         
         // State snapshot for testing/comparison
         // CRITICAL: Always enable for simulation tables, optional for real tables

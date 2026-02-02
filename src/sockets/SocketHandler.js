@@ -235,10 +235,12 @@ class SocketHandler {
                     if (result.success) {
                         // CRITICAL: Set up table callbacks for state broadcasting
                         // Without this, simulation tables won't broadcast state to players!
+                        // NOTE: This is called AFTER SimulationManager._setupAutoRestart, so we preserve that callback
                         const simTable = this.gameManager.getTable(result.tableId);
                         if (simTable) {
+                            console.log(`[SocketHandler] Setting up callbacks for simulation table ${result.tableId}. onGameOver before: ${simTable.onGameOver ? 'SET' : 'NOT SET'}`);
                             this.setupTableCallbacks(simTable);
-                            console.log(`[SocketHandler] Set up callbacks for simulation table ${result.tableId}`);
+                            console.log(`[SocketHandler] Set up callbacks for simulation table ${result.tableId}. onGameOver after: ${simTable.onGameOver ? 'SET' : 'NOT SET'}`);
                         }
                         
                         // Join creator as spectator - MUST add to table.spectators for card visibility
@@ -2164,6 +2166,7 @@ class SocketHandler {
         // CRITICAL: Preserve any existing onGameOver callback (e.g., from SimulationManager)
         // The existing callback should run AFTER SocketHandler notifies clients
         const originalOnGameOver = table.onGameOver;
+        console.log(`[SocketHandler] Setting up onGameOver callback for table ${table.name}. Original callback: ${originalOnGameOver ? 'EXISTS' : 'NONE'}`);
         table.onGameOver = (winner) => {
             console.log(`[SocketHandler] Game over at table ${table.name} - Winner: ${winner.name}`);
             
