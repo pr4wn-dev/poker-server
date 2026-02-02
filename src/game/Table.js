@@ -1677,11 +1677,15 @@ class Table {
         const oldCurrentBet = this.currentBet;
         const oldMinRaise = this.minRaise;
         const oldLastRaiser = this.lastRaiserIndex;
+        
+        // CRITICAL FIX: For all-in, amount is ALL remaining chips
+        // This goes to pot and totalBet (it's the additional amount they're betting)
+        const newCurrentBet = player.currentBet + amount; // Their total bet after all-in
 
-        player.currentBet += amount;
-        player.totalBet = (player.totalBet || 0) + amount;
-        this.pot += amount;
         player.chips = 0;
+        player.currentBet = newCurrentBet;
+        player.totalBet = (player.totalBet || 0) + amount; // Add all chips to totalBet
+        this.pot += amount; // Add all chips to pot
         player.isAllIn = true;
         
         // CRITICAL: Verify calculations
