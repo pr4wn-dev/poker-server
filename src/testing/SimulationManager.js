@@ -607,18 +607,18 @@ class SimulationManager {
         
         // Add missing regular bots
         // CRITICAL: Check which bots are already seated to avoid "already at this table" errors
-        const currentRegularBots = table.seats
+        const alreadySeatedBotNames = table.seats
             .filter(s => s && s.isBot)
             .map(s => s.name.toLowerCase());
         
-        const currentRegularCount = currentRegularBots.length;
+        const currentRegularCount = alreadySeatedBotNames.length;
         if (currentRegularCount < newRegularBotCount) {
             const regularBotsNeeded = newRegularBotCount - currentRegularCount;
             this.log('INFO', `Adding ${regularBotsNeeded} regular bot(s)`, { tableId });
             
             // Filter out bots that are already seated
             const availableBots = botProfiles.filter(profile => 
-                !currentRegularBots.includes(profile.toLowerCase())
+                !alreadySeatedBotNames.includes(profile.toLowerCase())
             );
             
             let added = 0;
@@ -637,7 +637,7 @@ class SimulationManager {
             if (added < regularBotsNeeded) {
                 this.log('WARN', `Could only add ${added} of ${regularBotsNeeded} regular bots needed`, { 
                     availableBots: availableBots.length,
-                    alreadySeated: currentRegularBots
+                    alreadySeated: alreadySeatedBotNames
                 });
             }
         }
