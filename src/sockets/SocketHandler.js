@@ -138,75 +138,114 @@ class SocketHandler {
             });
 
             socket.on('create_table', async (data, callback) => {
-                console.log('[SocketHandler] create_table received:', JSON.stringify(data));
-                const user = this.getAuthenticatedUser(socket);
-                if (!user) {
-                    console.log('[SocketHandler] create_table FAILED - not authenticated');
-                    const error = { success: false, error: 'Not authenticated' };
-                    if (callback) callback(error);
-                    socket.emit('create_table_response', error);
-                    return;
-                }
-
-                // Get user's chips from DB
-                const dbUser = await userRepo.getById(user.userId);
-                if (!dbUser) {
-                    const error = { success: false, error: 'User not found' };
-                    if (callback) callback(error);
-                    socket.emit('create_table_response', error);
-                    return;
-                }
-                
-                // Update player's chips in game manager
-                const player = this.gameManager.players.get(user.userId);
-                if (player) {
-                    player.chips = dbUser.chips;
-                }
-
-                console.log('[SocketHandler] create_table - user authenticated:', user.username);
-                const table = this.gameManager.createTable({
-                    ...data,
-                    creatorId: user.userId
-                });
-                
-                // Set up table callbacks for state broadcasting
-                this.setupTableCallbacks(table);
-                
-                // Auto-join the creator to seat 0
-                const joinResult = this.gameManager.joinTable(user.userId, table.id, 0);
-                if (joinResult.success) {
-                    socket.join(`table:${table.id}`);
-                }
-                
-                let state, publicInfo;
                 try {
-                    state = table.getState(user.userId);
-                } catch (err) {
-                    console.error('[SocketHandler] getState ERROR:', err);
-                    state = { id: table.id, name: table.name, phase: 'waiting' };
+                    console.log('[SocketHandler] create_table received:', JSON.stringify(data));
+                    const user = this.getAuthenticatedUser(socket);
+                    if (!user) {
+                        console.log('[SocketHandler] create_table FAILED - not authenticated');
+                        const error = { success: false, error: 'Not authenticated' };
+                        if (callback) callback(error);
+                        socket.emit('create_table_response', error);
+                        return;
+                    }
+
+                    // Get user's chips from DB
+                    const dbUser = await userRepo.getById(user.userId);
+                    if (!dbUser) {
+                        const error = { success: false, error: 'User not found' };
+                        if (callback) callback(error);
+                        socket.emit('create_table_response', error);
+                        return;
+                    }
+                    
+                    // Update player's chips in game manager
+                    const player = this.gameManager.players.get(user.userId);
+                    if (player) {
+                        player.chips = dbUser.chips;
+                    }
+
+                    console.log('[SocketHandler] create_table - user authenticated:', user.username);
+                    const table = this.gameManager.createTable({
+                        ...data,
+                        creatorId: user.userId
+                    });
+                    
+                    // Set up table callbacks for state broadcasting
+                    try {
+                        this.setupTableCallbacks(table);
+                    } catch (err) {
+                        console.error('[SocketHandler] setupTableCallbacks ERROR:', err);
+                    }
+                    
+                    // Auto-join the creator to seat 0
+                    const joinResult = this.gameManager.joinTable(user.userId, table.id, 0);
+                    if (joinResult.success) {
+                        socket.join(`table:${table.id}`);
+                    }
+                    
+                    let state, publicInfo;
+                    try {
+                        state = table.getState(user.userId);
+                    } catch (err) {
+                        console.error('[SocketHandler] getState ERROR:', err);
+                        state = { id: table.id, name: table.name, phase: 'waiting' };
+                    }
+                    
+                    try {
+                        publicInfo = table.getPublicInfo();
+                    } catch (err) {
+                        console.error('[SocketHandler] getPublicInfo ERROR:', err);
+                        publicInfo = { id: table.id, name: table.name, maxPlayers: table.maxPlayers };
+                    }
+                    
+                    const response = { 
+                        success: true, 
+                        tableId: table.id, 
+                        table: publicInfo,
+                        seatIndex: joinResult.success ? joinResult.seatIndex : -1,
+                        state 
+                    };
+                    console.log(`[SocketHandler] create_table SUCCESS - seatIndex: ${response.seatIndex}`);
+                    
+                    // CRITICAL: Send response BEFORE any async operations
+                    if (callback) {
+                        try {
+                            callback(response);
+                        } catch (err) {
+                            console.error('[SocketHandler] Callback error:', err);
+                        }
+                    }
+                    try {
+                        socket.emit('create_table_response', response);
+                        console.log('[SocketHandler] Response emitted to client');
+                    } catch (err) {
+                        console.error('[SocketHandler] Emit error:', err);
+                    }
+                    
+                    // Broadcast new table to lobby (non-blocking)
+                    setImmediate(() => {
+                        try {
+                            this.io.emit('table_created', publicInfo);
+                        } catch (err) {
+                            console.error('[SocketHandler] Broadcast error:', err);
+                        }
+                    });
+                } catch (error) {
+                    console.error('[SocketHandler] create_table FATAL ERROR:', error);
+                    const errorResponse = { success: false, error: `Server error: ${error.message}` };
+                    if (callback) {
+                        try {
+                            callback(errorResponse);
+                        } catch (err) {
+                            console.error('[SocketHandler] Error callback failed:', err);
+                        }
+                    }
+                    try {
+                        socket.emit('create_table_response', errorResponse);
+                    } catch (err) {
+                        console.error('[SocketHandler] Error emit failed:', err);
+                    }
                 }
-                
-                try {
-                    publicInfo = table.getPublicInfo();
-                } catch (err) {
-                    console.error('[SocketHandler] getPublicInfo ERROR:', err);
-                    publicInfo = { id: table.id, name: table.name, maxPlayers: table.maxPlayers };
-                }
-                
-                const response = { 
-                    success: true, 
-                    tableId: table.id, 
-                    table: publicInfo,
-                    seatIndex: joinResult.success ? joinResult.seatIndex : -1,
-                    state 
-                };
-                console.log(`[SocketHandler] create_table SUCCESS - seatIndex: ${response.seatIndex}`);
-                if (callback) callback(response);
-                socket.emit('create_table_response', response);
-                console.log('[SocketHandler] Response sent to client');
-                
-                // Broadcast new table to lobby
-                this.io.emit('table_created', publicInfo);
             });
 
             // ============ Simulation Mode ============
