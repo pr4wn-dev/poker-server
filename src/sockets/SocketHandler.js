@@ -176,13 +176,18 @@ class SocketHandler {
                     }
                     
                     // CRITICAL: Ensure player is registered in GameManager
+                    // registerPlayer takes (socketId, playerName, userId) - note the order!
                     console.log('[SocketHandler] Checking/registering player in GameManager...');
                     let player = this.gameManager.players.get(user.userId);
                     if (!player) {
                         console.log('[SocketHandler] Player not found, registering...');
-                        this.gameManager.registerPlayer(user.userId, user.profile?.username || user.username, socket.id);
+                        const registeredId = this.gameManager.registerPlayer(socket.id, user.profile?.username || user.username, user.userId);
+                        console.log(`[SocketHandler] registerPlayer returned: ${registeredId}`);
                         player = this.gameManager.players.get(user.userId);
                         console.log(`[SocketHandler] Player registered: ${player ? 'SUCCESS' : 'FAILED'}`);
+                        if (!player) {
+                            throw new Error(`Failed to register player - registerPlayer returned ${registeredId} but player not found`);
+                        }
                     }
                     
                     // Update player's chips in game manager
@@ -190,7 +195,7 @@ class SocketHandler {
                         player.chips = dbUser.chips;
                         console.log(`[SocketHandler] Updated player chips: ${player.chips}`);
                     } else {
-                        throw new Error('Failed to register player in GameManager');
+                        throw new Error('Player not found after registration');
                     }
 
                     console.log('[SocketHandler] create_table - user authenticated:', user.username);
