@@ -538,6 +538,11 @@ class SimulationManager {
         table.blindIncreaseInterval = newBlindIncreaseInterval;
         table.minRaise = newBigBlind;
         
+        // CRITICAL: Reset blind level and initial blinds to prevent exponential growth
+        table.blindLevel = 1;
+        table.initialSmallBlind = newSmallBlind;
+        table.initialBigBlind = newBigBlind;
+        
         // Update simulation tracking
         simulation.buyIn = newBuyIn;
         simulation.originalSmallBlind = newSmallBlind;
@@ -681,9 +686,17 @@ class SimulationManager {
         table.currentPlayerIndex = -1;
         table.dealerIndex = (table.dealerIndex + 1) % newMaxPlayers; // Rotate dealer
         table.lastRaiserIndex = -1;
-        table.blindLevel = 1; // Reset blind level
         
-        // Clear any pending timers
+        // CRITICAL: Reset blind level and initial blinds BEFORE clearing timers
+        // This prevents the blind timer from using old values if it fires during reset
+        table.blindLevel = 1;
+        table.initialSmallBlind = newSmallBlind;
+        table.initialBigBlind = newBigBlind;
+        table.smallBlind = newSmallBlind; // Ensure current blinds match new settings
+        table.bigBlind = newBigBlind;
+        table.minRaise = newBigBlind;
+        
+        // Clear any pending timers (must be done AFTER resetting blind values)
         if (table.turnTimeout) {
             clearTimeout(table.turnTimeout);
             table.turnTimeout = null;

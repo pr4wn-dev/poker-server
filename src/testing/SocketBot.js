@@ -766,6 +766,17 @@ class SocketBot {
         const state = this.gameState;
         if (!state) return;
         
+        // CRITICAL: Double-check it's still our turn before making decision
+        // This prevents race conditions where turn changed between scheduling and execution
+        if (!this.isMyTurn || state.currentPlayerId !== this.userId) {
+            this.log('DEBUG', 'Skipping decision - not my turn anymore', {
+                isMyTurn: this.isMyTurn,
+                currentPlayerId: state.currentPlayerId,
+                myUserId: this.userId
+            });
+            return;
+        }
+        
         // Find my seat info
         const mySeat = state.seats?.find(s => s?.playerId === this.userId);
         if (!mySeat) {
@@ -840,6 +851,17 @@ class SocketBot {
      * Send action to server
      */
     _sendAction(action, amount = 0) {
+        // CRITICAL: Final check before sending - verify it's still our turn
+        const state = this.gameState;
+        if (state && (!this.isMyTurn || state.currentPlayerId !== this.userId)) {
+            this.log('DEBUG', `Skipping ${action} - not my turn anymore`, {
+                isMyTurn: this.isMyTurn,
+                currentPlayerId: state.currentPlayerId,
+                myUserId: this.userId
+            });
+            return;
+        }
+        
         this.log('ACTION', `Sending: ${action}${amount > 0 ? ' ' + amount : ''}`, { action, amount });
         
         // Server listens for 'action' event, not 'player_action'
@@ -850,10 +872,18 @@ class SocketBot {
             if (response && response.success) {
                 this.log('ACTION', `${action} SUCCESS`, response);
             } else {
-                this.log('ERROR', `${action} FAILED`, { error: response?.error });
-                // Try fallback action
-                if (action !== 'fold' && action !== 'check') {
-                    this._sendAction(this.gameState?.currentBet > 0 ? 'fold' : 'check');
+                // Only log as ERROR if it's a real error, not just "not your turn" (which is expected in race conditions)
+                const isExpectedError = response?.error?.includes('Not your turn') || 
+                                       response?.error?.includes('No betting during showdown') ||
+                                       response?.error?.includes('Game not in progress');
+                if (isExpectedError) {
+                    this.log('DEBUG', `${action} rejected (expected): ${response?.error}`, { error: response?.error });
+                } else {
+                    this.log('ERROR', `${action} FAILED`, { error: response?.error });
+                    // Try fallback action only for real errors
+                    if (action !== 'fold' && action !== 'check') {
+                        this._sendAction(this.gameState?.currentBet > 0 ? 'fold' : 'check');
+                    }
                 }
             }
         });

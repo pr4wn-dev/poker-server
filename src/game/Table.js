@@ -666,13 +666,41 @@ class Table {
     }
     
     increaseBlinds() {
+        // CRITICAL: Don't increase blinds if game is not in progress
+        // This prevents blinds from increasing during waiting/ready_up phases
+        if (this.phase === GAME_PHASES.WAITING || 
+            this.phase === GAME_PHASES.READY_UP || 
+            this.phase === GAME_PHASES.COUNTDOWN) {
+            gameLogger.debug(this.name, '[BLIND_TIMER] Skipping blind increase - game not in progress', {
+                phase: this.phase,
+                blindLevel: this.blindLevel
+            });
+            // Reschedule for later (don't let timer accumulate)
+            this.startBlindTimer();
+            return;
+        }
+        
         const oldBlinds = { small: this.smallBlind, big: this.bigBlind, level: this.blindLevel };
         
-        // Double the blinds
-        this.blindLevel++;
-        this.smallBlind = this.smallBlind * 2;
-        this.bigBlind = this.bigBlind * 2;
-        this.minRaise = this.bigBlind;
+        // CRITICAL: Cap blind level to prevent exponential overflow
+        // If blinds get too large, reset to initial values
+        if (this.blindLevel > 50 || this.smallBlind > 1e15 || this.bigBlind > 1e15) {
+            gameLogger.gameEvent(this.name, '[BLIND_TIMER] BLINDS RESET - preventing overflow', {
+                oldLevel: this.blindLevel,
+                oldBlinds: `${this.smallBlind}/${this.bigBlind}`,
+                newBlinds: `${this.initialSmallBlind}/${this.initialBigBlind}`
+            });
+            this.blindLevel = 1;
+            this.smallBlind = this.initialSmallBlind;
+            this.bigBlind = this.initialBigBlind;
+            this.minRaise = this.bigBlind;
+        } else {
+            // Double the blinds
+            this.blindLevel++;
+            this.smallBlind = this.smallBlind * 2;
+            this.bigBlind = this.bigBlind * 2;
+            this.minRaise = this.bigBlind;
+        }
         
         gameLogger.gameEvent(this.name, '[BLIND_TIMER] BLINDS INCREASED', {
             oldLevel: oldBlinds.level,
