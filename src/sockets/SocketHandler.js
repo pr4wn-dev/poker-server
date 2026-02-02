@@ -139,6 +139,7 @@ class SocketHandler {
 
             socket.on('create_table', async (data, callback) => {
                 let completed = false;
+                let responseSent = false;
                 let timeoutHandle;
                 
                 // Wrap entire handler in timeout to prevent hanging
