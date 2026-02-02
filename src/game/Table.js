@@ -1554,8 +1554,16 @@ class Table {
 
         // FIX: Validate that raise amount is actually a raise (more than minRaise) or all-in
         // If amount equals toCall, treat as call, not raise
+        // EXCEPTION: Pre-flop - allow betting the big blind amount even if it equals currentBet
+        // (This allows players to "bet" the big blind pre-flop, which is valid)
         if (raiseAmount <= 0) {
             // Amount is just the call amount - treat as call instead
+            // BUT: Pre-flop, if player is betting exactly the big blind and hasn't acted yet, allow it as a bet
+            if (this.phase === GAME_PHASES.PRE_FLOP && amount === this.bigBlind && player.currentBet === 0) {
+                // Player is betting the big blind pre-flop (first action) - this is valid, treat as bet
+                gameLogger.debug(this.name, `PRE-FLOP BET: Player betting big blind amount, treating as bet`);
+                return this.bet(seatIndex, amount);
+            }
             gameLogger.debug(this.name, `RAISE converted to CALL (raiseAmount <= 0)`);
             return this.call(seatIndex);
         }
