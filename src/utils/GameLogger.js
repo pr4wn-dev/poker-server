@@ -157,9 +157,11 @@ class GameLogger {
     
     /**
      * Log card visibility (who can see what)
+     * DISABLED - too verbose, clogs logs
      */
     cardVisibility(tableName, message, data = null) {
-        this.writeLog('CARDS', tableName, message, data);
+        // Disabled - card visibility logging is too verbose
+        // Only log errors (missing cards) - see error logging in Table.js
     }
     
     /**

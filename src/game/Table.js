@@ -81,6 +81,10 @@ class Table {
         this.gameStarted = false;
         this.handsPlayed = 0;
         
+        // CRITICAL: Track starting chips for money validation
+        // Sum of all players' starting chips should equal winner's final chips
+        this.totalStartingChips = 0;  // Sum of all buy-ins when game starts
+        
         // Item side pot (optional gambling)
         this.itemSidePot = new SidePot(this.id, this.creatorId);
         this.sidePotCollectionTime = options.sidePotCollectionTime || 60000; // 60 seconds default
@@ -518,10 +522,15 @@ class Table {
         // Only reset if gameStarted was false (meaning this is a new game, not just a new hand)
         if (!this.gameStarted) {
             console.log(`[Table ${this.name}] Resetting all player chips to buy-in (${this.buyIn}) for new game`);
+            
+            // CRITICAL: Track total starting chips for money validation
+            this.totalStartingChips = 0;
+            
             for (const seat of this.seats) {
                 if (seat && seat.isActive !== false) {
                     const oldChips = seat.chips;
                     seat.chips = this.buyIn;
+                    this.totalStartingChips += this.buyIn;  // Track starting chips
                     console.log(`[Table ${this.name}] Reset ${seat.name} chips: ${oldChips} → ${seat.chips}`);
                     gameLogger.gameEvent(this.name, 'CHIPS RESET for new game', {
                         player: seat.name,
@@ -531,6 +540,12 @@ class Table {
                     });
                 }
             }
+            
+            gameLogger.gameEvent(this.name, 'TOTAL STARTING CHIPS TRACKED', {
+                totalStartingChips: this.totalStartingChips,
+                playerCount: this.seats.filter(s => s && s.isActive !== false).length,
+                buyIn: this.buyIn
+            });
         }
         
         // Start the game!
@@ -875,6 +890,45 @@ class Table {
         const playersWithChips = this.seats.filter(s => s && s.chips > 0);
         if (playersWithChips.length === 1) {
             const winner = playersWithChips[0];
+            
+            // CRITICAL: Validate money - winner's chips should equal sum of all starting chips
+            const winnerChips = winner.chips;
+            const currentTotalChips = this.seats
+                .filter(s => s !== null)
+                .reduce((sum, seat) => sum + (seat.chips || 0), 0);
+            
+            if (this.totalStartingChips > 0) {
+                const difference = Math.abs(winnerChips - this.totalStartingChips);
+                if (difference > 0.01) {
+                    console.error(`[Table ${this.name}] ⚠️ CRITICAL: MONEY LOST! Winner has ${winnerChips}, but total starting chips was ${this.totalStartingChips}. Missing: ${this.totalStartingChips - winnerChips}`);
+                    gameLogger.gameEvent(this.name, '[MONEY] ERROR: Money lost - winner chips != total starting chips', {
+                        winnerChips,
+                        totalStartingChips: this.totalStartingChips,
+                        missing: this.totalStartingChips - winnerChips,
+                        currentTotalChips,
+                        allPlayers: this.seats.filter(s => s !== null).map(s => ({
+                            name: s.name,
+                            chips: s.chips,
+                            isActive: s.isActive
+                        }))
+                    });
+                } else {
+                    gameLogger.gameEvent(this.name, '[MONEY] VALIDATION PASSED: Winner chips = total starting chips', {
+                        winnerChips,
+                        totalStartingChips: this.totalStartingChips,
+                        difference: 0
+                    });
+                }
+            } else {
+                // First game or starting chips not tracked - log warning
+                console.warn(`[Table ${this.name}] ⚠️ Starting chips not tracked (totalStartingChips=${this.totalStartingChips}) - cannot validate money`);
+                gameLogger.gameEvent(this.name, '[MONEY] WARNING: Starting chips not tracked', {
+                    winnerChips,
+                    totalStartingChips: this.totalStartingChips,
+                    currentTotalChips
+                });
+            }
+            
             console.log(`[Table ${this.name}] GAME OVER - ${winner.name} wins with ${winner.chips} chips!`);
             this.phase = GAME_PHASES.WAITING;
             this.gameStarted = false;
