@@ -92,8 +92,9 @@ class Table {
         this.hasPassedLastRaiser = false;  // Track if we've passed the last raiser this betting round
         
         // Raise cap - prevent infinite raising (standard poker: 3-4 raises max per round)
+        // Most cash games use 3-4 raises, tournaments often use 3, some allow unlimited
         this.raisesThisRound = 0;  // Count of raises in current betting round
-        this.MAX_RAISES_PER_ROUND = 4;  // Standard limit: 4 raises per betting round
+        this.MAX_RAISES_PER_ROUND = options.maxRaisesPerRound !== undefined ? options.maxRaisesPerRound : 3;  // Default: 3 raises (standard for most games)
         
         // Loop detection - prevent infinite loops
         this.turnsThisPhase = 0;  // Count turns in current phase
