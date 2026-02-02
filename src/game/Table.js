@@ -1940,12 +1940,10 @@ class Table {
             activePlayers: this.seats.filter(s => s && !s.isFolded).map(s => ({
                 name: s.name,
                 chips: s.chips,
-                isAllIn: s.isAllIn
+                isAllIn: s.isAllIn,
+                totalBet: s.totalBet
             }))
         });
-        
-        // CRITICAL: Broadcast state immediately so clients see cards before showing winner
-        this.onStateChange?.();
         
         // CRITICAL: Only include players who are:
         // 1. Still seated (seat !== null)
@@ -2005,8 +2003,26 @@ class Table {
             console.log(`[Table ${this.name}] ${player.name} has: ${player.handResult.name} (rank ${player.handResult.rank})`);
         }
 
-        // Calculate and award side pots
+        // CRITICAL: Calculate and award side pots BEFORE broadcasting state
+        // This ensures chips are awarded before clients see the state
         const potAwards = this.calculateAndAwardSidePots(activePlayers);
+        
+        // CRITICAL: Verify pot was distributed correctly
+        const totalAwarded = potAwards.reduce((sum, a) => sum + a.amount, 0);
+        const potBeforeAward = this.pot + totalAwarded; // pot is now 0, so add back what was awarded
+        if (totalAwarded !== potBeforeAward && potBeforeAward > 0) {
+            console.error(`[Table ${this.name}] ⚠️ POT MISMATCH: Awarded ${totalAwarded}, but pot was ${potBeforeAward}. Difference: ${potBeforeAward - totalAwarded}`);
+            gameLogger.gameEvent(this.name, '[POT] POT MISMATCH ERROR', {
+                potBeforeAward,
+                totalAwarded,
+                difference: potBeforeAward - totalAwarded,
+                potAwardsCount: potAwards.length,
+                activePlayersCount: activePlayers.length
+            });
+        }
+        
+        // CRITICAL: Broadcast state AFTER chips are awarded so clients see correct chip counts
+        this.onStateChange?.();
         
         // Award item side pot if active
         let sidePotResult = null;
@@ -2075,20 +2091,54 @@ class Table {
      * Side pots occur when players are all-in for different amounts
      */
     calculateAndAwardSidePots(activePlayers) {
+        // CRITICAL: Store pot before calculation for verification
+        const potBeforeCalculation = this.pot;
+        
         // Get all players (including folded) with their total bets
         const allContributors = this.seats
             .filter(seat => seat !== null)
             .map(seat => ({
                 playerId: seat.playerId,
                 name: seat.name,
-                totalBet: seat.totalBet,
+                totalBet: seat.totalBet || 0, // CRITICAL: Ensure totalBet is never undefined
                 isFolded: seat.isFolded,
                 isAllIn: seat.isAllIn,
                 seatIndex: this.seats.indexOf(seat),
                 handResult: activePlayers.find(p => p.playerId === seat.playerId)?.handResult || null
             }))
             .filter(p => p.totalBet > 0);
+        
+        // CRITICAL: Log for debugging all-in scenarios
+        gameLogger.gameEvent(this.name, '[POT] Calculating side pots', {
+            potBeforeCalculation,
+            allContributorsCount: allContributors.length,
+            contributors: allContributors.map(p => ({
+                name: p.name,
+                totalBet: p.totalBet,
+                isFolded: p.isFolded,
+                isAllIn: p.isAllIn,
+                hasHandResult: !!p.handResult
+            }))
+        });
 
+        // CRITICAL: If no contributors, something is wrong - log and return empty
+        if (allContributors.length === 0) {
+            console.error(`[Table ${this.name}] ⚠️ NO CONTRIBUTORS TO POT! Pot: ${potBeforeCalculation}, Active players: ${activePlayers.length}`);
+            gameLogger.gameEvent(this.name, '[POT] ERROR: No contributors found', {
+                potBeforeCalculation,
+                activePlayersCount: activePlayers.length,
+                seatsWithBets: this.seats.filter(s => s && (s.totalBet || 0) > 0).map(s => ({
+                    name: s.name,
+                    totalBet: s.totalBet,
+                    chips: s.chips,
+                    isFolded: s.isFolded,
+                    isAllIn: s.isAllIn
+                }))
+            });
+            // Don't clear pot if we can't calculate - this is an error state
+            return [];
+        }
+        
         // Sort by total bet to create side pots
         const sortedByBet = [...allContributors].sort((a, b) => a.totalBet - b.totalBet);
         
@@ -2132,10 +2182,41 @@ class Table {
                             potType: previousBetLevel === 0 ? 'main' : 'side'
                         });
                     }
+                } else if (potAmount > 0 && eligibleHands.length === 0) {
+                    // CRITICAL: Pot exists but no eligible hands - this shouldn't happen
+                    console.error(`[Table ${this.name}] ⚠️ POT EXISTS BUT NO ELIGIBLE HANDS: potAmount=${potAmount}, eligiblePlayers=${eligiblePlayers.length}, eligibleHands=${eligibleHands.length}`);
+                    gameLogger.gameEvent(this.name, '[POT] ERROR: Pot exists but no eligible hands', {
+                        potAmount,
+                        betLevel: player.totalBet,
+                        eligiblePlayers: eligiblePlayers.map(p => ({
+                            name: p.name,
+                            isFolded: p.isFolded,
+                            hasHandResult: !!p.handResult
+                        }))
+                    });
                 }
                 
                 previousBetLevel = player.totalBet;
             }
+        }
+        
+        // CRITICAL: If no awards were created but pot exists, this is an error
+        if (potAwards.length === 0 && potBeforeCalculation > 0) {
+            console.error(`[Table ${this.name}] ⚠️ POT NOT DISTRIBUTED! Pot: ${potBeforeCalculation}, Awards: 0, Contributors: ${allContributors.length}`);
+            gameLogger.gameEvent(this.name, '[POT] ERROR: Pot not distributed', {
+                potBeforeCalculation,
+                potAwardsCount: 0,
+                allContributorsCount: allContributors.length,
+                activePlayersCount: activePlayers.length,
+                sortedByBet: sortedByBet.map(p => ({
+                    name: p.name,
+                    totalBet: p.totalBet,
+                    isFolded: p.isFolded,
+                    hasHandResult: !!p.handResult
+                }))
+            });
+            // Don't clear pot if we couldn't distribute it
+            return [];
         }
         
         // Award the pots
