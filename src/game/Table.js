@@ -1741,8 +1741,9 @@ class Table {
     advanceGame() {
         // CRITICAL: Check for game over BEFORE early return (even in WAITING phase)
         // This ensures onGameOver callback is called when game ends
+        // CRITICAL: Check even if gameStarted is false - game might have ended during hand
         const playersWithChips = this.seats.filter(s => s && s.chips > 0);
-        if (playersWithChips.length === 1 && this.gameStarted) {
+        if (playersWithChips.length === 1) {
             const winner = playersWithChips[0];
             
             // CRITICAL: Validate money - winner's chips should equal sum of all starting chips
