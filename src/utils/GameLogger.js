@@ -67,6 +67,11 @@ class GameLogger {
      */
     writeLog(level, category, message, data = null) {
         try {
+            // CRITICAL: Skip CARDS category logging - too verbose, clogs logs
+            if (category === 'CARDS') {
+                return; // Don't log card visibility entries
+            }
+            
             this.rotateLog();
             
             const timestamp = this.getTimestamp();
