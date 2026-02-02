@@ -308,8 +308,12 @@ class SocketHandler {
                         throw new Error(`Failed to build response: ${err.message}`);
                     }
                     
-                    // CRITICAL: Send response BEFORE broadcasting to prevent race conditions
+                    // CRITICAL: Send response IMMEDIATELY - don't wait for broadcast
                     responseSent = true;
+                    completed = true;
+                    clearTimeout(timeoutHandle);
+                    
+                    // Send response via both callback and emit
                     if (callback) {
                         try {
                             callback(response);
@@ -319,21 +323,22 @@ class SocketHandler {
                     }
                     try {
                         socket.emit('create_table_response', response);
+                        console.log('[SocketHandler] Response sent to client');
                     } catch (err) {
                         console.error('[SocketHandler] Error emitting response:', err);
                         throw err;
                     }
                     
-                    // Broadcast new table to lobby (non-blocking)
-                    try {
-                        this.io.emit('table_created', publicInfo);
-                    } catch (err) {
-                        console.error('[SocketHandler] Error broadcasting table_created:', err);
-                    }
+                    // Broadcast new table to lobby (non-blocking, after response sent)
+                    setImmediate(() => {
+                        try {
+                            this.io.emit('table_created', publicInfo);
+                        } catch (err) {
+                            console.error('[SocketHandler] Error broadcasting table_created:', err);
+                        }
+                    });
                     
                     console.log('[SocketHandler] create_table complete');
-                    completed = true;
-                    clearTimeout(timeoutHandle);
                 } catch (error) {
                     completed = true;
                     clearTimeout(timeoutHandle);
