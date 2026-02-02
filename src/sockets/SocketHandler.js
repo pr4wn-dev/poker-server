@@ -262,9 +262,21 @@ class SocketHandler {
                         socket.join(`table:${table.id}`);
                     }
                     
-                    // Get state and public info
-                    const state = table.getState(user.userId);
-                    const publicInfo = table.getPublicInfo();
+                    // Get state and public info with error handling
+                    let state, publicInfo;
+                    try {
+                        state = table.getState(user.userId);
+                    } catch (err) {
+                        console.error('[SocketHandler] Error getting state:', err);
+                        state = { id: table.id, name: table.name, phase: 'waiting', error: err.message };
+                    }
+                    
+                    try {
+                        publicInfo = table.getPublicInfo();
+                    } catch (err) {
+                        console.error('[SocketHandler] Error getting public info:', err);
+                        publicInfo = { id: table.id, name: table.name, maxPlayers: table.maxPlayers, error: err.message };
+                    }
                     
                     // Build and send response
                     const response = { 
@@ -281,6 +293,7 @@ class SocketHandler {
                     
                     if (callback) callback(response);
                     socket.emit('create_table_response', response);
+                    console.log('[SocketHandler] Response sent');
                     
                     // Broadcast new table to lobby
                     this.io.emit('table_created', publicInfo);
