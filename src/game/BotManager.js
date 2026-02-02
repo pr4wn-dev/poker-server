@@ -272,6 +272,17 @@ class BotManager {
     }
     
     /**
+     * Clear all pending bots for a table (used when resetting/restarting)
+     */
+    clearPendingBots(tableId) {
+        const tablePending = this.pendingBots.get(tableId);
+        if (tablePending) {
+            tablePending.clear();
+            console.log(`[BotManager] Cleared all pending bots for table ${tableId}`);
+        }
+    }
+    
+    /**
      * Check if current player is a bot and trigger their turn
      */
     checkBotTurn(tableId) {

@@ -2802,9 +2802,13 @@ class Table {
                 const eligiblePlayers = allContributors.filter(p => p.totalBet >= player.totalBet);
                 const potAmount = eligiblePlayers.length * betDiff;
                 
-                // Find best eligible hand that isn't folded
+                // Find best eligible hand that isn't folded AND is still active
+                // CRITICAL: Only include players who are still active (not eliminated)
                 const eligibleHands = eligiblePlayers
-                    .filter(p => !p.isFolded && p.handResult)
+                    .filter(p => {
+                        const seat = this.seats.find(s => s?.playerId === p.playerId);
+                        return !p.isFolded && p.handResult && seat && seat.isActive !== false;
+                    })
                     .sort((a, b) => HandEvaluator.compare(b.handResult, a.handResult));
                 
                 if (eligibleHands.length > 0 && potAmount > 0) {
@@ -2833,9 +2837,9 @@ class Table {
                         });
                     }
                 } else if (potAmount > 0 && eligibleHands.length === 0) {
-                    // CRITICAL: Pot exists but no eligible hands - this shouldn't happen
-                    console.error(`[Table ${this.name}] ⚠️ POT EXISTS BUT NO ELIGIBLE HANDS: potAmount=${potAmount}, eligiblePlayers=${eligiblePlayers.length}, eligibleHands=${eligibleHands.length}`);
-                    gameLogger.gameEvent(this.name, '[POT] ERROR: Pot exists but no eligible hands', {
+                    // CRITICAL: Pot exists but all eligible players folded - award to best non-folded player who contributed
+                    console.error(`[Table ${this.name}] ⚠️ POT EXISTS BUT ALL ELIGIBLE PLAYERS FOLDED: potAmount=${potAmount}, eligiblePlayers=${eligiblePlayers.length}, eligibleHands=${eligibleHands.length}`);
+                    gameLogger.gameEvent(this.name, '[POT] ERROR: Pot exists but all eligible players folded', {
                         potAmount,
                         betLevel: player.totalBet,
                         eligiblePlayers: eligiblePlayers.map(p => ({
@@ -2844,6 +2848,26 @@ class Table {
                             hasHandResult: !!p.handResult
                         }))
                     });
+                    
+                    // FIX: Find best non-folded player who contributed to this level
+                    const nonFoldedContributors = allContributors
+                        .filter(p => !p.isFolded && p.totalBet >= player.totalBet && p.handResult)
+                        .sort((a, b) => HandEvaluator.compare(b.handResult, a.handResult));
+                    
+                    if (nonFoldedContributors.length > 0) {
+                        const winner = nonFoldedContributors[0];
+                        potAwards.push({
+                            playerId: winner.playerId,
+                            name: winner.name,
+                            amount: potAmount,
+                            handName: winner.handResult.name,
+                            potType: previousBetLevel === 0 ? 'main' : 'side',
+                            reason: 'All eligible players folded - awarded to best non-folded contributor'
+                        });
+                        console.log(`[Table ${this.name}] FIX: Awarding ${potAmount} to ${winner.name} (all eligible players folded)`);
+                    } else {
+                        console.error(`[Table ${this.name}] ⚠️ CRITICAL: No non-folded contributors found - pot will be lost!`);
+                    }
                 }
                 
                 previousBetLevel = player.totalBet;
@@ -2894,15 +2918,50 @@ class Table {
                     calculationCheck: chipsBefore + award.amount === chipsAfter ? 'CORRECT' : 'ERROR'
                 });
             } else if (seat && seat.isActive === false) {
-                // Player is eliminated - don't give them chips, pot goes to remaining players or is lost
-                console.log(`[Table ${this.name}] ${award.name} is eliminated - ${award.amount} chips from pot are forfeited`);
-                gameLogger.gameEvent(this.name, '[POT] ELIMINATED PLAYER - chips forfeited', {
-                    player: award.name,
+                // CRITICAL FIX: Eliminated player won a pot - redistribute to best active player
+                console.error(`[Table ${this.name}] ⚠️ CRITICAL: Eliminated player ${award.name} won ${award.amount} chips - redistributing to best active player`);
+                gameLogger.gameEvent(this.name, '[POT] ELIMINATED PLAYER WON POT - redistributing', {
+                    eliminatedPlayer: award.name,
                     amount: award.amount,
-                    reason: 'Player was eliminated'
+                    reason: 'Player was eliminated but won pot - redistributing'
                 });
-                // Note: In a real game, this shouldn't happen, but handle it gracefully
-                // Don't count forfeited chips in totalAwarded - they're lost
+                
+                // Find best active player who has chips and is still in the game
+                // CRITICAL: Use the activePlayers parameter from showdown, not this.seats
+                const activeSeats = this.seats
+                    .filter(s => s && s.isActive !== false && s.chips > 0)
+                    .map(s => {
+                        const playerData = activePlayers.find(p => p.playerId === s.playerId);
+                        return {
+                            seat: s,
+                            handResult: playerData?.handResult || null
+                        };
+                    })
+                    .filter(p => p.handResult)
+                    .sort((a, b) => HandEvaluator.compare(b.handResult, a.handResult));
+                
+                if (activeSeats.length > 0) {
+                    const bestActive = activeSeats[0].seat;
+                    const chipsBefore = bestActive.chips;
+                    bestActive.chips += award.amount;
+                    totalAwarded += award.amount; // Count it as awarded
+                    console.log(`[Table ${this.name}] FIX: Redistributed ${award.amount} from eliminated ${award.name} to ${bestActive.name} (chips: ${chipsBefore} → ${bestActive.chips})`);
+                    gameLogger.gameEvent(this.name, '[POT] Redistributed from eliminated player', {
+                        from: award.name,
+                        to: bestActive.name,
+                        amount: award.amount,
+                        chipsBefore,
+                        chipsAfter: bestActive.chips
+                    });
+                } else {
+                    // No active players - this is a game over scenario, but pot should have been handled earlier
+                    console.error(`[Table ${this.name}] ⚠️ CRITICAL: No active players to redistribute ${award.amount} to - pot will be lost!`);
+                    gameLogger.error(this.name, 'No active players for redistribution', {
+                        amount: award.amount,
+                        eliminatedPlayer: award.name
+                    });
+                    // Don't count forfeited chips in totalAwarded - they're lost
+                }
             }
         }
         
@@ -2966,15 +3025,39 @@ class Table {
                 calculationCheck: chipsBefore + potAmount === seat.chips ? 'CORRECT' : 'ERROR'
             });
         } else if (seat && seat.isActive === false) {
-            // Player is eliminated - don't give them chips
-            gameLogger.gameEvent(this.name, '[POT] ELIMINATED WINNER - pot forfeited', {
-                winner: winner.name,
+            // CRITICAL FIX: Eliminated player won pot - redistribute to best active player
+            console.error(`[Table ${this.name}] ⚠️ CRITICAL: Eliminated player ${winner.name} won pot ${potAmount} - redistributing to best active player`);
+            gameLogger.gameEvent(this.name, '[POT] ELIMINATED WINNER - redistributing', {
+                eliminatedWinner: winner.name,
                 potAmount,
-                reason: 'Player was eliminated'
+                reason: 'Player was eliminated but won pot - redistributing'
             });
-            console.log(`[Table ${this.name}] ${seat.name} is eliminated - pot forfeited`);
-            // In a real game, this shouldn't happen (eliminated players shouldn't win)
-            // But handle it gracefully - pot is lost
+            
+            // Find best active player who has chips and is still in the game
+            const activeSeats = this.seats
+                .filter(s => s && s.isActive !== false && s.chips > 0)
+                .sort((a, b) => b.chips - a.chips); // Sort by chips (best active player)
+            
+            if (activeSeats.length > 0) {
+                const bestActive = activeSeats[0];
+                const chipsBefore = bestActive.chips;
+                bestActive.chips += potAmount;
+                console.log(`[Table ${this.name}] FIX: Redistributed ${potAmount} from eliminated ${winner.name} to ${bestActive.name} (chips: ${chipsBefore} → ${bestActive.chips})`);
+                gameLogger.gameEvent(this.name, '[POT] Redistributed from eliminated winner', {
+                    from: winner.name,
+                    to: bestActive.name,
+                    amount: potAmount,
+                    chipsBefore,
+                    chipsAfter: bestActive.chips
+                });
+            } else {
+                // No active players - this is a game over scenario, but pot should have been handled earlier
+                console.error(`[Table ${this.name}] ⚠️ CRITICAL: No active players to redistribute ${potAmount} to - pot will be lost!`);
+                gameLogger.error(this.name, 'No active players for redistribution from eliminated winner', {
+                    amount: potAmount,
+                    eliminatedWinner: winner.name
+                });
+            }
         }
         this.pot = 0;
         

@@ -624,6 +624,10 @@ class SimulationManager {
         simulation.regularBotCount = newRegularBotCount;
         simulation.socketBotCount = newSocketBotCount;
         
+        // CRITICAL: Clear pending bots before resetting table
+        // This prevents "already pending approval" errors on restart
+        this.gameManager.botManager.clearPendingBots(tableId);
+        
         // Reset table state completely
         table.phase = 'waiting';
         table.pot = 0;
