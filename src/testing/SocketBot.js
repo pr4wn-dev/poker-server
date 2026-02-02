@@ -777,16 +777,7 @@ class SocketBot {
         const myChips = mySeat.chips;
         const potOdds = toCall > 0 ? toCall / (state.pot + toCall) : 0;
         
-        this.log('DECISION', 'Evaluating...', {
-            toCall,
-            myChips,
-            myCurrentBet: mySeat.currentBet || 0,
-            currentBet: state.currentBet,
-            minRaise: state.minRaise,
-            pot: state.pot,
-            potOdds: potOdds.toFixed(2),
-            phase: state.phase
-        });
+        // Removed verbose DECISION log - action will be logged when sent
         
         let action, amount = 0;
         
