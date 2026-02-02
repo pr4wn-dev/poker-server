@@ -215,12 +215,28 @@ process.on('SIGINT', async () => {
 });
 
 // Handle uncaught errors
+const gameLogger = require('./utils/GameLogger');
+
 process.on('uncaughtException', (err) => {
-    console.error('[Server] Uncaught Exception:', err);
+    const errorMsg = `[Server] Uncaught Exception: ${err.message}\n${err.stack}`;
+    console.error(errorMsg);
+    gameLogger.error('SERVER', 'Uncaught Exception', { 
+        message: err.message, 
+        stack: err.stack,
+        name: err.name
+    });
+    process.exit(1);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-    console.error('[Server] Unhandled Rejection:', reason);
+    const errorMsg = `[Server] Unhandled Rejection: ${reason}`;
+    console.error(errorMsg);
+    gameLogger.error('SERVER', 'Unhandled Rejection', { 
+        reason: reason?.toString() || String(reason),
+        stack: reason?.stack || 'No stack trace',
+        name: reason?.name || 'Unknown'
+    });
+    process.exit(1);
 });
 
 // Start the server

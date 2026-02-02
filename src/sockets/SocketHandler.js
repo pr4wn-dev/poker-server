@@ -143,11 +143,23 @@ class SocketHandler {
                 
                 // Wrap entire handler in timeout to prevent hanging
                 timeoutHandle = setTimeout(() => {
-                    if (completed) return;
+                    if (completed || responseSent) return;
                     completed = true;
+                    responseSent = true;
                     console.error('[SocketHandler] create_table TIMEOUT after 10 seconds');
+                    const gameLogger = require('../utils/GameLogger');
+                    gameLogger.error('SOCKET', 'create_table TIMEOUT', {
+                        userId: this.getAuthenticatedUser(socket)?.userId,
+                        tableName: data?.name
+                    });
                     const error = { success: false, error: 'Table creation timeout' };
-                    if (callback) callback(error);
+                    if (callback) {
+                        try {
+                            callback(error);
+                        } catch (err) {
+                            console.error('[SocketHandler] Error in timeout callback:', err);
+                        }
+                    }
                     socket.emit('create_table_response', error);
                 }, 10000);
                 
@@ -157,10 +169,17 @@ class SocketHandler {
                     const user = this.getAuthenticatedUser(socket);
                     if (!user) {
                         completed = true;
+                        responseSent = true;
                         clearTimeout(timeoutHandle);
                         console.log('[SocketHandler] create_table FAILED - not authenticated');
                         const error = { success: false, error: 'Not authenticated' };
-                        if (callback) callback(error);
+                        if (callback) {
+                            try {
+                                callback(error);
+                            } catch (err) {
+                                console.error('[SocketHandler] Error in auth callback:', err);
+                            }
+                        }
                         socket.emit('create_table_response', error);
                         return;
                     }
@@ -175,16 +194,40 @@ class SocketHandler {
                         ]);
                         console.log(`[SocketHandler] User fetched from DB: ${dbUser ? 'found' : 'not found'}`);
                     } catch (error) {
+                        completed = true;
+                        responseSent = true;
+                        clearTimeout(timeoutHandle);
                         console.error(`[SocketHandler] Database error fetching user:`, error);
+                        const gameLogger = require('../utils/GameLogger');
+                        gameLogger.error('SOCKET', 'create_table database error', {
+                            error: error.message,
+                            stack: error.stack,
+                            userId: user?.userId
+                        });
                         const errorResponse = { success: false, error: `Database error: ${error.message}` };
-                        if (callback) callback(errorResponse);
+                        if (callback) {
+                            try {
+                                callback(errorResponse);
+                            } catch (err) {
+                                console.error('[SocketHandler] Error in db callback:', err);
+                            }
+                        }
                         socket.emit('create_table_response', errorResponse);
                         return;
                     }
                     
                     if (!dbUser) {
+                        completed = true;
+                        responseSent = true;
+                        clearTimeout(timeoutHandle);
                         const error = { success: false, error: 'User not found' };
-                        if (callback) callback(error);
+                        if (callback) {
+                            try {
+                                callback(error);
+                            } catch (err) {
+                                console.error('[SocketHandler] Error in user not found callback:', err);
+                            }
+                        }
                         socket.emit('create_table_response', error);
                         return;
                     }
@@ -242,11 +285,17 @@ class SocketHandler {
                     console.log(`[SocketHandler] create_table SUCCESS - seatIndex: ${response.seatIndex} (took ${Date.now() - startTime}ms)`);
                     
                     // CRITICAL: Send response BEFORE broadcasting to prevent race conditions
+                    responseSent = true;
                     if (callback) {
                         try {
                             callback(response);
                         } catch (err) {
                             console.error('[SocketHandler] Error in callback:', err);
+                            const gameLogger = require('../utils/GameLogger');
+                            gameLogger.error('SOCKET', 'create_table callback error', {
+                                error: err.message,
+                                stack: err.stack
+                            });
                         }
                     }
                     socket.emit('create_table_response', response);
@@ -264,11 +313,31 @@ class SocketHandler {
                 } catch (error) {
                     completed = true;
                     clearTimeout(timeoutHandle);
-                    console.error('[SocketHandler] create_table ERROR:', error);
-                    console.error('[SocketHandler] create_table ERROR stack:', error.stack);
+                    const errorMsg = `[SocketHandler] create_table ERROR: ${error.message}\n${error.stack}`;
+                    console.error(errorMsg);
+                    const gameLogger = require('../utils/GameLogger');
+                    gameLogger.error('SOCKET', 'create_table failed', {
+                        error: error.message,
+                        stack: error.stack,
+                        userId: user?.userId,
+                        tableName: data?.name
+                    });
                     const errorResponse = { success: false, error: `Server error: ${error.message}` };
-                    if (callback) callback(errorResponse);
-                    socket.emit('create_table_response', errorResponse);
+                    if (!responseSent) {
+                        responseSent = true;
+                        if (callback) {
+                            try {
+                                callback(errorResponse);
+                            } catch (callbackErr) {
+                                console.error('[SocketHandler] Error in error callback:', callbackErr);
+                                gameLogger.error('SOCKET', 'create_table error callback failed', {
+                                    error: callbackErr.message,
+                                    stack: callbackErr.stack
+                                });
+                            }
+                        }
+                        socket.emit('create_table_response', errorResponse);
+                    }
                 }
             });
 
