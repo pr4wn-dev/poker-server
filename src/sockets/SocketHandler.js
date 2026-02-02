@@ -272,12 +272,23 @@ class SocketHandler {
                     }
                     
                     console.log('[SocketHandler] Getting table state...');
-                    const state = table.getState(user.userId);
-                    console.log('[SocketHandler] State retrieved');
+                    let state, publicInfo;
+                    try {
+                        state = table.getState(user.userId);
+                        console.log('[SocketHandler] State retrieved');
+                    } catch (err) {
+                        console.error('[SocketHandler] Error getting state:', err);
+                        throw new Error(`Failed to get table state: ${err.message}`);
+                    }
                     
                     console.log('[SocketHandler] Getting public info...');
-                    const publicInfo = table.getPublicInfo();
-                    console.log('[SocketHandler] Public info retrieved');
+                    try {
+                        publicInfo = table.getPublicInfo();
+                        console.log('[SocketHandler] Public info retrieved');
+                    } catch (err) {
+                        console.error('[SocketHandler] Error getting public info:', err);
+                        throw new Error(`Failed to get public info: ${err.message}`);
+                    }
                     
                     console.log('[SocketHandler] Building response...');
                     const response = { 
@@ -296,11 +307,6 @@ class SocketHandler {
                             callback(response);
                         } catch (err) {
                             console.error('[SocketHandler] Error in callback:', err);
-                            const gameLogger = require('../utils/GameLogger');
-                            gameLogger.error('SOCKET', 'create_table callback error', {
-                                error: err.message,
-                                stack: err.stack
-                            });
                         }
                     }
                     socket.emit('create_table_response', response);
