@@ -280,25 +280,6 @@ class SocketHandler {
                         console.error('[SocketHandler] Error emit failed:', err);
                     }
                 }
-                        
-                        const response = {
-                            success: true,
-                            tableId: result.tableId,
-                            tableName: result.tableName,
-                            socketBots: result.socketBots,
-                            regularBots: result.regularBots,
-                            status: result.status
-                        };
-                        if (callback) callback(response);
-                        socket.emit('start_simulation_response', response);
-                    } else {
-                        if (callback) callback(result);
-                    }
-                } catch (error) {
-                    console.error('[SocketHandler] start_simulation error:', error);
-                    const errorResponse = { success: false, error: error.message };
-                    if (callback) callback(errorResponse);
-                }
             });
             
             socket.on('stop_simulation', (data, callback) => {
