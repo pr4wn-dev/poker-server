@@ -2098,6 +2098,18 @@ class Table {
     advancePhase() {
         const oldPhase = this.phase;
         
+        // CRITICAL: Don't advance from non-game phases - these are terminal states
+        // WAITING: Game hasn't started or has ended - wait for manual start
+        // READY_UP/COUNTDOWN: Pre-game phases - handled separately
+        // SHOWDOWN: Handles its own completion via startNewHand()
+        if (this.phase === GAME_PHASES.WAITING || 
+            this.phase === GAME_PHASES.READY_UP || 
+            this.phase === GAME_PHASES.COUNTDOWN || 
+            this.phase === GAME_PHASES.SHOWDOWN) {
+            console.log(`[Table ${this.name}] Cannot advance from phase ${this.phase} - this is a terminal/non-game phase`);
+            return;
+        }
+        
         gameLogger.phaseChange(this.name, oldPhase, 'ADVANCING', {
             currentBet: this.currentBet,
             pot: this.pot,
