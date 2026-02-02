@@ -1853,20 +1853,33 @@ class Table {
                 // The round completes when we're about to return to the first player to act (dealer post-flop, BB pre-flop)
                 // AND we've passed that player at least once
                 if (this.phase === GAME_PHASES.PRE_FLOP) {
-                    // Pre-flop: round completes when we're about to return to BB AND we've passed them
-                    // We've passed BB if current > bbIndex OR we've wrapped around
-                    const hasPassedBB = this.currentPlayerIndex > bbIndex || 
-                                       (this.currentPlayerIndex < bbIndex && (nextPlayer === -1 || nextPlayer > bbIndex || nextPlayer <= this.currentPlayerIndex));
-                    bettingRoundComplete = hasPassedBB && nextPlayer === bbIndex;
+                    // Pre-flop: round completes when we're about to return to BB AND everyone has acted
+                    // CRITICAL FIX: In pre-flop, UTG acts first, BB acts LAST
+                    // We can't end the round until BB has had their chance to act
+                    // The round completes when:
+                    // 1. We're AT the BB and about to move to someone else (BB just acted)
+                    // 2. OR we've wrapped around (we're at BB and next is UTG, meaning everyone acted)
                     
-                    // FIX: Also check if hasPassedLastRaiser is set (indicates we've completed a full round)
-                    if (!bettingRoundComplete && this.hasPassedLastRaiser && nextPlayer === bbIndex) {
-                        bettingRoundComplete = true;
-                    }
+                    // Get the first player to act (UTG - the player after BB)
+                    const utgIndex = this.getNextActivePlayer(bbIndex);
                     
-                    // Fallback: if we're at BB and next player is different, we've completed the round
-                    if (!bettingRoundComplete && this.currentPlayerIndex === bbIndex && nextPlayer !== bbIndex && nextPlayer !== -1) {
-                        bettingRoundComplete = true;
+                    if (this.currentPlayerIndex === bbIndex) {
+                        // We're at BB - round completes if we're about to move to someone else
+                        // This means BB just acted (checked/called/raised)
+                        if (nextPlayer === utgIndex) {
+                            // Wrapped around to UTG - everyone has acted, round complete
+                            bettingRoundComplete = true;
+                        } else if (nextPlayer !== bbIndex && nextPlayer !== -1) {
+                            // Moving to someone else (not BB, not end) - BB just acted, round complete
+                            bettingRoundComplete = true;
+                        } else {
+                            // Still at BB or no next player - round not complete
+                            bettingRoundComplete = false;
+                        }
+                    } else {
+                        // We're not at BB yet - round cannot be complete
+                        // Even if all bets are equalized, BB still needs to act
+                        bettingRoundComplete = false;
                     }
                 } else {
                     // Post-flop: round completes when we're about to return to dealer/first to act
