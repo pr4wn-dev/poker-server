@@ -2514,7 +2514,8 @@ class Table {
         // CRITICAL: Check for game over AFTER awarding pot (only one player with chips)
         // This must happen BEFORE starting a new hand
         const playersWithChips = this.seats.filter(s => s && s.chips > 0);
-        if (playersWithChips.length === 1 && this.gameStarted) {
+        // CRITICAL: Check game over even if gameStarted is false (game might have ended during hand)
+        if (playersWithChips.length === 1) {
             const winner = playersWithChips[0];
             
             // CRITICAL: Validate money - winner's chips should equal sum of all starting chips
