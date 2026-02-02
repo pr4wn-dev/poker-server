@@ -1051,14 +1051,35 @@ class Table {
         if (!player) return;
 
         const blindAmount = Math.min(amount, player.chips);
+        const chipsBefore = player.chips;
+        const potBefore = this.pot;
+        
         player.chips -= blindAmount;
         player.currentBet = blindAmount;
         player.totalBet = blindAmount;
         this.pot += blindAmount;
 
+        // CRITICAL: Verify calculation
+        if (player.chips !== chipsBefore - blindAmount) {
+            console.error(`[Table ${this.name}] ⚠️ BLIND POSTING ERROR: Chips calculation wrong. Before: ${chipsBefore}, Amount: ${blindAmount}, After: ${player.chips}`);
+        }
+        if (this.pot !== potBefore + blindAmount) {
+            console.error(`[Table ${this.name}] ⚠️ BLIND POSTING ERROR: Pot calculation wrong. Before: ${potBefore}, Amount: ${blindAmount}, After: ${this.pot}`);
+        }
+
         if (player.chips === 0) {
             player.isAllIn = true;
         }
+        
+        gameLogger.bettingAction(this.name, player.name || `Seat ${seatIndex}`, 'BLIND POSTED', {
+            seatIndex,
+            blindAmount,
+            chipsBefore,
+            chipsAfter: player.chips,
+            potBefore,
+            potAfter: this.pot,
+            isAllIn: player.isAllIn
+        });
     }
 
     getNextActivePlayer(fromIndex) {
@@ -1350,15 +1371,32 @@ class Table {
         }
 
         const beforeChips = player.chips;
+        const potBefore = this.pot;
+        const totalBetBefore = player.totalBet || 0;
+        const currentBetBefore = player.currentBet || 0;
         const oldCurrentBet = this.currentBet;
         const oldMinRaise = this.minRaise;
         const oldLastRaiser = this.lastRaiserIndex;
         
         player.chips -= amount;
         player.currentBet += amount;
-        player.totalBet += amount;
+        player.totalBet = (player.totalBet || 0) + amount;
         this.pot += amount;
         this.currentBet = player.currentBet;
+        
+        // CRITICAL: Verify calculations
+        if (player.chips !== beforeChips - amount) {
+            console.error(`[Table ${this.name}] ⚠️ RAISE ERROR: Chips calculation wrong. Before: ${beforeChips}, Amount: ${amount}, After: ${player.chips}`);
+        }
+        if (this.pot !== potBefore + amount) {
+            console.error(`[Table ${this.name}] ⚠️ RAISE ERROR: Pot calculation wrong. Before: ${potBefore}, Amount: ${amount}, After: ${this.pot}`);
+        }
+        if (player.totalBet !== totalBetBefore + amount) {
+            console.error(`[Table ${this.name}] ⚠️ RAISE ERROR: totalBet calculation wrong. Before: ${totalBetBefore}, Amount: ${amount}, After: ${player.totalBet}`);
+        }
+        if (player.currentBet !== currentBetBefore + amount) {
+            console.error(`[Table ${this.name}] ⚠️ RAISE ERROR: currentBet calculation wrong. Before: ${currentBetBefore}, Amount: ${amount}, After: ${player.currentBet}`);
+        }
         this.minRaise = Math.max(raiseAmount, this.minRaise);  // Keep the larger raise amount
         this.lastRaiserIndex = seatIndex;
 
