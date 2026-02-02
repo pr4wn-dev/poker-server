@@ -98,6 +98,9 @@ class Table {
         this.consecutiveSamePlayerTurns = 0;  // Detect if same player keeps getting turn without others acting
         this.MAX_TURNS_PER_PHASE = 30;  // Safety valve - force advance if exceeded (raised for heads-up with lots of raising)
         this.MAX_CONSECUTIVE_SAME_PLAYER = 3;  // ONLY warn if same player acts 3x IN A ROW without anyone else acting
+        
+        // CRITICAL FIX: Action lock to prevent multiple simultaneous actions from rapid clicks
+        this._processingAction = false;
 
         // Timing
         this.turnTimeout = null;
@@ -506,6 +509,25 @@ class Table {
             return;
         }
         
+        // FIX: Reset chips to buy-in when starting a NEW game (after previous game ended)
+        // Only reset if gameStarted was false (meaning this is a new game, not just a new hand)
+        if (!this.gameStarted) {
+            console.log(`[Table ${this.name}] Resetting all player chips to buy-in (${this.buyIn}) for new game`);
+            for (const seat of this.seats) {
+                if (seat && seat.isActive !== false) {
+                    const oldChips = seat.chips;
+                    seat.chips = this.buyIn;
+                    console.log(`[Table ${this.name}] Reset ${seat.name} chips: ${oldChips} → ${seat.chips}`);
+                    gameLogger.gameEvent(this.name, 'CHIPS RESET for new game', {
+                        player: seat.name,
+                        oldChips,
+                        newChips: seat.chips,
+                        buyIn: this.buyIn
+                    });
+                }
+            }
+        }
+        
         // Start the game!
         console.log(`[Table ${this.name}] Starting game with ${readyPlayers.length} players!`);
         this.startNewHand();
@@ -600,6 +622,27 @@ class Table {
             return;
         }
         
+        // CRITICAL FIX: Check if already folded or all-in (shouldn't happen, but protect against it)
+        if (player.isFolded) {
+            gameLogger.debug(this.name, '[TIMER] Timeout triggered but player already folded', { 
+                currentPlayerIndex: this.currentPlayerIndex,
+                playerName: player.name 
+            });
+            // Just advance game - player already folded
+            this.advanceGame();
+            return;
+        }
+        
+        if (player.isAllIn) {
+            gameLogger.debug(this.name, '[TIMER] Timeout triggered but player already all-in', { 
+                currentPlayerIndex: this.currentPlayerIndex,
+                playerName: player.name 
+            });
+            // All-in players can't fold - just advance game
+            this.advanceGame();
+            return;
+        }
+        
         gameLogger.gameEvent(this.name, '[TIMER] TURN TIMEOUT - auto-folding', {
             player: player.name,
             seatIndex: this.currentPlayerIndex,
@@ -608,20 +651,32 @@ class Table {
         });
         console.log(`[Table ${this.name}] ${player.name} timed out - auto-folding`);
         
-        // Auto-fold
-        this.fold(this.currentPlayerIndex);
+        // Auto-fold (fold() now has validation, so it's safe)
+        const foldResult = this.fold(this.currentPlayerIndex);
         
-        // Notify via callback
-        if (this.onAutoFold) {
-            this.onAutoFold(player.playerId, this.currentPlayerIndex);
-        }
-        
-        // Advance game
-        this.advanceGame();
-        
-        // Notify state change
-        if (this.onStateChange) {
-            this.onStateChange();
+        // Only proceed if fold was successful
+        if (foldResult.success) {
+            // Notify via callback
+            if (this.onAutoFold) {
+                this.onAutoFold(player.playerId, this.currentPlayerIndex);
+            }
+            
+            // Advance game
+            this.advanceGame();
+            
+            // Notify state change
+            if (this.onStateChange) {
+                this.onStateChange();
+            }
+        } else {
+            // Fold failed (shouldn't happen, but log it)
+            gameLogger.gameEvent(this.name, '[TIMER] Auto-fold failed', {
+                player: player.name,
+                seatIndex: this.currentPlayerIndex,
+                error: foldResult.error
+            });
+            // Still try to advance game
+            this.advanceGame();
         }
     }
 
@@ -1102,25 +1157,68 @@ class Table {
     // ============ Actions ============
 
     handleAction(playerId, action, amount = 0) {
-        // CRITICAL: No betting allowed during showdown - just evaluate hands
-        if (this.phase === GAME_PHASES.SHOWDOWN) {
-            gameLogger.bettingAction(this.name, playerId || 'unknown', `Action rejected: No betting during showdown`);
-            return { success: false, error: 'No betting during showdown' };
+        // CRITICAL FIX: Action lock to prevent race conditions from rapid clicks
+        // MUST be checked FIRST before any validation to prevent multiple clicks from passing validation
+        if (this._processingAction) {
+            gameLogger.bettingAction(this.name, playerId || 'unknown', `Action rejected: Another action is being processed`);
+            return { success: false, error: 'Please wait - another action is being processed' };
         }
         
-        // CRITICAL: No betting allowed during waiting/ready_up/countdown phases
-        if (this.phase === GAME_PHASES.WAITING || this.phase === GAME_PHASES.READY_UP || this.phase === GAME_PHASES.COUNTDOWN) {
-            gameLogger.bettingAction(this.name, playerId || 'unknown', `Action rejected: Game not in progress (phase: ${this.phase})`);
-            return { success: false, error: 'Game not in progress' };
-        }
+        // CRITICAL FIX: Set action lock IMMEDIATELY after initial check to prevent race conditions
+        // This ensures only ONE action can be processed at a time, even if multiple requests arrive simultaneously
+        this._processingAction = true;
         
-        const seatIndex = this.seats.findIndex(s => s?.playerId === playerId);
-        if (seatIndex === -1 || seatIndex !== this.currentPlayerIndex) {
-            gameLogger.bettingAction(this.name, playerId || 'unknown', `Action rejected: Not your turn (seat ${seatIndex}, current ${this.currentPlayerIndex})`);
-            return { success: false, error: 'Not your turn' };
-        }
+        try {
+            // CRITICAL: No betting allowed during showdown - just evaluate hands
+            if (this.phase === GAME_PHASES.SHOWDOWN) {
+                gameLogger.bettingAction(this.name, playerId || 'unknown', `Action rejected: No betting during showdown`);
+                this._processingAction = false;
+                return { success: false, error: 'No betting during showdown' };
+            }
+            
+            // CRITICAL: No betting allowed during waiting/ready_up/countdown phases
+            if (this.phase === GAME_PHASES.WAITING || this.phase === GAME_PHASES.READY_UP || this.phase === GAME_PHASES.COUNTDOWN) {
+                gameLogger.bettingAction(this.name, playerId || 'unknown', `Action rejected: Game not in progress (phase: ${this.phase})`);
+                this._processingAction = false;
+                return { success: false, error: 'Game not in progress' };
+            }
+            
+            const seatIndex = this.seats.findIndex(s => s?.playerId === playerId);
+            if (seatIndex === -1) {
+                gameLogger.bettingAction(this.name, playerId || 'unknown', `Action rejected: Player not found at table`);
+                this._processingAction = false;
+                return { success: false, error: 'Player not found at table' };
+            }
+            
+            // CRITICAL FIX: Must be player's turn
+            if (seatIndex !== this.currentPlayerIndex) {
+                gameLogger.bettingAction(this.name, playerId || 'unknown', `Action rejected: Not your turn (seat ${seatIndex}, current ${this.currentPlayerIndex})`);
+                this._processingAction = false;
+                return { success: false, error: 'Not your turn' };
+            }
 
-        const player = this.seats[seatIndex];
+            const player = this.seats[seatIndex];
+            
+            // CRITICAL FIX: Validate player can act
+            if (!player) {
+                gameLogger.bettingAction(this.name, playerId || 'unknown', `Action rejected: Player seat is null`);
+                this._processingAction = false;
+                return { success: false, error: 'Player seat is null' };
+            }
+            
+            if (player.isFolded) {
+                gameLogger.bettingAction(this.name, player.name || playerId, `Action rejected: Already folded`);
+                this._processingAction = false;
+                return { success: false, error: 'Already folded - cannot act' };
+            }
+            
+            if (player.isAllIn && action !== ACTIONS.FOLD) {
+                // All-in players can only fold (though this shouldn't happen in normal play)
+                gameLogger.bettingAction(this.name, player.name || playerId, `Action rejected: Already all-in`);
+                this._processingAction = false;
+                return { success: false, error: 'Already all-in - cannot act' };
+            }
+        
         const toCall = this.currentBet - player.currentBet;
         
         gameLogger.bettingAction(this.name, player.name || playerId, `Attempting ${action}`, {
@@ -1137,79 +1235,128 @@ class Table {
         let result = { success: false, error: 'Invalid action' };
 
         switch (action) {
-            case ACTIONS.FOLD:
-                result = this.fold(seatIndex);
-                break;
-            case ACTIONS.CHECK:
-                if (toCall > 0) {
-                    result = { success: false, error: `Cannot check - need to call ${toCall}` };
-                } else {
-                    result = this.check(seatIndex);
-                }
-                break;
-            case ACTIONS.CALL:
-                if (toCall === 0) {
-                    // Can't call if there's nothing to call - treat as check
-                    result = this.check(seatIndex);
-                } else if (toCall > player.chips) {
-                    // Can't call more than you have - treat as all-in
+                case ACTIONS.FOLD:
+                    result = this.fold(seatIndex);
+                    break;
+                case ACTIONS.CHECK:
+                    if (toCall > 0) {
+                        result = { success: false, error: `Cannot check - need to call ${toCall}` };
+                    } else {
+                        result = this.check(seatIndex);
+                    }
+                    break;
+                case ACTIONS.CALL:
+                    if (toCall === 0) {
+                        // Can't call if there's nothing to call - treat as check
+                        result = this.check(seatIndex);
+                    } else if (toCall > player.chips) {
+                        // Can't call more than you have - treat as all-in
+                        result = this.allIn(seatIndex);
+                    } else {
+                        result = this.call(seatIndex);
+                    }
+                    break;
+                case ACTIONS.BET:
+                    // FIX: Pre-flop after blinds, currentBet equals bigBlind, but players should still be able to bet/raise
+                    // Only block betting if we're NOT in pre-flop OR if currentBet is 0 (post-flop with no bets yet)
+                    if (this.currentBet > 0 && this.phase !== GAME_PHASES.PRE_FLOP) {
+                        result = { success: false, error: `Cannot bet - current bet is ${this.currentBet}. Use raise or call.` };
+                    } else if (amount < this.bigBlind) {
+                        result = { success: false, error: `Minimum bet is ${this.bigBlind}` };
+                    } else if (amount > player.chips) {
+                        result = { success: false, error: `You don't have enough chips. You have ${player.chips}.` };
+                    } else {
+                        // Pre-flop: If currentBet > 0 (blinds posted), always treat as raise
+                        // This allows all players to bet/raise pre-flop even after blinds are posted
+                        if (this.currentBet > 0 && this.phase === GAME_PHASES.PRE_FLOP) {
+                            // Player wants to bet - convert to raise (even if amount equals currentBet, raise will handle it)
+                            result = this.raise(seatIndex, amount);
+                        } else {
+                            result = this.bet(seatIndex, amount);
+                        }
+                    }
+                    break;
+                case ACTIONS.RAISE:
+                    result = this.raise(seatIndex, amount);
+                    break;
+                case ACTIONS.ALL_IN:
                     result = this.allIn(seatIndex);
-                } else {
-                    result = this.call(seatIndex);
-                }
-                break;
-            case ACTIONS.BET:
-                if (this.currentBet > 0) {
-                    result = { success: false, error: `Cannot bet - current bet is ${this.currentBet}. Use raise or call.` };
-                } else if (amount < this.bigBlind) {
-                    result = { success: false, error: `Minimum bet is ${this.bigBlind}` };
-                } else if (amount > player.chips) {
-                    result = { success: false, error: `You don't have enough chips. You have ${player.chips}.` };
-                } else {
-                    result = this.bet(seatIndex, amount);
-                }
-                break;
-            case ACTIONS.RAISE:
-                result = this.raise(seatIndex, amount);
-                break;
-            case ACTIONS.ALL_IN:
-                result = this.allIn(seatIndex);
-                break;
-            default:
-                result = { success: false, error: `Unknown action: ${action}` };
-                break;
-        }
+                    break;
+                default:
+                    result = { success: false, error: `Unknown action: ${action}` };
+                    break;
+            }
 
-        if (result.success) {
-            gameLogger.bettingAction(this.name, player.name || playerId, `${result.action} SUCCESS`, {
-                action: result.action,
-                amount: result.amount,
-                newChips: player.chips,
-                newBet: player.currentBet,
-                pot: this.pot,
-                currentBet: this.currentBet,
-                minRaise: this.minRaise,
-                lastRaiserIndex: this.lastRaiserIndex
-            });
-            
-            this.clearTurnTimer();
-            
-            // Notify about the action (for all players including bots)
-            this.onPlayerAction?.(playerId, result.action, result.amount || 0);
-            
-            this.advanceGame();
-        } else {
-            gameLogger.bettingAction(this.name, player.name || playerId, `${action} FAILED`, {
-                error: result.error,
-                reason: result.error
-            });
-        }
+            if (result.success) {
+                gameLogger.bettingAction(this.name, player.name || playerId, `${result.action} SUCCESS`, {
+                    action: result.action,
+                    amount: result.amount,
+                    newChips: player.chips,
+                    newBet: player.currentBet,
+                    pot: this.pot,
+                    currentBet: this.currentBet,
+                    minRaise: this.minRaise,
+                    lastRaiserIndex: this.lastRaiserIndex
+                });
+                
+                this.clearTurnTimer();
+                
+                // Notify about the action (for all players including bots)
+                this.onPlayerAction?.(playerId, result.action, result.amount || 0);
+                
+                // CRITICAL FIX: Clear action lock BEFORE advancing game (advanceGame may trigger async operations)
+                this._processingAction = false;
+                
+                this.advanceGame();
+            } else {
+                gameLogger.bettingAction(this.name, player.name || playerId, `${action} FAILED`, {
+                    error: result.error,
+                    reason: result.error
+                });
+                
+                // CRITICAL FIX: Clear action lock on failure too
+                this._processingAction = false;
+            }
 
-        return result;
+            return result;
+        } catch (error) {
+            // CRITICAL FIX: Ensure lock is cleared even if an exception occurs
+            console.error(`[Table ${this.name}] Exception in handleAction:`, error);
+            this._processingAction = false;
+            return { success: false, error: 'An error occurred processing your action' };
+        }
     }
 
     fold(seatIndex) {
         const player = this.seats[seatIndex];
+        if (!player) {
+            gameLogger.bettingAction(this.name, `Seat ${seatIndex}`, 'FOLD REJECTED', {
+                seatIndex,
+                reason: 'Player not found'
+            });
+            return { success: false, error: 'Player not found' };
+        }
+        
+        // CRITICAL FIX: Prevent multiple folds
+        if (player.isFolded) {
+            gameLogger.bettingAction(this.name, player.name || `Seat ${seatIndex}`, 'FOLD REJECTED', {
+                seatIndex,
+                phase: this.phase,
+                reason: 'Already folded'
+            });
+            return { success: false, error: 'Already folded' };
+        }
+        
+        // CRITICAL FIX: Can't fold if already all-in (all-in players are committed)
+        if (player.isAllIn) {
+            gameLogger.bettingAction(this.name, player.name || `Seat ${seatIndex}`, 'FOLD REJECTED', {
+                seatIndex,
+                phase: this.phase,
+                reason: 'Cannot fold - already all-in'
+            });
+            return { success: false, error: 'Cannot fold - already all-in' };
+        }
+        
         const cardsBeforeFold = player.cards ? [...player.cards] : null;
         player.isFolded = true;
         // CRITICAL: DO NOT clear cards on fold - they should remain visible until showdown or new hand
@@ -1229,12 +1376,42 @@ class Table {
 
     check(seatIndex) {
         const player = this.seats[seatIndex];
+        
+        // FIX: Validate that check is allowed (currentBet must equal player's currentBet)
+        if (player.currentBet !== this.currentBet) {
+            const toCall = this.currentBet - player.currentBet;
+            gameLogger.bettingAction(this.name, player.name || `Seat ${seatIndex}`, 'CHECK REJECTED', {
+                seatIndex,
+                phase: this.phase,
+                currentBet: this.currentBet,
+                playerBet: player.currentBet,
+                toCall,
+                reason: 'Cannot check - must call or fold'
+            });
+            return { success: false, error: `Cannot check - you need to call ${toCall} chips or fold.` };
+        }
+        
         gameLogger.bettingAction(this.name, player.name || `Seat ${seatIndex}`, 'CHECK', {
             seatIndex,
             phase: this.phase,
             currentBet: this.currentBet,
             playerBet: player.currentBet
         });
+        
+        // FIX: Ensure hasPassedLastRaiser is set correctly when checking
+        // If no one has raised (lastRaiserIndex is BB), and we're checking, we need to track this
+        // This helps prevent infinite checking loops
+        if (this.phase === GAME_PHASES.PRE_FLOP && this.lastRaiserIndex !== -1) {
+            const bbIndex = this.getNextActivePlayer(this.getNextActivePlayer(this.dealerIndex));
+            // If we're checking and we've passed the BB, mark that we've passed the last raiser
+            if (this.currentBet <= this.bigBlind && this.lastRaiserIndex === bbIndex) {
+                if (seatIndex > bbIndex || (seatIndex < bbIndex && this.getNextActivePlayer(seatIndex) === bbIndex)) {
+                    // We've passed the BB (last raiser when no one raises)
+                    this.hasPassedLastRaiser = true;
+                }
+            }
+        }
+        
         return { success: true, action: 'check' };
     }
 
@@ -1655,6 +1832,11 @@ class Table {
                                        (this.currentPlayerIndex < bbIndex && (nextPlayer === -1 || nextPlayer > bbIndex || nextPlayer <= this.currentPlayerIndex));
                     bettingRoundComplete = hasPassedBB && nextPlayer === bbIndex;
                     
+                    // FIX: Also check if hasPassedLastRaiser is set (indicates we've completed a full round)
+                    if (!bettingRoundComplete && this.hasPassedLastRaiser && nextPlayer === bbIndex) {
+                        bettingRoundComplete = true;
+                    }
+                    
                     // Fallback: if we're at BB and next player is different, we've completed the round
                     if (!bettingRoundComplete && this.currentPlayerIndex === bbIndex && nextPlayer !== bbIndex && nextPlayer !== -1) {
                         bettingRoundComplete = true;
@@ -1666,6 +1848,11 @@ class Table {
                     const hasPassedFirst = this.currentPlayerIndex > firstToAct || 
                                           (this.currentPlayerIndex < firstToAct && (nextPlayer === -1 || nextPlayer > firstToAct || nextPlayer <= this.currentPlayerIndex));
                     bettingRoundComplete = hasPassedFirst && nextPlayer === firstToAct;
+                    
+                    // FIX: Also check if hasPassedLastRaiser is set (indicates we've completed a full round)
+                    if (!bettingRoundComplete && this.hasPassedLastRaiser && nextPlayer === firstToAct) {
+                        bettingRoundComplete = true;
+                    }
                     
                     // Fallback: if we're at first to act and next player is different, we've completed the round
                     if (!bettingRoundComplete && this.currentPlayerIndex === firstToAct && nextPlayer !== firstToAct && nextPlayer !== -1) {
