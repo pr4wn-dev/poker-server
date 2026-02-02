@@ -138,8 +138,13 @@ class SocketHandler {
             });
 
             socket.on('create_table', async (data, callback) => {
+                let completed = false;
+                let timeoutHandle;
+                
                 // Wrap entire handler in timeout to prevent hanging
-                const timeout = setTimeout(() => {
+                timeoutHandle = setTimeout(() => {
+                    if (completed) return;
+                    completed = true;
                     console.error('[SocketHandler] create_table TIMEOUT after 10 seconds');
                     const error = { success: false, error: 'Table creation timeout' };
                     if (callback) callback(error);
@@ -151,6 +156,8 @@ class SocketHandler {
                     console.log('[SocketHandler] create_table received:', JSON.stringify(data));
                     const user = this.getAuthenticatedUser(socket);
                     if (!user) {
+                        completed = true;
+                        clearTimeout(timeoutHandle);
                         console.log('[SocketHandler] create_table FAILED - not authenticated');
                         const error = { success: false, error: 'Not authenticated' };
                         if (callback) callback(error);
@@ -251,11 +258,13 @@ class SocketHandler {
                     console.log('[SocketHandler] Broadcasting table_created event...');
                     this.io.emit('table_created', table.getPublicInfo());
                     console.log('[SocketHandler] create_table complete');
-                    clearTimeout(timeout);
+                    completed = true;
+                    clearTimeout(timeoutHandle);
                 } catch (error) {
+                    completed = true;
+                    clearTimeout(timeoutHandle);
                     console.error('[SocketHandler] create_table ERROR:', error);
                     console.error('[SocketHandler] create_table ERROR stack:', error.stack);
-                    clearTimeout(timeout);
                     const errorResponse = { success: false, error: `Server error: ${error.message}` };
                     if (callback) callback(errorResponse);
                     socket.emit('create_table_response', errorResponse);
