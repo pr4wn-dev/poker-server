@@ -4,7 +4,10 @@
 
 ## LAW 1: PULL BOTH REPOS FIRST
 ```powershell
-cd C:\Projects\poker-server; git pull
+# Server repo (Node.js backend)
+cd c:\Users\Becca\source\repos\poker-server; git pull
+
+# Client repo (Unity frontend)  
 cd C:\Projects\poker-client-unity; git pull
 ```
 **This happens BEFORE you respond to the user. BEFORE you do anything else. FIRST.**
@@ -14,28 +17,35 @@ If user says "get files" or "update" or starts a new session → PULL BOTH REPOS
 Not one. BOTH. Every time. No exceptions.
 
 ### VERIFYING FILES MATCH (After Pulling)
-After pulling, verify you have the latest files:
+After pulling, verify you have the latest files and they match remote:
 ```powershell
 # Check latest commit on server
-cd C:\Projects\poker-server; git log --oneline -1
+cd c:\Users\Becca\source\repos\poker-server; git log --oneline -1
 
 # Check latest commit on client
 cd C:\Projects\poker-client-unity; git log --oneline -1
 
 # Check if working tree is clean (no uncommitted changes)
-cd C:\Projects\poker-server; git status
+cd c:\Users\Becca\source\repos\poker-server; git status
 cd C:\Projects\poker-client-unity; git status
+
+# Verify you're on the right branch and up to date
+cd c:\Users\Becca\source\repos\poker-server; git branch; git status
+cd C:\Projects\poker-client-unity; git branch; git status
 ```
 
 **If git status shows uncommitted changes:**
 - Local changes exist that aren't in the repo
-- Either commit and push them, or stash/discard them
+- Either commit and push them, or stash/discard them: `git stash` or `git restore .`
 - Goal: Working tree should be clean and match remote exactly
 
 **If commits don't match what you expect:**
 - Check commit messages to verify you have the right version
 - Latest commits should match what was pushed before leaving
 - If unsure, check commit timestamps: `git log --format="%h %ai %s" -5`
+- Compare with remote: `git fetch; git log origin/master --oneline -5`
+
+**CRITICAL:** Both repos MUST be pushed before leaving work session. Always verify with `git status` that working tree is clean and `git log -1` shows the latest commit you expect.
 
 ## LAW 2: CHECK PAST PROBLEMS FIRST
 Before solving ANY problem, search CHANGELOG.md for matching issues. The solution probably already exists.
