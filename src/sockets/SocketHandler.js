@@ -252,56 +252,50 @@ class SocketHandler {
                         creatorId: user.userId
                     });
                     console.log(`[SocketHandler] Table created: ${table.id}`);
-                    gameLogger.gameEvent('SOCKET', 'Table created', { tableId: table.id, tableName: table.name });
                     
-                    // Set up table callbacks for state broadcasting
-                    console.log('[SocketHandler] Setting up table callbacks...');
-                    this.setupTableCallbacks(table);
-                    console.log('[SocketHandler] Table callbacks set up');
-                    
-                    // Auto-join the creator to seat 0 (Issue #55: Creator must be seated to play)
-                    console.log('[SocketHandler] Attempting to join creator to table...');
-                    const joinResult = this.gameManager.joinTable(user.userId, table.id, 0);
-                    console.log(`[SocketHandler] Join result: ${joinResult.success ? 'SUCCESS' : 'FAILED'}`);
-                    if (!joinResult.success) {
-                        console.error(`[SocketHandler] Join failed: ${joinResult.error}`);
-                    }
-                    if (joinResult.success) {
-                        socket.join(`table:${table.id}`);
-                        console.log(`[SocketHandler] Creator ${user.username} auto-joined table at seat 0`);
-                    }
-                    
-                    // Send minimal response IMMEDIATELY - don't wait for full state
-                    const minimalResponse = {
+                    // Send response IMMEDIATELY - before any other operations
+                    const immediateResponse = {
                         success: true,
                         tableId: table.id,
                         table: {
                             id: table.id,
                             name: table.name,
-                            playerCount: table.getSeatedPlayerCount(),
-                            maxPlayers: table.maxPlayers
+                            maxPlayers: table.maxPlayers,
+                            playerCount: 0
                         },
-                        seatIndex: joinResult.success ? joinResult.seatIndex : -1,
+                        seatIndex: -1,
                         state: {
                             id: table.id,
                             name: table.name,
-                            phase: table.phase
+                            phase: 'waiting'
                         }
                     };
                     
                     responseSent = true;
-                    completed = true;
-                    clearTimeout(timeoutHandle);
+                    if (callback) callback(immediateResponse);
+                    socket.emit('create_table_response', immediateResponse);
+                    console.log('[SocketHandler] Response sent immediately after table creation');
                     
-                    if (callback) {
+                    // Do everything else asynchronously
+                    setImmediate(() => {
                         try {
-                            callback(minimalResponse);
+                            this.setupTableCallbacks(table);
+                            const joinResult = this.gameManager.joinTable(user.userId, table.id, 0);
+                            if (joinResult.success) {
+                                socket.join(`table:${table.id}`);
+                            }
+                            const fullState = table.getState(user.userId);
+                            const fullPublicInfo = table.getPublicInfo();
+                            socket.emit('table_state', fullState);
+                            this.io.emit('table_created', fullPublicInfo);
+                            completed = true;
+                            clearTimeout(timeoutHandle);
                         } catch (err) {
-                            console.error('[SocketHandler] Error in callback:', err);
+                            console.error('[SocketHandler] Error in async setup:', err);
+                            completed = true;
+                            clearTimeout(timeoutHandle);
                         }
-                    }
-                    socket.emit('create_table_response', minimalResponse);
-                    console.log('[SocketHandler] Minimal response sent immediately');
+                    });
                     
                     // Get full state asynchronously and send update
                     setImmediate(() => {
