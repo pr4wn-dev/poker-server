@@ -175,28 +175,14 @@ class SocketHandler {
                         return;
                     }
                     
-                    // CRITICAL: Ensure player is registered in GameManager
-                    // registerPlayer takes (socketId, playerName, userId) - note the order!
-                    console.log('[SocketHandler] Checking/registering player in GameManager...');
-                    let player = this.gameManager.players.get(user.userId);
+                    // Player should already be registered during authentication
+                    // Just update their chips from database
+                    const player = this.gameManager.players.get(user.userId);
                     if (!player) {
-                        console.log('[SocketHandler] Player not found, registering...');
-                        const registeredId = this.gameManager.registerPlayer(socket.id, user.profile?.username || user.username, user.userId);
-                        console.log(`[SocketHandler] registerPlayer returned: ${registeredId}`);
-                        player = this.gameManager.players.get(user.userId);
-                        console.log(`[SocketHandler] Player registered: ${player ? 'SUCCESS' : 'FAILED'}`);
-                        if (!player) {
-                            throw new Error(`Failed to register player - registerPlayer returned ${registeredId} but player not found`);
-                        }
+                        throw new Error(`Player ${user.userId} not found in GameManager - they should be registered during login`);
                     }
-                    
-                    // Update player's chips in game manager
-                    if (player) {
-                        player.chips = dbUser.chips;
-                        console.log(`[SocketHandler] Updated player chips: ${player.chips}`);
-                    } else {
-                        throw new Error('Player not found after registration');
-                    }
+                    player.chips = dbUser.chips;
+                    console.log(`[SocketHandler] Updated player chips: ${player.chips}`);
 
                     console.log('[SocketHandler] create_table - user authenticated:', user.username);
                     console.log('[SocketHandler] Creating table...');
