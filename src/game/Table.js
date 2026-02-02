@@ -1767,6 +1767,22 @@ class Table {
             if (playersWithChips.length === 1) {
             const winner = playersWithChips[0];
             
+            // CRITICAL: Check if game ended before any hands were played
+            if (this.handsPlayed === 0) {
+                console.error(`[Table ${this.name}] ⚠️ CRITICAL: Game ended before any hands were played! Winner: ${winner.name}, handsPlayed: ${this.handsPlayed}`);
+                gameLogger.error(this.name, 'GAME ENDED BEFORE HANDS PLAYED', {
+                    winnerName: winner.name,
+                    winnerChips: winner.chips,
+                    handsPlayed: this.handsPlayed,
+                    phase: this.phase,
+                    allPlayers: this.seats.filter(s => s !== null).map(s => ({
+                        name: s.name,
+                        chips: s.chips,
+                        isActive: s.isActive
+                    }))
+                });
+            }
+            
             // CRITICAL: Award any remaining pot to the winner BEFORE validation
             // This ensures money isn't lost when game ends with pot still unclaimed
             if (this.pot > 0) {
@@ -1794,6 +1810,7 @@ class Table {
                         totalStartingChips: this.totalStartingChips,
                         missing: this.totalStartingChips - winnerChips,
                         currentTotalChips,
+                        handsPlayed: this.handsPlayed,
                         allPlayers: this.seats.filter(s => s !== null).map(s => ({
                             name: s.name,
                             chips: s.chips,
@@ -1804,7 +1821,8 @@ class Table {
                     gameLogger.gameEvent(this.name, '[MONEY] VALIDATION PASSED: Winner chips = total starting chips', {
                         winnerChips,
                         totalStartingChips: this.totalStartingChips,
-                        difference: 0
+                        difference: 0,
+                        handsPlayed: this.handsPlayed
                     });
                 }
             } else {
@@ -1812,16 +1830,18 @@ class Table {
                 gameLogger.gameEvent(this.name, '[MONEY] WARNING: Starting chips not tracked', {
                     winnerChips,
                     totalStartingChips: this.totalStartingChips,
-                    currentTotalChips
+                    currentTotalChips,
+                    handsPlayed: this.handsPlayed
                 });
             }
             
-            console.log(`[Table ${this.name}] GAME OVER - ${winner.name} wins with ${winner.chips} chips!`);
+            console.log(`[Table ${this.name}] GAME OVER - ${winner.name} wins with ${winner.chips} chips! (handsPlayed: ${this.handsPlayed})`);
             gameLogger.gameEvent(this.name, 'GAME OVER - Winner announced', {
                 winnerName: winner.name,
                 winnerChips: winner.chips,
                 winnerId: winner.playerId,
-                isBot: winner.isBot || false
+                isBot: winner.isBot || false,
+                handsPlayed: this.handsPlayed
             });
             this.phase = GAME_PHASES.WAITING;
             this.gameStarted = false;
@@ -1834,7 +1854,8 @@ class Table {
                 console.error(`[Table ${this.name}] ⚠️ CRITICAL: onGameOver callback is NOT SET! Game over event will not be sent to clients!`);
                 gameLogger.error(this.name, 'onGameOver callback not set - game over event not sent', {
                     winnerName: winner.name,
-                    winnerChips: winner.chips
+                    winnerChips: winner.chips,
+                    handsPlayed: this.handsPlayed
                 });
             }
             // Capture snapshot before broadcasting
