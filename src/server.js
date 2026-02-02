@@ -74,6 +74,38 @@ app.get('/api/tables', (req, res) => {
     res.json(gameManager.getPublicTableList());
 });
 
+// API endpoint to manually save state snapshots for a table
+app.post('/api/tables/:tableId/save-snapshot', (req, res) => {
+    const tableId = req.params.tableId;
+    const table = gameManager.getTable(tableId);
+    
+    if (!table) {
+        return res.status(404).json({ success: false, error: 'Table not found' });
+    }
+    
+    if (!table.stateSnapshot) {
+        return res.status(400).json({ 
+            success: false, 
+            error: 'State snapshots not enabled for this table',
+            isSimulation: table.isSimulation,
+            hasEnvVar: process.env.ENABLE_STATE_SNAPSHOTS === 'true'
+        });
+    }
+    
+    const saved = table.saveStateSnapshots();
+    if (saved) {
+        res.json({ 
+            success: true, 
+            message: 'State snapshot saved',
+            tableId: table.id,
+            tableName: table.name,
+            snapshotCount: table.stateSnapshot?.snapshots?.length || 0
+        });
+    } else {
+        res.status(500).json({ success: false, error: 'Failed to save snapshot' });
+    }
+});
+
 // Server info endpoint - returns local IP and public IP for remote connections
 app.get('/api/server-info', async (req, res) => {
     const localIP = getLocalIP();
