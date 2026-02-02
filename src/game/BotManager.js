@@ -403,10 +403,11 @@ class BotManager {
                 minRaise: table.bigBlind,
                 maxBet: seat.chips,
                 phase: table.phase,
-                communityCards: table.communityCards
+                communityCards: table.communityCards,
+                isSimulation: table.isSimulation || false  // Pass simulation flag to bot AI
             };
             
-            console.log(`[BotManager] ${bot.name} deciding... phase=${table.phase}, currentBet=${table.currentBet}, botBet=${seat.currentBet}, pot=${table.pot}`);
+            console.log(`[BotManager] ${bot.name} deciding... phase=${table.phase}, currentBet=${table.currentBet}, botBet=${seat.currentBet}, pot=${table.pot}, isSimulation=${gameState.isSimulation}`);
             
             // Make decision
             const decision = bot.decide(gameState);

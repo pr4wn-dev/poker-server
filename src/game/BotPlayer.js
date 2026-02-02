@@ -79,7 +79,8 @@ class BotPlayer {
             minRaise,        // Minimum raise amount
             maxBet,          // Maximum bet (usually player's chips)
             phase,           // preflop, flop, turn, river
-            communityCards
+            communityCards,
+            isSimulation = false  // Simulation mode - bots should be more aggressive
         } = gameState;
         
         const toCall = currentBet - this.currentBet;
@@ -92,27 +93,59 @@ class BotPlayer {
             effectiveStrength = Math.max(0, Math.min(1, effectiveStrength));
         }
         
+        // SIMULATION MODE: Make bots more aggressive and all-in prone
+        // Lower thresholds for all-in, more likely to go all-in with decent hands
+        let allInThreshold = this.traits.allInThreshold;
+        let allInFrequency = 0.0;  // Base frequency for all-in
+        if (isSimulation) {
+            // In simulation, lower all-in threshold significantly
+            allInThreshold = Math.max(0.3, this.traits.allInThreshold - 0.3);  // Lower by 0.3, min 0.3
+            // Increase all-in frequency - bots go all-in more often in sim
+            allInFrequency = 0.15;  // 15% chance to go all-in even with moderate hands
+        }
+        
         // Decision logic
         const shouldBluff = Math.random() < this.traits.bluffFrequency;
+        const shouldAllInRandom = isSimulation && Math.random() < allInFrequency;
         
         // If we need to call
         if (toCall > 0) {
+            // SIMULATION MODE: More likely to go all-in when calling would be a significant portion of chips
+            if (isSimulation && toCall >= this.chips * 0.3 && effectiveStrength >= 0.4) {
+                // If calling would be 30%+ of chips and hand is decent, consider all-in
+                if (Math.random() < 0.4) {  // 40% chance
+                    return { action: 'allin' };
+                }
+            }
+            
             // Fold weak hands
-            if (effectiveStrength < this.traits.callThreshold && !shouldBluff) {
+            if (effectiveStrength < this.traits.callThreshold && !shouldBluff && !shouldAllInRandom) {
                 return { action: 'fold' };
             }
             
             // Strong hand - raise
-            if (effectiveStrength >= this.traits.raiseThreshold || shouldBluff) {
-                if (Math.random() < this.traits.aggression) {
-                    // All-in with very strong hands
-                    if (effectiveStrength >= this.traits.allInThreshold && this.chips <= pot * 0.5) {
-                        return { action: 'allin' };
+            if (effectiveStrength >= this.traits.raiseThreshold || shouldBluff || shouldAllInRandom) {
+                if (Math.random() < this.traits.aggression || shouldAllInRandom) {
+                    // All-in conditions (more aggressive in simulation)
+                    const allInCondition = effectiveStrength >= allInThreshold || shouldAllInRandom;
+                    const chipsLowCondition = this.chips <= pot * (isSimulation ? 1.0 : 0.5);  // More lenient in sim
+                    
+                    if (allInCondition && (chipsLowCondition || isSimulation)) {
+                        // In simulation, also go all-in if chips are low relative to pot or if random trigger
+                        if (isSimulation && (this.chips <= pot * 2 || shouldAllInRandom)) {
+                            return { action: 'allin' };
+                        } else if (!isSimulation && chipsLowCondition) {
+                            return { action: 'allin' };
+                        }
                     }
                     
                     // Raise
                     const raiseAmount = this.calculateRaiseAmount(toCall, minRaise, maxBet, pot, effectiveStrength);
                     if (raiseAmount > toCall) {
+                        // SIMULATION MODE: Sometimes make raises into all-ins
+                        if (isSimulation && raiseAmount >= this.chips * 0.7 && Math.random() < 0.3) {
+                            return { action: 'allin' };
+                        }
                         return { action: 'raise', amount: raiseAmount };
                     }
                 }
@@ -120,10 +153,14 @@ class BotPlayer {
             
             // Call
             if (toCall <= this.chips) {
+                // SIMULATION MODE: Sometimes call becomes all-in
+                if (isSimulation && toCall >= this.chips * 0.5 && effectiveStrength >= 0.5 && Math.random() < 0.25) {
+                    return { action: 'allin' };
+                }
                 return { action: 'call' };
             } else {
                 // Can't afford to call - all-in or fold
-                if (effectiveStrength >= this.traits.callThreshold) {
+                if (effectiveStrength >= this.traits.callThreshold || shouldAllInRandom) {
                     return { action: 'allin' };
                 }
                 return { action: 'fold' };
@@ -131,10 +168,15 @@ class BotPlayer {
         } else {
             // toCall === 0: Either no bet exists OR we've already matched
             // CRITICAL: Only use 'bet' if currentBet === 0. If currentBet > 0, we must 'raise' or 'check'.
-            if (effectiveStrength >= this.traits.raiseThreshold || shouldBluff) {
-                if (Math.random() < this.traits.aggression) {
+            if (effectiveStrength >= this.traits.raiseThreshold || shouldBluff || shouldAllInRandom) {
+                if (Math.random() < this.traits.aggression || shouldAllInRandom) {
                     const betAmount = this.calculateBetAmount(minRaise, maxBet, pot, effectiveStrength);
                     if (betAmount > 0) {
+                        // SIMULATION MODE: Sometimes bets become all-ins
+                        if (isSimulation && betAmount >= this.chips * 0.6 && Math.random() < 0.3) {
+                            return { action: 'allin' };
+                        }
+                        
                         if (currentBet === 0) {
                             // No bet on table - we can open with a bet
                             return { action: 'bet', amount: betAmount };
