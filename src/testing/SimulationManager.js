@@ -218,7 +218,7 @@ class SimulationManager {
             regularBots: regularBotCount 
         });
         
-        // Store simulation data with ALL original settings
+        // Store simulation data
         const simulation = {
             tableId,
             creatorId,
@@ -230,14 +230,8 @@ class SimulationManager {
             status: 'spawning',
             gamesPlayed: 0,
             fastMode: this.fastMode,
-            // Store ALL original settings for restart (don't randomize)
-            originalMaxPlayers: maxPlayers,
-            originalSmallBlind: smallBlind,
-            originalBigBlind: bigBlind,
-            originalBuyIn: buyIn,
-            originalTurnTimeLimit: turnTimeLimit,
-            originalBlindIncreaseInterval: blindIncreaseInterval,
-            originalSocketBotRatio: socketBotRatio
+            originalSmallBlind: smallBlind,  // Store original blinds for reference
+            originalBigBlind: bigBlind
         };
         this.activeSimulations.set(tableId, simulation);
         
@@ -464,7 +458,7 @@ class SimulationManager {
         const newRegularBotCount = Math.min(idealRegularBots, botProfiles.length);
         const newSocketBotCount = newTotalBots - newRegularBotCount;
         
-        this.log('INFO', 'Restarting with original settings', {
+        this.log('INFO', 'New game settings', {
             gameNumber: simulation.gamesPlayed + 1,
             maxPlayers: newMaxPlayers,
             smallBlind: newSmallBlind,
@@ -475,13 +469,24 @@ class SimulationManager {
             socketBotRatio: newSocketBotRatio.toFixed(2)
         });
         
-        // Reset table settings to original (don't change them)
+        // Update table settings with new random values
+        table.maxPlayers = newMaxPlayers;
+        table.smallBlind = newSmallBlind;
+        table.bigBlind = newBigBlind;
+        table.buyIn = newBuyIn;
+        table.turnTimeLimit = newTurnTimeLimit;
+        table.blindIncreaseInterval = newBlindIncreaseInterval;
         table.minRaise = newBigBlind;
         
         // CRITICAL: Reset blind level and initial blinds to prevent exponential growth
         table.blindLevel = 1;
         table.initialSmallBlind = newSmallBlind;
         table.initialBigBlind = newBigBlind;
+        
+        // Update simulation tracking (for reference, but won't be used on next restart)
+        simulation.buyIn = newBuyIn;
+        simulation.originalSmallBlind = newSmallBlind;
+        simulation.originalBigBlind = newBigBlind;
         
         // Adjust table seats array size if maxPlayers changed
         if (table.seats.length !== newMaxPlayers) {
