@@ -2163,6 +2163,7 @@ class Table {
             case GAME_PHASES.PRE_FLOP:
                 this.communityCards = [this.deck.draw(), this.deck.draw(), this.deck.draw()];
                 this.phase = GAME_PHASES.FLOP;
+                this.raisesThisRound = 0;  // Reset raise count for new betting round
                 gameLogger.phaseChange(this.name, 'PRE_FLOP', 'FLOP', {
                     communityCards: this.communityCards.map(c => `${c.rank}${c.suit}`)
                 });
@@ -2170,6 +2171,7 @@ class Table {
             case GAME_PHASES.FLOP:
                 this.communityCards.push(this.deck.draw());
                 this.phase = GAME_PHASES.TURN;
+                this.raisesThisRound = 0;  // Reset raise count for new betting round
                 gameLogger.phaseChange(this.name, 'FLOP', 'TURN', {
                     turnCard: `${this.communityCards[this.communityCards.length - 1].rank}${this.communityCards[this.communityCards.length - 1].suit}`
                 });
@@ -2177,6 +2179,7 @@ class Table {
             case GAME_PHASES.TURN:
                 this.communityCards.push(this.deck.draw());
                 this.phase = GAME_PHASES.RIVER;
+                this.raisesThisRound = 0;  // Reset raise count for new betting round
                 gameLogger.phaseChange(this.name, 'TURN', 'RIVER', {
                     riverCard: `${this.communityCards[this.communityCards.length - 1].rank}${this.communityCards[this.communityCards.length - 1].suit}`
                 });
