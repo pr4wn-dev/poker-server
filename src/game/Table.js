@@ -1238,10 +1238,28 @@ class Table {
         const toCall = Math.min(this.currentBet - player.currentBet, player.chips);
         
         const beforeChips = player.chips;
+        const potBefore = this.pot;
+        const totalBetBefore = player.totalBet || 0;
+        const currentBetBefore = player.currentBet || 0;
+        
         player.chips -= toCall;
         player.currentBet += toCall;
-        player.totalBet += toCall;
+        player.totalBet = (player.totalBet || 0) + toCall;
         this.pot += toCall;
+        
+        // CRITICAL: Verify calculations
+        if (player.chips !== beforeChips - toCall) {
+            console.error(`[Table ${this.name}] ⚠️ CALL ERROR: Chips calculation wrong. Before: ${beforeChips}, Amount: ${toCall}, After: ${player.chips}`);
+        }
+        if (this.pot !== potBefore + toCall) {
+            console.error(`[Table ${this.name}] ⚠️ CALL ERROR: Pot calculation wrong. Before: ${potBefore}, Amount: ${toCall}, After: ${this.pot}`);
+        }
+        if (player.totalBet !== totalBetBefore + toCall) {
+            console.error(`[Table ${this.name}] ⚠️ CALL ERROR: totalBet calculation wrong. Before: ${totalBetBefore}, Amount: ${toCall}, After: ${player.totalBet}`);
+        }
+        if (player.currentBet !== currentBetBefore + toCall) {
+            console.error(`[Table ${this.name}] ⚠️ CALL ERROR: currentBet calculation wrong. Before: ${currentBetBefore}, Amount: ${toCall}, After: ${player.currentBet}`);
+        }
 
         if (player.chips === 0) {
             player.isAllIn = true;
