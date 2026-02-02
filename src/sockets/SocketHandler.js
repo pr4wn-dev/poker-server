@@ -204,16 +204,25 @@ class SocketHandler {
                     console.log('[SocketHandler] start_simulation result:', JSON.stringify(result));
                     
                     if (result.success) {
-                        // CRITICAL: Set up table callbacks for state broadcasting
+                        // CRITICAL: Verify table exists before proceeding
                         const simTable = this.gameManager.getTable(result.tableId);
-                        if (simTable) {
-                            console.log(`[SocketHandler] Setting up callbacks for simulation table ${result.tableId}`);
-                            try {
-                                this.setupTableCallbacks(simTable);
-                                console.log(`[SocketHandler] Callbacks set up successfully`);
-                            } catch (err) {
-                                console.error(`[SocketHandler] Error setting up callbacks:`, err);
-                            }
+                        if (!simTable) {
+                            console.error(`[SocketHandler] ERROR: Table ${result.tableId} not found in GameManager!`);
+                            const errorResponse = { success: false, error: `Table ${result.tableId} was not created` };
+                            if (callback) callback(errorResponse);
+                            socket.emit('start_simulation_response', errorResponse);
+                            return;
+                        }
+                        
+                        console.log(`[SocketHandler] Table ${result.tableId} found: ${simTable.name}`);
+                        
+                        // CRITICAL: Set up table callbacks for state broadcasting
+                        console.log(`[SocketHandler] Setting up callbacks for simulation table ${result.tableId}`);
+                        try {
+                            this.setupTableCallbacks(simTable);
+                            console.log(`[SocketHandler] Callbacks set up successfully`);
+                        } catch (err) {
+                            console.error(`[SocketHandler] Error setting up callbacks:`, err);
                         }
                         
                         // Join creator as spectator
