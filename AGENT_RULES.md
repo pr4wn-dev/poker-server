@@ -13,6 +13,30 @@ If user says "get files" or "update" or starts a new session → PULL BOTH REPOS
 
 Not one. BOTH. Every time. No exceptions.
 
+### VERIFYING FILES MATCH (After Pulling)
+After pulling, verify you have the latest files:
+```powershell
+# Check latest commit on server
+cd C:\Projects\poker-server; git log --oneline -1
+
+# Check latest commit on client
+cd C:\Projects\poker-client-unity; git log --oneline -1
+
+# Check if working tree is clean (no uncommitted changes)
+cd C:\Projects\poker-server; git status
+cd C:\Projects\poker-client-unity; git status
+```
+
+**If git status shows uncommitted changes:**
+- Local changes exist that aren't in the repo
+- Either commit and push them, or stash/discard them
+- Goal: Working tree should be clean and match remote exactly
+
+**If commits don't match what you expect:**
+- Check commit messages to verify you have the right version
+- Latest commits should match what was pushed before leaving
+- If unsure, check commit timestamps: `git log --format="%h %ai %s" -5`
+
 ## LAW 2: CHECK PAST PROBLEMS FIRST
 Before solving ANY problem, search CHANGELOG.md for matching issues. The solution probably already exists.
 `Ctrl+F` the error message, the symptom, the feature name. If it's been solved before, use that solution.
@@ -132,9 +156,33 @@ Before writing ANY code, complete these steps:
 
 ### 🚨 Step 0: PULL BOTH REPOS FIRST!!! 🚨
 ```powershell
-cd C:\Projects\poker-server; git pull
+# Server repo (Node.js backend)
+cd c:\Users\Becca\source\repos\poker-server; git pull
+
+# Client repo (Unity frontend)
 cd C:\Projects\poker-client-unity; git pull
 ```
+
+**VERIFY FILES MATCH:**
+```powershell
+# Check latest commits match
+cd c:\Users\Becca\source\repos\poker-server; git log --oneline -1
+cd C:\Projects\poker-client-unity; git log --oneline -1
+
+# Verify no uncommitted local changes
+cd c:\Users\Becca\source\repos\poker-server; git status
+cd C:\Projects\poker-client-unity; git status
+
+# Verify branch and remote sync
+cd c:\Users\Becca\source\repos\poker-server; git branch; git fetch; git status
+cd C:\Projects\poker-client-unity; git branch; git fetch; git status
+```
+
+**If git status shows changes:**
+- You have local files not in the repo
+- Either commit/push them OR discard them to match remote exactly: `git restore .`
+- Working tree MUST be clean to ensure you have the right files
+- If you see "Your branch is behind 'origin/master'", run `git pull` again
 
 ### Step 1: Read Critical Issues
 - [ ] Check CHANGELOG.md for similar issues
