@@ -2167,9 +2167,17 @@ class SocketHandler {
             // CRITICAL: Only send game_over to actual players, NOT spectators
             // Spectators should not be prompted to leave - they're just watching
             // Send to each player individually to avoid sending to spectators
+            let playersNotified = 0;
             for (const seat of table.seats) {
                 if (seat && !seat.isBot && seat.socketId) {
                     // This is a real player (not a bot, not a spectator)
+                    // CRITICAL: Check if this socket is actually a spectator before sending
+                    const userId = this.socketToUser.get(seat.socketId);
+                    if (userId && table.isSpectator(userId)) {
+                        console.log(`[SocketHandler] Skipping game_over for ${seat.name} - they are a spectator`);
+                        continue;
+                    }
+                    
                     this.io.to(seat.socketId).emit('game_over', {
                         tableId: table.id,
                         winnerId: winner.playerId,
@@ -2177,12 +2185,19 @@ class SocketHandler {
                         winnerChips: winner.chips,
                         isBot: winner.isBot || false
                     });
+                    playersNotified++;
                 }
             }
             
             // Send informational version to spectators (no leave prompt)
             // They can see the game over state through normal state updates
-            this.io.to(`spectator:${table.id}`).emit('game_over', {
+            const spectatorRoom = `spectator:${table.id}`;
+            const spectatorSockets = this.io.sockets.adapter.rooms.get(spectatorRoom);
+            const spectatorCount = spectatorSockets ? spectatorSockets.size : 0;
+            
+            console.log(`[SocketHandler] Sending game_over to ${playersNotified} players and ${spectatorCount} spectators (informational)`);
+            
+            this.io.to(spectatorRoom).emit('game_over', {
                 tableId: table.id,
                 winnerId: winner.playerId,
                 winnerName: winner.name,
