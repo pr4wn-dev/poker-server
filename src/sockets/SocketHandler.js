@@ -138,6 +138,7 @@ class SocketHandler {
             });
 
             socket.on('create_table', async (data, callback) => {
+                console.log('[SocketHandler] ====== create_table HANDLER CALLED ======');
                 let completed = false;
                 let responseSent = false;
                 let timeoutHandle;
