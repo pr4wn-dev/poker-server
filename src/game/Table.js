@@ -91,6 +91,10 @@ class Table {
         this.lastRaiserIndex = -1;
         this.hasPassedLastRaiser = false;  // Track if we've passed the last raiser this betting round
         
+        // Raise cap - prevent infinite raising (standard poker: 3-4 raises max per round)
+        this.raisesThisRound = 0;  // Count of raises in current betting round
+        this.MAX_RAISES_PER_ROUND = 4;  // Standard limit: 4 raises per betting round
+        
         // Loop detection - prevent infinite loops
         this.turnsThisPhase = 0;  // Count turns in current phase
         this.playerTurnCounts = {};  // Track how many times each player has acted this phase
@@ -991,6 +995,7 @@ class Table {
         this.hasPassedLastRaiser = false;
         this.lastRaiserIndex = -1;
         this.currentPlayerIndex = -1;
+        this.raisesThisRound = 0;  // Reset raise count for new betting round
         
         // Reset loop detection counters
         this.turnsThisPhase = 0;
