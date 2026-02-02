@@ -138,52 +138,12 @@ class SocketHandler {
             });
 
             socket.on('create_table', async (data, callback) => {
-                console.log('[SocketHandler] ====== create_table HANDLER CALLED ======');
-                let completed = false;
-                let responseSent = false;
-                let timeoutHandle;
-                
-                // Wrap entire handler in timeout to prevent hanging
-                timeoutHandle = setTimeout(() => {
-                    if (completed || responseSent) return;
-                    completed = true;
-                    responseSent = true;
-                    console.error('[SocketHandler] create_table TIMEOUT after 10 seconds');
-                    const gameLogger = require('../utils/GameLogger');
-                    gameLogger.error('SOCKET', 'create_table TIMEOUT', {
-                        userId: this.getAuthenticatedUser(socket)?.userId,
-                        tableName: data?.name
-                    });
-                    const error = { success: false, error: 'Table creation timeout' };
-                    if (callback) {
-                        try {
-                            callback(error);
-                        } catch (err) {
-                            console.error('[SocketHandler] Error in timeout callback:', err);
-                        }
-                    }
-                    socket.emit('create_table_response', error);
-                }, 10000);
-                
-                try {
-                    const startTime = Date.now();
-                    const gameLogger = require('../utils/GameLogger');
-                    console.log('[SocketHandler] create_table received:', JSON.stringify(data));
-                    gameLogger.gameEvent('SOCKET', 'create_table received', { data });
-                    const user = this.getAuthenticatedUser(socket);
+                console.log('[SocketHandler] create_table received:', JSON.stringify(data));
+                const user = this.getAuthenticatedUser(socket);
                     if (!user) {
-                        completed = true;
-                        responseSent = true;
-                        clearTimeout(timeoutHandle);
                         console.log('[SocketHandler] create_table FAILED - not authenticated');
                         const error = { success: false, error: 'Not authenticated' };
-                        if (callback) {
-                            try {
-                                callback(error);
-                            } catch (err) {
-                                console.error('[SocketHandler] Error in auth callback:', err);
-                            }
-                        }
+                        if (callback) callback(error);
                         socket.emit('create_table_response', error);
                         return;
                     }
