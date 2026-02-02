@@ -1271,12 +1271,19 @@ class Table {
                     } else if (amount > player.chips) {
                         result = { success: false, error: `You don't have enough chips. You have ${player.chips}.` };
                     } else {
-                        // Pre-flop: If currentBet > 0 (blinds posted), always treat as raise
-                        // This allows all players to bet/raise pre-flop even after blinds are posted
+                        // Pre-flop: If currentBet > 0 (blinds posted), check if amount is more than currentBet
                         if (this.currentBet > 0 && this.phase === GAME_PHASES.PRE_FLOP) {
-                            // Player wants to bet - convert to raise (even if amount equals currentBet, raise will handle it)
-                            result = this.raise(seatIndex, amount);
+                            // If amount equals currentBet, it's a call, not a bet
+                            if (amount === this.currentBet) {
+                                result = this.call(seatIndex);
+                            } else if (amount > this.currentBet) {
+                                // Amount is more than currentBet - this is a raise
+                                result = this.raise(seatIndex, amount);
+                            } else {
+                                result = { success: false, error: `Bet amount must be at least ${this.currentBet} (current bet)` };
+                            }
                         } else {
+                            // Post-flop with no bets, or pre-flop before blinds - allow bet
                             result = this.bet(seatIndex, amount);
                         }
                     }
@@ -1542,8 +1549,19 @@ class Table {
             minRaise: this.minRaise,
             playerChips: player.chips,
             currentBet: this.currentBet,
-            playerBet: player.currentBet
+            playerBet: player.currentBet,
+            raisesThisRound: this.raisesThisRound,
+            maxRaises: this.MAX_RAISES_PER_ROUND
         });
+        
+        // CRITICAL: Check raise cap - prevent infinite raising
+        if (this.raisesThisRound >= this.MAX_RAISES_PER_ROUND) {
+            gameLogger.bettingAction(this.name, player.name || `Seat ${seatIndex}`, 'RAISE REJECTED - Raise cap reached', {
+                raisesThisRound: this.raisesThisRound,
+                maxRaises: this.MAX_RAISES_PER_ROUND
+            });
+            return { success: false, error: `Maximum raises per round reached (${this.MAX_RAISES_PER_ROUND}). You can only call or fold now.` };
+        }
         
         // CRITICAL: Validate amount is not more than player has
         if (amount > player.chips) {
@@ -1559,16 +1577,8 @@ class Table {
 
         // FIX: Validate that raise amount is actually a raise (more than minRaise) or all-in
         // If amount equals toCall, treat as call, not raise
-        // EXCEPTION: Pre-flop - allow betting the big blind amount even if it equals currentBet
-        // (This allows players to "bet" the big blind pre-flop, which is valid)
         if (raiseAmount <= 0) {
             // Amount is just the call amount - treat as call instead
-            // BUT: Pre-flop, if player is betting exactly the big blind and hasn't acted yet, allow it as a bet
-            if (this.phase === GAME_PHASES.PRE_FLOP && amount === this.bigBlind && player.currentBet === 0) {
-                // Player is betting the big blind pre-flop (first action) - this is valid, treat as bet
-                gameLogger.debug(this.name, `PRE-FLOP BET: Player betting big blind amount, treating as bet`);
-                return this.bet(seatIndex, amount);
-            }
             gameLogger.debug(this.name, `RAISE converted to CALL (raiseAmount <= 0)`);
             return this.call(seatIndex);
         }
@@ -1612,6 +1622,9 @@ class Table {
         }
         this.minRaise = Math.max(raiseAmount, this.minRaise);  // Keep the larger raise amount
         this.lastRaiserIndex = seatIndex;
+        
+        // Increment raise count for this betting round
+        this.raisesThisRound++;
 
         if (player.chips === 0) {
             player.isAllIn = true;
