@@ -94,7 +94,9 @@ class GameManager {
             turnTimeLimit: options.turnTimeLimit || 20000, // Turn time in ms (default 20 seconds)
             blindIncreaseInterval: options.blindIncreaseInterval || 0, // 0 = disabled, otherwise ms between blind increases
             maxRaisesPerRound: options.maxRaisesPerRound !== undefined ? options.maxRaisesPerRound : 3, // Default: 3 raises per round (standard poker)
-            isSimulation: options.isSimulation || false // Simulation tables hide Start Game button
+            isSimulation: options.isSimulation || false, // Simulation tables hide Start Game button
+            readyUpDuration: options.readyUpDuration, // Pass through for fast mode simulations
+            startDelaySeconds: options.countdownDuration ? options.countdownDuration / 1000 : undefined // Convert countdownDuration (ms) to startDelaySeconds
         });
 
         this.tables.set(tableId, table);
