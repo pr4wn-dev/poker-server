@@ -165,7 +165,9 @@ class SocketHandler {
                 
                 try {
                     const startTime = Date.now();
+                    const gameLogger = require('../utils/GameLogger');
                     console.log('[SocketHandler] create_table received:', JSON.stringify(data));
+                    gameLogger.gameEvent('SOCKET', 'create_table received', { data });
                     const user = this.getAuthenticatedUser(socket);
                     if (!user) {
                         completed = true;
@@ -242,12 +244,14 @@ class SocketHandler {
                     console.log(`[SocketHandler] Updated player chips: ${player.chips}`);
 
                     console.log('[SocketHandler] create_table - user authenticated:', user.username);
+                    gameLogger.gameEvent('SOCKET', 'create_table - user authenticated', { userId: user.userId, username: user.username });
                     console.log('[SocketHandler] Creating table...');
                     const table = this.gameManager.createTable({
                         ...data,
                         creatorId: user.userId
                     });
                     console.log(`[SocketHandler] Table created: ${table.id}`);
+                    gameLogger.gameEvent('SOCKET', 'Table created', { tableId: table.id, tableName: table.name });
                     
                     // Set up table callbacks for state broadcasting
                     console.log('[SocketHandler] Setting up table callbacks...');
