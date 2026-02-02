@@ -2153,7 +2153,8 @@ class SocketHandler {
 
     // ============ Table Callbacks ============
     
-    setupTableCallbacks(table) {
+        setupTableCallbacks(table) {
+            const gameLogger = require('../utils/GameLogger');
         // Called when table state changes (for auto-broadcasting)
         table.onStateChange = () => {
             this.broadcastTableState(table.id);
