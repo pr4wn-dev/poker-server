@@ -232,7 +232,9 @@ class Table {
             return { success: false, error: 'Game already in progress' };
         }
         
-        if (this.creatorId !== creatorId) {
+        // CRITICAL: For simulation tables, allow auto-start without creatorId check
+        // This allows SimulationManager to restart games automatically
+        if (!this.isSimulation && this.creatorId !== creatorId) {
             return { success: false, error: 'Only the table creator can start the game' };
         }
         
@@ -241,7 +243,7 @@ class Table {
             return { success: false, error: 'Need at least 2 players to start' };
         }
         
-        console.log(`[Table ${this.name}] Ready-up phase started by creator`);
+        console.log(`[Table ${this.name}] Ready-up phase started${this.isSimulation ? ' (simulation - auto-starting)' : ' by creator'}`);
         
         this.phase = GAME_PHASES.READY_UP;
         this.readyUpActive = true;
@@ -284,8 +286,12 @@ class Table {
         this.onReadyPrompt?.();
         this.onStateChange?.();
         
-        // Check if all already ready (all bots case)
-        this.checkAllReady();
+        // CRITICAL: Check if all already ready (all bots case or simulation)
+        // This should immediately start the countdown if everyone is ready
+        // Use setTimeout to ensure state has been broadcast first
+        setTimeout(() => {
+            this.checkAllReady();
+        }, 100);
         
         return { success: true };
     }
