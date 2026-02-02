@@ -2604,6 +2604,7 @@ class Table {
         
         // Award the pots
         // CRITICAL: Eliminated players don't get chips back - they're out!
+        let totalAwarded = 0;
         for (const award of potAwards) {
             const seat = this.seats.find(s => s?.playerId === award.playerId);
             if (seat && seat.isActive !== false) {
@@ -2611,6 +2612,7 @@ class Table {
                 const chipsBefore = seat.chips;
                 seat.chips += award.amount;
                 const chipsAfter = seat.chips;
+                totalAwarded += award.amount;
                 
                 console.log(`[Table ${this.name}] ${award.name} wins ${award.amount} from ${award.potType} pot with ${award.handName} (chips: ${chipsBefore} → ${chipsAfter})`);
                 
@@ -2627,15 +2629,44 @@ class Table {
             } else if (seat && seat.isActive === false) {
                 // Player is eliminated - don't give them chips, pot goes to remaining players or is lost
                 console.log(`[Table ${this.name}] ${award.name} is eliminated - ${award.amount} chips from pot are forfeited`);
+                gameLogger.gameEvent(this.name, '[POT] ELIMINATED PLAYER - chips forfeited', {
+                    player: award.name,
+                    amount: award.amount,
+                    reason: 'Player was eliminated'
+                });
                 // Note: In a real game, this shouldn't happen, but handle it gracefully
+                // Don't count forfeited chips in totalAwarded - they're lost
             }
         }
         
-        // Clear pot
+        // CRITICAL: Validate that all pot money was awarded
+        if (Math.abs(potBeforeCalculation - totalAwarded) > 0.01) {
+            console.error(`[Table ${this.name}] ⚠️ CRITICAL: POT NOT FULLY AWARDED! Pot was ${potBeforeCalculation}, but only ${totalAwarded} was awarded. Missing: ${potBeforeCalculation - totalAwarded}`);
+            gameLogger.gameEvent(this.name, '[POT] ERROR: Pot not fully awarded', {
+                potBeforeCalculation,
+                totalAwarded,
+                missing: potBeforeCalculation - totalAwarded,
+                potAwardsCount: potAwards.length,
+                potAwards: potAwards.map(a => ({ name: a.name, amount: a.amount, potType: a.potType, reason: a.reason || 'standard' }))
+            });
+            // CRITICAL: Don't clear pot if money is missing - this is an error state
+            // The pot will remain and be caught by emergency distribution logic
+            return potAwards; // Return what we have, but don't clear pot
+        }
+        
+        // Clear pot only after validation passes
         this.pot = 0;
         
         // Store awards for client display
         this.lastPotAwards = potAwards;
+        
+        // CRITICAL: Final validation log
+        gameLogger.gameEvent(this.name, '[POT] All money awarded correctly', {
+            potBeforeCalculation,
+            totalAwarded,
+            difference: potBeforeCalculation - totalAwarded,
+            potAwardsCount: potAwards.length
+        });
         
         return potAwards;
     }
@@ -2791,9 +2822,12 @@ class Table {
     }
 
     // ============ Item Side Pot ============
+    // CRITICAL: Item side pot is for ITEMS ONLY - NO MONEY/CHIPS!
+    // Real poker chip side pots are handled in calculateAndAwardSidePots() method above
 
     /**
      * Creator starts the item side pot with their item
+     * CRITICAL: This is for ITEMS ONLY - no money/chips allowed!
      */
     startSidePot(creatorId, item) {
         if (creatorId !== this.creatorId) {
@@ -2802,13 +2836,16 @@ class Table {
         if (this.gameStarted) {
             return { success: false, error: 'Game already started' };
         }
+        // CRITICAL: itemSidePot only accepts items, never money/chips
         return this.itemSidePot.start(item, this.sidePotCollectionTime);
     }
 
     /**
      * Player submits item to side pot for approval
+     * CRITICAL: This is for ITEMS ONLY - no money/chips allowed!
      */
     submitToSidePot(userId, item) {
+        // CRITICAL: itemSidePot only accepts items, never money/chips
         return this.itemSidePot.submitItem(userId, item);
     }
 

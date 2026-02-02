@@ -1,6 +1,9 @@
 /**
  * SidePot - Item gambling side pot for tables
  * 
+ * CRITICAL: This side pot is for ITEMS ONLY - NO MONEY/CHIPS!
+ * Real poker chip side pots are handled separately in Table.js calculateAndAwardSidePots()
+ * 
  * Flow:
  * 1. Table creator starts side pot with their item
  * 2. Other players submit items for approval
@@ -54,10 +57,12 @@ class SidePot {
      * Creator starts the side pot with their item
      */
     start(creatorItem, collectionDurationMs = 60000) {
+        // CRITICAL: This side pot is for ITEMS ONLY - no money/chips allowed!
         if (this.status !== SIDE_POT_STATUS.INACTIVE) {
             return { success: false, error: 'Side pot already active' };
         }
         
+        // CRITICAL: Must be an item object, not money/chips
         if (!creatorItem || !creatorItem.isGambleable) {
             return { success: false, error: 'Item cannot be gambled' };
         }
@@ -84,6 +89,7 @@ class SidePot {
      * Player submits an item for approval
      */
     submitItem(userId, item) {
+        // CRITICAL: This side pot is for ITEMS ONLY - no money/chips allowed!
         if (this.status !== SIDE_POT_STATUS.COLLECTING) {
             return { success: false, error: 'Side pot not accepting submissions' };
         }
@@ -92,6 +98,7 @@ class SidePot {
             return { success: false, error: 'Creator already has item in pot' };
         }
         
+        // CRITICAL: Must be an item object, not money/chips
         if (!item || !item.isGambleable) {
             return { success: false, error: 'Item cannot be gambled' };
         }
