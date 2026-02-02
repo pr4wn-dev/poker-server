@@ -148,8 +148,23 @@ class SocketHandler {
                     return;
                 }
 
-                // Get user's chips from DB
-                const dbUser = await userRepo.getById(user.userId);
+                // Get user's chips from DB with timeout
+                let dbUser;
+                try {
+                    console.log(`[SocketHandler] Fetching user from DB: ${user.userId}`);
+                    dbUser = await Promise.race([
+                        userRepo.getById(user.userId),
+                        new Promise((_, reject) => setTimeout(() => reject(new Error('Database query timeout')), 5000))
+                    ]);
+                    console.log(`[SocketHandler] User fetched from DB: ${dbUser ? 'found' : 'not found'}`);
+                } catch (error) {
+                    console.error(`[SocketHandler] Database error fetching user:`, error);
+                    const errorResponse = { success: false, error: `Database error: ${error.message}` };
+                    if (callback) callback(errorResponse);
+                    socket.emit('create_table_response', errorResponse);
+                    return;
+                }
+                
                 if (!dbUser) {
                     const error = { success: false, error: 'User not found' };
                     if (callback) callback(error);
@@ -164,22 +179,30 @@ class SocketHandler {
                 }
 
                 console.log('[SocketHandler] create_table - user authenticated:', user.username);
+                console.log('[SocketHandler] Creating table...');
                 const table = this.gameManager.createTable({
                     ...data,
                     creatorId: user.userId
                 });
+                console.log(`[SocketHandler] Table created: ${table.id}`);
                 
                 // Set up table callbacks for state broadcasting
+                console.log('[SocketHandler] Setting up table callbacks...');
                 this.setupTableCallbacks(table);
+                console.log('[SocketHandler] Table callbacks set up');
                 
                 // Auto-join the creator to seat 0 (Issue #55: Creator must be seated to play)
+                console.log('[SocketHandler] Attempting to join creator to table...');
                 const joinResult = this.gameManager.joinTable(user.userId, table.id, 0);
+                console.log(`[SocketHandler] Join result: ${joinResult.success ? 'SUCCESS' : 'FAILED'}`);
                 if (joinResult.success) {
                     socket.join(`table:${table.id}`);
                     console.log(`[SocketHandler] Creator ${user.username} auto-joined table at seat 0`);
                 }
                 
+                console.log('[SocketHandler] Getting table state...');
                 const state = table.getState(user.userId);
+                console.log('[SocketHandler] Building response...');
                 const response = { 
                     success: true, 
                     tableId: table.id, 
@@ -192,7 +215,9 @@ class SocketHandler {
                 socket.emit('create_table_response', response);
                 
                 // Broadcast new table to lobby
+                console.log('[SocketHandler] Broadcasting table_created event...');
                 this.io.emit('table_created', table.getPublicInfo());
+                console.log('[SocketHandler] create_table complete');
             });
 
             // ============ Simulation Mode ============
