@@ -1988,8 +1988,12 @@ class Table {
         // If currentBet is still at bigBlind and lastRaiserIndex is bbIndex (or equal to dealer), no one raised.
         // Also check if we're past the dealer position - that means we've gone around once.
         const bbIndex = this.getNextActivePlayer(this.getNextActivePlayer(this.dealerIndex));
-        const noRaisesHappened = this.currentBet <= this.bigBlind && 
-                                 (this.lastRaiserIndex === bbIndex || this.lastRaiserIndex === this.dealerIndex);
+        
+        // CRITICAL FIX: Post-flop, if currentBet is 0, no one raised (everyone checked)
+        // Pre-flop, check if currentBet is still at bigBlind and lastRaiserIndex matches BB or dealer
+        const noRaisesHappened = (this.phase !== GAME_PHASES.PRE_FLOP && this.currentBet === 0) ||
+                                 (this.phase === GAME_PHASES.PRE_FLOP && this.currentBet <= this.bigBlind && 
+                                  (this.lastRaiserIndex === bbIndex || this.lastRaiserIndex === this.dealerIndex));
         
         gameLogger.bettingRoundCheck(this.name, 'NO_RAISES_HAPPENED', noRaisesHappened ? 'TRUE' : 'FALSE', {
             currentBet: this.currentBet,
