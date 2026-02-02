@@ -271,70 +271,47 @@ class SocketHandler {
                         console.log(`[SocketHandler] Creator ${user.username} auto-joined table at seat 0`);
                     }
                     
-                    console.log('[SocketHandler] Getting table state...');
-                    let state, publicInfo;
-                    try {
-                        state = table.getState(user.userId);
-                        console.log('[SocketHandler] State retrieved');
-                    } catch (err) {
-                        console.error('[SocketHandler] Error getting state:', err);
-                        throw new Error(`Failed to get table state: ${err.message}`);
-                    }
+                    // Send minimal response IMMEDIATELY - don't wait for full state
+                    const minimalResponse = {
+                        success: true,
+                        tableId: table.id,
+                        table: {
+                            id: table.id,
+                            name: table.name,
+                            playerCount: table.getSeatedPlayerCount(),
+                            maxPlayers: table.maxPlayers
+                        },
+                        seatIndex: joinResult.success ? joinResult.seatIndex : -1,
+                        state: {
+                            id: table.id,
+                            name: table.name,
+                            phase: table.phase
+                        }
+                    };
                     
-                    console.log('[SocketHandler] Getting public info...');
-                    try {
-                        publicInfo = table.getPublicInfo();
-                        console.log('[SocketHandler] Public info retrieved');
-                    } catch (err) {
-                        console.error('[SocketHandler] Error getting public info:', err);
-                        throw new Error(`Failed to get public info: ${err.message}`);
-                    }
-                    
-                    console.log('[SocketHandler] Building response...');
-                    let response;
-                    try {
-                        response = { 
-                            success: true, 
-                            tableId: table.id, 
-                            table: publicInfo,
-                            seatIndex: joinResult.success ? joinResult.seatIndex : -1,  // -1 means not seated (Issue #57)
-                            state 
-                        };
-                        // Test JSON serialization
-                        JSON.stringify(response);
-                        console.log(`[SocketHandler] create_table SUCCESS - seatIndex: ${response.seatIndex} (took ${Date.now() - startTime}ms)`);
-                    } catch (err) {
-                        console.error('[SocketHandler] Error building/serializing response:', err);
-                        throw new Error(`Failed to build response: ${err.message}`);
-                    }
-                    
-                    // CRITICAL: Send response IMMEDIATELY - don't wait for broadcast
                     responseSent = true;
                     completed = true;
                     clearTimeout(timeoutHandle);
                     
-                    // Send response via both callback and emit
                     if (callback) {
                         try {
-                            callback(response);
+                            callback(minimalResponse);
                         } catch (err) {
                             console.error('[SocketHandler] Error in callback:', err);
                         }
                     }
-                    try {
-                        socket.emit('create_table_response', response);
-                        console.log('[SocketHandler] Response sent to client');
-                    } catch (err) {
-                        console.error('[SocketHandler] Error emitting response:', err);
-                        throw err;
-                    }
+                    socket.emit('create_table_response', minimalResponse);
+                    console.log('[SocketHandler] Minimal response sent immediately');
                     
-                    // Broadcast new table to lobby (non-blocking, after response sent)
+                    // Get full state asynchronously and send update
                     setImmediate(() => {
                         try {
-                            this.io.emit('table_created', publicInfo);
+                            const fullState = table.getState(user.userId);
+                            const fullPublicInfo = table.getPublicInfo();
+                            socket.emit('table_state', fullState);
+                            this.io.emit('table_created', fullPublicInfo);
                         } catch (err) {
-                            console.error('[SocketHandler] Error broadcasting table_created:', err);
+                            console.error('[SocketHandler] Error getting full state:', err);
                         }
                     });
                     
