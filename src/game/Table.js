@@ -2244,8 +2244,17 @@ class Table {
                 });
             }
             this._onStateChangeCallback?.();
+            // CRITICAL FIX: Check phase before advancing - prevent infinite loop in WAITING
             // Short delay before next phase for visual effect
-            setTimeout(() => this.advancePhase(), 1000);
+            setTimeout(() => {
+                // Only advance if we're still in a game phase (not WAITING/READY_UP/COUNTDOWN/SHOWDOWN)
+                if (this.phase !== GAME_PHASES.WAITING && 
+                    this.phase !== GAME_PHASES.READY_UP && 
+                    this.phase !== GAME_PHASES.COUNTDOWN && 
+                    this.phase !== GAME_PHASES.SHOWDOWN) {
+                    this.advancePhase();
+                }
+            }, 1000);
             return;
         }
         
