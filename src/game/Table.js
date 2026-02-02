@@ -3078,7 +3078,15 @@ class Table {
      * Get side pot state for a user
      */
     getSidePotState(forUserId = null) {
-        return this.itemSidePot.getState(forUserId);
+        try {
+            if (!this.itemSidePot) {
+                return null; // Side pot not initialized
+            }
+            return this.itemSidePot.getState(forUserId);
+        } catch (error) {
+            console.error(`[Table ${this.name}] Error getting side pot state:`, error);
+            return null; // Return null on error to prevent crashes
+        }
     }
 
     /**
@@ -3101,25 +3109,49 @@ class Table {
     // ============ State ============
 
     getPublicInfo() {
-        return {
-            id: this.id,
-            name: this.name,
-            playerCount: this.getSeatedPlayerCount(),
-            maxPlayers: this.maxPlayers,
-            spectatorCount: this.getSpectatorCount(),
-            smallBlind: this.smallBlind,
-            bigBlind: this.bigBlind,
-            buyIn: this.buyIn,
-            practiceMode: this.practiceMode,
-            isPrivate: this.isPrivate,
-            hasPassword: this.hasPassword,
-            gameStarted: this.gameStarted,
+        try {
+            return {
+                id: this.id,
+                name: this.name,
+                playerCount: this.getSeatedPlayerCount(),
+                maxPlayers: this.maxPlayers,
+                spectatorCount: this.getSpectatorCount(),
+                smallBlind: this.smallBlind,
+                bigBlind: this.bigBlind,
+                buyIn: this.buyIn,
+                practiceMode: this.practiceMode,
+                isPrivate: this.isPrivate,
+                hasPassword: this.hasPassword,
+                gameStarted: this.gameStarted,
             allowSpectators: this.allowSpectators,
             houseRulesPreset: this.houseRules?.bettingType || 'standard',
-            hasSidePot: this.itemSidePot.status !== SidePot.STATUS.INACTIVE,
-            sidePotItemCount: this.itemSidePot.approvedItems.length,
+            hasSidePot: this.itemSidePot?.status !== SidePot.STATUS.INACTIVE,
+            sidePotItemCount: this.itemSidePot?.approvedItems?.length || 0,
             createdAt: this.createdAt
         };
+        } catch (error) {
+            console.error(`[Table ${this.name}] Error in getPublicInfo:`, error);
+            // Return minimal info on error to prevent crashes
+            return {
+                id: this.id,
+                name: this.name || 'Unknown Table',
+                playerCount: 0,
+                maxPlayers: this.maxPlayers || 6,
+                spectatorCount: 0,
+                smallBlind: this.smallBlind || 10,
+                bigBlind: this.bigBlind || 20,
+                buyIn: this.buyIn || 20000000,
+                practiceMode: this.practiceMode || false,
+                isPrivate: this.isPrivate || false,
+                hasPassword: this.hasPassword || false,
+                gameStarted: false,
+                allowSpectators: this.allowSpectators || false,
+                houseRulesPreset: 'standard',
+                hasSidePot: false,
+                sidePotItemCount: 0,
+                createdAt: this.createdAt || Date.now()
+            };
+        }
     }
 
     getState(forPlayerId = null) {
