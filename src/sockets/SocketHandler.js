@@ -224,23 +224,12 @@ class SocketHandler {
                     }
                     
                     console.log('[SocketHandler] Getting table state...');
-                    let state, publicInfo;
-                    try {
-                        state = table.getState(user.userId);
-                        console.log('[SocketHandler] State retrieved');
-                    } catch (err) {
-                        console.error('[SocketHandler] ERROR getting state:', err);
-                        throw new Error(`Failed to get table state: ${err.message}`);
-                    }
+                    const state = table.getState(user.userId);
+                    console.log('[SocketHandler] State retrieved');
                     
                     console.log('[SocketHandler] Getting public info...');
-                    try {
-                        publicInfo = table.getPublicInfo();
-                        console.log('[SocketHandler] Public info retrieved');
-                    } catch (err) {
-                        console.error('[SocketHandler] ERROR getting public info:', err);
-                        throw new Error(`Failed to get public info: ${err.message}`);
-                    }
+                    const publicInfo = table.getPublicInfo();
+                    console.log('[SocketHandler] Public info retrieved');
                     
                     console.log('[SocketHandler] Building response...');
                     const response = { 
