@@ -2007,18 +2007,46 @@ class Table {
         // This ensures chips are awarded before clients see the state
         const potAwards = this.calculateAndAwardSidePots(activePlayers);
         
-        // CRITICAL: Verify pot was distributed correctly
-        const totalAwarded = potAwards.reduce((sum, a) => sum + a.amount, 0);
-        const potBeforeAward = this.pot + totalAwarded; // pot is now 0, so add back what was awarded
-        if (totalAwarded !== potBeforeAward && potBeforeAward > 0) {
-            console.error(`[Table ${this.name}] ⚠️ POT MISMATCH: Awarded ${totalAwarded}, but pot was ${potBeforeAward}. Difference: ${potBeforeAward - totalAwarded}`);
-            gameLogger.gameEvent(this.name, '[POT] POT MISMATCH ERROR', {
-                potBeforeAward,
-                totalAwarded,
-                difference: potBeforeAward - totalAwarded,
-                potAwardsCount: potAwards.length,
-                activePlayersCount: activePlayers.length
-            });
+        // CRITICAL: If pot awards failed, log error and try to recover
+        if (!potAwards || potAwards.length === 0) {
+            const potStillExists = this.pot > 0;
+            if (potStillExists) {
+                console.error(`[Table ${this.name}] ⚠️ CRITICAL: Pot calculation failed but pot still exists (${this.pot}). Attempting emergency distribution...`);
+                gameLogger.gameEvent(this.name, '[POT] EMERGENCY: Pot calculation failed', {
+                    pot: this.pot,
+                    activePlayersCount: activePlayers.length,
+                    activePlayers: activePlayers.map(p => ({
+                        name: p.name,
+                        chips: p.chips,
+                        totalBet: p.totalBet,
+                        hasHandResult: !!p.handResult
+                    }))
+                });
+                
+                // Emergency: If all players went all-in with same bet, give pot to best hand
+                if (activePlayers.length > 0) {
+                    const sortedByHand = [...activePlayers]
+                        .filter(p => p.handResult)
+                        .sort((a, b) => HandEvaluator.compare(b.handResult, a.handResult));
+                    
+                    if (sortedByHand.length > 0) {
+                        const winner = sortedByHand[0];
+                        const seat = this.seats.find(s => s?.playerId === winner.playerId);
+                        if (seat && seat.isActive !== false) {
+                            const chipsBefore = seat.chips;
+                            seat.chips += this.pot;
+                            console.log(`[Table ${this.name}] EMERGENCY: ${winner.name} wins entire pot ${this.pot} (chips: ${chipsBefore} → ${seat.chips})`);
+                            gameLogger.gameEvent(this.name, '[POT] EMERGENCY distribution', {
+                                winner: winner.name,
+                                pot: this.pot,
+                                chipsBefore,
+                                chipsAfter: seat.chips
+                            });
+                            this.pot = 0;
+                        }
+                    }
+                }
+            }
         }
         
         // CRITICAL: Broadcast state AFTER chips are awarded so clients see correct chip counts
