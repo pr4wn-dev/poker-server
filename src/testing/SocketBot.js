@@ -55,6 +55,8 @@ class SocketBot {
         this.chips = 0;
         this.actionScheduled = false; // Track if we've scheduled an action
         this.actionTimeout = null; // Timeout handle for stuck turn detection
+        this.isReady = false; // Track if we've already signaled ready
+        this.readyScheduled = false; // Track if we've scheduled a ready signal
         
         // Chaos tracking
         this.disconnectCount = 0;
@@ -649,12 +651,13 @@ class SocketBot {
             
             // If it just became our turn, OR it's a new hand and it's our turn, make a decision
             // CRITICAL FIX: Also check isNewHand to handle back-to-back turns across hands
-            if (this.isMyTurn && (!wasMyTurn || isNewHand)) {
+            // CRITICAL: Double-check it's actually our turn before scheduling (prevent race conditions)
+            if (this.isMyTurn && state.currentPlayerId === this.userId && (!wasMyTurn || isNewHand)) {
                 this.log('ACTION', `>>> IT'S MY TURN! Scheduling action with ${this.networkLatency}ms base latency...`, { 
                     reason: !wasMyTurn ? 'turn_started' : 'new_hand_my_turn' 
                 });
                 this._scheduleAction();
-            } else if (this.isMyTurn && wasMyTurn && !this.actionScheduled) {
+            } else if (this.isMyTurn && state.currentPlayerId === this.userId && wasMyTurn && !this.actionScheduled) {
                 // STUCK DETECTION: It's still our turn but we haven't scheduled an action
                 // This can happen if action failed or state update was missed
                 const lastTurnEntry = this.turnTracking.turnHistory[this.turnTracking.turnHistory.length - 1];
@@ -682,10 +685,27 @@ class SocketBot {
             // Auto-ready during ready_up phase (with latency simulation)
             // NOTE: Chaos mode (random disconnects) is disabled until game is actively playing
             // to prevent disrupting the ready-up flow
-            if (state.phase === 'ready_up') {
+            if (state.phase === 'ready_up' && !this.isReady && !this.readyScheduled) {
                 this._chaosEnabled = false; // Disable chaos during ready-up
+                this.readyScheduled = true; // Mark that we've scheduled ready
                 const delay = this._getRandomDelay() + this._getNetworkLatency();
-                setTimeout(() => this.ready(), delay);
+                setTimeout(() => {
+                    this.ready().then((response) => {
+                        if (response && response.success) {
+                            this.isReady = true;
+                        } else if (response && response.error && response.error.includes('Already ready')) {
+                            // Server says we're already ready - mark as ready to prevent retries
+                            this.isReady = true;
+                        }
+                        this.readyScheduled = false;
+                    }).catch(() => {
+                        this.readyScheduled = false;
+                    });
+                }, delay);
+            } else if (state.phase !== 'ready_up' && state.phase !== 'countdown') {
+                // Reset ready flag when we leave ready_up phase (for next game)
+                this.isReady = false;
+                this.readyScheduled = false;
             }
         } catch (error) {
             this.log('ERROR', `_handleTableState CRASHED: ${error.message}`, { error: error.stack });
