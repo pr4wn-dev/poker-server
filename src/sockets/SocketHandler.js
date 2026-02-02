@@ -291,14 +291,22 @@ class SocketHandler {
                     }
                     
                     console.log('[SocketHandler] Building response...');
-                    const response = { 
-                        success: true, 
-                        tableId: table.id, 
-                        table: publicInfo,
-                        seatIndex: joinResult.success ? joinResult.seatIndex : -1,  // -1 means not seated (Issue #57)
-                        state 
-                    };
-                    console.log(`[SocketHandler] create_table SUCCESS - seatIndex: ${response.seatIndex} (took ${Date.now() - startTime}ms)`);
+                    let response;
+                    try {
+                        response = { 
+                            success: true, 
+                            tableId: table.id, 
+                            table: publicInfo,
+                            seatIndex: joinResult.success ? joinResult.seatIndex : -1,  // -1 means not seated (Issue #57)
+                            state 
+                        };
+                        // Test JSON serialization
+                        JSON.stringify(response);
+                        console.log(`[SocketHandler] create_table SUCCESS - seatIndex: ${response.seatIndex} (took ${Date.now() - startTime}ms)`);
+                    } catch (err) {
+                        console.error('[SocketHandler] Error building/serializing response:', err);
+                        throw new Error(`Failed to build response: ${err.message}`);
+                    }
                     
                     // CRITICAL: Send response BEFORE broadcasting to prevent race conditions
                     responseSent = true;
@@ -309,7 +317,12 @@ class SocketHandler {
                             console.error('[SocketHandler] Error in callback:', err);
                         }
                     }
-                    socket.emit('create_table_response', response);
+                    try {
+                        socket.emit('create_table_response', response);
+                    } catch (err) {
+                        console.error('[SocketHandler] Error emitting response:', err);
+                        throw err;
+                    }
                     
                     // Broadcast new table to lobby (non-blocking)
                     try {
