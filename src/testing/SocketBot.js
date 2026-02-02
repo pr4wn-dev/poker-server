@@ -630,20 +630,20 @@ class SocketBot {
                               (prevHandNumber !== undefined && state.handNumber !== prevHandNumber) ||
                               (prevPhase && !['preflop', 'flop', 'turn', 'river'].includes(prevPhase) && state.phase === 'preflop');
             
-            // Log EVERY state during active phases for debugging
+            // Only log state changes that matter (phase changes, turn changes, errors)
             const isActiveBettingPhase = ['preflop', 'flop', 'turn', 'river'].includes(state.phase);
-            if (isActiveBettingPhase || state.phase === 'ready_up' || state.phase === 'countdown') {
-                this.log('STATE', `Phase: ${state.phase}, Pot: ${state.pot}, CurrentPlayerId: ${state.currentPlayerId}, MyUserId: ${this.userId}, MyTurn: ${this.isMyTurn}`, {
+            const phaseChanged = prevPhase !== state.phase;
+            const turnChanged = wasMyTurn !== this.isMyTurn;
+            
+            // Log only on phase changes, turn changes, or if there's an issue
+            if (phaseChanged || turnChanged || state.phase === 'ready_up' || state.phase === 'countdown') {
+                this.log('STATE', `Phase: ${state.phase}${phaseChanged ? ' (CHANGED)' : ''}, Pot: ${state.pot}, MyTurn: ${this.isMyTurn}${turnChanged ? ' (TURN CHANGED)' : ''}`, {
                     phase: state.phase,
                     pot: state.pot,
                     currentBet: state.currentBet,
                     myTurn: this.isMyTurn,
                     turnTimeRemaining: state.turnTimeRemaining,
-                    currentPlayerId: state.currentPlayerId,
-                    myUserId: this.userId,
-                    latency: this.networkLatency,
-                    statesReceived: this.eventsReceived.tableState,
-                    isNewHand: isNewHand
+                    currentPlayerId: state.currentPlayerId
                 });
             }
             
@@ -657,11 +657,16 @@ class SocketBot {
             } else if (this.isMyTurn && wasMyTurn && !this.actionScheduled) {
                 // STUCK DETECTION: It's still our turn but we haven't scheduled an action
                 // This can happen if action failed or state update was missed
-                const timeSinceTurnStart = Date.now() - (this.turnTracking.turnHistory[this.turnTracking.turnHistory.length - 1]?.timestamp || Date.now());
+                const lastTurnEntry = this.turnTracking.turnHistory[this.turnTracking.turnHistory.length - 1];
+                const timeSinceTurnStart = lastTurnEntry ? (Date.now() - lastTurnEntry.timestamp) : 0;
                 if (timeSinceTurnStart > 10000) { // More than 10 seconds stuck
+                    // CRITICAL: Log to file for debugging stuck bots
                     this.log('WARN', `STUCK TURN DETECTED - It's been my turn for ${timeSinceTurnStart}ms but no action scheduled. Forcing action...`, {
                         timeSinceTurnStart,
-                        phase: state.phase
+                        phase: state.phase,
+                        currentBet: state.currentBet,
+                        pot: state.pot,
+                        myChips: state.seats?.find(s => s?.playerId === this.userId)?.chips
                     });
                     this._scheduleAction();
                 }
@@ -698,7 +703,7 @@ class SocketBot {
         this.actionScheduled = true;
         
         const delay = this._getRandomDelay();
-        this.log('THINK', `Thinking for ${delay}ms...`);
+        // Removed verbose THINK log - only log when action is actually taken
         
         setTimeout(() => {
             if (this.isMyTurn) {
@@ -724,10 +729,13 @@ class SocketBot {
         
         this.actionTimeout = setTimeout(() => {
             if (this.isMyTurn && !this.actionScheduled) {
+                // CRITICAL: Log to file for debugging stuck bots
                 this.log('ERROR', `STUCK TURN TIMEOUT - It's been my turn for ${timeoutDuration}ms with no action! Forcing action...`, {
                     phase: state?.phase,
                     currentBet: state?.currentBet,
-                    pot: state?.pot
+                    pot: state?.pot,
+                    myChips: state?.seats?.find(s => s?.playerId === this.userId)?.chips,
+                    timeoutDuration
                 });
                 this._scheduleAction();
             }
