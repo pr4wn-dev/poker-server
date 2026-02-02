@@ -1718,6 +1718,15 @@ class Table {
     // ============ Game Advancement ============
 
     advanceGame() {
+        // CRITICAL: Don't advance game if we're in a terminal phase
+        if (this.phase === GAME_PHASES.WAITING || 
+            this.phase === GAME_PHASES.READY_UP || 
+            this.phase === GAME_PHASES.COUNTDOWN || 
+            this.phase === GAME_PHASES.SHOWDOWN) {
+            // Terminal phases - don't advance
+            return;
+        }
+        
         gameLogger.gameEvent(this.name, 'advanceGame() called', {
             phase: this.phase,
             currentPlayerIndex: this.currentPlayerIndex,
