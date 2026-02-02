@@ -2524,6 +2524,7 @@ class Table {
                 });
                 
                 // Emergency: If all players went all-in with same bet, give pot to best hand
+                // CRITICAL: Also handle case where activePlayers is empty (all folded/eliminated)
                 if (activePlayers.length > 0) {
                     const sortedByHand = [...activePlayers]
                         .filter(p => p.handResult)
@@ -2543,6 +2544,71 @@ class Table {
                                 chipsAfter: seat.chips
                             });
                             this.pot = 0;
+                        }
+                    }
+                } else {
+                    // CRITICAL FIX: If no active players but pot exists, find best player who contributed
+                    // This happens when all players folded but pot wasn't distributed
+                    console.error(`[Table ${this.name}] ⚠️ EMERGENCY: No active players but pot exists (${this.pot}). Finding best contributor...`);
+                    
+                    // Find all players who contributed to the pot (have totalBet > 0)
+                    const contributors = this.seats
+                        .filter(seat => seat && seat.totalBet > 0)
+                        .map(seat => {
+                            // Try to find hand result from previous evaluation
+                            const playerData = activePlayers.find(p => p.playerId === seat.playerId);
+                            return {
+                                seat,
+                                handResult: playerData?.handResult || null,
+                                totalBet: seat.totalBet
+                            };
+                        })
+                        .filter(p => p.seat.isActive !== false); // Only active players
+                    
+                    if (contributors.length > 0) {
+                        // Sort by hand result if available, otherwise by chips
+                        const sorted = contributors.sort((a, b) => {
+                            if (a.handResult && b.handResult) {
+                                return HandEvaluator.compare(b.handResult, a.handResult);
+                            }
+                            return b.seat.chips - a.seat.chips;
+                        });
+                        
+                        const winner = sorted[0].seat;
+                        const chipsBefore = winner.chips;
+                        winner.chips += this.pot;
+                        console.log(`[Table ${this.name}] EMERGENCY: ${winner.name} wins entire pot ${this.pot} (no active players, chips: ${chipsBefore} → ${winner.chips})`);
+                        gameLogger.gameEvent(this.name, '[POT] EMERGENCY distribution (no active players)', {
+                            winner: winner.name,
+                            pot: this.pot,
+                            chipsBefore,
+                            chipsAfter: winner.chips,
+                            contributors: contributors.map(c => c.seat.name)
+                        });
+                        this.pot = 0;
+                    } else {
+                        // Last resort: give to player with most chips
+                        const bestPlayer = this.seats
+                            .filter(seat => seat && seat.isActive !== false)
+                            .sort((a, b) => b.chips - a.chips)[0];
+                        
+                        if (bestPlayer) {
+                            const chipsBefore = bestPlayer.chips;
+                            bestPlayer.chips += this.pot;
+                            console.log(`[Table ${this.name}] EMERGENCY: ${bestPlayer.name} wins entire pot ${this.pot} (last resort, chips: ${chipsBefore} → ${bestPlayer.chips})`);
+                            gameLogger.gameEvent(this.name, '[POT] EMERGENCY distribution (last resort)', {
+                                winner: bestPlayer.name,
+                                pot: this.pot,
+                                chipsBefore,
+                                chipsAfter: bestPlayer.chips
+                            });
+                            this.pot = 0;
+                        } else {
+                            console.error(`[Table ${this.name}] ⚠️ CRITICAL: Cannot distribute pot ${this.pot} - no eligible players found!`);
+                            gameLogger.error(this.name, 'Cannot distribute pot - no eligible players', {
+                                pot: this.pot,
+                                allSeats: this.seats.map((s, i) => s ? { seatIndex: i, name: s.name, chips: s.chips, isActive: s.isActive, totalBet: s.totalBet } : null)
+                            });
                         }
                     }
                 }
