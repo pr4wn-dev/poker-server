@@ -178,20 +178,35 @@ class SocketHandler {
                     socket.join(`table:${table.id}`);
                 }
                 
-                const state = table.getState(user.userId);
+                let state, publicInfo;
+                try {
+                    state = table.getState(user.userId);
+                } catch (err) {
+                    console.error('[SocketHandler] getState ERROR:', err);
+                    state = { id: table.id, name: table.name, phase: 'waiting' };
+                }
+                
+                try {
+                    publicInfo = table.getPublicInfo();
+                } catch (err) {
+                    console.error('[SocketHandler] getPublicInfo ERROR:', err);
+                    publicInfo = { id: table.id, name: table.name, maxPlayers: table.maxPlayers };
+                }
+                
                 const response = { 
                     success: true, 
                     tableId: table.id, 
-                    table: table.getPublicInfo(),
+                    table: publicInfo,
                     seatIndex: joinResult.success ? joinResult.seatIndex : -1,
                     state 
                 };
                 console.log(`[SocketHandler] create_table SUCCESS - seatIndex: ${response.seatIndex}`);
                 if (callback) callback(response);
                 socket.emit('create_table_response', response);
+                console.log('[SocketHandler] Response sent to client');
                 
                 // Broadcast new table to lobby
-                this.io.emit('table_created', table.getPublicInfo());
+                this.io.emit('table_created', publicInfo);
             });
 
             // ============ Simulation Mode ============
