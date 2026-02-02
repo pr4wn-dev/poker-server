@@ -2600,6 +2600,22 @@ class Table {
         if (playersWithChips.length === 1) {
             const winner = playersWithChips[0];
             
+            // CRITICAL: Check if game ended before any hands were played
+            if (this.handsPlayed === 0) {
+                console.error(`[Table ${this.name}] ⚠️ CRITICAL: Game ended in showdown before any hands were played! Winner: ${winner.name}, handsPlayed: ${this.handsPlayed}`);
+                gameLogger.error(this.name, 'GAME ENDED IN SHOWDOWN BEFORE HANDS PLAYED', {
+                    winnerName: winner.name,
+                    winnerChips: winner.chips,
+                    handsPlayed: this.handsPlayed,
+                    phase: this.phase,
+                    allPlayers: this.seats.filter(s => s !== null).map(s => ({
+                        name: s.name,
+                        chips: s.chips,
+                        isActive: s.isActive
+                    }))
+                });
+            }
+            
             // CRITICAL: Validate money - winner's chips should equal sum of all starting chips
             const winnerChips = winner.chips;
             const currentTotalChips = this.seats
