@@ -934,12 +934,25 @@ class Table {
             }
             
             console.log(`[Table ${this.name}] GAME OVER - ${winner.name} wins with ${winner.chips} chips!`);
+            gameLogger.gameEvent(this.name, 'GAME OVER - Winner announced', {
+                winnerName: winner.name,
+                winnerChips: winner.chips,
+                winnerId: winner.playerId,
+                isBot: winner.isBot || false
+            });
             this.phase = GAME_PHASES.WAITING;
             this.gameStarted = false;
             
-            // Notify about game winner
+            // CRITICAL: Notify about game winner (this triggers simulation restart and client announcement)
             if (this.onGameOver) {
+                console.log(`[Table ${this.name}] Calling onGameOver callback for winner ${winner.name}`);
                 this.onGameOver(winner);
+            } else {
+                console.error(`[Table ${this.name}] ⚠️ CRITICAL: onGameOver callback is NOT SET! Game over event will not be sent to clients!`);
+                gameLogger.error(this.name, 'onGameOver callback not set - game over event not sent', {
+                    winnerName: winner.name,
+                    winnerChips: winner.chips
+                });
             }
             // Capture snapshot before broadcasting
             if (this.stateSnapshot) {
@@ -2556,12 +2569,25 @@ class Table {
             }
             
             console.log(`[Table ${this.name}] GAME OVER - ${winner.name} wins with ${winner.chips} chips!`);
+            gameLogger.gameEvent(this.name, 'GAME OVER - Winner announced', {
+                winnerName: winner.name,
+                winnerChips: winner.chips,
+                winnerId: winner.playerId,
+                isBot: winner.isBot || false
+            });
             this.phase = GAME_PHASES.WAITING;
             this.gameStarted = false;
             
-            // CRITICAL: Notify about game winner (this triggers simulation restart)
+            // CRITICAL: Notify about game winner (this triggers simulation restart and client announcement)
             if (this.onGameOver) {
+                console.log(`[Table ${this.name}] Calling onGameOver callback for winner ${winner.name}`);
                 this.onGameOver(winner);
+            } else {
+                console.error(`[Table ${this.name}] ⚠️ CRITICAL: onGameOver callback is NOT SET! Game over event will not be sent to clients!`);
+                gameLogger.error(this.name, 'onGameOver callback not set - game over event not sent', {
+                    winnerName: winner.name,
+                    winnerChips: winner.chips
+                });
             }
             // Capture snapshot before broadcasting
             if (this.stateSnapshot) {
