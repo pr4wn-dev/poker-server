@@ -2164,12 +2164,31 @@ class SocketHandler {
         table.onGameOver = (winner) => {
             console.log(`[SocketHandler] Game over at table ${table.name} - Winner: ${winner.name}`);
             
-            this.io.to(`table:${table.id}`).emit('game_over', {
+            // CRITICAL: Only send game_over to actual players, NOT spectators
+            // Spectators should not be prompted to leave - they're just watching
+            // Send to each player individually to avoid sending to spectators
+            for (const seat of table.seats) {
+                if (seat && !seat.isBot && seat.socketId) {
+                    // This is a real player (not a bot, not a spectator)
+                    this.io.to(seat.socketId).emit('game_over', {
+                        tableId: table.id,
+                        winnerId: winner.playerId,
+                        winnerName: winner.name,
+                        winnerChips: winner.chips,
+                        isBot: winner.isBot || false
+                    });
+                }
+            }
+            
+            // Send informational version to spectators (no leave prompt)
+            // They can see the game over state through normal state updates
+            this.io.to(`spectator:${table.id}`).emit('game_over', {
                 tableId: table.id,
                 winnerId: winner.playerId,
                 winnerName: winner.name,
                 winnerChips: winner.chips,
-                isBot: winner.isBot || false
+                isBot: winner.isBot || false,
+                isInformational: true  // Spectators get informational only - no leave prompt
             });
         };
         
