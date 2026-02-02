@@ -288,10 +288,8 @@ class Table {
         
         // CRITICAL: Check if all already ready (all bots case or simulation)
         // This should immediately start the countdown if everyone is ready
-        // Use setTimeout to ensure state has been broadcast first
-        setTimeout(() => {
-            this.checkAllReady();
-        }, 100);
+        // Call immediately - players are already marked as ready above
+        this.checkAllReady();
         
         return { success: true };
     }
