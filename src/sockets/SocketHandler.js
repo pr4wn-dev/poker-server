@@ -193,7 +193,6 @@ class SocketHandler {
                 // Broadcast new table to lobby
                 this.io.emit('table_created', table.getPublicInfo());
             });
-            });
 
             // ============ Simulation Mode ============
             
