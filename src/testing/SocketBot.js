@@ -53,6 +53,8 @@ class SocketBot {
         this.isMyTurn = false;
         this.isConnected = false;
         this.chips = 0;
+        this.actionScheduled = false; // Track if we've scheduled an action
+        this.actionTimeout = null; // Timeout handle for stuck turn detection
         
         // Chaos tracking
         this.disconnectCount = 0;
@@ -160,6 +162,7 @@ class SocketBot {
             this.socket.disconnect();
         }
         this.isConnected = false;
+        this._clearTurnTimeout(); // Clear timeout on disconnect
         
         // Wait random time before reconnecting
         const reconnectDelay = this.reconnectMinTime + 
@@ -461,6 +464,8 @@ class SocketBot {
             
             this.socket.on('disconnect', (reason) => {
                 this.isConnected = false;
+                this._clearTurnTimeout(); // Clear timeout on disconnect
+                this.actionScheduled = false; // Reset action flag
                 this.log('WARN', 'Disconnected from server', { reason });
             });
             
@@ -649,6 +654,24 @@ class SocketBot {
                     reason: !wasMyTurn ? 'turn_started' : 'new_hand_my_turn' 
                 });
                 this._scheduleAction();
+            } else if (this.isMyTurn && wasMyTurn && !this.actionScheduled) {
+                // STUCK DETECTION: It's still our turn but we haven't scheduled an action
+                // This can happen if action failed or state update was missed
+                const timeSinceTurnStart = Date.now() - (this.turnTracking.turnHistory[this.turnTracking.turnHistory.length - 1]?.timestamp || Date.now());
+                if (timeSinceTurnStart > 10000) { // More than 10 seconds stuck
+                    this.log('WARN', `STUCK TURN DETECTED - It's been my turn for ${timeSinceTurnStart}ms but no action scheduled. Forcing action...`, {
+                        timeSinceTurnStart,
+                        phase: state.phase
+                    });
+                    this._scheduleAction();
+                }
+            }
+            
+            // Set up timeout to detect if we're stuck on our turn
+            if (this.isMyTurn) {
+                this._setupTurnTimeout(state);
+            } else {
+                this._clearTurnTimeout();
             }
             
             // Auto-ready during ready_up phase (with latency simulation)
@@ -668,14 +691,57 @@ class SocketBot {
      * Schedule an action with random delay (simulates thinking + network)
      */
     _scheduleAction() {
+        // Clear any existing timeout
+        this._clearTurnTimeout();
+        
+        // Mark that we've scheduled an action
+        this.actionScheduled = true;
+        
         const delay = this._getRandomDelay();
         this.log('THINK', `Thinking for ${delay}ms...`);
         
         setTimeout(() => {
             if (this.isMyTurn) {
                 this._makeDecision();
+                // Reset flag after making decision
+                this.actionScheduled = false;
+            } else {
+                // Turn changed before we could act
+                this.actionScheduled = false;
             }
         }, delay);
+    }
+    
+    /**
+     * Set up timeout to detect stuck turns
+     */
+    _setupTurnTimeout(state) {
+        // Clear existing timeout
+        this._clearTurnTimeout();
+        
+        // Set timeout to detect if we're stuck (15 seconds in fast mode, 30 seconds normally)
+        const timeoutDuration = this.fastMode ? 15000 : 30000;
+        
+        this.actionTimeout = setTimeout(() => {
+            if (this.isMyTurn && !this.actionScheduled) {
+                this.log('ERROR', `STUCK TURN TIMEOUT - It's been my turn for ${timeoutDuration}ms with no action! Forcing action...`, {
+                    phase: state?.phase,
+                    currentBet: state?.currentBet,
+                    pot: state?.pot
+                });
+                this._scheduleAction();
+            }
+        }, timeoutDuration);
+    }
+    
+    /**
+     * Clear turn timeout
+     */
+    _clearTurnTimeout() {
+        if (this.actionTimeout) {
+            clearTimeout(this.actionTimeout);
+            this.actionTimeout = null;
+        }
     }
     
     /**
