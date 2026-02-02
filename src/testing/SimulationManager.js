@@ -422,8 +422,6 @@ class SimulationManager {
             setTimeout(() => this._restartGame(simulation), restartDelay);
         };
         
-        table.onGameOver = simulationCallback;
-        
         this.log('INFO', 'Auto-restart callback set up', { tableId });
     }
     
