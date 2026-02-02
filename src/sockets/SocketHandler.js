@@ -188,71 +188,26 @@ class SocketHandler {
                         return;
                     }
 
-                    // Get user's chips from DB with timeout
-                    let dbUser;
-                    try {
-                        console.log(`[SocketHandler] Fetching user from DB: ${user.userId}`);
-                        dbUser = await Promise.race([
-                            userRepo.getById(user.userId),
-                            new Promise((_, reject) => setTimeout(() => reject(new Error('Database query timeout')), 5000))
-                        ]);
-                        console.log(`[SocketHandler] User fetched from DB: ${dbUser ? 'found' : 'not found'}`);
-                    } catch (error) {
-                        completed = true;
-                        responseSent = true;
-                        clearTimeout(timeoutHandle);
-                        console.error(`[SocketHandler] Database error fetching user:`, error);
-                        const gameLogger = require('../utils/GameLogger');
-                        gameLogger.error('SOCKET', 'create_table database error', {
-                            error: error.message,
-                            stack: error.stack,
-                            userId: user?.userId
-                        });
-                        const errorResponse = { success: false, error: `Database error: ${error.message}` };
-                        if (callback) {
-                            try {
-                                callback(errorResponse);
-                            } catch (err) {
-                                console.error('[SocketHandler] Error in db callback:', err);
-                            }
-                        }
-                        socket.emit('create_table_response', errorResponse);
-                        return;
-                    }
-                    
+                    // Get user's chips from DB
+                    const dbUser = await userRepo.getById(user.userId);
                     if (!dbUser) {
-                        completed = true;
-                        responseSent = true;
-                        clearTimeout(timeoutHandle);
                         const error = { success: false, error: 'User not found' };
-                        if (callback) {
-                            try {
-                                callback(error);
-                            } catch (err) {
-                                console.error('[SocketHandler] Error in user not found callback:', err);
-                            }
-                        }
+                        if (callback) callback(error);
                         socket.emit('create_table_response', error);
                         return;
                     }
                     
-                    // Player should already be registered during authentication
-                    // Just update their chips from database
+                    // Update player's chips in game manager
                     const player = this.gameManager.players.get(user.userId);
-                    if (!player) {
-                        throw new Error(`Player ${user.userId} not found in GameManager - they should be registered during login`);
+                    if (player) {
+                        player.chips = dbUser.chips;
                     }
-                    player.chips = dbUser.chips;
-                    console.log(`[SocketHandler] Updated player chips: ${player.chips}`);
 
                     console.log('[SocketHandler] create_table - user authenticated:', user.username);
-                    gameLogger.gameEvent('SOCKET', 'create_table - user authenticated', { userId: user.userId, username: user.username });
-                    console.log('[SocketHandler] Creating table...');
                     const table = this.gameManager.createTable({
                         ...data,
                         creatorId: user.userId
                     });
-                    console.log(`[SocketHandler] Table created: ${table.id}`);
                     
                     // Set up table callbacks for state broadcasting
                     this.setupTableCallbacks(table);
@@ -263,27 +218,11 @@ class SocketHandler {
                         socket.join(`table:${table.id}`);
                     }
                     
-                    // Get state and public info with error handling
-                    let state, publicInfo;
-                    try {
-                        state = table.getState(user.userId);
-                    } catch (err) {
-                        console.error('[SocketHandler] Error getting state:', err);
-                        state = { id: table.id, name: table.name, phase: 'waiting', error: err.message };
-                    }
-                    
-                    try {
-                        publicInfo = table.getPublicInfo();
-                    } catch (err) {
-                        console.error('[SocketHandler] Error getting public info:', err);
-                        publicInfo = { id: table.id, name: table.name, maxPlayers: table.maxPlayers, error: err.message };
-                    }
-                    
-                    // Build and send response
+                    const state = table.getState(user.userId);
                     const response = { 
                         success: true, 
                         tableId: table.id, 
-                        table: publicInfo,
+                        table: table.getPublicInfo(),
                         seatIndex: joinResult.success ? joinResult.seatIndex : -1,
                         state 
                     };
@@ -292,24 +231,11 @@ class SocketHandler {
                     completed = true;
                     clearTimeout(timeoutHandle);
                     
-                    console.log('[SocketHandler] Sending response. Callback exists:', !!callback);
-                    if (callback) {
-                        try {
-                            callback(response);
-                            console.log('[SocketHandler] Callback executed');
-                        } catch (err) {
-                            console.error('[SocketHandler] Callback error:', err);
-                        }
-                    }
-                    try {
-                        socket.emit('create_table_response', response);
-                        console.log('[SocketHandler] Response emitted to socket');
-                    } catch (err) {
-                        console.error('[SocketHandler] Emit error:', err);
-                    }
+                    if (callback) callback(response);
+                    socket.emit('create_table_response', response);
                     
                     // Broadcast new table to lobby
-                    this.io.emit('table_created', publicInfo);
+                    this.io.emit('table_created', table.getPublicInfo());
                     
                     // Get full state asynchronously and send update
                     setImmediate(() => {
