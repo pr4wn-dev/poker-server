@@ -240,12 +240,24 @@ class SocketHandler {
                         state 
                     };
                     console.log(`[SocketHandler] create_table SUCCESS - seatIndex: ${response.seatIndex} (took ${Date.now() - startTime}ms)`);
-                    if (callback) callback(response);
+                    
+                    // CRITICAL: Send response BEFORE broadcasting to prevent race conditions
+                    if (callback) {
+                        try {
+                            callback(response);
+                        } catch (err) {
+                            console.error('[SocketHandler] Error in callback:', err);
+                        }
+                    }
                     socket.emit('create_table_response', response);
                     
-                    // Broadcast new table to lobby
-                    console.log('[SocketHandler] Broadcasting table_created event...');
-                    this.io.emit('table_created', table.getPublicInfo());
+                    // Broadcast new table to lobby (non-blocking)
+                    try {
+                        this.io.emit('table_created', publicInfo);
+                    } catch (err) {
+                        console.error('[SocketHandler] Error broadcasting table_created:', err);
+                    }
+                    
                     console.log('[SocketHandler] create_table complete');
                     completed = true;
                     clearTimeout(timeoutHandle);
