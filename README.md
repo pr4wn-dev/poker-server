@@ -8,6 +8,7 @@ Real-time multiplayer Texas Hold'em poker server built with Node.js and Socket.I
 - **[AGENT_RULES.md](AGENT_RULES.md)** - Rules for AI agents working on this project
 - **[CHANGELOG.md](CHANGELOG.md)** - Issues encountered and solutions (search this first!)
 - **[TESTING.md](TESTING.md)** - Testing guide: unit tests, simulation comparison, state snapshots
+- **[UI_BEST_PRACTICES.md](UI_BEST_PRACTICES.md)** - UI component best practices: position locking, animations, layout handling
 
 ## Features
 
