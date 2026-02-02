@@ -138,10 +138,17 @@ class SocketHandler {
             });
 
             socket.on('create_table', async (data, callback) => {
-                const startTime = Date.now();
-                console.log('[SocketHandler] create_table received:', JSON.stringify(data));
+                // Wrap entire handler in timeout to prevent hanging
+                const timeout = setTimeout(() => {
+                    console.error('[SocketHandler] create_table TIMEOUT after 10 seconds');
+                    const error = { success: false, error: 'Table creation timeout' };
+                    if (callback) callback(error);
+                    socket.emit('create_table_response', error);
+                }, 10000);
                 
                 try {
+                    const startTime = Date.now();
+                    console.log('[SocketHandler] create_table received:', JSON.stringify(data));
                     const user = this.getAuthenticatedUser(socket);
                     if (!user) {
                         console.log('[SocketHandler] create_table FAILED - not authenticated');
@@ -244,9 +251,11 @@ class SocketHandler {
                     console.log('[SocketHandler] Broadcasting table_created event...');
                     this.io.emit('table_created', table.getPublicInfo());
                     console.log('[SocketHandler] create_table complete');
+                    clearTimeout(timeout);
                 } catch (error) {
                     console.error('[SocketHandler] create_table ERROR:', error);
                     console.error('[SocketHandler] create_table ERROR stack:', error.stack);
+                    clearTimeout(timeout);
                     const errorResponse = { success: false, error: `Server error: ${error.message}` };
                     if (callback) callback(errorResponse);
                     socket.emit('create_table_response', errorResponse);
