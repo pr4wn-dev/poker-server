@@ -143,10 +143,15 @@ class Table {
         this.onPlayerAction = null; // Called when any player (human or bot) takes an action
         this.onPlayerEliminated = null; // Called when a player runs out of chips
         
-        // State snapshot for testing/comparison (optional)
+        // State snapshot for testing/comparison
+        // CRITICAL: Always enable for simulation tables, optional for real tables
+        // This ensures we can always compare simulation vs real games
         this.stateSnapshot = null;
-        if (process.env.ENABLE_STATE_SNAPSHOTS === 'true') {
+        if (this.isSimulation || process.env.ENABLE_STATE_SNAPSHOTS === 'true') {
             this.stateSnapshot = new StateSnapshot(this.id, this.name, this.isSimulation);
+            if (this.isSimulation) {
+                console.log(`[Table ${this.name}] State snapshots ENABLED (simulation table)`);
+            }
         }
     }
     

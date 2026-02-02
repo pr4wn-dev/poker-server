@@ -2,7 +2,10 @@
 /**
  * Compare simulation state logs to real game state logs
  * 
- * Usage: node scripts/compare-states.js <tableId>
+ * Usage: 
+ *   node scripts/compare-states.js <simTableId> <realTableId>
+ *   node scripts/compare-states.js <tableId>  (if both use same tableId)
+ *   node scripts/compare-states.js --latest    (compare most recent snapshots)
  * 
  * Compares state snapshots from simulation and real game to find differences.
  */
@@ -11,24 +14,112 @@ const StateComparator = require('../src/testing/StateComparator');
 const StateAnalyzer = require('../src/testing/StateAnalyzer');
 const StateSnapshot = require('../src/testing/StateSnapshot');
 const path = require('path');
+const fs = require('fs');
 
-const tableId = process.argv[2];
+let simTableId = process.argv[2];
+let realTableId = process.argv[3];
 
-if (!tableId) {
-    console.error('Usage: node scripts/compare-states.js <tableId>');
-    console.error('Example: node scripts/compare-states.js table_abc123');
+// Handle --latest flag
+if (simTableId === '--latest' || simTableId === '-l') {
+    const snapshotDir = path.join(__dirname, '../logs/state_snapshots');
+    if (!fs.existsSync(snapshotDir)) {
+        console.error('Error: No snapshot directory found. Run some games first!');
+        process.exit(1);
+    }
+    
+    const files = fs.readdirSync(snapshotDir);
+    const simFiles = files.filter(f => f.endsWith('_sim.json')).sort();
+    const realFiles = files.filter(f => f.endsWith('_real.json')).sort();
+    
+    if (simFiles.length === 0 || realFiles.length === 0) {
+        console.error('Error: Need at least one simulation and one real game snapshot');
+        console.error(`  Found ${simFiles.length} simulation snapshot(s) and ${realFiles.length} real game snapshot(s)`);
+        process.exit(1);
+    }
+    
+    simTableId = simFiles[simFiles.length - 1].replace('_sim.json', '');
+    realTableId = realFiles[realFiles.length - 1].replace('_real.json', '');
+    
+    console.log(`Auto-selected most recent snapshots:`);
+    console.log(`  Simulation: ${simTableId}`);
+    console.log(`  Real Game: ${realTableId}`);
+    console.log('');
+}
+
+// If only one tableId provided, assume both use same ID
+if (!realTableId) {
+    realTableId = simTableId;
+}
+
+if (!simTableId) {
+    console.error('Usage: node scripts/compare-states.js <simTableId> [realTableId]');
+    console.error('   or: node scripts/compare-states.js --latest');
+    console.error('');
+    console.error('Examples:');
+    console.error('  node scripts/compare-states.js table_abc123 table_xyz789');
+    console.error('  node scripts/compare-states.js table_abc123  (if both use same ID)');
+    console.error('  node scripts/compare-states.js --latest      (compare most recent)');
     process.exit(1);
 }
 
 const comparator = new StateComparator();
-const files = StateSnapshot.getSnapshotFiles(tableId);
 
-if (!files.sim || !files.real) {
-    console.error('Error: Could not find snapshot files for table:', tableId);
-    if (!files.sim) console.error('  Missing: simulation snapshot');
-    if (!files.real) console.error('  Missing: real game snapshot');
+// Get snapshot files - try multiple methods
+let simFile = null;
+let realFile = null;
+
+// Method 1: Use getSnapshotFiles helper
+const simFiles = StateSnapshot.getSnapshotFiles(simTableId);
+const realFiles = StateSnapshot.getSnapshotFiles(realTableId);
+simFile = simFiles.sim;
+realFile = realFiles.real;
+
+// Method 2: Try with _sim/_real suffixes if not found
+const snapshotDir = path.join(__dirname, '../logs/state_snapshots');
+if (!simFile && !simTableId.includes('_sim')) {
+    const altSimFile = path.join(snapshotDir, `${simTableId}_sim.json`);
+    if (fs.existsSync(altSimFile)) {
+        simFile = altSimFile;
+    }
+}
+
+if (!realFile && !realTableId.includes('_real')) {
+    const altRealFile = path.join(snapshotDir, `${realTableId}_real.json`);
+    if (fs.existsSync(altRealFile)) {
+        realFile = altRealFile;
+    }
+}
+
+// Method 3: Try direct file paths if still not found
+if (!simFile) {
+    const directSimFile = path.join(snapshotDir, `${simTableId}.json`);
+    if (fs.existsSync(directSimFile)) {
+        simFile = directSimFile;
+    }
+}
+
+if (!realFile) {
+    const directRealFile = path.join(snapshotDir, `${realTableId}.json`);
+    if (fs.existsSync(directRealFile)) {
+        realFile = directRealFile;
+    }
+}
+
+if (!simFile || !fs.existsSync(simFile)) {
+    console.error('Error: Could not find simulation snapshot');
+    console.error(`  Looked for: ${simTableId}_sim.json or ${simTableId}.json`);
+    console.error(`  Directory: ${path.join(__dirname, '../logs/state_snapshots')}`);
     process.exit(1);
 }
+
+if (!realFile || !fs.existsSync(realFile)) {
+    console.error('Error: Could not find real game snapshot');
+    console.error(`  Looked for: ${realTableId}_real.json or ${realTableId}.json`);
+    console.error(`  Directory: ${path.join(__dirname, '../logs/state_snapshots')}`);
+    process.exit(1);
+}
+
+const files = { sim: simFile, real: realFile };
 
 console.log('Comparing state snapshots...');
 console.log(`  Simulation: ${files.sim}`);

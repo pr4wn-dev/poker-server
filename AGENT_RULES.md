@@ -84,6 +84,17 @@ If logging is insufficient to diagnose a problem → ADD MORE LOGGING before ask
 
 ## LAW 10: USE STATE COMPARISON TO FIND BUGS
 
+**CRITICAL: Simulation tables ALWAYS capture state snapshots automatically.**
+**Real/practice tables require ENABLE_STATE_SNAPSHOTS=true to capture snapshots.**
+
+To compare simulation vs real games:
+1. Run a simulation (snapshots auto-enabled)
+2. Run a real/practice game with ENABLE_STATE_SNAPSHOTS=true
+3. Run: `npm run compare-states --latest` or `npm run compare-states <simId> <realId>`
+4. Review differences and fix issues
+
+See `COMPARISON_WORKFLOW.md` for detailed instructions.
+
 **CRITICAL:** Simulation and real games use the SAME code path. Comparing them finds bugs automatically.
 
 **When debugging game logic issues:**
