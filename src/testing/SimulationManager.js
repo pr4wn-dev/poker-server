@@ -438,18 +438,19 @@ class SimulationManager {
             return;
         }
         
-        this.log('INFO', `Restarting game ${simulation.gamesPlayed + 1} - keeping original settings`, { tableId });
+        this.log('INFO', `Restarting game ${simulation.gamesPlayed + 1} - randomizing settings and bots`, { tableId });
         
-        // KEEP original settings - don't randomize on restart
-        const newMaxPlayers = simulation.originalMaxPlayers || table.maxPlayers;
-        const newBuyIn = simulation.buyIn || table.buyIn;
-        const newSmallBlind = simulation.originalSmallBlind || table.smallBlind;
-        const newBigBlind = simulation.originalBigBlind || table.bigBlind;
-        const newTurnTimeLimit = simulation.originalTurnTimeLimit || table.turnTimeLimit;
-        const newBlindIncreaseInterval = simulation.originalBlindIncreaseInterval || table.blindIncreaseInterval;
+        // Generate NEW random settings for this game
+        const newSettings = this._generateRandomSettings();
+        const newMaxPlayers = newSettings.maxPlayers;
+        const newBuyIn = newSettings.buyIn;
+        const newSmallBlind = newSettings.smallBlind;
+        const newBigBlind = newSettings.bigBlind;
+        const newTurnTimeLimit = newSettings.turnTimeLimit;
+        const newBlindIncreaseInterval = newSettings.blindIncreaseInterval;
         
-        // Keep original socket bot ratio
-        const newSocketBotRatio = simulation.originalSocketBotRatio || 0.5;
+        // Randomize socket bot ratio for this game (0.3 to 0.7)
+        const newSocketBotRatio = 0.3 + Math.random() * 0.4;
         
         // Keep original bot distribution
         const newTotalBots = newMaxPlayers;
@@ -482,6 +483,11 @@ class SimulationManager {
         table.blindLevel = 1;
         table.initialSmallBlind = newSmallBlind;
         table.initialBigBlind = newBigBlind;
+        
+        // Update simulation tracking (for reference, but won't be used on next restart)
+        simulation.buyIn = newBuyIn;
+        simulation.originalSmallBlind = newSmallBlind;
+        simulation.originalBigBlind = newBigBlind;
         
         // Update simulation tracking (for reference, but won't be used on next restart)
         simulation.buyIn = newBuyIn;
