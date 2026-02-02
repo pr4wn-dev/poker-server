@@ -2166,9 +2166,17 @@ class SocketHandler {
         // CRITICAL: Preserve any existing onGameOver callback (e.g., from SimulationManager)
         // The existing callback should run AFTER SocketHandler notifies clients
         const originalOnGameOver = table.onGameOver;
-        console.log(`[SocketHandler] Setting up onGameOver callback for table ${table.name}. Original callback: ${originalOnGameOver ? 'EXISTS' : 'NONE'}`);
+        console.log(`[SocketHandler] Setting up onGameOver callback for table ${table.name} (${table.id}). Original callback: ${originalOnGameOver ? 'EXISTS' : 'NONE'}`);
+        gameLogger.gameEvent(table.name, '[SocketHandler] Setting up onGameOver callback', {
+            tableId: table.id,
+            hasOriginalCallback: !!originalOnGameOver
+        });
         table.onGameOver = (winner) => {
             console.log(`[SocketHandler] Game over at table ${table.name} - Winner: ${winner.name}`);
+            gameLogger.gameEvent(table.name, '[SocketHandler] Game over callback invoked', {
+                winner: winner.name,
+                winnerId: winner.playerId
+            });
             
             // CRITICAL: Only send game_over to actual players, NOT spectators
             // Spectators should not be prompted to leave - they're just watching
