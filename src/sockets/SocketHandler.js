@@ -166,26 +166,29 @@ class SocketHandler {
             // ============ Simulation Mode ============
             
             socket.on('start_simulation', async (data, callback) => {
-                console.log('[SocketHandler] start_simulation received:', JSON.stringify(data));
-                const user = this.getAuthenticatedUser(socket);
-                if (!user) {
-                    const error = { success: false, error: 'Not authenticated' };
-                    if (callback) callback(error);
-                    return;
-                }
-                
-                const {
-                    tableName = 'Simulation Game',
-                    maxPlayers = 6,
-                    smallBlind = 25,
-                    bigBlind = 50,
-                    buyIn = 20000000,
-                    turnTimeLimit = 5000,
-                    blindIncreaseInterval = 0,
-                    socketBotRatio = 0.5
-                } = data;
-                
                 try {
+                    console.log('[SocketHandler] ========== start_simulation EVENT RECEIVED ==========');
+                    console.log('[SocketHandler] Data:', JSON.stringify(data));
+                    const user = this.getAuthenticatedUser(socket);
+                    if (!user) {
+                        const error = { success: false, error: 'Not authenticated' };
+                        if (callback) callback(error);
+                        socket.emit('start_simulation_response', error);
+                        return;
+                    }
+                    
+                    const {
+                        tableName = 'Simulation Game',
+                        maxPlayers = 6,
+                        smallBlind = 25,
+                        bigBlind = 50,
+                        buyIn = 20000000,
+                        turnTimeLimit = 5000,
+                        blindIncreaseInterval = 0,
+                        socketBotRatio = 0.5
+                    } = data;
+                    
+                    console.log('[SocketHandler] Calling simulationManager.startSimulation...');
                     const result = await this.simulationManager.startSimulation({
                         creatorId: user.userId,
                         tableName,
@@ -198,24 +201,85 @@ class SocketHandler {
                         socketBotRatio: Math.min(Math.max(socketBotRatio, 0), 1)
                     });
                     
-                    console.log('[SocketHandler] start_simulation result:', result);
+                    console.log('[SocketHandler] start_simulation result:', JSON.stringify(result));
                     
                     if (result.success) {
                         // CRITICAL: Set up table callbacks for state broadcasting
-                        // Without this, simulation tables won't broadcast state to players!
-                        // NOTE: This is called AFTER SimulationManager._setupAutoRestart, so we preserve that callback
                         const simTable = this.gameManager.getTable(result.tableId);
                         if (simTable) {
-                            console.log(`[SocketHandler] Setting up callbacks for simulation table ${result.tableId}. onGameOver before: ${simTable.onGameOver ? 'SET' : 'NOT SET'}`);
-                            this.setupTableCallbacks(simTable);
-                            console.log(`[SocketHandler] Set up callbacks for simulation table ${result.tableId}. onGameOver after: ${simTable.onGameOver ? 'SET' : 'NOT SET'}`);
+                            console.log(`[SocketHandler] Setting up callbacks for simulation table ${result.tableId}`);
+                            try {
+                                this.setupTableCallbacks(simTable);
+                                console.log(`[SocketHandler] Callbacks set up successfully`);
+                            } catch (err) {
+                                console.error(`[SocketHandler] Error setting up callbacks:`, err);
+                            }
                         }
                         
-                        // Join creator as spectator - MUST add to table.spectators for card visibility
-                        simTable.addSpectator(user.userId, user.profile?.username || 'Creator', socket.id);
-                        socket.join(`table:${result.tableId}`);
-                        socket.join(`spectator:${result.tableId}`);
-                        console.log(`[SocketHandler] Added ${user.userId} as spectator for simulation table`);
+                        // Join creator as spectator
+                        try {
+                            simTable.addSpectator(user.userId, user.profile?.username || 'Creator', socket.id);
+                            socket.join(`table:${result.tableId}`);
+                            socket.join(`spectator:${result.tableId}`);
+                            console.log(`[SocketHandler] Added ${user.userId} as spectator`);
+                        } catch (err) {
+                            console.error(`[SocketHandler] Error adding spectator:`, err);
+                        }
+                        
+                        // Get table state
+                        let state, publicInfo;
+                        try {
+                            state = simTable.getState(user.userId);
+                            publicInfo = simTable.getPublicInfo();
+                        } catch (err) {
+                            console.error(`[SocketHandler] Error getting state:`, err);
+                            state = { id: simTable.id, name: simTable.name, phase: 'waiting' };
+                            publicInfo = { id: simTable.id, name: simTable.name, maxPlayers: simTable.maxPlayers };
+                        }
+                        
+                        const response = {
+                            success: true,
+                            tableId: result.tableId,
+                            table: publicInfo,
+                            state
+                        };
+                        
+                        console.log('[SocketHandler] Sending start_simulation response...');
+                        if (callback) {
+                            try {
+                                callback(response);
+                                console.log('[SocketHandler] Callback executed');
+                            } catch (err) {
+                                console.error('[SocketHandler] Callback error:', err);
+                            }
+                        }
+                        try {
+                            socket.emit('start_simulation_response', response);
+                            console.log('[SocketHandler] Response emitted');
+                        } catch (err) {
+                            console.error('[SocketHandler] Emit error:', err);
+                        }
+                    } else {
+                        console.error('[SocketHandler] start_simulation failed:', result.error);
+                        if (callback) callback(result);
+                        socket.emit('start_simulation_response', result);
+                    }
+                } catch (error) {
+                    console.error('[SocketHandler] start_simulation FATAL ERROR:', error);
+                    const errorResponse = { success: false, error: `Server error: ${error.message}` };
+                    if (callback) {
+                        try {
+                            callback(errorResponse);
+                        } catch (err) {
+                            console.error('[SocketHandler] Error callback failed:', err);
+                        }
+                    }
+                    try {
+                        socket.emit('start_simulation_response', errorResponse);
+                    } catch (err) {
+                        console.error('[SocketHandler] Error emit failed:', err);
+                    }
+                }
                         
                         const response = {
                             success: true,
