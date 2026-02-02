@@ -384,104 +384,43 @@ class SimulationManager {
         
         const tableId = table.id;
         
-        // Hook into the game over scenario
-        // CRITICAL: Only check for game over when in WAITING phase (hand fully completed)
-        // Don't interrupt hands in progress - players with 0 chips may be all-in with money in pot
-        const checkGameOver = () => {
-            if (!this.activeSimulations.has(tableId)) return; // Simulation stopped
+        // CRITICAL: Hook into onGameOver callback instead of polling
+        // This is more reliable and immediate
+        const originalOnGameOver = table.onGameOver;
+        table.onGameOver = (winner) => {
+            // Call original callback if it exists (for SocketHandler)
+            if (originalOnGameOver) {
+                originalOnGameOver(winner);
+            }
+            
+            // Check if simulation is still active
+            if (!this.activeSimulations.has(tableId)) return;
             
             const currentTable = this.gameManager.tables.get(tableId);
             if (!currentTable) return;
             
-            // CRITICAL FIX: Only check during waiting phase (hand complete, no active game)
-            // During active phases, players may have 0 chips but still be all-in
-            if (currentTable.phase !== 'waiting') {
-                // Hand in progress - check again later
-                const checkInterval = simulation.fastMode ? 500 : 2000;
-                setTimeout(checkGameOver, checkInterval);
-                return;
-            }
+            // Game over detected via callback - restart immediately
+            simulation.gamesPlayed++;
             
-            // Count ACTIVE players with chips (not eliminated, not spectating)
-            // A player is "out of the game" only if chips = 0 AND isActive = false
-            // CRITICAL: Use Table's getActivePlayerCount() method instead of manual filtering
-            // This ensures we use the same logic the game uses
-            const activePlayerCount = currentTable.getActivePlayerCount();
-            const allSeatedPlayers = currentTable.seats.filter(s => s);
-            const playersWithChips = allSeatedPlayers.filter(s => s && s.chips > 0);
-            const sortedByChips = [...allSeatedPlayers].sort((a, b) => (b.chips || 0) - (a.chips || 0));
-            const likelyWinner = sortedByChips[0];
-            
-            this.log('DEBUG', 'Game over check', {
+            this.log('INFO', `Game ${simulation.gamesPlayed} COMPLETE - Winner: ${winner.name}`, {
                 tableId,
-                phase: currentTable.phase,
-                activePlayers: activePlayerCount,
-                playersWithChips: playersWithChips.length,
-                likelyWinner: likelyWinner?.name,
-                likelyWinnerChips: likelyWinner?.chips,
-                playerDetails: allSeatedPlayers.map(s => ({ 
-                    name: s.name, 
-                    chips: s.chips, 
-                    isActive: s.isActive,
-                    isFolded: s.isFolded,
-                    isAllIn: s.isAllIn,
-                    isSittingOut: s.isSittingOut
-                }))
+                winner: winner.name,
+                winnerChips: winner.chips,
+                gamesPlayed: simulation.gamesPlayed
             });
             
-            // Game is over when only 1 player has chips (winner determined)
-            // CRITICAL: Check if game was actually started (not just waiting for players)
-            // Also check that we have at least 2 seated players to avoid false positives
-            const seatedCount = allSeatedPlayers.length;
-            const gameWasStarted = currentTable.gameStarted || simulation.gamesPlayed > 0;
-            
-            if (playersWithChips.length === 1 && seatedCount >= 2 && gameWasStarted) {
-                // Game over - one winner!
-                simulation.gamesPlayed++;
-                
-                // Get winner name
-                const winnerName = playersWithChips[0]?.name || 'Unknown';
-                
-                this.log('INFO', `Game ${simulation.gamesPlayed} COMPLETE - Resetting for next game`, {
-                    tableId,
-                    winner: winnerName,
-                    winnerChips: playersWithChips[0]?.chips,
-                    gamesPlayed: simulation.gamesPlayed,
-                    seatedCount,
-                    activePlayerCount
-                });
-                
-                if (simulation.gamesPlayed >= this.maxGames) {
-                    this.log('INFO', `Reached max games (${this.maxGames}), stopping simulation`, { tableId });
-                    this.stopSimulation(tableId);
-                    return;
-                }
-                
-                // Reset all players to starting chips
-                const restartDelay = simulation.fastMode ? 1000 : 3000;
-                setTimeout(() => this._restartGame(simulation), restartDelay);
-                return; // Stop checking - game over detected
-            } else if (playersWithChips.length === 0 && seatedCount >= 2 && gameWasStarted) {
-                // Edge case: No players with chips (shouldn't happen, but handle it)
-                this.log('WARN', 'Game over detected but no players with chips - resetting anyway', {
-                    tableId,
-                    seatedCount,
-                    activePlayerCount
-                });
-                simulation.gamesPlayed++;
-                const restartDelay = simulation.fastMode ? 1000 : 3000;
-                setTimeout(() => this._restartGame(simulation), restartDelay);
+            if (simulation.gamesPlayed >= this.maxGames) {
+                this.log('INFO', `Reached max games (${this.maxGames}), stopping simulation`, { tableId });
+                this.stopSimulation(tableId);
                 return;
-            } else {
-                // Check again in a bit
-                const checkInterval = simulation.fastMode ? 500 : 2000;
-                setTimeout(checkGameOver, checkInterval);
             }
+            
+            // Reset all players to starting chips and start new game
+            const restartDelay = simulation.fastMode ? 1000 : 3000;
+            setTimeout(() => this._restartGame(simulation), restartDelay);
         };
         
-        // Start checking after first game begins
-        const initialDelay = simulation.fastMode ? 5000 : 15000;
-        setTimeout(checkGameOver, initialDelay);
+        this.log('INFO', 'Auto-restart callback set up', { tableId });
     }
     
     /**
