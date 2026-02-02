@@ -292,9 +292,21 @@ class SocketHandler {
                     completed = true;
                     clearTimeout(timeoutHandle);
                     
-                    if (callback) callback(response);
-                    socket.emit('create_table_response', response);
-                    console.log('[SocketHandler] Response sent');
+                    console.log('[SocketHandler] Sending response. Callback exists:', !!callback);
+                    if (callback) {
+                        try {
+                            callback(response);
+                            console.log('[SocketHandler] Callback executed');
+                        } catch (err) {
+                            console.error('[SocketHandler] Callback error:', err);
+                        }
+                    }
+                    try {
+                        socket.emit('create_table_response', response);
+                        console.log('[SocketHandler] Response emitted to socket');
+                    } catch (err) {
+                        console.error('[SocketHandler] Emit error:', err);
+                    }
                     
                     // Broadcast new table to lobby
                     this.io.emit('table_created', publicInfo);
