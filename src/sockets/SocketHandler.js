@@ -2289,13 +2289,21 @@ class SocketHandler {
             // Spectators should not be prompted to leave - they're just watching
             // Send to each player individually to avoid sending to spectators
             let playersNotified = 0;
+            const spectatorUserIds = new Set(Array.from(table.spectators.keys())); // Get all spectator user IDs
+            
             for (const seat of table.seats) {
                 if (seat && !seat.isBot && seat.socketId) {
                     // This is a real player (not a bot, not a spectator)
-                    // CRITICAL: Check if this socket is actually a spectator before sending
+                    // CRITICAL: Check if this user is actually a spectator before sending
                     const userId = this.socketToUser.get(seat.socketId);
-                    if (userId && table.isSpectator(userId)) {
+                    if (userId && spectatorUserIds.has(userId)) {
                         console.log(`[SocketHandler] Skipping game_over for ${seat.name} - they are a spectator`);
+                        continue;
+                    }
+                    
+                    // Double-check: make sure this user is not in the spectators map
+                    if (userId && table.isSpectator(userId)) {
+                        console.log(`[SocketHandler] Skipping game_over for ${seat.name} - confirmed spectator via isSpectator check`);
                         continue;
                     }
                     
@@ -2304,28 +2312,34 @@ class SocketHandler {
                         winnerId: winner.playerId,
                         winnerName: winner.name,
                         winnerChips: winner.chips,
-                        isBot: winner.isBot || false
+                        isBot: winner.isBot || false,
+                        isInformational: false  // Explicitly mark as non-informational for players
                     });
                     playersNotified++;
                 }
             }
             
             // Send informational version to spectators (no leave prompt)
-            // They can see the game over state through normal state updates
+            // CRITICAL: Send ONLY to spectator room, NOT to table room, to avoid duplicates
+            // Spectators are in both rooms, so we must be explicit
             const spectatorRoom = `spectator:${table.id}`;
             const spectatorSockets = this.io.sockets.adapter.rooms.get(spectatorRoom);
             const spectatorCount = spectatorSockets ? spectatorSockets.size : 0;
             
-            console.log(`[SocketHandler] Sending game_over to ${playersNotified} players and ${spectatorCount} spectators (informational)`);
+            console.log(`[SocketHandler] Sending game_over to ${playersNotified} players and ${spectatorCount} spectators (informational only)`);
             
-            this.io.to(spectatorRoom).emit('game_over', {
-                tableId: table.id,
-                winnerId: winner.playerId,
-                winnerName: winner.name,
-                winnerChips: winner.chips,
-                isBot: winner.isBot || false,
-                isInformational: true  // Spectators get informational only - no leave prompt
-            });
+            // CRITICAL: Send to spectator room only, and mark as informational
+            // This ensures spectators don't get the regular game_over event from table room
+            if (spectatorCount > 0) {
+                this.io.to(spectatorRoom).emit('game_over', {
+                    tableId: table.id,
+                    winnerId: winner.playerId,
+                    winnerName: winner.name,
+                    winnerChips: winner.chips,
+                    isBot: winner.isBot || false,
+                    isInformational: true  // Spectators get informational only - no leave prompt
+                });
+            }
             
             // Call original callback AFTER notifying clients (e.g., SimulationManager auto-restart)
             // This ensures clients are notified before the game restarts

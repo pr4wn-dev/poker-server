@@ -193,7 +193,7 @@ class GameManager {
         return result;
     }
 
-    leaveTable(playerId) {
+    leaveTable(playerId, skipEmptyCheck = false) {
         const player = this.players.get(playerId);
         if (!player?.currentTableId) return { success: false, error: 'Not at a table' };
 
@@ -215,7 +215,10 @@ class GameManager {
             }
             
             // Check if only bots remain - if so, close the table
-            this.checkAndCloseEmptyTable(tableId);
+            // CRITICAL: Skip empty check during simulation restart to prevent closing table with spectators
+            if (!skipEmptyCheck) {
+                this.checkAndCloseEmptyTable(tableId);
+            }
         }
 
         player.currentTableId = null;
@@ -232,8 +235,12 @@ class GameManager {
         // Count human players (non-bots)
         const humanPlayers = table.seats.filter(seat => seat && !seat.isBot);
         
-        if (humanPlayers.length === 0) {
-            console.log(`[GameManager] Table ${table.name} has no human players - closing table`);
+        // CRITICAL FIX: Don't close table if there are active spectators (unless simulation ended)
+        // Spectators should be able to watch games even if no human players are seated
+        const spectatorCount = table.getSpectatorCount();
+        
+        if (humanPlayers.length === 0 && spectatorCount === 0) {
+            console.log(`[GameManager] Table ${table.name} has no human players and no spectators - closing table`);
             
             // Remove all bots from the table
             for (const seat of table.seats) {
@@ -250,6 +257,8 @@ class GameManager {
             // Delete the table
             this.tables.delete(tableId);
             console.log(`[GameManager] Table ${tableId} closed`);
+        } else if (humanPlayers.length === 0 && spectatorCount > 0) {
+            console.log(`[GameManager] Table ${table.name} has no human players but has ${spectatorCount} spectator(s) - keeping table open`);
         }
     }
 
@@ -354,7 +363,11 @@ class GameManager {
                 return false;
             });
             
-            if (connectedHumans.length === 0) {
+            // CRITICAL FIX: Don't close table if there are active spectators
+            // Spectators should be able to watch games even if no human players are seated
+            const spectatorCount = table.getSpectatorCount();
+            
+            if (connectedHumans.length === 0 && spectatorCount === 0) {
                 tablesToRemove.push(tableId);
             }
         }

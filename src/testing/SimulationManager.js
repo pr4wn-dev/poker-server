@@ -479,6 +479,21 @@ class SimulationManager {
         table.blindIncreaseInterval = newBlindIncreaseInterval;
         table.minRaise = newBigBlind;
         
+        // CRITICAL: Preserve fast mode settings for simulations
+        // Fast mode shortens ready-up and countdown timers for faster games
+        if (this.fastMode) {
+            table.readyUpDuration = 5000; // 5 sec ready-up in fast mode
+            table.startDelaySeconds = 3; // 3 sec countdown in fast mode
+            // Also cap turn time at 5 seconds in fast mode
+            if (table.turnTimeLimit > 5000) {
+                table.turnTimeLimit = 5000;
+            }
+            // Use 30 sec blind increase in fast mode
+            if (table.blindIncreaseInterval > 30000) {
+                table.blindIncreaseInterval = 30000;
+            }
+        }
+        
         // CRITICAL: Reset blind level and initial blinds to prevent exponential growth
         table.blindLevel = 1;
         table.initialSmallBlind = newSmallBlind;
@@ -512,7 +527,7 @@ class SimulationManager {
                         // If it's a regular bot, remove it
                         if (seat.isBot) {
                             this.log('INFO', `Removing excess regular bot: ${seat.name}`, { seatIndex: i });
-                            this.gameManager.leaveTable(seat.playerId);
+                            this.gameManager.leaveTable(seat.playerId, true); // Skip empty check during restart
                         }
                     }
                 }
@@ -538,7 +553,7 @@ class SimulationManager {
                 const seat = table.seats[i];
                 if (seat && seat.isBot) {
                     this.log('INFO', `Removing excess regular bot: ${seat.name}`, { seatIndex: i });
-                    this.gameManager.leaveTable(seat.playerId);
+                    this.gameManager.leaveTable(seat.playerId, true); // Skip empty check during restart
                     removed++;
                 }
             }
@@ -591,23 +606,39 @@ class SimulationManager {
         }
         
         // Add missing regular bots
-        const currentRegularCount = table.seats.filter(s => s && s.isBot).length;
+        // CRITICAL: Check which bots are already seated to avoid "already at this table" errors
+        const currentRegularBots = table.seats
+            .filter(s => s && s.isBot)
+            .map(s => s.name.toLowerCase());
+        
+        const currentRegularCount = currentRegularBots.length;
         if (currentRegularCount < newRegularBotCount) {
             const regularBotsNeeded = newRegularBotCount - currentRegularCount;
             this.log('INFO', `Adding ${regularBotsNeeded} regular bot(s)`, { tableId });
             
-            for (let i = 0; i < regularBotsNeeded; i++) {
-                const profileIndex = currentRegularCount + i;
-                if (profileIndex < botProfiles.length) {
-                    const botProfile = botProfiles[profileIndex];
-                    const result = await this.gameManager.inviteBot(tableId, botProfile, creatorId, newBuyIn);
-                    if (result.success) {
-                        this.log('INFO', `Added regular bot: ${botProfile}`, { seatIndex: result.seatIndex });
-                    } else {
-                        this.log('WARN', `Failed to add regular bot: ${botProfile}`, { error: result.error });
-                    }
-                    await new Promise(r => setTimeout(r, 500));
+            // Filter out bots that are already seated
+            const availableBots = botProfiles.filter(profile => 
+                !currentRegularBots.includes(profile.toLowerCase())
+            );
+            
+            let added = 0;
+            for (let i = 0; i < regularBotsNeeded && added < availableBots.length; i++) {
+                const botProfile = availableBots[i];
+                const result = await this.gameManager.inviteBot(tableId, botProfile, creatorId, newBuyIn);
+                if (result.success) {
+                    this.log('INFO', `Added regular bot: ${botProfile}`, { seatIndex: result.seatIndex });
+                    added++;
+                } else {
+                    this.log('WARN', `Failed to add regular bot: ${botProfile}`, { error: result.error });
                 }
+                await new Promise(r => setTimeout(r, 500));
+            }
+            
+            if (added < regularBotsNeeded) {
+                this.log('WARN', `Could only add ${added} of ${regularBotsNeeded} regular bots needed`, { 
+                    availableBots: availableBots.length,
+                    alreadySeated: currentRegularBots
+                });
             }
         }
         
@@ -669,9 +700,36 @@ class SimulationManager {
         }
         
         // Auto-start the new game after bots are added
-        const startDelay = simulation.fastMode ? 1000 : 3000;
-        setTimeout(() => {
+        // CRITICAL: Wait for all bots to be seated before starting
+        const startDelay = simulation.fastMode ? 2000 : 5000;
+        setTimeout(async () => {
             if (table.phase === 'waiting') {
+                // Verify we have enough players before starting
+                const seatedCount = table.seats.filter(s => s !== null).length;
+                const requiredPlayers = Math.min(2, newMaxPlayers);
+                
+                if (seatedCount < requiredPlayers) {
+                    this.log('WARN', `Not enough players to start game ${simulation.gamesPlayed + 1}`, {
+                        seatedCount,
+                        requiredPlayers,
+                        expectedRegular: newRegularBotCount,
+                        expectedSocket: newSocketBotCount
+                    });
+                    // Retry after a delay
+                    setTimeout(() => {
+                        if (table.phase === 'waiting') {
+                            const retryResult = table.startReadyUp(creatorId);
+                            if (retryResult.success) {
+                                this.log('INFO', `Game ${simulation.gamesPlayed + 1} started on retry`, { tableId });
+                                this._setupAutoRestart(table, simulation);
+                            } else {
+                                this.log('ERROR', `Failed to start game ${simulation.gamesPlayed + 1} on retry`, { error: retryResult.error });
+                            }
+                        }
+                    }, 2000);
+                    return;
+                }
+                
                 const result = table.startReadyUp(creatorId);
                 if (result.success) {
                     this.log('INFO', `Game ${simulation.gamesPlayed + 1} starting with new settings...`, { 
@@ -679,7 +737,8 @@ class SimulationManager {
                         maxPlayers: newMaxPlayers,
                         blinds: `${newSmallBlind}/${newBigBlind}`,
                         buyIn: newBuyIn,
-                        bots: `${newRegularBotCount} regular + ${newSocketBotCount} socket`
+                        bots: `${newRegularBotCount} regular + ${newSocketBotCount} socket`,
+                        seatedPlayers: seatedCount
                     });
                     // Continue the game-over check loop
                     this._setupAutoRestart(table, simulation);
