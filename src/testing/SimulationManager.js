@@ -507,7 +507,7 @@ class SimulationManager {
                         // If it's a regular bot, remove it
                         if (seat.isBot) {
                             this.log('INFO', `Removing excess regular bot: ${seat.name}`, { seatIndex: i });
-                            this.gameManager.removePlayerFromTable(tableId, seat.playerId);
+                            this.gameManager.leaveTable(seat.playerId);
                         }
                     }
                 }
@@ -533,7 +533,7 @@ class SimulationManager {
                 const seat = table.seats[i];
                 if (seat && seat.isBot) {
                     this.log('INFO', `Removing excess regular bot: ${seat.name}`, { seatIndex: i });
-                    this.gameManager.removePlayerFromTable(tableId, seat.playerId);
+                    this.gameManager.leaveTable(seat.playerId);
                     removed++;
                 }
             }

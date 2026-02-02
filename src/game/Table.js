@@ -1759,6 +1759,18 @@ class Table {
         if (playersWithChips.length === 1) {
             const winner = playersWithChips[0];
             
+            // CRITICAL: Award any remaining pot to the winner BEFORE validation
+            // This ensures money isn't lost when game ends with pot still unclaimed
+            if (this.pot > 0) {
+                console.log(`[Table ${this.name}] Game ending with pot unclaimed (${this.pot}) - awarding to winner ${winner.name}`);
+                gameLogger.gameEvent(this.name, '[GAME OVER] Awarding unclaimed pot to winner', {
+                    winner: winner.name,
+                    potAmount: this.pot,
+                    winnerChipsBefore: winner.chips
+                });
+                this.awardPot(winner);
+            }
+            
             // CRITICAL: Validate money - winner's chips should equal sum of all starting chips
             const winnerChips = winner.chips;
             const currentTotalChips = this.seats
