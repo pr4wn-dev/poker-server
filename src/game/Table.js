@@ -909,30 +909,37 @@ class Table {
                 this.awardPot(winner);
             }
             
-            // CRITICAL: Validate money - winner's chips should equal sum of all starting chips
-            const winnerChips = winner.chips;
+            // CRITICAL: Validate money - total chips should equal sum of all starting chips
+            // Count ALL chips (winner + all other players, including eliminated)
             const currentTotalChips = this.seats
                 .filter(s => s !== null)
                 .reduce((sum, seat) => sum + (seat.chips || 0), 0);
             
+            // Also check if pot still has money (should be 0 after award)
+            const potStillHasMoney = this.pot > 0;
+            
             if (this.totalStartingChips > 0) {
-                const difference = Math.abs(winnerChips - this.totalStartingChips);
-                if (difference > 0.01) {
-                    console.error(`[Table ${this.name}] ⚠️ CRITICAL: MONEY LOST! Winner has ${winnerChips}, but total starting chips was ${this.totalStartingChips}. Missing: ${this.totalStartingChips - winnerChips}`);
-                    gameLogger.gameEvent(this.name, '[MONEY] ERROR: Money lost - winner chips != total starting chips', {
-                        winnerChips,
-                        totalStartingChips: this.totalStartingChips,
-                        missing: this.totalStartingChips - winnerChips,
+                const difference = Math.abs(currentTotalChips - this.totalStartingChips);
+                if (difference > 0.01 || potStillHasMoney) {
+                    const missing = this.totalStartingChips - currentTotalChips - (potStillHasMoney ? this.pot : 0);
+                    console.error(`[Table ${this.name}] ⚠️ CRITICAL: MONEY LOST! Total chips: ${currentTotalChips}, total starting chips: ${this.totalStartingChips}, pot: ${this.pot}. Missing: ${missing}`);
+                    gameLogger.gameEvent(this.name, '[MONEY] ERROR: Money lost - total chips != total starting chips', {
+                        winnerChips: winner.chips,
                         currentTotalChips,
+                        totalStartingChips: this.totalStartingChips,
+                        pot: this.pot,
+                        missing,
                         allPlayers: this.seats.filter(s => s !== null).map(s => ({
                             name: s.name,
                             chips: s.chips,
-                            isActive: s.isActive
+                            isActive: s.isActive,
+                            totalBet: s.totalBet
                         }))
                     });
                 } else {
-                    gameLogger.gameEvent(this.name, '[MONEY] VALIDATION PASSED: Winner chips = total starting chips', {
-                        winnerChips,
+                    gameLogger.gameEvent(this.name, '[MONEY] VALIDATION PASSED: Total chips = total starting chips', {
+                        winnerChips: winner.chips,
+                        currentTotalChips,
                         totalStartingChips: this.totalStartingChips,
                         difference: 0
                     });
@@ -941,9 +948,10 @@ class Table {
                 // First game or starting chips not tracked - log warning
                 console.warn(`[Table ${this.name}] ⚠️ Starting chips not tracked (totalStartingChips=${this.totalStartingChips}) - cannot validate money`);
                 gameLogger.gameEvent(this.name, '[MONEY] WARNING: Starting chips not tracked', {
-                    winnerChips,
+                    winnerChips: winner.chips,
+                    currentTotalChips,
                     totalStartingChips: this.totalStartingChips,
-                    currentTotalChips
+                    pot: this.pot
                 });
             }
             
@@ -2448,6 +2456,18 @@ class Table {
         this.clearTurnTimer();
         this.phase = GAME_PHASES.SHOWDOWN;
         
+        // CRITICAL FIX: If pot is already 0, it means it was awarded earlier (by fold)
+        // Don't try to calculate side pots - just start a new hand
+        if (this.pot === 0) {
+            console.log(`[Table ${this.name}] Pot is 0 - already awarded earlier. Skipping showdown calculation and starting new hand.`);
+            gameLogger.gameEvent(this.name, 'SHOWDOWN SKIPPED - pot already awarded', {
+                pot: this.pot,
+                reason: 'Pot was awarded earlier (by fold)'
+            });
+            setTimeout(() => this.startNewHand(), 3000);
+            return;
+        }
+        
         gameLogger.gameEvent(this.name, 'SHOWDOWN STARTED', {
             pot: this.pot,
             communityCards: this.communityCards?.map(c => `${c.rank}${c.suit}`),
@@ -2691,30 +2711,37 @@ class Table {
                 });
             }
             
-            // CRITICAL: Validate money - winner's chips should equal sum of all starting chips
-            const winnerChips = winner.chips;
+            // CRITICAL: Validate money - total chips should equal sum of all starting chips
+            // Count ALL chips (winner + all other players, including eliminated)
             const currentTotalChips = this.seats
                 .filter(s => s !== null)
                 .reduce((sum, seat) => sum + (seat.chips || 0), 0);
             
+            // Also check if pot still has money (should be 0 after award)
+            const potStillHasMoney = this.pot > 0;
+            
             if (this.totalStartingChips > 0) {
-                const difference = Math.abs(winnerChips - this.totalStartingChips);
-                if (difference > 0.01) {
-                    console.error(`[Table ${this.name}] ⚠️ CRITICAL: MONEY LOST! Winner has ${winnerChips}, but total starting chips was ${this.totalStartingChips}. Missing: ${this.totalStartingChips - winnerChips}`);
-                    gameLogger.gameEvent(this.name, '[MONEY] ERROR: Money lost - winner chips != total starting chips', {
-                        winnerChips,
-                        totalStartingChips: this.totalStartingChips,
-                        missing: this.totalStartingChips - winnerChips,
+                const difference = Math.abs(currentTotalChips - this.totalStartingChips);
+                if (difference > 0.01 || potStillHasMoney) {
+                    const missing = this.totalStartingChips - currentTotalChips - (potStillHasMoney ? this.pot : 0);
+                    console.error(`[Table ${this.name}] ⚠️ CRITICAL: MONEY LOST! Total chips: ${currentTotalChips}, total starting chips: ${this.totalStartingChips}, pot: ${this.pot}. Missing: ${missing}`);
+                    gameLogger.gameEvent(this.name, '[MONEY] ERROR: Money lost - total chips != total starting chips', {
+                        winnerChips: winner.chips,
                         currentTotalChips,
+                        totalStartingChips: this.totalStartingChips,
+                        pot: this.pot,
+                        missing,
                         allPlayers: this.seats.filter(s => s !== null).map(s => ({
                             name: s.name,
                             chips: s.chips,
-                            isActive: s.isActive
+                            isActive: s.isActive,
+                            totalBet: s.totalBet
                         }))
                     });
                 } else {
-                    gameLogger.gameEvent(this.name, '[MONEY] VALIDATION PASSED: Winner chips = total starting chips', {
-                        winnerChips,
+                    gameLogger.gameEvent(this.name, '[MONEY] VALIDATION PASSED: Total chips = total starting chips', {
+                        winnerChips: winner.chips,
+                        currentTotalChips,
                         totalStartingChips: this.totalStartingChips,
                         difference: 0
                     });
@@ -2722,9 +2749,10 @@ class Table {
             } else {
                 console.warn(`[Table ${this.name}] ⚠️ Starting chips not tracked (totalStartingChips=${this.totalStartingChips}) - cannot validate money`);
                 gameLogger.gameEvent(this.name, '[MONEY] WARNING: Starting chips not tracked', {
-                    winnerChips,
+                    winnerChips: winner.chips,
+                    currentTotalChips,
                     totalStartingChips: this.totalStartingChips,
-                    currentTotalChips
+                    pot: this.pot
                 });
             }
             
