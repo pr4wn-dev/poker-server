@@ -605,29 +605,57 @@ class SimulationManager {
             });
         }
         
+        // CRITICAL: Wait a bit for bot removals to complete before checking which bots are seated
+        await new Promise(r => setTimeout(r, 100));
+        
         // Add missing regular bots
         // CRITICAL: Check which bots are already seated to avoid "already at this table" errors
+        // Check by both name and by checking if the bot profile is already at the table
         const alreadySeatedBotNames = table.seats
             .filter(s => s && s.isBot)
             .map(s => s.name.toLowerCase());
+        
+        // Also check by bot profile name (case-insensitive)
+        const alreadySeatedProfiles = new Set();
+        for (const seat of table.seats) {
+            if (seat && seat.isBot) {
+                const seatNameLower = seat.name.toLowerCase();
+                // Check if this seat matches any bot profile
+                for (const profile of botProfiles) {
+                    if (seatNameLower === profile.toLowerCase() || 
+                        seatNameLower.includes(profile.toLowerCase()) ||
+                        profile.toLowerCase().includes(seatNameLower)) {
+                        alreadySeatedProfiles.add(profile.toLowerCase());
+                        break;
+                    }
+                }
+            }
+        }
         
         const currentRegularCount = alreadySeatedBotNames.length;
         if (currentRegularCount < newRegularBotCount) {
             const regularBotsNeeded = newRegularBotCount - currentRegularCount;
             this.log('INFO', `Adding ${regularBotsNeeded} regular bot(s)`, { tableId });
             
-            // Filter out bots that are already seated
+            // Filter out bots that are already seated (check both name and profile)
             const availableBots = botProfiles.filter(profile => 
-                !alreadySeatedBotNames.includes(profile.toLowerCase())
+                !alreadySeatedProfiles.has(profile.toLowerCase()) &&
+                !alreadySeatedBotNames.some(name => 
+                    name === profile.toLowerCase() || 
+                    name.includes(profile.toLowerCase()) ||
+                    profile.toLowerCase().includes(name)
+                )
             );
             
             let added = 0;
-            for (let i = 0; i < regularBotsNeeded && added < availableBots.length; i++) {
+            for (let i = 0; i < regularBotsNeeded && i < availableBots.length; i++) {
                 const botProfile = availableBots[i];
                 const result = await this.gameManager.inviteBot(tableId, botProfile, creatorId, newBuyIn);
                 if (result.success) {
                     this.log('INFO', `Added regular bot: ${botProfile}`, { seatIndex: result.seatIndex });
                     added++;
+                    // Add to alreadySeatedProfiles to prevent duplicate adds in the same loop
+                    alreadySeatedProfiles.add(botProfile.toLowerCase());
                 } else {
                     this.log('WARN', `Failed to add regular bot: ${botProfile}`, { error: result.error });
                 }
@@ -637,7 +665,7 @@ class SimulationManager {
             if (added < regularBotsNeeded) {
                 this.log('WARN', `Could only add ${added} of ${regularBotsNeeded} regular bots needed`, { 
                     availableBots: availableBots.length,
-                    alreadySeated: alreadySeatedBotNames
+                    alreadySeated: Array.from(alreadySeatedProfiles)
                 });
             }
         }

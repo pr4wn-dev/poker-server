@@ -520,15 +520,19 @@ class SocketHandler {
 
             socket.on('leave_table', async (callback) => {
                 const respond = (response) => {
+                    console.log(`[SocketHandler] LEAVE_TABLE RESPONSE | success=${response.success}, error=${response.error || 'none'}`);
                     if (callback) callback(response);
                     socket.emit('leave_table_response', response);
                 };
                 
                 const user = this.getAuthenticatedUser(socket);
                 if (!user) {
+                    console.log('[SocketHandler] LEAVE_TABLE FAILED | Not authenticated');
                     return respond({ success: false, error: 'Not authenticated' });
                 }
 
+                console.log(`[SocketHandler] LEAVE_TABLE REQUEST | userId=${user.userId}, username=${user.profile?.username || 'unknown'}`);
+                
                 const player = this.gameManager.players.get(user.userId);
                 const tableId = player?.currentTableId;
                 
@@ -549,6 +553,11 @@ class SocketHandler {
                     return respond({ success: true });
                 }
                 
+                if (!tableId) {
+                    console.log(`[SocketHandler] LEAVE_TABLE FAILED | No tableId for user ${user.userId}`);
+                    return respond({ success: false, error: 'Not at a table' });
+                }
+                
                 const result = this.gameManager.leaveTable(user.userId);
                 
                 if (result.success && tableId) {
@@ -558,9 +567,14 @@ class SocketHandler {
                     }
                     
                     socket.leave(`table:${tableId}`);
+                    socket.leave(`spectator:${tableId}`);
                     socket.to(`table:${tableId}`).emit('player_left', {
                         userId: user.userId
                     });
+                    
+                    console.log(`[SocketHandler] ${user.profile?.username || user.userId} left table ${tableId}`);
+                } else {
+                    console.log(`[SocketHandler] LEAVE_TABLE FAILED | Error: ${result.error}`);
                 }
 
                 respond(result);

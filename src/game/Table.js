@@ -529,6 +529,7 @@ class Table {
             console.log(`[Table ${this.name}] Resetting all player chips to buy-in (${this.buyIn}) for new game`);
             
             // CRITICAL: Track total starting chips for money validation
+            // MUST reset to 0 first to prevent accumulation across games
             this.totalStartingChips = 0;
             
             for (const seat of this.seats) {
@@ -2027,10 +2028,10 @@ class Table {
                 if (this.phase === GAME_PHASES.PRE_FLOP) {
                     // Pre-flop: round completes when we're about to return to BB AND everyone has acted
                     // CRITICAL FIX: In pre-flop, UTG acts first, BB acts LAST
-                    // We can't end the round until BB has had their chance to act
                     // The round completes when:
                     // 1. We're AT the BB and about to move to someone else (BB just acted)
                     // 2. OR we've wrapped around (we're at BB and next is UTG, meaning everyone acted)
+                    // 3. OR we're at UTG and next is BB, and BB has already acted (posted blind counts as action)
                     
                     // Get the first player to act (UTG - the player after BB)
                     const utgIndex = this.getNextActivePlayer(bbIndex);
@@ -2048,9 +2049,13 @@ class Table {
                             // Still at BB or no next player - round not complete
                             bettingRoundComplete = false;
                         }
+                    } else if (this.currentPlayerIndex === utgIndex && nextPlayer === bbIndex) {
+                        // We're at UTG and next is BB
+                        // If all bets are equalized and no raises happened, BB has already acted (posted blind)
+                        // So the round should be complete
+                        bettingRoundComplete = true;
                     } else {
-                        // We're not at BB yet - round cannot be complete
-                        // Even if all bets are equalized, BB still needs to act
+                        // We're not at BB or UTG->BB transition - round cannot be complete yet
                         bettingRoundComplete = false;
                     }
                 } else {
