@@ -1559,11 +1559,6 @@ class Table {
         
         // Raise validation debug logging removed - too verbose
         // Only log errors or invalid raises
-            currentBet: this.currentBet,
-            playerBet: player.currentBet,
-            raisesThisRound: this.raisesThisRound,
-            maxRaises: this.MAX_RAISES_PER_ROUND
-        });
         
         // CRITICAL: Check raise cap - prevent infinite raising
         if (this.raisesThisRound >= this.MAX_RAISES_PER_ROUND) {
@@ -1614,7 +1609,7 @@ class Table {
         
         // CRITICAL FIX: amount is the TOTAL bet, not the additional amount
         // We need to calculate how much MORE the player is betting
-        const toCall = this.currentBet - player.currentBet;
+        // toCall already calculated above
         const additionalBet = amount - player.currentBet; // How much MORE than current bet
         
         player.chips -= amount;
@@ -2016,8 +2011,6 @@ class Table {
                                           (this.currentPlayerIndex === bbIndex && nextPlayer !== bbIndex);
                         bettingRoundComplete = hasPassedBB && nextPlayer === bbIndex;
                         // Pre-flop BB check debug logging removed - too verbose
-                            bettingRoundComplete
-                        });
                     }
                     
                     gameLogger.bettingRoundCheck(this.name, 'BETTING_ROUND_COMPLETE (pre-flop with raises)', bettingRoundComplete ? 'TRUE' : 'FALSE', {
@@ -2188,15 +2181,15 @@ class Table {
         }
         
         // Check for stuck scenario: only one player has chips, others all-in
-        const playersWithChips = this.seats.filter(s => s && !s.isFolded && !s.isAllIn && s.chips > 0);
+        const activePlayersWithChips = this.seats.filter(s => s && !s.isFolded && !s.isAllIn && s.chips > 0);
         const allInPlayers = this.seats.filter(s => s && !s.isFolded && s.isAllIn);
-        if (playersWithChips.length === 1 && allInPlayers.length > 0) {
+        if (activePlayersWithChips.length === 1 && allInPlayers.length > 0) {
             gameLogger.gameEvent(this.name, `WARNING: Only one player with chips, ${allInPlayers.length} all-in - checking if round should auto-complete`, {
-                playerWithChips: playersWithChips[0]?.name,
+                playerWithChips: activePlayersWithChips[0]?.name,
                 allInCount: allInPlayers.length,
                 phase: this.phase
             });
-            console.warn(`[Table ${this.name}] WARNING: Only ${playersWithChips[0]?.name} has chips, ${allInPlayers.length} players all-in`);
+            console.warn(`[Table ${this.name}] WARNING: Only ${activePlayersWithChips[0]?.name} has chips, ${allInPlayers.length} players all-in`);
             
             // If bets are equalized, force advance
             const allBetsMatch = this.seats.every(s => !s || s.isFolded || s.isAllIn || s.currentBet === this.currentBet);
