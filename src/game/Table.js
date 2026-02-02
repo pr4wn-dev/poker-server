@@ -1612,24 +1612,29 @@ class Table {
         const oldMinRaise = this.minRaise;
         const oldLastRaiser = this.lastRaiserIndex;
         
+        // CRITICAL FIX: amount is the TOTAL bet, not the additional amount
+        // We need to calculate how much MORE the player is betting
+        const toCall = this.currentBet - player.currentBet;
+        const additionalBet = amount - player.currentBet; // How much MORE than current bet
+        
         player.chips -= amount;
-        player.currentBet += amount;
-        player.totalBet = (player.totalBet || 0) + amount;
-        this.pot += amount;
+        player.currentBet = amount; // Set to total bet amount
+        player.totalBet = (player.totalBet || 0) + additionalBet; // Only add the additional amount
+        this.pot += additionalBet; // Only add the additional amount to pot
         this.currentBet = player.currentBet;
         
         // CRITICAL: Verify calculations
         if (player.chips !== beforeChips - amount) {
             console.error(`[Table ${this.name}] ⚠️ RAISE ERROR: Chips calculation wrong. Before: ${beforeChips}, Amount: ${amount}, After: ${player.chips}`);
         }
-        if (this.pot !== potBefore + amount) {
-            console.error(`[Table ${this.name}] ⚠️ RAISE ERROR: Pot calculation wrong. Before: ${potBefore}, Amount: ${amount}, After: ${this.pot}`);
+        if (this.pot !== potBefore + additionalBet) {
+            console.error(`[Table ${this.name}] ⚠️ RAISE ERROR: Pot calculation wrong. Before: ${potBefore}, Additional: ${additionalBet}, After: ${this.pot}`);
         }
-        if (player.totalBet !== totalBetBefore + amount) {
-            console.error(`[Table ${this.name}] ⚠️ RAISE ERROR: totalBet calculation wrong. Before: ${totalBetBefore}, Amount: ${amount}, After: ${player.totalBet}`);
+        if (player.totalBet !== totalBetBefore + additionalBet) {
+            console.error(`[Table ${this.name}] ⚠️ RAISE ERROR: totalBet calculation wrong. Before: ${totalBetBefore}, Additional: ${additionalBet}, After: ${player.totalBet}`);
         }
-        if (player.currentBet !== currentBetBefore + amount) {
-            console.error(`[Table ${this.name}] ⚠️ RAISE ERROR: currentBet calculation wrong. Before: ${currentBetBefore}, Amount: ${amount}, After: ${player.currentBet}`);
+        if (player.currentBet !== amount) {
+            console.error(`[Table ${this.name}] ⚠️ RAISE ERROR: currentBet calculation wrong. Expected: ${amount}, Actual: ${player.currentBet}`);
         }
         this.minRaise = Math.max(raiseAmount, this.minRaise);  // Keep the larger raise amount
         this.lastRaiserIndex = seatIndex;
