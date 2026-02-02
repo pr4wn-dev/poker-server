@@ -1752,11 +1752,19 @@ class Table {
     // ============ Game Advancement ============
 
     advanceGame() {
-        // CRITICAL: Check for game over BEFORE early return (even in WAITING phase)
-        // This ensures onGameOver callback is called when game ends
-        // CRITICAL: Check even if gameStarted is false - game might have ended during hand
-        const playersWithChips = this.seats.filter(s => s && s.chips > 0);
-        if (playersWithChips.length === 1) {
+        // CRITICAL: Check for game over - but ONLY when not in an active betting phase
+        // Don't end game during a hand - wait until hand is complete (WAITING, SHOWDOWN, or after hand ends)
+        // This prevents premature game ending when players go all-in during a hand
+        if (this.phase !== GAME_PHASES.WAITING && 
+            this.phase !== GAME_PHASES.READY_UP && 
+            this.phase !== GAME_PHASES.COUNTDOWN &&
+            this.phase !== GAME_PHASES.SHOWDOWN) {
+            // In active betting phase - don't check for game over yet
+            // Game over will be checked in showdown() or after hand completes
+        } else {
+            // Safe to check for game over - we're in a terminal phase or waiting
+            const playersWithChips = this.seats.filter(s => s && s.chips > 0);
+            if (playersWithChips.length === 1) {
             const winner = playersWithChips[0];
             
             // CRITICAL: Award any remaining pot to the winner BEFORE validation
@@ -1840,6 +1848,7 @@ class Table {
             }
             this._onStateChangeCallback?.();
             return; // Game over - don't continue
+            }
         }
         
         // CRITICAL: Don't advance game if we're in a terminal phase
