@@ -175,10 +175,22 @@ class SocketHandler {
                         return;
                     }
                     
+                    // CRITICAL: Ensure player is registered in GameManager
+                    console.log('[SocketHandler] Checking/registering player in GameManager...');
+                    let player = this.gameManager.players.get(user.userId);
+                    if (!player) {
+                        console.log('[SocketHandler] Player not found, registering...');
+                        this.gameManager.registerPlayer(user.userId, user.profile?.username || user.username, socket.id);
+                        player = this.gameManager.players.get(user.userId);
+                        console.log(`[SocketHandler] Player registered: ${player ? 'SUCCESS' : 'FAILED'}`);
+                    }
+                    
                     // Update player's chips in game manager
-                    const player = this.gameManager.players.get(user.userId);
                     if (player) {
                         player.chips = dbUser.chips;
+                        console.log(`[SocketHandler] Updated player chips: ${player.chips}`);
+                    } else {
+                        throw new Error('Failed to register player in GameManager');
                     }
 
                     console.log('[SocketHandler] create_table - user authenticated:', user.username);
@@ -198,6 +210,9 @@ class SocketHandler {
                     console.log('[SocketHandler] Attempting to join creator to table...');
                     const joinResult = this.gameManager.joinTable(user.userId, table.id, 0);
                     console.log(`[SocketHandler] Join result: ${joinResult.success ? 'SUCCESS' : 'FAILED'}`);
+                    if (!joinResult.success) {
+                        console.error(`[SocketHandler] Join failed: ${joinResult.error}`);
+                    }
                     if (joinResult.success) {
                         socket.join(`table:${table.id}`);
                         console.log(`[SocketHandler] Creator ${user.username} auto-joined table at seat 0`);
