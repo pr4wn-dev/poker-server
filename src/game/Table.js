@@ -1254,10 +1254,24 @@ class Table {
         }
 
         const beforeChips = player.chips;
+        const potBefore = this.pot;
+        const totalBetBefore = player.totalBet || 0;
+        
         player.chips -= amount;
         player.currentBet = amount;
-        player.totalBet += amount;
+        player.totalBet = (player.totalBet || 0) + amount;
         this.pot += amount;
+        
+        // CRITICAL: Verify calculations
+        if (player.chips !== beforeChips - amount) {
+            console.error(`[Table ${this.name}] ⚠️ BET ERROR: Chips calculation wrong. Before: ${beforeChips}, Amount: ${amount}, After: ${player.chips}`);
+        }
+        if (this.pot !== potBefore + amount) {
+            console.error(`[Table ${this.name}] ⚠️ BET ERROR: Pot calculation wrong. Before: ${potBefore}, Amount: ${amount}, After: ${this.pot}`);
+        }
+        if (player.totalBet !== totalBetBefore + amount) {
+            console.error(`[Table ${this.name}] ⚠️ BET ERROR: totalBet calculation wrong. Before: ${totalBetBefore}, Amount: ${amount}, After: ${player.totalBet}`);
+        }
         const oldCurrentBet = this.currentBet;
         this.currentBet = amount;
         this.minRaise = amount;
@@ -1376,15 +1390,33 @@ class Table {
     allIn(seatIndex) {
         const player = this.seats[seatIndex];
         const amount = player.chips;
+        const chipsBefore = player.chips;
+        const potBefore = this.pot;
+        const totalBetBefore = player.totalBet || 0;
+        const currentBetBefore = player.currentBet || 0;
         const oldCurrentBet = this.currentBet;
         const oldMinRaise = this.minRaise;
         const oldLastRaiser = this.lastRaiserIndex;
 
         player.currentBet += amount;
-        player.totalBet += amount;
+        player.totalBet = (player.totalBet || 0) + amount;
         this.pot += amount;
         player.chips = 0;
         player.isAllIn = true;
+        
+        // CRITICAL: Verify calculations
+        if (player.chips !== 0) {
+            console.error(`[Table ${this.name}] ⚠️ ALL-IN ERROR: Chips should be 0 but are ${player.chips}`);
+        }
+        if (this.pot !== potBefore + amount) {
+            console.error(`[Table ${this.name}] ⚠️ ALL-IN ERROR: Pot calculation wrong. Before: ${potBefore}, Amount: ${amount}, After: ${this.pot}`);
+        }
+        if (player.totalBet !== totalBetBefore + amount) {
+            console.error(`[Table ${this.name}] ⚠️ ALL-IN ERROR: totalBet calculation wrong. Before: ${totalBetBefore}, Amount: ${amount}, After: ${player.totalBet}`);
+        }
+        if (player.currentBet !== currentBetBefore + amount) {
+            console.error(`[Table ${this.name}] ⚠️ ALL-IN ERROR: currentBet calculation wrong. Before: ${currentBetBefore}, Amount: ${amount}, After: ${player.currentBet}`);
+        }
 
         if (player.currentBet > this.currentBet) {
             this.minRaise = player.currentBet - this.currentBet;
@@ -2123,6 +2155,7 @@ class Table {
         const potBeforeCalculation = this.pot;
         
         // Get all players (including folded) with their total bets
+        // CRITICAL: Include ALL seats (even if player left mid-hand) to ensure all bets are counted
         const allContributors = this.seats
             .filter(seat => seat !== null)
             .map(seat => ({
@@ -2136,9 +2169,40 @@ class Table {
             }))
             .filter(p => p.totalBet > 0);
         
+        // CRITICAL: Validate that pot equals sum of all totalBet
+        const sumOfTotalBets = allContributors.reduce((sum, p) => sum + p.totalBet, 0);
+        if (Math.abs(potBeforeCalculation - sumOfTotalBets) > 0.01) { // Allow small floating point differences
+            console.error(`[Table ${this.name}] ⚠️ POT MISMATCH BEFORE CALCULATION: Pot=${potBeforeCalculation}, Sum of totalBet=${sumOfTotalBets}, Difference=${potBeforeCalculation - sumOfTotalBets}`);
+            gameLogger.gameEvent(this.name, '[POT] ERROR: Pot mismatch before calculation', {
+                potBeforeCalculation,
+                sumOfTotalBets,
+                difference: potBeforeCalculation - sumOfTotalBets,
+                allContributors: allContributors.map(p => ({
+                    name: p.name,
+                    totalBet: p.totalBet,
+                    isFolded: p.isFolded
+                })),
+                allSeats: this.seats.map((seat, idx) => seat ? {
+                    seatIndex: idx,
+                    name: seat.name,
+                    totalBet: seat.totalBet || 0,
+                    currentBet: seat.currentBet || 0,
+                    chips: seat.chips,
+                    isFolded: seat.isFolded,
+                    isAllIn: seat.isAllIn
+                } : null).filter(Boolean)
+            });
+            // Use the larger value to prevent losing chips (pot should never be less than sum of bets)
+            if (sumOfTotalBets > potBeforeCalculation) {
+                console.error(`[Table ${this.name}] ⚠️ CRITICAL: Sum of bets (${sumOfTotalBets}) > Pot (${potBeforeCalculation}). This indicates chips were lost!`);
+                // Can't fix this retroactively, but log it
+            }
+        }
+        
         // CRITICAL: Log for debugging all-in scenarios
         gameLogger.gameEvent(this.name, '[POT] Calculating side pots', {
             potBeforeCalculation,
+            sumOfTotalBets,
             allContributorsCount: allContributors.length,
             contributors: allContributors.map(p => ({
                 name: p.name,
