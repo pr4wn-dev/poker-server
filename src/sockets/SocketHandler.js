@@ -204,12 +204,29 @@ class SocketHandler {
                     }
                     
                     console.log('[SocketHandler] Getting table state...');
-                    const state = table.getState(user.userId);
+                    let state, publicInfo;
+                    try {
+                        state = table.getState(user.userId);
+                        console.log('[SocketHandler] State retrieved');
+                    } catch (err) {
+                        console.error('[SocketHandler] ERROR getting state:', err);
+                        throw new Error(`Failed to get table state: ${err.message}`);
+                    }
+                    
+                    console.log('[SocketHandler] Getting public info...');
+                    try {
+                        publicInfo = table.getPublicInfo();
+                        console.log('[SocketHandler] Public info retrieved');
+                    } catch (err) {
+                        console.error('[SocketHandler] ERROR getting public info:', err);
+                        throw new Error(`Failed to get public info: ${err.message}`);
+                    }
+                    
                     console.log('[SocketHandler] Building response...');
                     const response = { 
                         success: true, 
                         tableId: table.id, 
-                        table: table.getPublicInfo(),
+                        table: publicInfo,
                         seatIndex: joinResult.success ? joinResult.seatIndex : -1,  // -1 means not seated (Issue #57)
                         state 
                     };
