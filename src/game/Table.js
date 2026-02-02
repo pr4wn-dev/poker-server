@@ -2507,7 +2507,71 @@ class Table {
             }, 100); // Small delay to ensure state broadcast happens first
         }
 
-        // Start new hand after showing results
+        // CRITICAL: Check for game over AFTER awarding pot (only one player with chips)
+        // This must happen BEFORE starting a new hand
+        const playersWithChips = this.seats.filter(s => s && s.chips > 0);
+        if (playersWithChips.length === 1 && this.gameStarted) {
+            const winner = playersWithChips[0];
+            
+            // CRITICAL: Validate money - winner's chips should equal sum of all starting chips
+            const winnerChips = winner.chips;
+            const currentTotalChips = this.seats
+                .filter(s => s !== null)
+                .reduce((sum, seat) => sum + (seat.chips || 0), 0);
+            
+            if (this.totalStartingChips > 0) {
+                const difference = Math.abs(winnerChips - this.totalStartingChips);
+                if (difference > 0.01) {
+                    console.error(`[Table ${this.name}] ⚠️ CRITICAL: MONEY LOST! Winner has ${winnerChips}, but total starting chips was ${this.totalStartingChips}. Missing: ${this.totalStartingChips - winnerChips}`);
+                    gameLogger.gameEvent(this.name, '[MONEY] ERROR: Money lost - winner chips != total starting chips', {
+                        winnerChips,
+                        totalStartingChips: this.totalStartingChips,
+                        missing: this.totalStartingChips - winnerChips,
+                        currentTotalChips,
+                        allPlayers: this.seats.filter(s => s !== null).map(s => ({
+                            name: s.name,
+                            chips: s.chips,
+                            isActive: s.isActive
+                        }))
+                    });
+                } else {
+                    gameLogger.gameEvent(this.name, '[MONEY] VALIDATION PASSED: Winner chips = total starting chips', {
+                        winnerChips,
+                        totalStartingChips: this.totalStartingChips,
+                        difference: 0
+                    });
+                }
+            } else {
+                console.warn(`[Table ${this.name}] ⚠️ Starting chips not tracked (totalStartingChips=${this.totalStartingChips}) - cannot validate money`);
+                gameLogger.gameEvent(this.name, '[MONEY] WARNING: Starting chips not tracked', {
+                    winnerChips,
+                    totalStartingChips: this.totalStartingChips,
+                    currentTotalChips
+                });
+            }
+            
+            console.log(`[Table ${this.name}] GAME OVER - ${winner.name} wins with ${winner.chips} chips!`);
+            this.phase = GAME_PHASES.WAITING;
+            this.gameStarted = false;
+            
+            // CRITICAL: Notify about game winner (this triggers simulation restart)
+            if (this.onGameOver) {
+                this.onGameOver(winner);
+            }
+            // Capture snapshot before broadcasting
+            if (this.stateSnapshot) {
+                const state = this.getState(null);
+                this.stateSnapshot.capture(state, {
+                    phase: this.phase,
+                    handsPlayed: this.handsPlayed,
+                    reason: 'state_change'
+                });
+            }
+            this._onStateChangeCallback?.();
+            return; // Game over - don't start new hand
+        }
+        
+        // Start new hand after showing results (only if game is not over)
         setTimeout(() => {
             // Broadcast state one more time before starting new hand (in case chips updated)
             // Capture snapshot before broadcasting
