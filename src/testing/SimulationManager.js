@@ -421,6 +421,11 @@ class SimulationManager {
             if (currentTable) {
                 currentTable.simulationGamesPlayed = simulation.gamesPlayed;
                 currentTable.simulationMaxGames = this.maxGames;
+                this.log('INFO', `Updated simulation counter on table: ${simulation.gamesPlayed}/${this.maxGames}`, {
+                    tableId,
+                    gamesPlayed: simulation.gamesPlayed,
+                    maxGames: this.maxGames
+                });
                 // Broadcast state update so client sees new counter
                 currentTable.onStateChange?.();
             }
@@ -429,7 +434,9 @@ class SimulationManager {
                 tableId,
                 winner: winner.name,
                 winnerChips: winner.chips,
-                gamesPlayed: simulation.gamesPlayed
+                gamesPlayed: simulation.gamesPlayed,
+                maxGames: this.maxGames,
+                progress: `${simulation.gamesPlayed}/${this.maxGames}`
             });
             
             if (simulation.gamesPlayed >= this.maxGames) {
