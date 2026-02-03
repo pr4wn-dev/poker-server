@@ -583,10 +583,17 @@ class Table {
         if (!this.gameStarted) {
             console.log(`[Table ${this.name}] Resetting all player chips to buy-in (${this.buyIn}) for new game`);
             
-            // CRITICAL: Track total starting chips for money validation
-            // MUST reset to 0 first to prevent accumulation across games
-            this.totalStartingChips = 0;
-            this._gameOverCalled = false;  // Reset game over guard for new game
+        // CRITICAL: Track total starting chips for money validation
+        // MUST reset to 0 first to prevent accumulation across games
+        this.totalStartingChips = 0;
+        this._gameOverCalled = false;  // Reset game over guard for new game
+        
+        // CRITICAL: Do NOT reset simulationGamesPlayed here - it's managed by SimulationManager
+        // Only reset if this is NOT a simulation (simulation counter persists across games)
+        if (!this.isSimulation) {
+            this.simulationGamesPlayed = 0;
+            this.simulationMaxGames = 0;
+        }
             
             for (const seat of this.seats) {
                 if (seat && seat.isActive !== false) {
