@@ -667,10 +667,18 @@ class SimulationManager {
                     if (botProfileName) {
                         const botProfileNameLower = botProfileName.toLowerCase();
                         // Check exact match or if names contain each other (handles variations)
+                        // Also check if profile key matches (e.g., "lazy_larry" matches "Lazy Larry")
                         if (seatNameLower === botProfileNameLower || 
                             seatNameLower.includes(botProfileNameLower) ||
-                            botProfileNameLower.includes(seatNameLower)) {
+                            botProfileNameLower.includes(seatNameLower) ||
+                            seatNameLower === profile.toLowerCase() ||
+                            seatNameLower.includes(profile.toLowerCase().replace('_', ' '))) {
                             alreadySeatedProfiles.add(profile.toLowerCase());
+                            this.log('DEBUG', `Found already seated bot: ${seat.name} matches profile ${profile}`, {
+                                seatName: seat.name,
+                                profile,
+                                botProfileName
+                            });
                             break;
                         }
                     }
