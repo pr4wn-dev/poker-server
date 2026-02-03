@@ -618,6 +618,11 @@ class SimulationManager {
             return true;
         });
         
+        // CRITICAL: Reset totalStartingChips BEFORE resetting player chips
+        // This ensures money validation uses the correct starting amount for THIS game
+        table.totalStartingChips = 0;
+        this.log('DEBUG', 'Reset totalStartingChips to 0 for new game', { tableId });
+        
         // Reset all existing players to new buy-in
         for (let i = 0; i < table.seats.length; i++) {
             const seat = table.seats[i];
@@ -635,6 +640,9 @@ class SimulationManager {
             // CRITICAL FIX: In simulation, all bots (regular and socket) should auto-ready
             seat.isReady = seat.isBot || (seat.name && seat.name.startsWith('NetPlayer'));
             
+            // Track starting chips for this game
+            table.totalStartingChips += newBuyIn;
+            
             this.log('DEBUG', `Reset chips for ${seat.name}`, { 
                 seatIndex: i, 
                 oldChips, 
@@ -643,6 +651,12 @@ class SimulationManager {
                 isActive: seat.isActive 
             });
         }
+        
+        this.log('INFO', `Total starting chips for new game: ${table.totalStartingChips}`, {
+            tableId,
+            playerCount: table.seats.filter(s => s !== null).length,
+            buyIn: newBuyIn
+        });
         
         // CRITICAL: Wait a bit for bot removals to complete before checking which bots are seated
         await new Promise(r => setTimeout(r, 100));
