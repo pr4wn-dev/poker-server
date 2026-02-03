@@ -605,10 +605,17 @@ class Table {
             playerCount: this.seats.filter(s => s && s.isActive !== false).length
         });
         
+        // CRITICAL: Only reset chips for players who are actually active and seated
+        // Don't reset chips for players who have already been eliminated (isActive === false)
+        // But DO reset chips for players who are active (isActive !== false)
         for (const seat of this.seats) {
             if (seat && seat.isActive !== false) {
                 const oldChips = seat.chips;
-                seat.chips = this.buyIn;
+                // CRITICAL: Only reset if chips are different from buyIn (prevents double-counting)
+                // If chips already equal buyIn, don't reset (they were already reset in _restartGame)
+                if (seat.chips !== this.buyIn) {
+                    seat.chips = this.buyIn;
+                }
                 this.totalStartingChips += this.buyIn;  // Track starting chips
                 console.log(`[Table ${this.name}] Reset ${seat.name} chips: ${oldChips} → ${seat.chips}, totalStartingChips now: ${this.totalStartingChips}`);
                 gameLogger.gameEvent(this.name, 'CHIPS RESET for new game', {
