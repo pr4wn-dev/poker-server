@@ -427,7 +427,18 @@ class SimulationManager {
                     maxGames: this.maxGames
                 });
                 // Broadcast state update so client sees new counter
-                currentTable.onStateChange?.();
+                // CRITICAL: Force immediate state broadcast to ensure counter is visible
+                if (currentTable.onStateChange) {
+                    currentTable.onStateChange();
+                    // Also log to verify it's being called
+                    this.log('DEBUG', 'Called onStateChange to broadcast counter update', {
+                        tableId,
+                        gamesPlayed: simulation.gamesPlayed,
+                        maxGames: this.maxGames
+                    });
+                } else {
+                    this.log('WARN', 'onStateChange callback not set - counter update may not be visible', { tableId });
+                }
             }
             
             this.log('INFO', `Game ${simulation.gamesPlayed} COMPLETE - Winner: ${winner.name}`, {
