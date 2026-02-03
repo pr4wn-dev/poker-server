@@ -778,6 +778,9 @@ class SimulationManager {
         table.currentPlayerIndex = -1;
         table.dealerIndex = (table.dealerIndex + 1) % newMaxPlayers; // Rotate dealer
         table.lastRaiserIndex = -1;
+        // CRITICAL: Reset gameStarted flag so handleGameStart() will reset chips properly
+        table.gameStarted = false;
+        this.log('DEBUG', 'Reset gameStarted to false for new game', { tableId });
         
         // CRITICAL: Reset blind level and initial blinds BEFORE clearing timers
         // This prevents the blind timer from using old values if it fires during reset
