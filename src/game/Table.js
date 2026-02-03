@@ -611,11 +611,9 @@ class Table {
         for (const seat of this.seats) {
             if (seat && seat.isActive !== false) {
                 const oldChips = seat.chips;
-                // CRITICAL: Only reset if chips are different from buyIn (prevents double-counting)
-                // If chips already equal buyIn, don't reset (they were already reset in _restartGame)
-                if (seat.chips !== this.buyIn) {
-                    seat.chips = this.buyIn;
-                }
+                // CRITICAL: Always reset to buyIn to ensure consistency
+                // Even if chips were reset in _restartGame, we need to ensure they match this.buyIn
+                seat.chips = this.buyIn;
                 this.totalStartingChips += this.buyIn;  // Track starting chips
                 console.log(`[Table ${this.name}] Reset ${seat.name} chips: ${oldChips} → ${seat.chips}, totalStartingChips now: ${this.totalStartingChips}`);
                 gameLogger.gameEvent(this.name, 'CHIPS RESET for new game', {
