@@ -246,6 +246,7 @@ class SimulationManager {
         // CRITICAL: Initialize simulation counters on table for client display
         table.simulationGamesPlayed = 0;
         table.simulationMaxGames = this.maxGames;
+        table.simulationStartTime = Date.now();  // Start timer for client display
         
         // Set up auto-restart callback on the table
         this._setupAutoRestart(table, simulation);

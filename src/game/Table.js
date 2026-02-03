@@ -57,6 +57,7 @@ class Table {
         // Simulation game counter (for display on client)
         this.simulationGamesPlayed = 0;
         this.simulationMaxGames = 0;  // Set by SimulationManager
+        this.simulationStartTime = null;  // When simulation started (for timer)
         
         // New: House Rules
         this.houseRules = options.houseRules || null;
