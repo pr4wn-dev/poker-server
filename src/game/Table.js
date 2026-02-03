@@ -1081,17 +1081,21 @@ class Table {
         }
         
         // Remove players with no chips
-        // FIRST: Clear all betting state from the previous hand
-        // This MUST happen before elimination check to get accurate chip counts
+        // CRITICAL FIX: Don't clear totalBet here - it's needed for pot calculation!
+        // totalBet tracks how much each player contributed to the pot this hand
+        // It will be cleared AFTER the pot is calculated and awarded (in showdown or after awardPot)
+        // Only clear currentBet (for new hand betting)
         for (const seat of this.seats) {
             if (seat) {
                 seat.currentBet = 0;
-                seat.totalBet = 0;
+                // CRITICAL: Preserve totalBet - it's needed for pot calculation in showdown()
+                // totalBet will be cleared after pot is awarded
             }
         }
         
         // NOW check for eliminated players (0 chips with no pending pot money)
-        // At this point, currentBet and totalBet are 0, so we just check chips
+        // CRITICAL: Don't remove eliminated players yet - we need their totalBet for pot calculation
+        // They'll be removed after pot is calculated and awarded
         for (let i = 0; i < this.seats.length; i++) {
             const seat = this.seats[i];
             if (seat && seat.chips <= 0) {
@@ -1100,15 +1104,17 @@ class Table {
                 
                 // Skip if already eliminated (prevents duplicate messages and notifications)
                 if (wasAlreadyEliminated) {
-                    // Already handled - just remove bot if still lingering
-                    if (seat.isBot) {
-                        this.seats[i] = null;
-                    }
+                    // Already handled - but DON'T remove bot yet if pot calculation might need their totalBet
+                    // Only remove if we're sure the hand is complete and pot has been awarded
+                    // For now, keep them in the seat but marked as eliminated
                     continue;
                 }
                 
                 // Mark as eliminated
                 seat.isActive = false;
+                
+                // CRITICAL: Preserve totalBet even after elimination - it's needed for pot calculation
+                // Don't clear it here - it will be cleared after pot is awarded
                 
                 // Notify about elimination
                 if (this.onPlayerEliminated) {
@@ -1120,15 +1126,15 @@ class Table {
                     });
                 }
                 
-                if (seat.isBot) {
-                    console.log(`[Table ${this.name}] Bot ${seat.name} eliminated (0 chips)`);
-                    this.seats[i] = null;  // Remove bots completely
-                } else {
-                    console.log(`[Table ${this.name}] ${seat.name} eliminated (0 chips) - can spectate or leave`);
-                    // Don't remove human players - let them spectate or leave
-                }
+                console.log(`[Table ${this.name}] ${seat.name} eliminated (0 chips) - preserving seat for pot calculation`);
+                // CRITICAL FIX: Don't set seat to null yet - we need their totalBet for pot calculation
+                // They'll be removed after the pot is properly calculated and awarded
+                // This prevents chips from being lost when eliminated players contributed to the pot
             }
         }
+        
+        // CRITICAL: After pot is calculated and awarded, THEN we can safely remove eliminated bots
+        // This cleanup will happen in showdown() after calculateAndAwardSidePots() completes
 
         console.log(`[Table ${this.name}] Starting new hand`);
         
@@ -3557,6 +3563,24 @@ class Table {
             potAwardsCount: potAwards.length
         });
         
+        // CRITICAL: NOW that pot is calculated and awarded, clear totalBet for all seats
+        // This is safe because the pot has been fully distributed
+        for (const seat of this.seats) {
+            if (seat) {
+                seat.totalBet = 0;
+            }
+        }
+        
+        // CRITICAL: NOW that pot is calculated and awarded, we can safely remove eliminated bots
+        // Their totalBet has been used for pot calculation, so we can clear it and remove them
+        for (let i = 0; i < this.seats.length; i++) {
+            const seat = this.seats[i];
+            if (seat && seat.isActive === false && seat.isBot) {
+                console.log(`[Table ${this.name}] Removing eliminated bot ${seat.name} after pot calculation`);
+                this.seats[i] = null;
+            }
+        }
+        
         // CRITICAL: Validate money after side pot awards
         this._validateMoney('AFTER_SIDE_POT_AWARDS');
         
@@ -3626,6 +3650,23 @@ class Table {
             }
         }
         this.pot = 0;
+        
+        // CRITICAL: NOW that pot is awarded, clear totalBet for all seats
+        // This is safe because the pot has been fully distributed
+        for (const seat of this.seats) {
+            if (seat) {
+                seat.totalBet = 0;
+            }
+        }
+        
+        // CRITICAL: NOW that pot is awarded, we can safely remove eliminated bots
+        for (let i = 0; i < this.seats.length; i++) {
+            const seat = this.seats[i];
+            if (seat && seat.isActive === false && seat.isBot) {
+                console.log(`[Table ${this.name}] Removing eliminated bot ${seat.name} after pot award`);
+                this.seats[i] = null;
+            }
+        }
         
         // CRITICAL: Validate money after pot award
         this._validateMoney(`AFTER_AWARD_POT_${winner.name}`);
