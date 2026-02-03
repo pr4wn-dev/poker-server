@@ -668,6 +668,7 @@ class SimulationManager {
         // Also check by bot profile name (case-insensitive)
         // CRITICAL: Use BOT_PROFILES to get actual bot names for matching
         const { BOT_PROFILES } = require('../game/BotPlayer');
+        const botProfiles = ['tex', 'lazy_larry', 'pickles']; // Available bot profiles
         const alreadySeatedProfiles = new Set();
         for (const seat of table.seats) {
             if (seat && seat.isBot) {
