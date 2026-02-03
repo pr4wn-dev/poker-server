@@ -994,10 +994,10 @@ class SimulationManager {
         // Remove from active simulations
         this.activeSimulations.delete(tableId);
         
-        const duration = Date.now() - simulation.startTime;
+        const simDuration = Date.now() - simulation.startTime;
         this.log('INFO', 'Simulation stopped', { 
             tableId, 
-            duration: `${Math.floor(duration / 1000)}s`,
+            duration: `${Math.floor(simDuration / 1000)}s`,
             gamesPlayed: simulation.gamesPlayed,
             reason
         });
