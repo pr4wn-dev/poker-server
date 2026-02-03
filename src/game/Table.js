@@ -1113,6 +1113,9 @@ class Table {
         this.currentBet = 0;
         this.minRaise = this.bigBlind;
         
+        // CRITICAL: Validate money at hand start (before blinds)
+        this._validateMoney('HAND_START_BEFORE_BLINDS');
+        
         // CRITICAL: Reset betting round tracking flags
         this.hasPassedLastRaiser = false;
         this.lastRaiserIndex = -1;
