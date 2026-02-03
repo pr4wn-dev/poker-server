@@ -53,17 +53,33 @@ class BotManager {
         }
         
         // Check if this bot profile is already at the table (active or pending)
-        const tableBots = this.activeBots.get(tableId) || new Map();
-        const tablePending = this.pendingBots.get(tableId) || new Map();
+        // CRITICAL: Check both activeBots map AND actual seats, because in simulation restarts,
+        // bots remain in seats but activeBots might not be cleared
+        const botProfileName = BOT_PROFILES[botProfile]?.name;
+        if (!botProfileName) {
+            return { success: false, error: `Invalid bot profile: ${botProfile}` };
+        }
         
-        for (const [, bot] of tableBots) {
-            if (bot.name === BOT_PROFILES[botProfile]?.name) {
-                return { success: false, error: `${BOT_PROFILES[botProfile]?.name} is already at this table` };
+        // Check actual seats first (most reliable)
+        for (const seat of table.seats) {
+            if (seat && seat.isBot && seat.name === botProfileName) {
+                return { success: false, error: `${botProfileName} is already at this table` };
             }
         }
+        
+        // Also check activeBots map
+        const tableBots = this.activeBots.get(tableId) || new Map();
+        for (const [, bot] of tableBots) {
+            if (bot.name === botProfileName) {
+                return { success: false, error: `${botProfileName} is already at this table` };
+            }
+        }
+        
+        // Check pending bots
+        const tablePending = this.pendingBots.get(tableId) || new Map();
         for (const [, pending] of tablePending) {
-            if (pending.bot.name === BOT_PROFILES[botProfile]?.name) {
-                return { success: false, error: `${BOT_PROFILES[botProfile]?.name} is already pending approval` };
+            if (pending.bot.name === botProfileName) {
+                return { success: false, error: `${botProfileName} is already pending approval` };
             }
         }
         
