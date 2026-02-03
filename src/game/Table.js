@@ -596,21 +596,21 @@ class Table {
         }
         
         for (const seat of this.seats) {
-                if (seat && seat.isActive !== false) {
-                    const oldChips = seat.chips;
-                    seat.chips = this.buyIn;
-                    this.totalStartingChips += this.buyIn;  // Track starting chips
-                    console.log(`[Table ${this.name}] Reset ${seat.name} chips: ${oldChips} → ${seat.chips}`);
-                    gameLogger.gameEvent(this.name, 'CHIPS RESET for new game', {
-                        player: seat.name,
-                        oldChips,
-                        newChips: seat.chips,
-                        buyIn: this.buyIn
-                    });
-                }
+            if (seat && seat.isActive !== false) {
+                const oldChips = seat.chips;
+                seat.chips = this.buyIn;
+                this.totalStartingChips += this.buyIn;  // Track starting chips
+                console.log(`[Table ${this.name}] Reset ${seat.name} chips: ${oldChips} → ${seat.chips}`);
+                gameLogger.gameEvent(this.name, 'CHIPS RESET for new game', {
+                    player: seat.name,
+                    oldChips,
+                    newChips: seat.chips,
+                    buyIn: this.buyIn
+                });
             }
-            
-            gameLogger.gameEvent(this.name, 'TOTAL STARTING CHIPS TRACKED', {
+        }
+        
+        gameLogger.gameEvent(this.name, 'TOTAL STARTING CHIPS TRACKED', {
                 totalStartingChips: this.totalStartingChips,
                 playerCount: this.seats.filter(s => s && s.isActive !== false).length,
                 buyIn: this.buyIn,
