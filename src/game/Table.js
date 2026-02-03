@@ -586,6 +586,7 @@ class Table {
         // CRITICAL: Track total starting chips for money validation
         // MUST reset to 0 first to prevent accumulation across games
         // CRITICAL: Reset for EVERY new game, including simulation restarts
+        const oldTotalStartingChips = this.totalStartingChips;
         this.totalStartingChips = 0;
         this._gameOverCalled = false;  // Reset game over guard for new game
         
@@ -596,19 +597,26 @@ class Table {
             this.simulationMaxGames = 0;
         }
         
-        console.log(`[Table ${this.name}] handleGameStart: Resetting totalStartingChips to 0 (will recalculate for this game)`);
+        console.log(`[Table ${this.name}] handleGameStart: Resetting totalStartingChips from ${oldTotalStartingChips} to 0 (will recalculate for this game)`);
+        gameLogger.gameEvent(this.name, 'RESETTING totalStartingChips for new game', {
+            oldTotalStartingChips,
+            newTotalStartingChips: 0,
+            buyIn: this.buyIn,
+            playerCount: this.seats.filter(s => s && s.isActive !== false).length
+        });
         
         for (const seat of this.seats) {
             if (seat && seat.isActive !== false) {
                 const oldChips = seat.chips;
                 seat.chips = this.buyIn;
                 this.totalStartingChips += this.buyIn;  // Track starting chips
-                console.log(`[Table ${this.name}] Reset ${seat.name} chips: ${oldChips} → ${seat.chips}`);
+                console.log(`[Table ${this.name}] Reset ${seat.name} chips: ${oldChips} → ${seat.chips}, totalStartingChips now: ${this.totalStartingChips}`);
                 gameLogger.gameEvent(this.name, 'CHIPS RESET for new game', {
                     player: seat.name,
                     oldChips,
                     newChips: seat.chips,
-                    buyIn: this.buyIn
+                    buyIn: this.buyIn,
+                    totalStartingChipsAfter: this.totalStartingChips
                 });
             }
         }
