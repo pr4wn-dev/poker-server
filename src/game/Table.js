@@ -3739,6 +3739,7 @@ class Table {
             isSimulation: this.isSimulation,
             simulationGamesPlayed: this.isSimulation ? this.simulationGamesPlayed : 0,
             simulationMaxGames: this.isSimulation ? this.simulationMaxGames : 0,
+            simulationElapsedTime: this.isSimulation && this.simulationStartTime ? Math.floor((Date.now() - this.simulationStartTime) / 1000) : 0,  // Seconds elapsed
             practiceMode: this.practiceMode,
             houseRules: this.houseRules?.toJSON?.() || null,
             sidePot: this.getSidePotState(forPlayerId),
