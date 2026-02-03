@@ -594,8 +594,8 @@ class Table {
             this.simulationGamesPlayed = 0;
             this.simulationMaxGames = 0;
         }
-            
-            for (const seat of this.seats) {
+        
+        for (const seat of this.seats) {
                 if (seat && seat.isActive !== false) {
                     const oldChips = seat.chips;
                     seat.chips = this.buyIn;
