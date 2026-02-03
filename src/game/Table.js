@@ -585,6 +585,7 @@ class Table {
             
         // CRITICAL: Track total starting chips for money validation
         // MUST reset to 0 first to prevent accumulation across games
+        // CRITICAL: Reset for EVERY new game, including simulation restarts
         this.totalStartingChips = 0;
         this._gameOverCalled = false;  // Reset game over guard for new game
         
@@ -594,6 +595,8 @@ class Table {
             this.simulationGamesPlayed = 0;
             this.simulationMaxGames = 0;
         }
+        
+        console.log(`[Table ${this.name}] handleGameStart: Resetting totalStartingChips to 0 (will recalculate for this game)`);
         
         for (const seat of this.seats) {
             if (seat && seat.isActive !== false) {
