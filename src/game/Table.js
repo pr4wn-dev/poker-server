@@ -1148,8 +1148,10 @@ class Table {
         this.currentBet = 0;
         this.minRaise = this.bigBlind;
         
-        // CRITICAL: Validate money at hand start (before blinds)
-        this._validateMoney('HAND_START_BEFORE_BLINDS');
+        // CRITICAL: Money validation should only happen at GAME START, not at HAND START
+        // During a game, chips move between players and pot, but total should remain constant
+        // Only validate at game start (handleGameStart) and game end (startNewHand when game over)
+        // DO NOT validate at hand start - it will fail because chips have moved between players
         
         // CRITICAL: Reset betting round tracking flags
         this.hasPassedLastRaiser = false;
@@ -1180,16 +1182,51 @@ class Table {
         // Move dealer button
         this.dealerIndex = this.getNextActivePlayer(this.dealerIndex);
         
+        // CRITICAL: Check if we have enough active players before posting blinds
+        const activePlayers = this.seats.filter(s => s && s.isActive);
+        if (activePlayers.length < 2) {
+            console.error(`[Table ${this.name}] ⚠️ CRITICAL: Not enough active players (${activePlayers.length}) to start hand!`);
+            gameLogger.error(this.name, 'Not enough active players to start hand', {
+                activePlayersCount: activePlayers.length,
+                allSeats: this.seats.map((s, i) => ({
+                    seatIndex: i,
+                    name: s?.name,
+                    isActive: s?.isActive,
+                    chips: s?.chips
+                }))
+            });
+            this.phase = GAME_PHASES.WAITING;
+            this._onStateChangeCallback?.();
+            return;
+        }
+        
         // Post blinds
         const sbIndex = this.getNextActivePlayer(this.dealerIndex);
         const bbIndex = this.getNextActivePlayer(sbIndex);
         
+        // CRITICAL: Validate indices before posting blinds
+        if (sbIndex === -1 || bbIndex === -1) {
+            console.error(`[Table ${this.name}] ⚠️ CRITICAL: Cannot find active players for blinds! sbIndex=${sbIndex}, bbIndex=${bbIndex}`);
+            gameLogger.error(this.name, 'Cannot find active players for blinds', {
+                dealerIndex: this.dealerIndex,
+                sbIndex,
+                bbIndex,
+                activePlayersCount: activePlayers.length,
+                allSeats: this.seats.map((s, i) => ({
+                    seatIndex: i,
+                    name: s?.name,
+                    isActive: s?.isActive,
+                    chips: s?.chips
+                }))
+            });
+            this.phase = GAME_PHASES.WAITING;
+            this._onStateChangeCallback?.();
+            return;
+        }
+        
         this.postBlind(sbIndex, this.smallBlind);
         this.postBlind(bbIndex, this.bigBlind);
         this.currentBet = this.bigBlind;
-        
-        // CRITICAL: Validate money after blinds posted
-        this._validateMoney('HAND_START_AFTER_BLINDS');
 
         // Deal hole cards - REPLACE old cards, don't clear first
         // This ensures cards are never empty in state broadcasts
