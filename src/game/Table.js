@@ -2772,6 +2772,33 @@ class Table {
             .map((seat, index) => seat && seat.isActive !== false && !seat.isFolded && seat.cards?.length >= 2 
                 ? { ...seat, seatIndex: index } : null)
             .filter(p => p !== null);
+        
+        // CRITICAL FIX: Also evaluate hands for eliminated players who contributed to the pot
+        // This ensures their chips can be properly redistributed
+        const eliminatedPlayers = this.seats
+            .map((seat, index) => seat && seat.isActive === false && !seat.isFolded && seat.cards?.length >= 2 && (seat.totalBet || 0) > 0
+                ? { ...seat, seatIndex: index } : null)
+            .filter(p => p !== null);
+        
+        // Evaluate hands for eliminated players too (so we can redistribute their pot portions)
+        for (const player of eliminatedPlayers) {
+            const playerCards = (player.cards || []).filter(c => c && c.rank && c.suit);
+            const communityCards = (this.communityCards || []).filter(c => c && c.rank && c.suit);
+            
+            if (playerCards.length >= 2 && communityCards.length >= 3) {
+                const allCards = [...playerCards, ...communityCards];
+                const seen = new Set();
+                const uniqueCards = allCards.filter(card => {
+                    const key = `${card.rank}-${card.suit}`;
+                    if (seen.has(key)) return false;
+                    seen.add(key);
+                    return true;
+                });
+                
+                player.handResult = HandEvaluator.evaluate(uniqueCards);
+                console.log(`[Table ${this.name}] Evaluated eliminated player ${player.name} hand: ${player.handResult.name}`);
+            }
+        }
 
         // Evaluate hands
         // CRITICAL: Filter out null/undefined cards before evaluation
@@ -3198,6 +3225,59 @@ class Table {
                     })
                     .sort((a, b) => HandEvaluator.compare(b.handResult, a.handResult));
                 
+                // CRITICAL FIX: Check if eliminated players contributed to this pot level
+                // If so, their portion needs to be redistributed to active players
+                const eliminatedContributors = eligiblePlayers.filter(p => {
+                    const seat = this.seats.find(s => s?.playerId === p.playerId);
+                    return seat && seat.isActive === false && p.totalBet >= player.totalBet;
+                });
+                
+                // If eliminated players contributed, redistribute their portion to best active player
+                if (eliminatedContributors.length > 0 && potAmount > 0) {
+                    const eliminatedPortion = eliminatedContributors.length * betDiff;
+                    const activePortion = potAmount - eliminatedPortion;
+                    
+                    console.log(`[Table ${this.name}] Eliminated players contributed ${eliminatedPortion} to pot level ${player.totalBet}, redistributing to active players`);
+                    gameLogger.gameEvent(this.name, '[POT] Eliminated players contributed - redistributing', {
+                        potLevel: player.totalBet,
+                        eliminatedCount: eliminatedContributors.length,
+                        eliminatedPortion,
+                        activePortion,
+                        totalPotAmount: potAmount
+                    });
+                    
+                    // Redistribute eliminated portion to best active player who contributed to this level or higher
+                    if (eligibleHands.length > 0) {
+                        // Best active player gets the eliminated portion too
+                        const totalPotForBestPlayer = activePortion + eliminatedPortion;
+                        const winAmount = Math.floor(totalPotForBestPlayer / eligibleHands.length);
+                        const remainder = totalPotForBestPlayer % eligibleHands.length;
+                        
+                        // Update pot awards to include eliminated portion
+                        // We'll handle this in the award loop below
+                    } else {
+                        // No active eligible hands - find best active player who contributed
+                        const bestActiveContributor = allContributors
+                            .filter(p => {
+                                const seat = this.seats.find(s => s?.playerId === p.playerId);
+                                return !p.isFolded && p.totalBet >= player.totalBet && seat && seat.isActive !== false && p.handResult;
+                            })
+                            .sort((a, b) => HandEvaluator.compare(b.handResult, a.handResult))[0];
+                        
+                        if (bestActiveContributor) {
+                            potAwards.push({
+                                playerId: bestActiveContributor.playerId,
+                                name: bestActiveContributor.name,
+                                amount: potAmount, // Include eliminated portion
+                                handName: bestActiveContributor.handResult.name,
+                                potType: previousBetLevel === 0 ? 'main' : 'side',
+                                reason: 'Redistributed from eliminated players'
+                            });
+                            console.log(`[Table ${this.name}] Redistributed ${potAmount} (including ${eliminatedPortion} from eliminated) to ${bestActiveContributor.name}`);
+                        }
+                    }
+                }
+                
                 if (eligibleHands.length > 0 && potAmount > 0) {
                     // Check for split pot (ties)
                     const winners = [eligibleHands[0]];
@@ -3210,8 +3290,16 @@ class Table {
                     }
                     
                     // Split among winners
-                    const winAmount = Math.floor(potAmount / winners.length);
-                    const remainder = potAmount % winners.length;
+                    // CRITICAL: If eliminated players contributed, add their portion to the pot
+                    const eliminatedContributors = eligiblePlayers.filter(p => {
+                        const seat = this.seats.find(s => s?.playerId === p.playerId);
+                        return seat && seat.isActive === false && p.totalBet >= player.totalBet;
+                    });
+                    const eliminatedPortion = eliminatedContributors.length * betDiff;
+                    const totalPotToAward = potAmount + eliminatedPortion; // Include eliminated portion
+                    
+                    const winAmount = Math.floor(totalPotToAward / winners.length);
+                    const remainder = totalPotToAward % winners.length;
                     
                     for (let i = 0; i < winners.length; i++) {
                         const award = winAmount + (i === 0 ? remainder : 0);
@@ -3220,7 +3308,8 @@ class Table {
                             name: winners[i].name,
                             amount: award,
                             handName: winners[i].handResult.name,
-                            potType: previousBetLevel === 0 ? 'main' : 'side'
+                            potType: previousBetLevel === 0 ? 'main' : 'side',
+                            reason: eliminatedPortion > 0 ? `Includes ${eliminatedPortion} redistributed from eliminated players` : undefined
                         });
                     }
                 } else if (potAmount > 0 && eligibleHands.length === 0) {
