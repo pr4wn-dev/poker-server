@@ -741,6 +741,9 @@ class Table {
                 this.onAutoFold(player.playerId, this.currentPlayerIndex);
             }
             
+            // CRITICAL: Clear turn timer BEFORE advancing to prevent timeout loop
+            this.clearTurnTimer();
+            
             // Advance game
             this.advanceGame();
             
@@ -748,6 +751,12 @@ class Table {
             if (this.onStateChange) {
                 this.onStateChange();
             }
+        } else {
+            // Fold failed - clear timer anyway to prevent stuck state
+            this.clearTurnTimer();
+            console.error(`[Table ${this.name}] Auto-fold failed for ${player.name}: ${foldResult.error}`);
+            // Still try to advance to prevent stuck state
+            this.advanceGame();
         } else {
             // Fold failed (shouldn't happen, but log it)
             gameLogger.gameEvent(this.name, '[TIMER] Auto-fold failed', {
