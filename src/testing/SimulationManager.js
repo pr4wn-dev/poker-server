@@ -412,6 +412,14 @@ class SimulationManager {
             // Game over detected via callback - restart immediately
             simulation.gamesPlayed++;
             
+            // CRITICAL: Update table's simulation counter for client display
+            if (currentTable) {
+                currentTable.simulationGamesPlayed = simulation.gamesPlayed;
+                currentTable.simulationMaxGames = this.maxGames;
+                // Broadcast state update so client sees new counter
+                currentTable.onStateChange?.();
+            }
+            
             this.log('INFO', `Game ${simulation.gamesPlayed} COMPLETE - Winner: ${winner.name}`, {
                 tableId,
                 winner: winner.name,

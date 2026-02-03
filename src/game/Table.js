@@ -54,6 +54,10 @@ class Table {
         this.isSimulation = options.isSimulation || false;
         this.createdAt = Date.now();
         
+        // Simulation game counter (for display on client)
+        this.simulationGamesPlayed = 0;
+        this.simulationMaxGames = 0;  // Set by SimulationManager
+        
         // New: House Rules
         this.houseRules = options.houseRules || null;
         
@@ -3732,6 +3736,8 @@ class Table {
             isSpectating: isSpectating,
             creatorId: this.creatorId,
             isSimulation: this.isSimulation,
+            simulationGamesPlayed: this.isSimulation ? this.simulationGamesPlayed : 0,
+            simulationMaxGames: this.isSimulation ? this.simulationMaxGames : 0,
             practiceMode: this.practiceMode,
             houseRules: this.houseRules?.toJSON?.() || null,
             sidePot: this.getSidePotState(forPlayerId),
