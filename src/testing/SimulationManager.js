@@ -709,13 +709,11 @@ class SimulationManager {
             }
         }
         
-        // Add missing socket bots
-        const currentSocketCount = simulation.socketBots.filter(b => b.socket && b.socket.connected).length;
-        if (currentSocketCount < newSocketBotCount) {
-            const socketBotsNeeded = newSocketBotCount - currentSocketCount;
-            this.log('INFO', `Adding ${socketBotsNeeded} socket bot(s)`, { tableId });
-            
-            await this._addSocketBots(simulation, socketBotsNeeded, newBuyIn);
+        // Add socket bots
+        // CRITICAL: All socket bots were disconnected above, so we can add the correct number now
+        if (newSocketBotCount > 0) {
+            this.log('INFO', `Adding ${newSocketBotCount} socket bot(s)`, { tableId });
+            await this._addSocketBots(simulation, newSocketBotCount, newBuyIn);
         }
         
         // Update simulation tracking
