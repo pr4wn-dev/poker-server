@@ -843,30 +843,64 @@ class SimulationManager {
     stopSimulation(tableId, reason = 'max_games_reached') {
         const simulation = this.activeSimulations.get(tableId);
         if (!simulation) {
+            this.log('WARN', 'Cannot stop simulation - not found', { tableId, reason });
             return { success: false, error: 'Simulation not found' };
         }
         
         const table = this.gameManager.tables.get(tableId);
+        const duration = Date.now() - simulation.startTime;
         
-        this.log('INFO', 'Stopping simulation', { tableId, reason });
+        this.log('INFO', 'Stopping simulation', { 
+            tableId, 
+            reason, 
+            gamesPlayed: simulation.gamesPlayed,
+            maxGames: this.maxGames,
+            duration: `${Math.floor(duration / 1000)}s`,
+            durationMs: duration
+        });
         
         // CRITICAL: Notify spectators that simulation has ended
-        // This allows them to leave the table
+        // This allows them to leave the table or restart
         if (table && this.io) {
             const spectatorRoom = `spectator:${tableId}`;
+            const spectatorSockets = this.io.sockets.adapter.rooms.get(spectatorRoom);
+            const spectatorCount = spectatorSockets ? spectatorSockets.size : 0;
+            
+            this.log('INFO', 'Emitting simulation_ended event to spectators', {
+                tableId,
+                spectatorRoom,
+                spectatorCount,
+                reason,
+                gamesPlayed: simulation.gamesPlayed,
+                maxGames: this.maxGames,
+                duration: Math.floor(duration / 1000)
+            });
+            
+            const endMessage = reason === 'max_games_reached' 
+                ? `Simulation complete! ${simulation.gamesPlayed} games played in ${Math.floor(duration / 1000)}s.`
+                : `Simulation has ended: ${reason}.`;
+            
             this.io.to(spectatorRoom).emit('simulation_ended', {
                 tableId: tableId,
                 reason: reason,
                 gamesPlayed: simulation.gamesPlayed,
                 maxGames: this.maxGames,
-                message: reason === 'max_games_reached' 
-                    ? `Simulation complete! ${simulation.gamesPlayed} games played.`
-                    : 'Simulation has ended.'
+                duration: Math.floor(duration / 1000),
+                message: endMessage
             });
-            this.log('INFO', 'Notified spectators of simulation end', { 
+            
+            this.log('INFO', 'simulation_ended event emitted successfully', { 
                 tableId, 
                 spectatorRoom,
-                reason 
+                spectatorCount,
+                reason,
+                eventSent: true
+            });
+        } else {
+            this.log('WARN', 'Cannot emit simulation_ended - table or io not available', {
+                tableId,
+                hasTable: !!table,
+                hasIO: !!this.io
             });
         }
         
