@@ -640,19 +640,18 @@ class SimulationManager {
             return true;
         });
         
-        // CRITICAL: DO NOT set totalStartingChips here - let handleGameStart() do it
-        // handleGameStart() will reset it to 0 and recalculate correctly based on actual active players
-        // We just need to ensure gameStarted is false so handleGameStart() runs
-        // Reset all existing players to new buy-in
-        // CRITICAL: Only reset seats that are actually occupied (not null)
-        // Don't re-activate eliminated players - handleGameStart() will handle that correctly
+        // CRITICAL: DO NOT reset chips here - let handleGameStart() do it!
+        // handleGameStart() will:
+        // 1. Reset totalStartingChips to 0
+        // 2. Reset chips to this.buyIn for all active players
+        // 3. Calculate totalStartingChips correctly
+        // If we reset chips here, we might reset them to the wrong value or before buyIn is updated
+        // Just reset game state, but let handleGameStart() handle chip resets
         for (let i = 0; i < table.seats.length; i++) {
             const seat = table.seats[i];
             if (!seat) continue;
             
-            // Reset the seat
-            const oldChips = seat.chips;
-            seat.chips = newBuyIn;
+            // Reset game state only - DON'T reset chips here!
             seat.isFolded = false;
             seat.isAllIn = false;
             // CRITICAL: Only set isActive = true if the seat was already active
@@ -667,10 +666,9 @@ class SimulationManager {
             // CRITICAL FIX: In simulation, all bots (regular and socket) should auto-ready
             seat.isReady = seat.isBot || (seat.name && seat.name.startsWith('NetPlayer'));
             
-            this.log('DEBUG', `Reset chips for ${seat.name}`, { 
+            this.log('DEBUG', `Reset game state for ${seat.name} (chips will be reset by handleGameStart)`, { 
                 seatIndex: i, 
-                oldChips, 
-                newChips: seat.chips, 
+                currentChips: seat.chips, 
                 buyIn: newBuyIn, 
                 isActive: seat.isActive 
             });
