@@ -1998,26 +1998,33 @@ class Table {
                 .reduce((sum, seat) => sum + (seat.chips || 0), 0);
             
             if (this.totalStartingChips > 0) {
-                const difference = Math.abs(winnerChips - this.totalStartingChips);
+                // CRITICAL: Compare sum of ALL players' chips + pot to total starting chips
+                const totalChipsAndPot = currentTotalChips + this.pot;
+                const difference = Math.abs(totalChipsAndPot - this.totalStartingChips);
                 if (difference > 0.01) {
-                    console.error(`[Table ${this.name}] ⚠️ CRITICAL: MONEY LOST! Winner has ${winnerChips}, but total starting chips was ${this.totalStartingChips}. Missing: ${this.totalStartingChips - winnerChips}`);
-                    gameLogger.gameEvent(this.name, '[MONEY] ERROR: Money lost - winner chips != total starting chips', {
-                        winnerChips,
+                    const missing = this.totalStartingChips - totalChipsAndPot;
+                    console.error(`[Table ${this.name}] ⚠️ CRITICAL: MONEY LOST! Total chips + pot (${totalChipsAndPot}) != total starting chips (${this.totalStartingChips}). Missing: ${missing}`);
+                    gameLogger.error(this.name, '[MONEY] ERROR: Money lost - total chips + pot != total starting chips', {
+                        totalChipsAndPot,
                         totalStartingChips: this.totalStartingChips,
-                        missing: this.totalStartingChips - winnerChips,
-                        currentTotalChips,
+                        missing,
+                        remainingPot: this.pot,
+                        winnerChips: winner.chips,
                         handsPlayed: this.handsPlayed,
                         allPlayers: this.seats.filter(s => s !== null).map(s => ({
                             name: s.name,
                             chips: s.chips,
-                            isActive: s.isActive
+                            isActive: s.isActive,
+                            totalBet: s.totalBet,
+                            currentBet: s.currentBet
                         }))
                     });
                 } else {
-                    gameLogger.gameEvent(this.name, '[MONEY] VALIDATION PASSED: Winner chips = total starting chips', {
-                        winnerChips,
+                    gameLogger.gameEvent(this.name, '[MONEY] VALIDATION PASSED: Total chips + pot = total starting chips', {
+                        totalChipsAndPot,
                         totalStartingChips: this.totalStartingChips,
-                        difference: 0,
+                        winnerChips: winner.chips,
+                        remainingPot: this.pot,
                         handsPlayed: this.handsPlayed
                     });
                 }

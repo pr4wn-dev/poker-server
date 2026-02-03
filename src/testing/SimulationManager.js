@@ -644,17 +644,24 @@ class SimulationManager {
             .map(s => s.name.toLowerCase());
         
         // Also check by bot profile name (case-insensitive)
+        // CRITICAL: Use BOT_PROFILES to get actual bot names for matching
+        const { BOT_PROFILES } = require('../game/BotPlayer');
         const alreadySeatedProfiles = new Set();
         for (const seat of table.seats) {
             if (seat && seat.isBot) {
-                const seatNameLower = seat.name.toLowerCase();
-                // Check if this seat matches any bot profile
+                const seatNameLower = (seat.name || '').toLowerCase();
+                // Check if this seat matches any bot profile by comparing to actual bot names
                 for (const profile of botProfiles) {
-                    if (seatNameLower === profile.toLowerCase() || 
-                        seatNameLower.includes(profile.toLowerCase()) ||
-                        profile.toLowerCase().includes(seatNameLower)) {
-                        alreadySeatedProfiles.add(profile.toLowerCase());
-                        break;
+                    const botProfileName = BOT_PROFILES[profile]?.name;
+                    if (botProfileName) {
+                        const botProfileNameLower = botProfileName.toLowerCase();
+                        // Check exact match or if names contain each other (handles variations)
+                        if (seatNameLower === botProfileNameLower || 
+                            seatNameLower.includes(botProfileNameLower) ||
+                            botProfileNameLower.includes(seatNameLower)) {
+                            alreadySeatedProfiles.add(profile.toLowerCase());
+                            break;
+                        }
                     }
                 }
             }
@@ -666,14 +673,26 @@ class SimulationManager {
             this.log('INFO', `Adding ${regularBotsNeeded} regular bot(s)`, { tableId });
             
             // Filter out bots that are already seated (check both name and profile)
-            const availableBots = botProfiles.filter(profile => 
-                !alreadySeatedProfiles.has(profile.toLowerCase()) &&
-                !alreadySeatedBotNames.some(name => 
-                    name === profile.toLowerCase() || 
-                    name.includes(profile.toLowerCase()) ||
-                    profile.toLowerCase().includes(name)
-                )
-            );
+            // CRITICAL: Use BOT_PROFILES to get actual bot names for matching
+            const availableBots = botProfiles.filter(profile => {
+                // Check if profile is already seated
+                if (alreadySeatedProfiles.has(profile.toLowerCase())) {
+                    return false;
+                }
+                // Check if any seated bot name matches this profile's bot name
+                const botProfileName = BOT_PROFILES[profile]?.name;
+                if (botProfileName) {
+                    const botProfileNameLower = botProfileName.toLowerCase();
+                    if (alreadySeatedBotNames.some(name => 
+                        name === botProfileNameLower || 
+                        name.includes(botProfileNameLower) ||
+                        botProfileNameLower.includes(name)
+                    )) {
+                        return false;
+                    }
+                }
+                return true;
+            });
             
             let added = 0;
             for (let i = 0; i < regularBotsNeeded && i < availableBots.length; i++) {
