@@ -16,6 +16,8 @@ class SocketHandler {
         this.adventureManager = new AdventureManager(userRepo);
         this.tournamentManager = new TournamentManager(userRepo);
         this.simulationManager = new SimulationManager(gameManager);
+        // Pass io to SimulationManager so it can notify spectators
+        this.simulationManager.setIO(io);
         
         // Track authenticated users: userId -> { userId, socketId, profile }
         this.authenticatedUsers = new Map();

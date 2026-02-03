@@ -17,6 +17,7 @@ class SimulationManager {
     constructor(gameManager, serverUrl = 'http://localhost:3000') {
         this.gameManager = gameManager;
         this.serverUrl = serverUrl;
+        this.io = null; // Will be set by SocketHandler
         this.activeSimulations = new Map(); // tableId -> simulation data
         this.logFile = path.join(__dirname, '../../logs/simulation.log');
         
@@ -26,6 +27,13 @@ class SimulationManager {
         this.maxGames = 10;         // Max games per simulation before auto-stop (10 for testing)
         
         this._ensureLogDir();
+    }
+    
+    /**
+     * Set the Socket.IO instance (called by SocketHandler)
+     */
+    setIO(io) {
+        this.io = io;
     }
     
     /**
@@ -832,21 +840,72 @@ class SimulationManager {
     /**
      * Stop a simulation and clean up
      */
-    stopSimulation(tableId) {
+    stopSimulation(tableId, reason = 'max_games_reached') {
         const simulation = this.activeSimulations.get(tableId);
         if (!simulation) {
             return { success: false, error: 'Simulation not found' };
         }
         
-        this.log('INFO', 'Stopping simulation', { tableId });
+        const table = this.gameManager.tables.get(tableId);
+        
+        this.log('INFO', 'Stopping simulation', { tableId, reason });
+        
+        // CRITICAL: Notify spectators that simulation has ended
+        // This allows them to leave the table
+        if (table && this.io) {
+            const spectatorRoom = `spectator:${tableId}`;
+            this.io.to(spectatorRoom).emit('simulation_ended', {
+                tableId: tableId,
+                reason: reason,
+                gamesPlayed: simulation.gamesPlayed,
+                maxGames: this.maxGames,
+                message: reason === 'max_games_reached' 
+                    ? `Simulation complete! ${simulation.gamesPlayed} games played.`
+                    : 'Simulation has ended.'
+            });
+            this.log('INFO', 'Notified spectators of simulation end', { 
+                tableId, 
+                spectatorRoom,
+                reason 
+            });
+        }
         
         // Disconnect all socket bots
         for (const bot of simulation.socketBots) {
             bot.disconnect();
         }
         
-        // Close the table
-        this.gameManager.closeTable(tableId);
+        // CRITICAL: Notify spectators via table_closed event before removing table
+        // This allows them to leave gracefully
+        if (table && this.io) {
+            // Get all spectator user IDs
+            const spectatorUserIds = Array.from(table.spectators.keys());
+            for (const userId of spectatorUserIds) {
+                const spectator = table.spectators.get(userId);
+                if (spectator && spectator.socketId) {
+                    this.io.to(spectator.socketId).emit('table_closed', {
+                        tableId: tableId,
+                        reason: 'simulation_ended',
+                        message: 'Simulation has ended. You can now leave the table.'
+                    });
+                }
+            }
+        }
+        
+        // Remove the table from GameManager
+        // Note: GameManager doesn't have closeTable, so we'll just delete it
+        // But first, we need to clean up bots and notify
+        if (table) {
+            // Remove all bots
+            for (const seat of table.seats) {
+                if (seat && seat.isBot) {
+                    table.removePlayer(seat.playerId);
+                }
+            }
+        }
+        
+        // Delete table from GameManager
+        this.gameManager.tables.delete(tableId);
         
         // Remove from active simulations
         this.activeSimulations.delete(tableId);
@@ -854,7 +913,9 @@ class SimulationManager {
         const duration = Date.now() - simulation.startTime;
         this.log('INFO', 'Simulation stopped', { 
             tableId, 
-            duration: `${Math.floor(duration / 1000)}s` 
+            duration: `${Math.floor(duration / 1000)}s`,
+            gamesPlayed: simulation.gamesPlayed,
+            reason
         });
         
         return { success: true };

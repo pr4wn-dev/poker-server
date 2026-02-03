@@ -550,7 +550,12 @@ class Table {
             gameLogger.gameEvent(this.name, 'TOTAL STARTING CHIPS TRACKED', {
                 totalStartingChips: this.totalStartingChips,
                 playerCount: this.seats.filter(s => s && s.isActive !== false).length,
-                buyIn: this.buyIn
+                buyIn: this.buyIn,
+                allPlayers: this.seats.filter(s => s && s.isActive !== false).map(s => ({
+                    name: s.name,
+                    chips: s.chips,
+                    seatIndex: this.seats.indexOf(s)
+                }))
             });
         }
         
@@ -3034,6 +3039,8 @@ class Table {
         // Award the pots
         // CRITICAL: Eliminated players don't get chips back - they're out!
         let totalAwarded = 0;
+        const awardDetails = []; // Track all awards for detailed logging
+        
         for (const award of potAwards) {
             const seat = this.seats.find(s => s?.playerId === award.playerId);
             if (seat && seat.isActive !== false) {
@@ -3042,6 +3049,18 @@ class Table {
                 seat.chips += award.amount;
                 const chipsAfter = seat.chips;
                 totalAwarded += award.amount;
+                
+                awardDetails.push({
+                    playerId: award.playerId,
+                    name: award.name,
+                    amount: award.amount,
+                    potType: award.potType,
+                    handName: award.handName,
+                    chipsBefore,
+                    chipsAfter,
+                    seatIndex: this.seats.indexOf(seat),
+                    isActive: seat.isActive
+                });
                 
                 console.log(`[Table ${this.name}] ${award.name} wins ${award.amount} from ${award.potType} pot with ${award.handName} (chips: ${chipsBefore} → ${chipsAfter})`);
                 
@@ -3104,14 +3123,49 @@ class Table {
         }
         
         // CRITICAL: Validate that all pot money was awarded
+        // CRITICAL: Log detailed breakdown for debugging
+        gameLogger.gameEvent(this.name, '[POT] Award summary', {
+            potBeforeCalculation,
+            totalAwarded,
+            difference: potBeforeCalculation - totalAwarded,
+            potAwardsCount: potAwards.length,
+            awardDetails: awardDetails,
+            allSeatsAfterAward: this.seats.map((seat, idx) => seat ? {
+                seatIndex: idx,
+                name: seat.name,
+                chips: seat.chips,
+                totalBet: seat.totalBet || 0,
+                isActive: seat.isActive,
+                isFolded: seat.isFolded,
+                isAllIn: seat.isAllIn
+            } : null).filter(Boolean)
+        });
+        
         if (Math.abs(potBeforeCalculation - totalAwarded) > 0.01) {
             console.error(`[Table ${this.name}] ⚠️ CRITICAL: POT NOT FULLY AWARDED! Pot was ${potBeforeCalculation}, but only ${totalAwarded} was awarded. Missing: ${potBeforeCalculation - totalAwarded}`);
-            gameLogger.gameEvent(this.name, '[POT] ERROR: Pot not fully awarded', {
+            gameLogger.error(this.name, '[POT] ERROR: Pot not fully awarded', {
                 potBeforeCalculation,
                 totalAwarded,
                 missing: potBeforeCalculation - totalAwarded,
                 potAwardsCount: potAwards.length,
-                potAwards: potAwards.map(a => ({ name: a.name, amount: a.amount, potType: a.potType, reason: a.reason || 'standard' }))
+                potAwards: potAwards.map(a => ({ name: a.name, amount: a.amount, potType: a.potType, reason: a.reason || 'standard' })),
+                awardDetails: awardDetails,
+                allContributors: allContributors.map(p => ({
+                    name: p.name,
+                    totalBet: p.totalBet,
+                    isFolded: p.isFolded,
+                    isAllIn: p.isAllIn,
+                    hasHandResult: !!p.handResult
+                })),
+                allSeatsAfterAward: this.seats.map((seat, idx) => seat ? {
+                    seatIndex: idx,
+                    name: seat.name,
+                    chips: seat.chips,
+                    totalBet: seat.totalBet || 0,
+                    isActive: seat.isActive,
+                    isFolded: seat.isFolded,
+                    isAllIn: seat.isAllIn
+                } : null).filter(Boolean)
             });
             // CRITICAL: Don't clear pot if money is missing - this is an error state
             // The pot will remain and be caught by emergency distribution logic
