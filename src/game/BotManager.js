@@ -61,9 +61,17 @@ class BotManager {
         }
         
         // Check actual seats first (most reliable)
+        // CRITICAL: Use case-insensitive comparison to handle any name variations
+        const botProfileNameLower = botProfileName.toLowerCase();
         for (const seat of table.seats) {
-            if (seat && seat.isBot && seat.name === botProfileName) {
-                return { success: false, error: `${botProfileName} is already at this table` };
+            if (seat && seat.isBot) {
+                const seatNameLower = (seat.name || '').toLowerCase();
+                // Check exact match or if names contain each other (handles variations)
+                if (seatNameLower === botProfileNameLower || 
+                    seatNameLower.includes(botProfileNameLower) || 
+                    botProfileNameLower.includes(seatNameLower)) {
+                    return { success: false, error: `${botProfileName} is already at this table` };
+                }
             }
         }
         

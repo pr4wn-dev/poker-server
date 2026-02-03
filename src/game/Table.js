@@ -2952,24 +2952,59 @@ class Table {
                         }))
                     });
                     
-                    // FIX: Find best non-folded player who contributed to this level
+                    // FIX: Find best non-folded player who contributed to this level OR HIGHER
+                    // CRITICAL: Check ALL contributors, not just those at this exact level
+                    // Look for any non-folded player who contributed at this level or higher
                     const nonFoldedContributors = allContributors
-                        .filter(p => !p.isFolded && p.totalBet >= player.totalBet && p.handResult)
-                        .sort((a, b) => HandEvaluator.compare(b.handResult, a.handResult));
+                        .filter(p => {
+                            const seat = this.seats.find(s => s?.playerId === p.playerId);
+                            return !p.isFolded && p.totalBet >= player.totalBet && seat && seat.isActive !== false;
+                        })
+                        .sort((a, b) => {
+                            // Sort by hand result if available, otherwise by chips
+                            if (a.handResult && b.handResult) {
+                                return HandEvaluator.compare(b.handResult, a.handResult);
+                            }
+                            // If one has hand result and other doesn't, prefer the one with hand result
+                            if (a.handResult && !b.handResult) return -1;
+                            if (!a.handResult && b.handResult) return 1;
+                            // Both have no hand result - sort by chips (from seat)
+                            const seatA = this.seats.find(s => s?.playerId === a.playerId);
+                            const seatB = this.seats.find(s => s?.playerId === b.playerId);
+                            return (seatB?.chips || 0) - (seatA?.chips || 0);
+                        });
                     
                     if (nonFoldedContributors.length > 0) {
                         const winner = nonFoldedContributors[0];
+                        const handName = winner.handResult ? winner.handResult.name : 'No Hand';
                         potAwards.push({
                             playerId: winner.playerId,
                             name: winner.name,
                             amount: potAmount,
-                            handName: winner.handResult.name,
+                            handName: handName,
                             potType: previousBetLevel === 0 ? 'main' : 'side',
                             reason: 'All eligible players folded - awarded to best non-folded contributor'
                         });
-                        console.log(`[Table ${this.name}] FIX: Awarding ${potAmount} to ${winner.name} (all eligible players folded)`);
+                        console.log(`[Table ${this.name}] FIX: Awarding ${potAmount} to ${winner.name} (all eligible players folded, hand: ${handName})`);
+                        gameLogger.gameEvent(this.name, '[POT] Awarded to non-folded contributor', {
+                            winner: winner.name,
+                            amount: potAmount,
+                            betLevel: player.totalBet,
+                            handName: handName,
+                            reason: 'All eligible players at bet level folded'
+                        });
                     } else {
                         console.error(`[Table ${this.name}] ⚠️ CRITICAL: No non-folded contributors found - pot will be lost!`);
+                        gameLogger.error(this.name, 'No non-folded contributors for folded pot', {
+                            potAmount,
+                            betLevel: player.totalBet,
+                            allContributors: allContributors.map(p => ({
+                                name: p.name,
+                                totalBet: p.totalBet,
+                                isFolded: p.isFolded,
+                                hasHandResult: !!p.handResult
+                            }))
+                        });
                     }
                 }
                 
