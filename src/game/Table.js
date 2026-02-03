@@ -84,6 +84,7 @@ class Table {
         // CRITICAL: Track starting chips for money validation
         // Sum of all players' starting chips should equal winner's final chips
         this.totalStartingChips = 0;  // Sum of all buy-ins when game starts
+        this._gameOverCalled = false;  // Guard to prevent duplicate onGameOver calls
         
         // Item side pot (optional gambling)
         this.itemSidePot = new SidePot(this.id, this.creatorId);
@@ -531,6 +532,7 @@ class Table {
             // CRITICAL: Track total starting chips for money validation
             // MUST reset to 0 first to prevent accumulation across games
             this.totalStartingChips = 0;
+            this._gameOverCalled = false;  // Reset game over guard for new game
             
             for (const seat of this.seats) {
                 if (seat && seat.isActive !== false) {
@@ -1503,6 +1505,28 @@ class Table {
         player.totalBet = (player.totalBet || 0) + toCall;
         this.pot += toCall;
         
+        // CRITICAL: Log chip movement for money tracking
+        gameLogger.gameEvent(this.name, '[CHIPS] Call - chip movement', {
+            player: player.name,
+            seatIndex,
+            chipsBefore: beforeChips,
+            chipsAfter: player.chips,
+            chipsMoved: toCall,
+            potBefore,
+            potAfter: this.pot,
+            potIncrease: toCall,
+            totalBetBefore,
+            totalBetAfter: player.totalBet,
+            currentBetBefore,
+            currentBetAfter: player.currentBet,
+            phase: this.phase,
+            validation: {
+                chipsCorrect: player.chips === beforeChips - toCall,
+                potCorrect: this.pot === potBefore + toCall,
+                totalBetCorrect: player.totalBet === totalBetBefore + toCall
+            }
+        });
+        
         // CRITICAL: Verify calculations
         if (player.chips !== beforeChips - toCall) {
             console.error(`[Table ${this.name}] ⚠️ CALL ERROR: Chips calculation wrong. Before: ${beforeChips}, Amount: ${toCall}, After: ${player.chips}`);
@@ -1556,6 +1580,26 @@ class Table {
         player.currentBet = amount;
         player.totalBet = (player.totalBet || 0) + amount;
         this.pot += amount;
+        
+        // CRITICAL: Log chip movement for money tracking
+        gameLogger.gameEvent(this.name, '[CHIPS] Bet - chip movement', {
+            player: player.name,
+            seatIndex,
+            chipsBefore: beforeChips,
+            chipsAfter: player.chips,
+            chipsMoved: amount,
+            potBefore,
+            potAfter: this.pot,
+            potIncrease: amount,
+            totalBetBefore,
+            totalBetAfter: player.totalBet,
+            phase: this.phase,
+            validation: {
+                chipsCorrect: player.chips === beforeChips - amount,
+                potCorrect: this.pot === potBefore + amount,
+                totalBetCorrect: player.totalBet === totalBetBefore + amount
+            }
+        });
         
         // CRITICAL: Verify calculations
         if (player.chips !== beforeChips - amount) {
@@ -1662,6 +1706,29 @@ class Table {
         this.pot += additionalBet; // Only add the additional amount to pot
         this.currentBet = player.currentBet;
         
+        // CRITICAL: Log chip movement for money tracking
+        gameLogger.gameEvent(this.name, '[CHIPS] Raise - chip movement', {
+            player: player.name,
+            seatIndex,
+            chipsBefore: beforeChips,
+            chipsAfter: player.chips,
+            chipsMoved: amount,
+            additionalBet,
+            potBefore,
+            potAfter: this.pot,
+            potIncrease: additionalBet,
+            totalBetBefore,
+            totalBetAfter: player.totalBet,
+            currentBetBefore,
+            currentBetAfter: player.currentBet,
+            phase: this.phase,
+            validation: {
+                chipsCorrect: player.chips === beforeChips - amount,
+                potCorrect: this.pot === potBefore + additionalBet,
+                totalBetCorrect: player.totalBet === totalBetBefore + additionalBet
+            }
+        });
+        
         // CRITICAL: Verify calculations
         if (player.chips !== beforeChips - amount) {
             console.error(`[Table ${this.name}] ⚠️ RAISE ERROR: Chips calculation wrong. Before: ${beforeChips}, Amount: ${amount}, After: ${player.chips}`);
@@ -1726,6 +1793,29 @@ class Table {
         player.totalBet = (player.totalBet || 0) + amount; // Add all chips to totalBet
         this.pot += amount; // Add all chips to pot
         player.isAllIn = true;
+        
+        // CRITICAL: Log chip movement for money tracking
+        gameLogger.gameEvent(this.name, '[CHIPS] All-In - chip movement', {
+            player: player.name,
+            seatIndex,
+            chipsBefore: chipsBefore,
+            chipsAfter: player.chips,
+            chipsMoved: amount,
+            potBefore,
+            potAfter: this.pot,
+            potIncrease: amount,
+            totalBetBefore,
+            totalBetAfter: player.totalBet,
+            currentBetBefore,
+            currentBetAfter: player.currentBet,
+            phase: this.phase,
+            validation: {
+                chipsCorrect: player.chips === 0,
+                potCorrect: this.pot === potBefore + amount,
+                totalBetCorrect: player.totalBet === totalBetBefore + amount,
+                currentBetCorrect: player.currentBet === currentBetBefore + amount
+            }
+        });
         
         // CRITICAL: Verify calculations
         if (player.chips !== 0) {
@@ -1848,6 +1938,20 @@ class Table {
                     handsPlayed: this.handsPlayed
                 });
             }
+            
+            // CRITICAL: Prevent duplicate onGameOver calls
+            if (this._gameOverCalled) {
+                console.warn(`[Table ${this.name}] ⚠️ Game over already called - preventing duplicate call for winner ${winner.name} (handsPlayed: ${this.handsPlayed})`);
+                gameLogger.gameEvent(this.name, '[GAME OVER] Duplicate call prevented', {
+                    winnerName: winner.name,
+                    winnerChips: winner.chips,
+                    winnerId: winner.playerId,
+                    handsPlayed: this.handsPlayed
+                });
+                return; // Exit early to prevent duplicate processing
+            }
+            
+            this._gameOverCalled = true;  // Mark as called
             
             console.log(`[Table ${this.name}] GAME OVER - ${winner.name} wins with ${winner.chips} chips! (handsPlayed: ${this.handsPlayed})`);
             gameLogger.gameEvent(this.name, 'GAME OVER - Winner announced', {
