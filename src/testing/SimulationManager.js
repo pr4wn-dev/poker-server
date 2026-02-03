@@ -623,6 +623,8 @@ class SimulationManager {
         // handleGameStart() will reset it to 0 and recalculate correctly based on actual active players
         // We just need to ensure gameStarted is false so handleGameStart() runs
         // Reset all existing players to new buy-in
+        // CRITICAL: Only reset seats that are actually occupied (not null)
+        // Don't re-activate eliminated players - handleGameStart() will handle that correctly
         for (let i = 0; i < table.seats.length; i++) {
             const seat = table.seats[i];
             if (!seat) continue;
@@ -632,7 +634,12 @@ class SimulationManager {
             seat.chips = newBuyIn;
             seat.isFolded = false;
             seat.isAllIn = false;
-            seat.isActive = true;  // CRITICAL: Re-activate eliminated players!
+            // CRITICAL: Only set isActive = true if the seat was already active
+            // Don't re-activate eliminated players - let handleGameStart() handle that
+            // This prevents counting eliminated players (with 0 chips) in totalStartingChips
+            if (seat.isActive !== false) {
+                seat.isActive = true;  // Keep active players active
+            }
             seat.currentBet = 0;
             seat.totalBet = 0;
             seat.cards = [];
