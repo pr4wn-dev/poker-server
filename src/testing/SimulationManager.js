@@ -439,8 +439,6 @@ class SimulationManager {
                     currentTable.onStateChange();
                 } else {
                     this.log('WARN', 'onStateChange callback not available - counter may not update', { tableId });
-                } else {
-                    this.log('WARN', 'onStateChange callback not set - counter update may not be visible', { tableId });
                 }
             }
             

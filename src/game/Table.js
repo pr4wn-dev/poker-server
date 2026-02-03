@@ -763,15 +763,13 @@ class Table {
             // Fold failed - clear timer anyway to prevent stuck state
             this.clearTurnTimer();
             console.error(`[Table ${this.name}] Auto-fold failed for ${player.name}: ${foldResult.error}`);
-            // Still try to advance to prevent stuck state
-            this.advanceGame();
-        } else {
-            // Fold failed (shouldn't happen, but log it)
             gameLogger.gameEvent(this.name, '[TIMER] Auto-fold failed', {
                 player: player.name,
                 seatIndex: this.currentPlayerIndex,
                 error: foldResult.error
             });
+            // Still try to advance to prevent stuck state
+            this.advanceGame();
             // Still try to advance game
             this.advanceGame();
         }
