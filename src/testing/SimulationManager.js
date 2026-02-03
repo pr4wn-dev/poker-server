@@ -400,46 +400,48 @@ class SimulationManager {
         // CRITICAL: Hook into onGameOver callback instead of polling
         // This is more reliable and immediate
         // NOTE: SocketHandler will wrap this callback and call it after notifying clients
-        // So we don't need to call the original - SocketHandler handles that
-        const originalOnGameOver = table.onGameOver;
-        this.log('INFO', `Setting up auto-restart callback. Original onGameOver: ${originalOnGameOver ? 'EXISTS' : 'NONE'}`, { tableId });
-        table.onGameOver = (winner) => {
-            // NOTE: If SocketHandler has set up, it will call us AFTER notifying clients
-            // If SocketHandler hasn't set up yet, we'll still restart the game
-            // (clients will see game over through state updates)
-            
+        // SocketHandler preserves existing callbacks, so we need to check if it's already set up
+        const existingOnGameOver = table.onGameOver;
+        this.log('INFO', `Setting up auto-restart callback. Existing onGameOver: ${existingOnGameOver ? 'EXISTS' : 'NONE'}`, { tableId });
+        
+        // CRITICAL: Create our callback function
+        const simulationCallback = (winner) => {
             // Check if simulation is still active
-            if (!this.activeSimulations.has(tableId)) return;
+            if (!this.activeSimulations.has(tableId)) {
+                this.log('WARN', 'Simulation no longer active, skipping restart', { tableId });
+                return;
+            }
             
             const currentTable = this.gameManager.tables.get(tableId);
-            if (!currentTable) return;
+            if (!currentTable) {
+                this.log('WARN', 'Table not found, skipping restart', { tableId });
+                return;
+            }
             
             // Game over detected via callback - restart immediately
             simulation.gamesPlayed++;
             
             // CRITICAL: Update table's simulation counter for client display
-            if (currentTable) {
-                currentTable.simulationGamesPlayed = simulation.gamesPlayed;
-                currentTable.simulationMaxGames = this.maxGames;
-                this.log('INFO', `Updated simulation counter on table: ${simulation.gamesPlayed}/${this.maxGames}`, {
+            currentTable.simulationGamesPlayed = simulation.gamesPlayed;
+            currentTable.simulationMaxGames = this.maxGames;
+            this.log('INFO', `Updated simulation counter on table: ${simulation.gamesPlayed}/${this.maxGames}`, {
+                tableId,
+                gamesPlayed: simulation.gamesPlayed,
+                maxGames: this.maxGames
+            });
+            // Broadcast state update so client sees new counter
+            // CRITICAL: Force immediate state broadcast to ensure counter is visible
+            if (currentTable.onStateChange) {
+                this.log('DEBUG', 'Calling onStateChange to broadcast counter update', {
                     tableId,
                     gamesPlayed: simulation.gamesPlayed,
-                    maxGames: this.maxGames
+                    maxGames: this.maxGames,
+                    tableSimulationGamesPlayed: currentTable.simulationGamesPlayed,
+                    tableSimulationMaxGames: currentTable.simulationMaxGames
                 });
-                // Broadcast state update so client sees new counter
-                // CRITICAL: Force immediate state broadcast to ensure counter is visible
-                if (currentTable.onStateChange) {
-                    this.log('DEBUG', 'Calling onStateChange to broadcast counter update', {
-                        tableId,
-                        gamesPlayed: simulation.gamesPlayed,
-                        maxGames: this.maxGames,
-                        tableSimulationGamesPlayed: currentTable.simulationGamesPlayed,
-                        tableSimulationMaxGames: currentTable.simulationMaxGames
-                    });
-                    currentTable.onStateChange();
-                } else {
-                    this.log('WARN', 'onStateChange callback not available - counter may not update', { tableId });
-                }
+                currentTable.onStateChange();
+            } else {
+                this.log('WARN', 'onStateChange callback not available - counter may not update', { tableId });
             }
             
             this.log('INFO', `Game ${simulation.gamesPlayed} COMPLETE - Winner: ${winner.name}`, {
@@ -461,6 +463,25 @@ class SimulationManager {
             const restartDelay = simulation.fastMode ? 1000 : 3000;
             setTimeout(() => this._restartGame(simulation), restartDelay);
         };
+        
+        // CRITICAL: If SocketHandler has already set up (existingOnGameOver exists and is not our callback),
+        // we need to wrap it. SocketHandler will call originalOnGameOver, so we set ours as the "original"
+        // and wrap SocketHandler's callback to call ours.
+        // If we set up first, SocketHandler will preserve our callback.
+        if (existingOnGameOver && existingOnGameOver !== simulationCallback) {
+            // SocketHandler's callback exists - we need to ensure both are called
+            // SocketHandler calls originalOnGameOver, so we set ours as original and wrap SocketHandler's
+            const socketHandlerCallback = existingOnGameOver;
+            table.onGameOver = (winner) => {
+                // Call SocketHandler's callback first (notifies clients)
+                socketHandlerCallback(winner);
+                // Then call our callback (restarts game)
+                simulationCallback(winner);
+            };
+        } else {
+            // No existing callback or it's already ours - just set it
+            table.onGameOver = simulationCallback;
+        }
         
         this.log('INFO', 'Auto-restart callback set up', { tableId });
     }
