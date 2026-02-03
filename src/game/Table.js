@@ -86,6 +86,55 @@ class Table {
         this.totalStartingChips = 0;  // Sum of all buy-ins when game starts
         this._gameOverCalled = false;  // Guard to prevent duplicate onGameOver calls
         
+        // CRITICAL: Money validation helper - validates chips are conserved at every point
+        this._validateMoney = (context) => {
+            const currentTotalChips = this.seats
+                .filter(s => s !== null)
+                .reduce((sum, seat) => sum + (seat.chips || 0), 0);
+            const totalChipsAndPot = currentTotalChips + this.pot;
+            
+            if (this.totalStartingChips > 0) {
+                const difference = Math.abs(totalChipsAndPot - this.totalStartingChips);
+                const isValid = difference <= 0.01; // Allow for floating point errors
+                
+                if (!isValid) {
+                    const missing = this.totalStartingChips - totalChipsAndPot;
+                    console.error(`[Table ${this.name}] ⚠️ MONEY VALIDATION FAILED at ${context}: Expected ${this.totalStartingChips}, Got ${totalChipsAndPot}, Missing: ${missing}`);
+                    gameLogger.gameEvent(this.name, '[MONEY] VALIDATION FAILED', {
+                        context,
+                        expected: this.totalStartingChips,
+                        actual: totalChipsAndPot,
+                        missing,
+                        currentTotalChips,
+                        pot: this.pot,
+                        phase: this.phase,
+                        handNumber: this.handsPlayed,
+                        allPlayers: this.seats.filter(s => s !== null).map(s => ({
+                            name: s.name,
+                            chips: s.chips,
+                            totalBet: s.totalBet || 0,
+                            currentBet: s.currentBet || 0,
+                            isActive: s.isActive,
+                            isFolded: s.isFolded
+                        }))
+                    });
+                } else {
+                    gameLogger.gameEvent(this.name, '[MONEY] VALIDATION PASSED', {
+                        context,
+                        expected: this.totalStartingChips,
+                        actual: totalChipsAndPot,
+                        currentTotalChips,
+                        pot: this.pot,
+                        phase: this.phase,
+                        handNumber: this.handsPlayed
+                    });
+                }
+                
+                return isValid;
+            }
+            return true; // Can't validate if starting chips not tracked
+        };
+        
         // Item side pot (optional gambling)
         this.itemSidePot = new SidePot(this.id, this.creatorId);
         this.sidePotCollectionTime = options.sidePotCollectionTime || 60000; // 60 seconds default
@@ -1100,6 +1149,9 @@ class Table {
         this.postBlind(sbIndex, this.smallBlind);
         this.postBlind(bbIndex, this.bigBlind);
         this.currentBet = this.bigBlind;
+        
+        // CRITICAL: Validate money after blinds posted
+        this._validateMoney('HAND_START_AFTER_BLINDS');
 
         // Deal hole cards - REPLACE old cards, don't clear first
         // This ensures cards are never empty in state broadcasts
@@ -1187,6 +1239,29 @@ class Table {
         player.currentBet = blindAmount;
         player.totalBet = blindAmount;
         this.pot += blindAmount;
+        
+        // CRITICAL: Log chip movement for money tracking
+        gameLogger.gameEvent(this.name, '[CHIPS] Blind Posted - chip movement', {
+            player: player.name,
+            seatIndex,
+            blindType: amount === this.smallBlind ? 'small' : 'big',
+            chipsBefore,
+            chipsAfter: player.chips,
+            chipsMoved: blindAmount,
+            potBefore,
+            potAfter: this.pot,
+            potIncrease: blindAmount,
+            totalBetBefore: 0,
+            totalBetAfter: player.totalBet,
+            currentBetBefore: 0,
+            currentBetAfter: player.currentBet,
+            phase: this.phase,
+            validation: {
+                chipsCorrect: player.chips === chipsBefore - blindAmount,
+                potCorrect: this.pot === potBefore + blindAmount,
+                totalBetCorrect: player.totalBet === blindAmount
+            }
+        });
 
         // CRITICAL: Verify calculation
         if (player.chips !== chipsBefore - blindAmount) {
@@ -1636,6 +1711,9 @@ class Table {
             phase: this.phase
         });
 
+        // CRITICAL: Validate money after bet
+        this._validateMoney(`AFTER_BET_${player.name}`);
+        
         return { success: true, action: 'bet', amount };
     }
 
@@ -1770,6 +1848,9 @@ class Table {
             phase: this.phase
         });
 
+        // CRITICAL: Validate money after raise
+        this._validateMoney(`AFTER_RAISE_${player.name}`);
+        
         return { success: true, action: 'raise', amount };
     }
 
@@ -1850,6 +1931,9 @@ class Table {
             phase: this.phase
         });
 
+        // CRITICAL: Validate money after all-in
+        this._validateMoney(`AFTER_ALLIN_${player.name}`);
+        
         return { success: true, action: 'allin', amount };
     }
 
@@ -2471,6 +2555,9 @@ class Table {
         const oldCurrentBet = this.currentBet;
         this.currentBet = 0;
         this.minRaise = this.bigBlind;
+        
+        // CRITICAL: Validate money before phase transition
+        this._validateMoney(`BEFORE_PHASE_ADVANCE_${oldPhase}`);
 
         switch (this.phase) {
             case GAME_PHASES.PRE_FLOP:
@@ -2480,6 +2567,8 @@ class Table {
                 gameLogger.phaseChange(this.name, 'PRE_FLOP', 'FLOP', {
                     communityCards: this.communityCards.map(c => `${c.rank}${c.suit}`)
                 });
+                // CRITICAL: Validate money after phase transition
+                this._validateMoney('AFTER_PHASE_ADVANCE_PREFLOP_TO_FLOP');
                 break;
             case GAME_PHASES.FLOP:
                 this.communityCards.push(this.deck.draw());
@@ -2488,6 +2577,8 @@ class Table {
                 gameLogger.phaseChange(this.name, 'FLOP', 'TURN', {
                     turnCard: `${this.communityCards[this.communityCards.length - 1].rank}${this.communityCards[this.communityCards.length - 1].suit}`
                 });
+                // CRITICAL: Validate money after phase transition
+                this._validateMoney('AFTER_PHASE_ADVANCE_FLOP_TO_TURN');
                 break;
             case GAME_PHASES.TURN:
                 this.communityCards.push(this.deck.draw());
@@ -2496,6 +2587,8 @@ class Table {
                 gameLogger.phaseChange(this.name, 'TURN', 'RIVER', {
                     riverCard: `${this.communityCards[this.communityCards.length - 1].rank}${this.communityCards[this.communityCards.length - 1].suit}`
                 });
+                // CRITICAL: Validate money after phase transition
+                this._validateMoney('AFTER_PHASE_ADVANCE_TURN_TO_RIVER');
                 break;
             case GAME_PHASES.RIVER:
                 this.showdown();
@@ -3245,6 +3338,9 @@ class Table {
             } : null).filter(Boolean)
         });
         
+        // CRITICAL: Validate money after pot awards
+        this._validateMoney('AFTER_POT_AWARDS');
+        
         if (Math.abs(potBeforeCalculation - totalAwarded) > 0.01) {
             console.error(`[Table ${this.name}] ⚠️ CRITICAL: POT NOT FULLY AWARDED! Pot was ${potBeforeCalculation}, but only ${totalAwarded} was awarded. Missing: ${potBeforeCalculation - totalAwarded}`);
             gameLogger.error(this.name, '[POT] ERROR: Pot not fully awarded', {
@@ -3289,6 +3385,9 @@ class Table {
             difference: potBeforeCalculation - totalAwarded,
             potAwardsCount: potAwards.length
         });
+        
+        // CRITICAL: Validate money after side pot awards
+        this._validateMoney('AFTER_SIDE_POT_AWARDS');
         
         return potAwards;
     }
@@ -3356,6 +3455,9 @@ class Table {
             }
         }
         this.pot = 0;
+        
+        // CRITICAL: Validate money after pot award
+        this._validateMoney(`AFTER_AWARD_POT_${winner.name}`);
         
         // CRITICAL: Broadcast state immediately so clients see updated chips
         this.onStateChange?.();
