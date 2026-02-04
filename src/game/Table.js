@@ -4036,6 +4036,7 @@ class Table {
         }
         // ============ END LOOP DETECTION ============
         
+        // Log detailed turn change for stuck player detection
         gameLogger.turnChange(this.name, oldCurrentPlayer || `Seat ${this.currentPlayerIndex}`, nextPlayerSeat?.name || `Seat ${nextPlayer}`, {
             fromSeat: this.currentPlayerIndex !== nextPlayer ? this.currentPlayerIndex : null,
             toSeat: nextPlayer,
@@ -4045,8 +4046,25 @@ class Table {
             lastRaiserIndex: this.lastRaiserIndex,
             hasPassedLastRaiser: this.hasPassedLastRaiser,
             turnsThisPhase: this.turnsThisPhase,
-            playerTurnCount: this.playerTurnCounts[playerId]
+            playerTurnCount: this.playerTurnCounts[playerId],
+            consecutiveSamePlayerTurns: this.consecutiveSamePlayerTurns,
+            consecutiveAdvanceGameCalls: this.consecutiveAdvanceGameCalls || 0,
+            handNumber: this.handsPlayed
         });
+        
+        // Log if player has been waiting
+        if (this.playerWaitStartTime && this.lastWaitingPlayer === nextPlayer) {
+            const waitTime = Date.now() - this.playerWaitStartTime;
+            if (waitTime > 10000) { // 10 seconds
+                gameLogger.gameEvent(this.name, 'WARNING: Player turn change but player was waiting', {
+                    player: nextPlayerSeat?.name,
+                    seatIndex: nextPlayer,
+                    waitTimeMs: waitTime,
+                    phase: this.phase
+                });
+                console.warn(`[Table ${this.name}] WARNING: ${nextPlayerSeat?.name} was waiting ${Math.floor(waitTime/1000)}s before getting turn`);
+            }
+        }
         
         console.log(`[Table ${this.name}] Turn: ${nextPlayerSeat?.name} (seat ${this.currentPlayerIndex}, isBot: ${nextPlayerSeat?.isBot}, currentBet: ${nextPlayerSeat?.currentBet}/${this.currentBet}, lastRaiser: ${this.lastRaiserIndex}, hasPassed: ${this.hasPassedLastRaiser}, turnsThisPhase: ${this.turnsThisPhase})`);
         this.startTurnTimer();
