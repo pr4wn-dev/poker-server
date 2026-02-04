@@ -1035,6 +1035,21 @@ class Table {
         // Start the game!
         console.log(`[Table ${this.name}] Starting game with ${readyPlayers.length} players!`);
         
+        // CRITICAL: Only start new hand if game hasn't started yet
+        // If a hand is already in progress, don't call startNewHand (this would interrupt the current hand)
+        if (this.gameStarted || this.phase !== GAME_PHASES.WAITING) {
+            console.error(`[Table ${this.name}] ⚠️ CRITICAL: handleGameStart called but game already started! Phase: ${this.phase}, gameStarted: ${this.gameStarted}, handNumber: ${this.handsPlayed}`);
+            gameLogger.error(this.name, '[GAME] CRITICAL: handleGameStart called during active hand', {
+                phase: this.phase,
+                gameStarted: this.gameStarted,
+                handNumber: this.handsPlayed,
+                pot: this.pot
+            });
+            // Don't call startNewHand if game is already in progress
+            this.onStateChange?.();
+            return;
+        }
+        
         // CRITICAL: Clear pot before starting new hand (safeguard)
         if (this.pot > 0) {
             console.error(`[Table ${this.name}] ⚠️ CRITICAL: Pot still has ${this.pot} chips before startNewHand in handleGameStart! Clearing now.`);
