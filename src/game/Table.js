@@ -99,26 +99,36 @@ class Table {
         
         // CRITICAL: Fix attempt tracking system - tracks how many times each fix has been attempted and failed
         // This helps identify which fixes aren't working and need a different approach
-        // MAX_FAILURES: After 5 failures, the fix is disabled and a different approach should be tried
+        // MAX_FAILURES: After 5 failures, the fix is disabled PERMANENTLY and a different approach should be tried
+        // ONCE DISABLED, A FIX CAN NEVER BE RE-ENABLED - prevents going back and forth between failing fixes
         const MAX_FAILURES = 5;
         
         this._fixAttempts = {
-            'FIX_1_POT_NOT_CLEARED': { attempts: 0, failures: 0, lastFailure: null, disabled: false },
-            'FIX_2_CHIPS_LOST_BETTING': { attempts: 0, failures: 0, lastFailure: null, disabled: false },
-            'FIX_3_CUMULATIVE_CHIP_LOSS': { attempts: 0, failures: 0, lastFailure: null, disabled: false },
-            'FIX_4_ACTION_NOT_YOUR_TURN': { attempts: 0, failures: 0, lastFailure: null, disabled: false },
-            'FIX_5_ACTION_GAME_NOT_IN_PROGRESS': { attempts: 0, failures: 0, lastFailure: null, disabled: false },
-            'FIX_6_BETTING_ACTION_FAILURES': { attempts: 0, failures: 0, lastFailure: null, disabled: false },
-            'FIX_7_VALIDATION_FAILURES': { attempts: 0, failures: 0, lastFailure: null, disabled: false },
-            'FIX_8_POT_MISMATCH': { attempts: 0, failures: 0, lastFailure: null, disabled: false }
+            'FIX_1_POT_NOT_CLEARED': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
+            'FIX_2_CHIPS_LOST_BETTING': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
+            'FIX_3_CUMULATIVE_CHIP_LOSS': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
+            'FIX_4_ACTION_NOT_YOUR_TURN': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
+            'FIX_5_ACTION_GAME_NOT_IN_PROGRESS': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
+            'FIX_6_BETTING_ACTION_FAILURES': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
+            'FIX_7_VALIDATION_FAILURES': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
+            'FIX_8_POT_MISMATCH': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false }
         };
         
+        // Track which fixes have been tried and failed (to prevent going back to them)
+        this._failedFixes = new Set(); // Set of fix IDs that have been permanently disabled
+        
         // Helper to check if a fix is enabled (not disabled due to too many failures)
+        // CRITICAL: Once a fix is disabled, it can NEVER be re-enabled to prevent going back and forth
         this._isFixEnabled = (fixId) => {
             if (!this._fixAttempts[fixId]) {
                 return true; // Unknown fix, allow it
             }
-            return !this._fixAttempts[fixId].disabled;
+            const fix = this._fixAttempts[fixId];
+            // If permanently disabled or in failed set, never allow it again
+            if (fix.permanentlyDisabled || this._failedFixes.has(fixId)) {
+                return false;
+            }
+            return !fix.disabled;
         };
         
         // Helper to record fix attempt
@@ -158,18 +168,24 @@ class Table {
                     ...details
                 });
                 
-                // DISABLE FIX after MAX_FAILURES failures
+                // PERMANENTLY DISABLE FIX after MAX_FAILURES failures
+                // Once disabled, this fix can NEVER be re-enabled to prevent going back and forth
                 if (fix.failures >= MAX_FAILURES) {
                     fix.disabled = true;
-                    console.error(`[Table ${this.name}] 🚫🚫🚫 FIX ${fixId} DISABLED - ${fix.failures} FAILURES (limit: ${MAX_FAILURES}) - TRY A DIFFERENT APPROACH! 🚫🚫🚫`);
-                    gameLogger.gameEvent(this.name, `[FIX ATTEMPT] ${fixId} DISABLED - TOO MANY FAILURES`, {
+                    fix.permanentlyDisabled = true;
+                    this._failedFixes.add(fixId); // Add to failed set - prevents any future attempts
+                    console.error(`[Table ${this.name}] 🚫🚫🚫 FIX ${fixId} PERMANENTLY DISABLED - ${fix.failures} FAILURES (limit: ${MAX_FAILURES}) - TRY A DIFFERENT APPROACH! 🚫🚫🚫`);
+                    console.error(`[Table ${this.name}] ⚠️ WARNING: ${fixId} will NEVER be tried again - must use a completely different fix approach!`);
+                    gameLogger.gameEvent(this.name, `[FIX ATTEMPT] ${fixId} PERMANENTLY DISABLED - TOO MANY FAILURES`, {
                         fixId,
                         totalFailures: fix.failures,
                         maxFailures: MAX_FAILURES,
                         totalAttempts: fix.attempts,
                         successRate: ((fix.attempts - fix.failures) / fix.attempts * 100).toFixed(1) + '%',
-                        recommendation: `Fix has failed ${fix.failures} times. Current approach is not working - MUST try a different approach!`,
-                        lastFailure: fix.lastFailure
+                        recommendation: `Fix has failed ${fix.failures} times. Current approach is not working - MUST try a completely different approach! This fix will NEVER be re-enabled.`,
+                        lastFailure: fix.lastFailure,
+                        permanentlyDisabled: true,
+                        warning: 'DO NOT re-enable this fix - it has been proven to not work. Use a different approach instead.'
                     });
                 }
             } else {
