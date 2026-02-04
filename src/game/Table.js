@@ -1777,22 +1777,28 @@ class Table {
         
         // CRITICAL FIX: If chips were lost due to pot clearing, adjust totalStartingChips to match reality
         // This prevents validation failures from cascading through the game
+        // NOTE: potBeforeForceClear is the amount of chips that were in the pot and are now lost
+        // We need to subtract this from totalStartingChips to reflect the actual chips in the system
         if (potBeforeForceClear > 0 && this.totalStartingChips > 0) {
             const oldTotalStartingChips = this.totalStartingChips;
-            this.totalStartingChips = totalChipsAndPotAfterReset;
+            // Subtract the lost chips from totalStartingChips
+            this.totalStartingChips = this.totalStartingChips - potBeforeForceClear;
             console.error(`[Table ${this.name}] ⚠️ ADJUSTING totalStartingChips: ${oldTotalStartingChips} → ${this.totalStartingChips} (lost ${potBeforeForceClear} chips due to pot clearing)`);
             this._logTotalStartingChipsChange('ADJUST_FOR_POT_CLEAR', 'HAND_START', oldTotalStartingChips, this.totalStartingChips, {
                 reason: 'Pot was cleared at hand start, chips were lost',
                 chipsLost: potBeforeForceClear,
                 handNumber: this.handsPlayed,
-                totalChipsAndPotAfterReset
+                totalChipsAndPotAfterReset,
+                oldTotalStartingChips,
+                newTotalStartingChips: this.totalStartingChips
             });
             gameLogger.error(this.name, '[MONEY] Adjusted totalStartingChips due to pot clearing', {
                 oldTotalStartingChips,
                 newTotalStartingChips: this.totalStartingChips,
                 chipsLost: potBeforeForceClear,
                 handNumber: this.handsPlayed,
-                totalChipsAndPotAfterReset
+                totalChipsAndPotAfterReset,
+                calculation: `${oldTotalStartingChips} - ${potBeforeForceClear} = ${this.totalStartingChips}`
             });
         }
         
