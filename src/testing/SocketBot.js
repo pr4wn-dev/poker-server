@@ -33,8 +33,10 @@ class SocketBot {
         this.fastMode = options.fastMode || false;
         const speedMultiplier = this.fastMode ? 0.1 : 1; // 10x faster in fast mode
         
-        this.minDelay = Math.floor((options.minDelay || 500) * speedMultiplier);  // Min delay before action (ms)
-        this.maxDelay = Math.floor((options.maxDelay || 2000) * speedMultiplier); // Max delay before action (ms)
+        // CRITICAL: In fast mode, use very short delays (10-50ms) to prevent timeouts
+        // Regular mode uses 500-2000ms delays
+        this.minDelay = this.fastMode ? 10 : Math.floor((options.minDelay || 500) * speedMultiplier);  // Min delay before action (ms)
+        this.maxDelay = this.fastMode ? 50 : Math.floor((options.maxDelay || 2000) * speedMultiplier); // Max delay before action (ms)
         this.aggressiveness = options.aggressiveness || 0.3; // 0-1, higher = more raises
         
         // Network simulation settings
