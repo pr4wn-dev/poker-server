@@ -99,24 +99,42 @@ class Table {
         
         // CRITICAL: Fix attempt tracking system - tracks how many times each fix has been attempted and failed
         // This helps identify which fixes aren't working and need a different approach
+        // MAX_FAILURES: After 5 failures, the fix is disabled and a different approach should be tried
+        const MAX_FAILURES = 5;
+        
         this._fixAttempts = {
-            'FIX_1_POT_NOT_CLEARED': { attempts: 0, failures: 0, lastFailure: null },
-            'FIX_2_CHIPS_LOST_BETTING': { attempts: 0, failures: 0, lastFailure: null },
-            'FIX_3_CUMULATIVE_CHIP_LOSS': { attempts: 0, failures: 0, lastFailure: null },
-            'FIX_4_ACTION_NOT_YOUR_TURN': { attempts: 0, failures: 0, lastFailure: null },
-            'FIX_5_ACTION_GAME_NOT_IN_PROGRESS': { attempts: 0, failures: 0, lastFailure: null },
-            'FIX_6_BETTING_ACTION_FAILURES': { attempts: 0, failures: 0, lastFailure: null },
-            'FIX_7_VALIDATION_FAILURES': { attempts: 0, failures: 0, lastFailure: null },
-            'FIX_8_POT_MISMATCH': { attempts: 0, failures: 0, lastFailure: null }
+            'FIX_1_POT_NOT_CLEARED': { attempts: 0, failures: 0, lastFailure: null, disabled: false },
+            'FIX_2_CHIPS_LOST_BETTING': { attempts: 0, failures: 0, lastFailure: null, disabled: false },
+            'FIX_3_CUMULATIVE_CHIP_LOSS': { attempts: 0, failures: 0, lastFailure: null, disabled: false },
+            'FIX_4_ACTION_NOT_YOUR_TURN': { attempts: 0, failures: 0, lastFailure: null, disabled: false },
+            'FIX_5_ACTION_GAME_NOT_IN_PROGRESS': { attempts: 0, failures: 0, lastFailure: null, disabled: false },
+            'FIX_6_BETTING_ACTION_FAILURES': { attempts: 0, failures: 0, lastFailure: null, disabled: false },
+            'FIX_7_VALIDATION_FAILURES': { attempts: 0, failures: 0, lastFailure: null, disabled: false },
+            'FIX_8_POT_MISMATCH': { attempts: 0, failures: 0, lastFailure: null, disabled: false }
+        };
+        
+        // Helper to check if a fix is enabled (not disabled due to too many failures)
+        this._isFixEnabled = (fixId) => {
+            if (!this._fixAttempts[fixId]) {
+                return true; // Unknown fix, allow it
+            }
+            return !this._fixAttempts[fixId].disabled;
         };
         
         // Helper to record fix attempt
         this._recordFixAttempt = (fixId, success, details = {}) => {
             if (!this._fixAttempts[fixId]) {
-                this._fixAttempts[fixId] = { attempts: 0, failures: 0, lastFailure: null };
+                this._fixAttempts[fixId] = { attempts: 0, failures: 0, lastFailure: null, disabled: false };
             }
             
             const fix = this._fixAttempts[fixId];
+            
+            // If fix is already disabled, don't record attempts (but log that it was skipped)
+            if (fix.disabled) {
+                console.warn(`[Table ${this.name}] ⚠️ FIX ${fixId} IS DISABLED (${fix.failures} failures) - Skipping fix attempt`);
+                return;
+            }
+            
             fix.attempts++;
             
             if (!success) {
@@ -128,39 +146,43 @@ class Table {
                     ...details
                 };
                 
-                console.error(`[Table ${this.name}] ⚠️ FIX ATTEMPT FAILED: ${fixId} | Attempt #${fix.attempts} | Total Failures: ${fix.failures} | Success Rate: ${((fix.attempts - fix.failures) / fix.attempts * 100).toFixed(1)}%`);
+                console.error(`[Table ${this.name}] ⚠️ FIX ATTEMPT FAILED: ${fixId} | Attempt #${fix.attempts} | Total Failures: ${fix.failures}/${MAX_FAILURES} | Success Rate: ${((fix.attempts - fix.failures) / fix.attempts * 100).toFixed(1)}%`);
                 gameLogger.gameEvent(this.name, `[FIX ATTEMPT] ${fixId} FAILED`, {
                     fixId,
                     attemptNumber: fix.attempts,
                     totalFailures: fix.failures,
+                    maxFailures: MAX_FAILURES,
                     successRate: ((fix.attempts - fix.failures) / fix.attempts * 100).toFixed(1) + '%',
                     handNumber: this.handsPlayed,
                     phase: this.phase,
                     ...details
                 });
+                
+                // DISABLE FIX after MAX_FAILURES failures
+                if (fix.failures >= MAX_FAILURES) {
+                    fix.disabled = true;
+                    console.error(`[Table ${this.name}] 🚫🚫🚫 FIX ${fixId} DISABLED - ${fix.failures} FAILURES (limit: ${MAX_FAILURES}) - TRY A DIFFERENT APPROACH! 🚫🚫🚫`);
+                    gameLogger.gameEvent(this.name, `[FIX ATTEMPT] ${fixId} DISABLED - TOO MANY FAILURES`, {
+                        fixId,
+                        totalFailures: fix.failures,
+                        maxFailures: MAX_FAILURES,
+                        totalAttempts: fix.attempts,
+                        successRate: ((fix.attempts - fix.failures) / fix.attempts * 100).toFixed(1) + '%',
+                        recommendation: `Fix has failed ${fix.failures} times. Current approach is not working - MUST try a different approach!`,
+                        lastFailure: fix.lastFailure
+                    });
+                }
             } else {
-                console.log(`[Table ${this.name}] ✓ FIX ATTEMPT SUCCESS: ${fixId} | Attempt #${fix.attempts} | Total Failures: ${fix.failures} | Success Rate: ${((fix.attempts - fix.failures) / fix.attempts * 100).toFixed(1)}%`);
+                console.log(`[Table ${this.name}] ✓ FIX ATTEMPT SUCCESS: ${fixId} | Attempt #${fix.attempts} | Total Failures: ${fix.failures}/${MAX_FAILURES} | Success Rate: ${((fix.attempts - fix.failures) / fix.attempts * 100).toFixed(1)}%`);
                 gameLogger.gameEvent(this.name, `[FIX ATTEMPT] ${fixId} SUCCESS`, {
                     fixId,
                     attemptNumber: fix.attempts,
                     totalFailures: fix.failures,
+                    maxFailures: MAX_FAILURES,
                     successRate: ((fix.attempts - fix.failures) / fix.attempts * 100).toFixed(1) + '%',
                     handNumber: this.handsPlayed,
                     phase: this.phase,
                     ...details
-                });
-            }
-            
-            // Log summary if failures are accumulating
-            if (fix.failures > 0 && fix.failures % 5 === 0) {
-                console.error(`[Table ${this.name}] ⚠️⚠️⚠️ FIX ${fixId} HAS FAILED ${fix.failures} TIMES! Consider changing approach! ⚠️⚠️⚠️`);
-                gameLogger.gameEvent(this.name, `[FIX ATTEMPT] ${fixId} MULTIPLE FAILURES`, {
-                    fixId,
-                    totalFailures: fix.failures,
-                    totalAttempts: fix.attempts,
-                    successRate: ((fix.attempts - fix.failures) / fix.attempts * 100).toFixed(1) + '%',
-                    recommendation: 'Consider changing fix approach - current method is not working',
-                    lastFailure: fix.lastFailure
                 });
             }
         };
