@@ -1119,6 +1119,22 @@ class Table {
             isReady: false  // New: ready-up status
         };
         
+        // ULTRA-VERBOSE: Log before adding player
+        const totalChipsBefore = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
+        const totalChipsAndPotBefore = totalChipsBefore + this.pot;
+        
+        console.log(`[Table ${this.name}] [ADD_PLAYER PRE-OP] Hand: ${this.handsPlayed} | Player: ${name} | Chips: ${chips} | TotalChips: ${totalChipsBefore} | Pot: ${this.pot} | TotalChips+Pot: ${totalChipsAndPotBefore} | totalStartingChips: ${this.totalStartingChips}`);
+        gameLogger.gameEvent(this.name, '[ADD_PLAYER] PRE-OPERATION STATE', {
+            handNumber: this.handsPlayed,
+            player: name,
+            chips,
+            totalChipsBefore,
+            pot: this.pot,
+            totalChipsAndPotBefore,
+            totalStartingChips: this.totalStartingChips,
+            gameStarted: this.gameStarted
+        });
+        
         this.seats[seatIndex] = seat;
         
         // CRITICAL: If game already started, update totalStartingChips
@@ -1131,6 +1147,38 @@ class Table {
                 seatIndex,
                 chips,
                 reason: 'Late joiner - adding chips to totalStartingChips'
+            });
+        }
+        
+        // ULTRA-VERBOSE: Log after adding player
+        const totalChipsAfter = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
+        const totalChipsAndPotAfter = totalChipsAfter + this.pot;
+        const chipsDifference = totalChipsAndPotAfter - totalChipsAndPotBefore;
+        
+        console.log(`[Table ${this.name}] [ADD_PLAYER POST-OP] Hand: ${this.handsPlayed} | Player: ${name} | TotalChips: ${totalChipsAfter} | Pot: ${this.pot} | TotalChips+Pot: ${totalChipsAndPotAfter} | Difference: ${chipsDifference} | totalStartingChips: ${this.totalStartingChips}`);
+        gameLogger.gameEvent(this.name, '[ADD_PLAYER] POST-OPERATION STATE', {
+            handNumber: this.handsPlayed,
+            player: name,
+            chips,
+            totalChipsBefore,
+            totalChipsAfter,
+            pot: this.pot,
+            totalChipsAndPotBefore,
+            totalChipsAndPotAfter,
+            chipsDifference,
+            totalStartingChips: this.totalStartingChips,
+            gameStarted: this.gameStarted
+        });
+        
+        if (Math.abs(chipsDifference - chips) > 0.01) {
+            console.error(`[Table ${this.name}] ⚠️ CRITICAL ADD_PLAYER ERROR: Chips difference (${chipsDifference}) != added chips (${chips})!`);
+            gameLogger.error(this.name, '[ADD_PLAYER] CRITICAL: Chips difference mismatch', {
+                handNumber: this.handsPlayed,
+                player: name,
+                chips,
+                chipsDifference,
+                totalChipsAndPotBefore,
+                totalChipsAndPotAfter
             });
         }
         
@@ -1528,9 +1576,56 @@ class Table {
             return;
         }
         
+        // ULTRA-VERBOSE: Log before posting blinds
+        const totalChipsBeforeBlinds = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
+        const totalChipsAndPotBeforeBlinds = totalChipsBeforeBlinds + this.pot;
+        
+        console.log(`[Table ${this.name}] [POST_BLINDS PRE-OP] Hand: ${this.handsPlayed} | SB: ${this.smallBlind} | BB: ${this.bigBlind} | Pot: ${this.pot} | TotalChips: ${totalChipsBeforeBlinds} | TotalChips+Pot: ${totalChipsAndPotBeforeBlinds}`);
+        gameLogger.gameEvent(this.name, '[POST_BLINDS] PRE-OPERATION STATE', {
+            handNumber: this.handsPlayed,
+            smallBlind: this.smallBlind,
+            bigBlind: this.bigBlind,
+            pot: this.pot,
+            totalChipsBeforeBlinds,
+            totalChipsAndPotBeforeBlinds,
+            totalStartingChips: this.totalStartingChips,
+            sbIndex,
+            bbIndex,
+            sbPlayer: this.seats[sbIndex]?.name,
+            bbPlayer: this.seats[bbIndex]?.name
+        });
+        
         this.postBlind(sbIndex, this.smallBlind);
         this.postBlind(bbIndex, this.bigBlind);
         this.currentBet = this.bigBlind;
+        
+        // ULTRA-VERBOSE: Log after posting blinds
+        const totalChipsAfterBlinds = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
+        const totalChipsAndPotAfterBlinds = totalChipsAfterBlinds + this.pot;
+        const blindsDifference = totalChipsAndPotAfterBlinds - totalChipsAndPotBeforeBlinds;
+        const expectedBlindsTotal = this.smallBlind + this.bigBlind;
+        
+        console.log(`[Table ${this.name}] [POST_BLINDS POST-OP] Hand: ${this.handsPlayed} | Pot: ${this.pot} | TotalChips: ${totalChipsAfterBlinds} | TotalChips+Pot: ${totalChipsAndPotAfterBlinds} | Difference: ${blindsDifference} | Expected: ${expectedBlindsTotal}`);
+        gameLogger.gameEvent(this.name, '[POST_BLINDS] POST-OPERATION STATE', {
+            handNumber: this.handsPlayed,
+            pot: this.pot,
+            totalChipsAfterBlinds,
+            totalChipsAndPotAfterBlinds,
+            blindsDifference,
+            expectedBlindsTotal,
+            totalStartingChips: this.totalStartingChips
+        });
+        
+        if (Math.abs(blindsDifference) > 0.01) {
+            console.error(`[Table ${this.name}] ⚠️ CRITICAL POST_BLINDS ERROR: Total chips changed! Before: ${totalChipsAndPotBeforeBlinds}, After: ${totalChipsAndPotAfterBlinds}, Difference: ${blindsDifference}`);
+            gameLogger.error(this.name, '[POST_BLINDS] CRITICAL: Total chips changed', {
+                handNumber: this.handsPlayed,
+                totalChipsAndPotBeforeBlinds,
+                totalChipsAndPotAfterBlinds,
+                blindsDifference,
+                expectedBlindsTotal
+            });
+        }
 
         // Deal hole cards - REPLACE old cards, don't clear first
         // This ensures cards are never empty in state broadcasts
@@ -1624,21 +1719,101 @@ class Table {
             blindType: amount === this.smallBlind ? 'small' : 'big'
         });
         
-        // ULTRA-VERBOSE: Log before operation
+        // ULTRA-VERBOSE: Log before operation with FULL STATE
         const potBeforeAdd = this.pot;
         const chipsBeforeSubtract = player.chips;
+        const totalChipsBefore = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
+        const totalChipsAndPotBefore = totalChipsBefore + this.pot;
+        
+        console.log(`[Table ${this.name}] [BLIND PRE-OP] Hand: ${this.handsPlayed} | Player: ${player.name} | Blind: ${blindAmount} | PlayerChips: ${chipsBeforeSubtract} | Pot: ${potBeforeAdd} | TotalChips: ${totalChipsBefore} | TotalChips+Pot: ${totalChipsAndPotBefore}`);
+        gameLogger.gameEvent(this.name, '[BLIND] PRE-OPERATION STATE', {
+            handNumber: this.handsPlayed,
+            player: player.name,
+            blindAmount,
+            playerChipsBefore: chipsBeforeSubtract,
+            potBefore: potBeforeAdd,
+            totalChipsBefore,
+            totalChipsAndPotBefore,
+            totalStartingChips: this.totalStartingChips,
+            allSeats: this.seats.map((s, i) => s ? {
+                seatIndex: i,
+                name: s.name,
+                chips: s.chips,
+                totalBet: s.totalBet || 0,
+                currentBet: s.currentBet || 0,
+                isActive: s.isActive
+            } : null).filter(Boolean)
+        });
         
         player.chips -= blindAmount;
         player.currentBet = blindAmount;
         player.totalBet = blindAmount;
         this.pot += blindAmount;
         
+        // ULTRA-VERBOSE: Log after operation with FULL STATE
+        const chipsAfter = player.chips;
+        const potAfter = this.pot;
+        const totalChipsAfter = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
+        const totalChipsAndPotAfter = totalChipsAfter + this.pot;
+        const chipsDifference = totalChipsAndPotAfter - totalChipsAndPotBefore;
+        
+        console.log(`[Table ${this.name}] [BLIND POST-OP] Hand: ${this.handsPlayed} | Player: ${player.name} | PlayerChips: ${chipsAfter} (${chipsBeforeSubtract} - ${blindAmount}) | Pot: ${potAfter} (${potBeforeAdd} + ${blindAmount}) | TotalChips: ${totalChipsAfter} | TotalChips+Pot: ${totalChipsAndPotAfter} | Difference: ${chipsDifference}`);
+        gameLogger.gameEvent(this.name, '[BLIND] POST-OPERATION STATE', {
+            handNumber: this.handsPlayed,
+            player: player.name,
+            blindAmount,
+            playerChipsBefore: chipsBeforeSubtract,
+            playerChipsAfter: chipsAfter,
+            potBefore: potBeforeAdd,
+            potAfter: potAfter,
+            totalChipsBefore,
+            totalChipsAfter,
+            totalChipsAndPotBefore,
+            totalChipsAndPotAfter,
+            chipsDifference,
+            totalStartingChips: this.totalStartingChips,
+            allSeats: this.seats.map((s, i) => s ? {
+                seatIndex: i,
+                name: s.name,
+                chips: s.chips,
+                totalBet: s.totalBet || 0,
+                currentBet: s.currentBet || 0,
+                isActive: s.isActive
+            } : null).filter(Boolean)
+        });
+        
         // ULTRA-VERBOSE: Verify operation immediately
         if (player.chips !== chipsBeforeSubtract - blindAmount) {
             console.error(`[Table ${this.name}] ⚠️ CRITICAL BLIND ERROR: Chips calculation failed! Before: ${chipsBeforeSubtract}, Amount: ${blindAmount}, After: ${player.chips}, Expected: ${chipsBeforeSubtract - blindAmount}`);
+            gameLogger.error(this.name, '[BLIND] CRITICAL: Chips calculation error', {
+                handNumber: this.handsPlayed,
+                player: player.name,
+                chipsBefore: chipsBeforeSubtract,
+                blindAmount,
+                chipsAfter: player.chips,
+                expected: chipsBeforeSubtract - blindAmount
+            });
         }
         if (this.pot !== potBeforeAdd + blindAmount) {
             console.error(`[Table ${this.name}] ⚠️ CRITICAL BLIND ERROR: Pot calculation failed! Before: ${potBeforeAdd}, Amount: ${blindAmount}, After: ${this.pot}, Expected: ${potBeforeAdd + blindAmount}`);
+            gameLogger.error(this.name, '[BLIND] CRITICAL: Pot calculation error', {
+                handNumber: this.handsPlayed,
+                player: player.name,
+                potBefore: potBeforeAdd,
+                blindAmount,
+                potAfter: this.pot,
+                expected: potBeforeAdd + blindAmount
+            });
+        }
+        if (Math.abs(chipsDifference) > 0.01) {
+            console.error(`[Table ${this.name}] ⚠️ CRITICAL BLIND ERROR: Total chips changed! Before: ${totalChipsAndPotBefore}, After: ${totalChipsAndPotAfter}, Difference: ${chipsDifference}`);
+            gameLogger.error(this.name, '[BLIND] CRITICAL: Total chips changed', {
+                handNumber: this.handsPlayed,
+                player: player.name,
+                totalChipsAndPotBefore,
+                totalChipsAndPotAfter,
+                chipsDifference
+            });
         }
         
         // CRITICAL: Validate after operation
@@ -1990,21 +2165,101 @@ class Table {
             currentBetBefore
         });
         
-        // ULTRA-VERBOSE: Log before operation
+        // ULTRA-VERBOSE: Log before operation with FULL STATE
         const potBeforeAdd = this.pot;
         const chipsBeforeSubtract = player.chips;
+        const totalChipsBefore = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
+        const totalChipsAndPotBefore = totalChipsBefore + this.pot;
+        
+        console.log(`[Table ${this.name}] [CALL PRE-OP] Hand: ${this.handsPlayed} | Player: ${player.name} | ToCall: ${toCall} | PlayerChips: ${chipsBeforeSubtract} | Pot: ${potBeforeAdd} | TotalChips: ${totalChipsBefore} | TotalChips+Pot: ${totalChipsAndPotBefore}`);
+        gameLogger.gameEvent(this.name, '[CALL] PRE-OPERATION STATE', {
+            handNumber: this.handsPlayed,
+            player: player.name,
+            toCall,
+            playerChipsBefore: chipsBeforeSubtract,
+            potBefore: potBeforeAdd,
+            totalChipsBefore,
+            totalChipsAndPotBefore,
+            totalStartingChips: this.totalStartingChips,
+            allSeats: this.seats.map((s, i) => s ? {
+                seatIndex: i,
+                name: s.name,
+                chips: s.chips,
+                totalBet: s.totalBet || 0,
+                currentBet: s.currentBet || 0,
+                isActive: s.isActive
+            } : null).filter(Boolean)
+        });
         
         player.chips -= toCall;
         player.currentBet += toCall;
         player.totalBet = (player.totalBet || 0) + toCall;
         this.pot += toCall;
         
+        // ULTRA-VERBOSE: Log after operation with FULL STATE
+        const chipsAfter = player.chips;
+        const potAfter = this.pot;
+        const totalChipsAfter = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
+        const totalChipsAndPotAfter = totalChipsAfter + this.pot;
+        const chipsDifference = totalChipsAndPotAfter - totalChipsAndPotBefore;
+        
+        console.log(`[Table ${this.name}] [CALL POST-OP] Hand: ${this.handsPlayed} | Player: ${player.name} | PlayerChips: ${chipsAfter} (${chipsBeforeSubtract} - ${toCall}) | Pot: ${potAfter} (${potBeforeAdd} + ${toCall}) | TotalChips: ${totalChipsAfter} | TotalChips+Pot: ${totalChipsAndPotAfter} | Difference: ${chipsDifference}`);
+        gameLogger.gameEvent(this.name, '[CALL] POST-OPERATION STATE', {
+            handNumber: this.handsPlayed,
+            player: player.name,
+            toCall,
+            playerChipsBefore: chipsBeforeSubtract,
+            playerChipsAfter: chipsAfter,
+            potBefore: potBeforeAdd,
+            potAfter: potAfter,
+            totalChipsBefore,
+            totalChipsAfter,
+            totalChipsAndPotBefore,
+            totalChipsAndPotAfter,
+            chipsDifference,
+            totalStartingChips: this.totalStartingChips,
+            allSeats: this.seats.map((s, i) => s ? {
+                seatIndex: i,
+                name: s.name,
+                chips: s.chips,
+                totalBet: s.totalBet || 0,
+                currentBet: s.currentBet || 0,
+                isActive: s.isActive
+            } : null).filter(Boolean)
+        });
+        
         // ULTRA-VERBOSE: Verify operation immediately
         if (player.chips !== chipsBeforeSubtract - toCall) {
             console.error(`[Table ${this.name}] ⚠️ CRITICAL CALL ERROR: Chips calculation failed! Before: ${chipsBeforeSubtract}, Amount: ${toCall}, After: ${player.chips}, Expected: ${chipsBeforeSubtract - toCall}`);
+            gameLogger.error(this.name, '[CALL] CRITICAL: Chips calculation error', {
+                handNumber: this.handsPlayed,
+                player: player.name,
+                chipsBefore: chipsBeforeSubtract,
+                toCall,
+                chipsAfter: player.chips,
+                expected: chipsBeforeSubtract - toCall
+            });
         }
         if (this.pot !== potBeforeAdd + toCall) {
             console.error(`[Table ${this.name}] ⚠️ CRITICAL CALL ERROR: Pot calculation failed! Before: ${potBeforeAdd}, Amount: ${toCall}, After: ${this.pot}, Expected: ${potBeforeAdd + toCall}`);
+            gameLogger.error(this.name, '[CALL] CRITICAL: Pot calculation error', {
+                handNumber: this.handsPlayed,
+                player: player.name,
+                potBefore: potBeforeAdd,
+                toCall,
+                potAfter: this.pot,
+                expected: potBeforeAdd + toCall
+            });
+        }
+        if (Math.abs(chipsDifference) > 0.01) {
+            console.error(`[Table ${this.name}] ⚠️ CRITICAL CALL ERROR: Total chips changed! Before: ${totalChipsAndPotBefore}, After: ${totalChipsAndPotAfter}, Difference: ${chipsDifference}`);
+            gameLogger.error(this.name, '[CALL] CRITICAL: Total chips changed', {
+                handNumber: this.handsPlayed,
+                player: player.name,
+                totalChipsAndPotBefore,
+                totalChipsAndPotAfter,
+                chipsDifference
+            });
         }
         
         // CRITICAL: Validate after operation
@@ -2091,21 +2346,101 @@ class Table {
             totalBetBefore
         });
         
-        // ULTRA-VERBOSE: Log before operation
+        // ULTRA-VERBOSE: Log before operation with FULL STATE
         const potBeforeAdd = this.pot;
         const chipsBeforeSubtract = player.chips;
+        const totalChipsBefore = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
+        const totalChipsAndPotBefore = totalChipsBefore + this.pot;
+        
+        console.log(`[Table ${this.name}] [BET PRE-OP] Hand: ${this.handsPlayed} | Player: ${player.name} | Amount: ${amount} | PlayerChips: ${chipsBeforeSubtract} | Pot: ${potBeforeAdd} | TotalChips: ${totalChipsBefore} | TotalChips+Pot: ${totalChipsAndPotBefore}`);
+        gameLogger.gameEvent(this.name, '[BET] PRE-OPERATION STATE', {
+            handNumber: this.handsPlayed,
+            player: player.name,
+            amount,
+            playerChipsBefore: chipsBeforeSubtract,
+            potBefore: potBeforeAdd,
+            totalChipsBefore,
+            totalChipsAndPotBefore,
+            totalStartingChips: this.totalStartingChips,
+            allSeats: this.seats.map((s, i) => s ? {
+                seatIndex: i,
+                name: s.name,
+                chips: s.chips,
+                totalBet: s.totalBet || 0,
+                currentBet: s.currentBet || 0,
+                isActive: s.isActive
+            } : null).filter(Boolean)
+        });
         
         player.chips -= amount;
         player.currentBet = amount;
         player.totalBet = (player.totalBet || 0) + amount;
         this.pot += amount;
         
+        // ULTRA-VERBOSE: Log after operation with FULL STATE
+        const chipsAfter = player.chips;
+        const potAfter = this.pot;
+        const totalChipsAfter = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
+        const totalChipsAndPotAfter = totalChipsAfter + this.pot;
+        const chipsDifference = totalChipsAndPotAfter - totalChipsAndPotBefore;
+        
+        console.log(`[Table ${this.name}] [BET POST-OP] Hand: ${this.handsPlayed} | Player: ${player.name} | PlayerChips: ${chipsAfter} (${chipsBeforeSubtract} - ${amount}) | Pot: ${potAfter} (${potBeforeAdd} + ${amount}) | TotalChips: ${totalChipsAfter} | TotalChips+Pot: ${totalChipsAndPotAfter} | Difference: ${chipsDifference}`);
+        gameLogger.gameEvent(this.name, '[BET] POST-OPERATION STATE', {
+            handNumber: this.handsPlayed,
+            player: player.name,
+            amount,
+            playerChipsBefore: chipsBeforeSubtract,
+            playerChipsAfter: chipsAfter,
+            potBefore: potBeforeAdd,
+            potAfter: potAfter,
+            totalChipsBefore,
+            totalChipsAfter,
+            totalChipsAndPotBefore,
+            totalChipsAndPotAfter,
+            chipsDifference,
+            totalStartingChips: this.totalStartingChips,
+            allSeats: this.seats.map((s, i) => s ? {
+                seatIndex: i,
+                name: s.name,
+                chips: s.chips,
+                totalBet: s.totalBet || 0,
+                currentBet: s.currentBet || 0,
+                isActive: s.isActive
+            } : null).filter(Boolean)
+        });
+        
         // ULTRA-VERBOSE: Verify operation immediately
         if (player.chips !== chipsBeforeSubtract - amount) {
             console.error(`[Table ${this.name}] ⚠️ CRITICAL BET ERROR: Chips calculation failed! Before: ${chipsBeforeSubtract}, Amount: ${amount}, After: ${player.chips}, Expected: ${chipsBeforeSubtract - amount}`);
+            gameLogger.error(this.name, '[BET] CRITICAL: Chips calculation error', {
+                handNumber: this.handsPlayed,
+                player: player.name,
+                chipsBefore: chipsBeforeSubtract,
+                amount,
+                chipsAfter: player.chips,
+                expected: chipsBeforeSubtract - amount
+            });
         }
         if (this.pot !== potBeforeAdd + amount) {
             console.error(`[Table ${this.name}] ⚠️ CRITICAL BET ERROR: Pot calculation failed! Before: ${potBeforeAdd}, Amount: ${amount}, After: ${this.pot}, Expected: ${potBeforeAdd + amount}`);
+            gameLogger.error(this.name, '[BET] CRITICAL: Pot calculation error', {
+                handNumber: this.handsPlayed,
+                player: player.name,
+                potBefore: potBeforeAdd,
+                amount,
+                potAfter: this.pot,
+                expected: potBeforeAdd + amount
+            });
+        }
+        if (Math.abs(chipsDifference) > 0.01) {
+            console.error(`[Table ${this.name}] ⚠️ CRITICAL BET ERROR: Total chips changed! Before: ${totalChipsAndPotBefore}, After: ${totalChipsAndPotAfter}, Difference: ${chipsDifference}`);
+            gameLogger.error(this.name, '[BET] CRITICAL: Total chips changed', {
+                handNumber: this.handsPlayed,
+                player: player.name,
+                totalChipsAndPotBefore,
+                totalChipsAndPotAfter,
+                chipsDifference
+            });
         }
         
         // CRITICAL: Validate after operation
@@ -2247,21 +2582,103 @@ class Table {
         
         // CRITICAL FIX: Subtract only the additional bet from chips, not the full amount
         // The player's previous bet was already paid and is in the pot
-        // ULTRA-VERBOSE: Log before operation
+        // ULTRA-VERBOSE: Log before operation with FULL STATE
         const potBeforeAdd = this.pot;
         const chipsBeforeSubtract = player.chips;
+        const totalChipsBefore = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
+        const totalChipsAndPotBefore = totalChipsBefore + this.pot;
+        
+        console.log(`[Table ${this.name}] [RAISE PRE-OP] Hand: ${this.handsPlayed} | Player: ${player.name} | Amount: ${amount} | AdditionalBet: ${additionalBet} | PlayerChips: ${chipsBeforeSubtract} | Pot: ${potBeforeAdd} | TotalChips: ${totalChipsBefore} | TotalChips+Pot: ${totalChipsAndPotBefore}`);
+        gameLogger.gameEvent(this.name, '[RAISE] PRE-OPERATION STATE', {
+            handNumber: this.handsPlayed,
+            player: player.name,
+            amount,
+            additionalBet,
+            playerChipsBefore: chipsBeforeSubtract,
+            potBefore: potBeforeAdd,
+            totalChipsBefore,
+            totalChipsAndPotBefore,
+            totalStartingChips: this.totalStartingChips,
+            allSeats: this.seats.map((s, i) => s ? {
+                seatIndex: i,
+                name: s.name,
+                chips: s.chips,
+                totalBet: s.totalBet || 0,
+                currentBet: s.currentBet || 0,
+                isActive: s.isActive
+            } : null).filter(Boolean)
+        });
         
         player.chips -= additionalBet;
         player.currentBet = amount; // Set to total bet amount
         player.totalBet = (player.totalBet || 0) + additionalBet; // Only add the additional amount
         this.pot += additionalBet; // Only add the additional amount to pot
         
+        // ULTRA-VERBOSE: Log after operation with FULL STATE
+        const chipsAfter = player.chips;
+        const potAfter = this.pot;
+        const totalChipsAfter = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
+        const totalChipsAndPotAfter = totalChipsAfter + this.pot;
+        const chipsDifference = totalChipsAndPotAfter - totalChipsAndPotBefore;
+        
+        console.log(`[Table ${this.name}] [RAISE POST-OP] Hand: ${this.handsPlayed} | Player: ${player.name} | PlayerChips: ${chipsAfter} (${chipsBeforeSubtract} - ${additionalBet}) | Pot: ${potAfter} (${potBeforeAdd} + ${additionalBet}) | TotalChips: ${totalChipsAfter} | TotalChips+Pot: ${totalChipsAndPotAfter} | Difference: ${chipsDifference}`);
+        gameLogger.gameEvent(this.name, '[RAISE] POST-OPERATION STATE', {
+            handNumber: this.handsPlayed,
+            player: player.name,
+            amount,
+            additionalBet,
+            playerChipsBefore: chipsBeforeSubtract,
+            playerChipsAfter: chipsAfter,
+            potBefore: potBeforeAdd,
+            potAfter: potAfter,
+            totalChipsBefore,
+            totalChipsAfter,
+            totalChipsAndPotBefore,
+            totalChipsAndPotAfter,
+            chipsDifference,
+            totalStartingChips: this.totalStartingChips,
+            allSeats: this.seats.map((s, i) => s ? {
+                seatIndex: i,
+                name: s.name,
+                chips: s.chips,
+                totalBet: s.totalBet || 0,
+                currentBet: s.currentBet || 0,
+                isActive: s.isActive
+            } : null).filter(Boolean)
+        });
+        
         // ULTRA-VERBOSE: Verify operation immediately
         if (player.chips !== chipsBeforeSubtract - additionalBet) {
             console.error(`[Table ${this.name}] ⚠️ CRITICAL RAISE ERROR: Chips calculation failed! Before: ${chipsBeforeSubtract}, AdditionalBet: ${additionalBet}, After: ${player.chips}, Expected: ${chipsBeforeSubtract - additionalBet}`);
+            gameLogger.error(this.name, '[RAISE] CRITICAL: Chips calculation error', {
+                handNumber: this.handsPlayed,
+                player: player.name,
+                chipsBefore: chipsBeforeSubtract,
+                additionalBet,
+                chipsAfter: player.chips,
+                expected: chipsBeforeSubtract - additionalBet
+            });
         }
         if (this.pot !== potBeforeAdd + additionalBet) {
             console.error(`[Table ${this.name}] ⚠️ CRITICAL RAISE ERROR: Pot calculation failed! Before: ${potBeforeAdd}, AdditionalBet: ${additionalBet}, After: ${this.pot}, Expected: ${potBeforeAdd + additionalBet}`);
+            gameLogger.error(this.name, '[RAISE] CRITICAL: Pot calculation error', {
+                handNumber: this.handsPlayed,
+                player: player.name,
+                potBefore: potBeforeAdd,
+                additionalBet,
+                potAfter: this.pot,
+                expected: potBeforeAdd + additionalBet
+            });
+        }
+        if (Math.abs(chipsDifference) > 0.01) {
+            console.error(`[Table ${this.name}] ⚠️ CRITICAL RAISE ERROR: Total chips changed! Before: ${totalChipsAndPotBefore}, After: ${totalChipsAndPotAfter}, Difference: ${chipsDifference}`);
+            gameLogger.error(this.name, '[RAISE] CRITICAL: Total chips changed', {
+                handNumber: this.handsPlayed,
+                player: player.name,
+                totalChipsAndPotBefore,
+                totalChipsAndPotAfter,
+                chipsDifference
+            });
         }
         this.currentBet = player.currentBet;
         
@@ -2365,24 +2782,108 @@ class Table {
             newCurrentBet
         });
 
-        // ULTRA-VERBOSE: Log before operation
+        // ULTRA-VERBOSE: Log before operation with FULL STATE
         const potBeforeAdd = this.pot;
         const chipsBeforeSubtract = player.chips;
+        const totalChipsBefore = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
+        const totalChipsAndPotBefore = totalChipsBefore + this.pot;
+        
+        console.log(`[Table ${this.name}] [ALL-IN PRE-OP] Hand: ${this.handsPlayed} | Player: ${player.name} | Amount: ${amount} | PlayerChips: ${chipsBeforeSubtract} | Pot: ${potBeforeAdd} | TotalChips: ${totalChipsBefore} | TotalChips+Pot: ${totalChipsAndPotBefore}`);
+        gameLogger.gameEvent(this.name, '[ALL-IN] PRE-OPERATION STATE', {
+            handNumber: this.handsPlayed,
+            player: player.name,
+            amount,
+            playerChipsBefore: chipsBeforeSubtract,
+            potBefore: potBeforeAdd,
+            totalChipsBefore,
+            totalChipsAndPotBefore,
+            totalStartingChips: this.totalStartingChips,
+            allSeats: this.seats.map((s, i) => s ? {
+                seatIndex: i,
+                name: s.name,
+                chips: s.chips,
+                totalBet: s.totalBet || 0,
+                currentBet: s.currentBet || 0,
+                isActive: s.isActive
+            } : null).filter(Boolean)
+        });
         
         player.chips = 0;
         player.currentBet = newCurrentBet;
         player.totalBet = (player.totalBet || 0) + amount; // Add all chips to totalBet
         this.pot += amount; // Add all chips to pot
         
+        // ULTRA-VERBOSE: Log after operation with FULL STATE
+        const chipsAfter = player.chips;
+        const potAfter = this.pot;
+        const totalChipsAfter = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
+        const totalChipsAndPotAfter = totalChipsAfter + this.pot;
+        const chipsDifference = totalChipsAndPotAfter - totalChipsAndPotBefore;
+        
+        console.log(`[Table ${this.name}] [ALL-IN POST-OP] Hand: ${this.handsPlayed} | Player: ${player.name} | PlayerChips: ${chipsAfter} (should be 0) | Pot: ${potAfter} (${potBeforeAdd} + ${amount}) | TotalChips: ${totalChipsAfter} | TotalChips+Pot: ${totalChipsAndPotAfter} | Difference: ${chipsDifference}`);
+        gameLogger.gameEvent(this.name, '[ALL-IN] POST-OPERATION STATE', {
+            handNumber: this.handsPlayed,
+            player: player.name,
+            amount,
+            playerChipsBefore: chipsBeforeSubtract,
+            playerChipsAfter: chipsAfter,
+            potBefore: potBeforeAdd,
+            potAfter: potAfter,
+            totalChipsBefore,
+            totalChipsAfter,
+            totalChipsAndPotBefore,
+            totalChipsAndPotAfter,
+            chipsDifference,
+            totalStartingChips: this.totalStartingChips,
+            allSeats: this.seats.map((s, i) => s ? {
+                seatIndex: i,
+                name: s.name,
+                chips: s.chips,
+                totalBet: s.totalBet || 0,
+                currentBet: s.currentBet || 0,
+                isActive: s.isActive
+            } : null).filter(Boolean)
+        });
+        
         // ULTRA-VERBOSE: Verify operation immediately
         if (player.chips !== 0) {
             console.error(`[Table ${this.name}] ⚠️ CRITICAL ALL-IN ERROR: Chips should be 0 but are ${player.chips}! Amount: ${amount}`);
+            gameLogger.error(this.name, '[ALL-IN] CRITICAL: Chips not zero', {
+                handNumber: this.handsPlayed,
+                player: player.name,
+                chipsAfter: player.chips,
+                amount
+            });
         }
         if (this.pot !== potBeforeAdd + amount) {
             console.error(`[Table ${this.name}] ⚠️ CRITICAL ALL-IN ERROR: Pot calculation failed! Before: ${potBeforeAdd}, Amount: ${amount}, After: ${this.pot}, Expected: ${potBeforeAdd + amount}`);
+            gameLogger.error(this.name, '[ALL-IN] CRITICAL: Pot calculation error', {
+                handNumber: this.handsPlayed,
+                player: player.name,
+                potBefore: potBeforeAdd,
+                amount,
+                potAfter: this.pot,
+                expected: potBeforeAdd + amount
+            });
         }
         if (chipsBeforeSubtract !== amount) {
             console.error(`[Table ${this.name}] ⚠️ CRITICAL ALL-IN ERROR: Amount mismatch! Player chips before: ${chipsBeforeSubtract}, Amount being bet: ${amount}`);
+            gameLogger.error(this.name, '[ALL-IN] CRITICAL: Amount mismatch', {
+                handNumber: this.handsPlayed,
+                player: player.name,
+                chipsBefore: chipsBeforeSubtract,
+                amount
+            });
+        }
+        if (Math.abs(chipsDifference) > 0.01) {
+            console.error(`[Table ${this.name}] ⚠️ CRITICAL ALL-IN ERROR: Total chips changed! Before: ${totalChipsAndPotBefore}, After: ${totalChipsAndPotAfter}, Difference: ${chipsDifference}`);
+            gameLogger.error(this.name, '[ALL-IN] CRITICAL: Total chips changed', {
+                handNumber: this.handsPlayed,
+                player: player.name,
+                totalChipsAndPotBefore,
+                totalChipsAndPotAfter,
+                chipsDifference
+            });
         }
         player.isAllIn = true;
         
