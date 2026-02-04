@@ -4699,7 +4699,7 @@ class Table {
                     // Chips lost: pot is less than sum of bets
                     const chipsLost = sumOfTotalBets - potBeforeCalculation;
                     console.error(`[Table ${this.name}] ⚠️ CRITICAL FIX #2: Sum of bets (${sumOfTotalBets}) > Pot (${potBeforeCalculation}). CHIPS LOST: ${chipsLost}!`);
-                    gameLogger.error(this.name, '[FIX #2: POT] CRITICAL: Chips lost during betting', {
+                    gameLogger.gameEvent(this.name, '[FIX #2: POT] CRITICAL: Chips lost during betting', {
                         potBeforeCalculation,
                         sumOfTotalBets,
                         chipsLost,
@@ -4728,7 +4728,7 @@ class Table {
                     const oldPot = potBeforeCalculation;
                     this.pot = sumOfTotalBets;
                     console.error(`[Table ${this.name}] ⚠️ FIX #2: Adjusting pot from ${oldPot} to ${sumOfTotalBets} to recover ${chipsLost} lost chips`);
-                    gameLogger.error(this.name, '[FIX #2: POT] Pot adjusted to match sumOfTotalBets', {
+                    gameLogger.gameEvent(this.name, '[FIX #2: POT] Pot adjusted to match sumOfTotalBets', {
                         oldPot: oldPot,
                         newPot: sumOfTotalBets,
                         chipsRecovered: chipsLost,
@@ -4750,7 +4750,7 @@ class Table {
                     // Chips created: pot is more than sum of bets
                     const chipsCreated = potBeforeCalculation - sumOfTotalBets;
                     console.error(`[Table ${this.name}] ⚠️ CRITICAL FIX #2: Pot (${potBeforeCalculation}) > Sum of bets (${sumOfTotalBets}). CHIPS CREATED: ${chipsCreated}!`);
-                    gameLogger.error(this.name, '[FIX #2: POT] CRITICAL: Chips created during betting', {
+                    gameLogger.gameEvent(this.name, '[FIX #2: POT] CRITICAL: Chips created during betting', {
                         potBeforeCalculation,
                         sumOfTotalBets,
                         chipsCreated,
@@ -4779,7 +4779,7 @@ class Table {
                     const oldPot = potBeforeCalculation;
                     this.pot = sumOfTotalBets;
                     console.error(`[Table ${this.name}] ⚠️ FIX #2: Adjusting pot from ${oldPot} to ${sumOfTotalBets} to remove ${chipsCreated} created chips`);
-                    gameLogger.error(this.name, '[FIX #2: POT] Pot adjusted down to match sumOfTotalBets', {
+                    gameLogger.gameEvent(this.name, '[FIX #2: POT] Pot adjusted down to match sumOfTotalBets', {
                         oldPot: oldPot,
                         newPot: sumOfTotalBets,
                         chipsRemoved: chipsCreated,
