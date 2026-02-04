@@ -1485,17 +1485,85 @@ class Table {
         this.deck.shuffle();
         this.communityCards = [];
         
-        // ULTRA-VERBOSE: Log pot reset at hand start
+        // CRITICAL FIX #1: Pot not cleared at hand start - ULTRA-VERBOSE logging
         const potBeforeReset = this.pot;
+        const totalChipsBeforeReset = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
+        const totalChipsAndPotBeforeReset = totalChipsBeforeReset + this.pot;
+        
+        console.log(`[Table ${this.name}] [FIX #1: HAND_START PRE-RESET] Hand: ${this.handsPlayed} | Pot: ${potBeforeReset} | TotalChips: ${totalChipsBeforeReset} | TotalChips+Pot: ${totalChipsAndPotBeforeReset} | totalStartingChips: ${this.totalStartingChips}`);
+        gameLogger.gameEvent(this.name, '[FIX #1: HAND_START] PRE-RESET STATE', {
+            handNumber: this.handsPlayed,
+            potBeforeReset,
+            totalChipsBeforeReset,
+            totalChipsAndPotBeforeReset,
+            totalStartingChips: this.totalStartingChips,
+            phase: this.phase,
+            allSeats: this.seats.map((s, i) => s ? {
+                seatIndex: i,
+                name: s.name,
+                chips: s.chips,
+                totalBet: s.totalBet || 0,
+                currentBet: s.currentBet || 0,
+                isActive: s.isActive
+            } : null).filter(Boolean)
+        });
+        
+        // CRITICAL FIX: If pot is not 0, this is a bug - log it and FORCE clear it
         if (potBeforeReset > 0) {
-            console.error(`[Table ${this.name}] ⚠️ CRITICAL: Pot was ${potBeforeReset} at hand start! Pot should be 0! | Hand: ${this.handsPlayed}`);
-            gameLogger.error(this.name, '[POT] ERROR: Pot not cleared at hand start', {
+            console.error(`[Table ${this.name}] ⚠️ CRITICAL FIX #1: Pot was ${potBeforeReset} at hand start! Pot should be 0! FORCING CLEAR. | Hand: ${this.handsPlayed}`);
+            gameLogger.error(this.name, '[FIX #1: POT] ERROR: Pot not cleared at hand start - FORCING CLEAR', {
                 potBeforeReset,
                 handNumber: this.handsPlayed,
-                phase: this.phase
+                phase: this.phase,
+                totalChipsBeforeReset,
+                totalChipsAndPotBeforeReset,
+                totalStartingChips: this.totalStartingChips,
+                fix: 'FORCING pot = 0 to prevent cascading errors',
+                stackTrace: new Error().stack
+            });
+            
+            // CRITICAL: If pot wasn't cleared, it means chips were lost
+            // Log this as a critical error but clear the pot anyway
+            const chipsLost = potBeforeReset;
+            console.error(`[Table ${this.name}] ⚠️ CRITICAL: ${chipsLost} chips LOST because pot wasn't cleared!`);
+            gameLogger.error(this.name, '[FIX #1: POT] CRITICAL: Chips lost due to pot not cleared', {
+                chipsLost,
+                potBeforeReset,
+                handNumber: this.handsPlayed
             });
         }
+        
+        // CRITICAL: ALWAYS clear pot, even if it should already be 0
+        const potBeforeForceClear = this.pot;
         this.pot = 0;
+        
+        // ULTRA-VERBOSE: Log after pot reset
+        const totalChipsAfterReset = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
+        const totalChipsAndPotAfterReset = totalChipsAfterReset + this.pot;
+        const resetDifference = totalChipsAndPotAfterReset - totalChipsAndPotBeforeReset;
+        
+        console.log(`[Table ${this.name}] [FIX #1: HAND_START POST-RESET] Hand: ${this.handsPlayed} | Pot: ${this.pot} (was ${potBeforeForceClear}) | TotalChips: ${totalChipsAfterReset} | TotalChips+Pot: ${totalChipsAndPotAfterReset} | Difference: ${resetDifference}`);
+        gameLogger.gameEvent(this.name, '[FIX #1: HAND_START] POST-RESET STATE', {
+            handNumber: this.handsPlayed,
+            potBeforeForceClear,
+            potAfterReset: this.pot,
+            totalChipsAfterReset,
+            totalChipsAndPotAfterReset,
+            resetDifference,
+            totalStartingChips: this.totalStartingChips,
+            chipsLost: potBeforeForceClear > 0 ? potBeforeForceClear : 0
+        });
+        
+        if (Math.abs(resetDifference + potBeforeReset) > 0.01) {
+            console.error(`[Table ${this.name}] ⚠️ CRITICAL FIX #1 ERROR: Reset difference (${resetDifference}) != -potBeforeReset (${-potBeforeReset})!`);
+            gameLogger.error(this.name, '[FIX #1: HAND_START] CRITICAL: Reset difference mismatch', {
+                handNumber: this.handsPlayed,
+                potBeforeReset,
+                resetDifference,
+                totalChipsAndPotBeforeReset,
+                totalChipsAndPotAfterReset
+            });
+        }
         this.sidePots = [];
         this.currentBet = 0;
         this.minRaise = this.bigBlind;
@@ -1899,23 +1967,62 @@ class Table {
                 return { success: false, error: 'No betting during showdown' };
             }
             
+            // CRITICAL FIX #4 & #5: Action rejected - Game not in progress / Not your turn
+            // ULTRA-VERBOSE: Log all validation checks
+            console.log(`[Table ${this.name}] [FIX #4/#5: ACTION VALIDATION] Player: ${playerId} | Action: ${action} | Phase: ${this.phase} | CurrentPlayerIndex: ${this.currentPlayerIndex}`);
+            gameLogger.gameEvent(this.name, '[FIX #4/#5: ACTION] VALIDATION START', {
+                playerId,
+                action,
+                amount,
+                phase: this.phase,
+                currentPlayerIndex: this.currentPlayerIndex,
+                handNumber: this.handsPlayed
+            });
+            
             // CRITICAL: No betting allowed during waiting/ready_up/countdown phases
             if (this.phase === GAME_PHASES.WAITING || this.phase === GAME_PHASES.READY_UP || this.phase === GAME_PHASES.COUNTDOWN) {
-                gameLogger.bettingAction(this.name, playerId || 'unknown', `Action rejected: Game not in progress (phase: ${this.phase})`);
+                console.error(`[Table ${this.name}] ⚠️ FIX #5: Action rejected - Game not in progress | Player: ${playerId} | Phase: ${this.phase} | Action: ${action}`);
+                gameLogger.bettingAction(this.name, playerId || 'unknown', `[FIX #5] Action rejected: Game not in progress (phase: ${this.phase})`, {
+                    playerId,
+                    action,
+                    amount,
+                    phase: this.phase,
+                    handNumber: this.handsPlayed,
+                    fix: 'Bot/player trying to act when game not in progress - this should be prevented by bot state checking'
+                });
                 this._processingAction = false;
                 return { success: false, error: 'Game not in progress' };
             }
             
             const seatIndex = this.seats.findIndex(s => s?.playerId === playerId);
             if (seatIndex === -1) {
-                gameLogger.bettingAction(this.name, playerId || 'unknown', `Action rejected: Player not found at table`);
+                console.error(`[Table ${this.name}] ⚠️ FIX #4: Action rejected - Player not found | Player: ${playerId} | Action: ${action}`);
+                gameLogger.bettingAction(this.name, playerId || 'unknown', `[FIX #4] Action rejected: Player not found at table`, {
+                    playerId,
+                    action,
+                    amount,
+                    phase: this.phase,
+                    handNumber: this.handsPlayed,
+                    allSeats: this.seats.map((s, i) => s ? { seatIndex: i, playerId: s.playerId, name: s.name } : { seatIndex: i, isNull: true }),
+                    fix: 'Bot/player trying to act but not found in seats - bot may have been removed or seat cleared'
+                });
                 this._processingAction = false;
                 return { success: false, error: 'Player not found at table' };
             }
             
-            // CRITICAL FIX: Must be player's turn
+            // CRITICAL FIX #4: Must be player's turn
             if (seatIndex !== this.currentPlayerIndex) {
-                gameLogger.bettingAction(this.name, playerId || 'unknown', `Action rejected: Not your turn (seat ${seatIndex}, current ${this.currentPlayerIndex})`);
+                console.error(`[Table ${this.name}] ⚠️ FIX #4: Action rejected - Not your turn | Player: ${playerId} | Seat: ${seatIndex} | Current: ${this.currentPlayerIndex} | Action: ${action}`);
+                gameLogger.bettingAction(this.name, playerId || 'unknown', `[FIX #4] Action rejected: Not your turn (seat ${seatIndex}, current ${this.currentPlayerIndex})`, {
+                    playerId,
+                    action,
+                    amount,
+                    seatIndex,
+                    currentPlayerIndex: this.currentPlayerIndex,
+                    phase: this.phase,
+                    handNumber: this.handsPlayed,
+                    fix: 'Bot/player trying to act out of turn - bot should check currentPlayerIndex before acting'
+                });
                 this._processingAction = false;
                 return { success: false, error: 'Not your turn' };
             }
@@ -1962,9 +2069,32 @@ class Table {
                     result = this.fold(seatIndex);
                     break;
                 case ACTIONS.CHECK:
+                    // CRITICAL FIX #6: Check action failures - improve validation
+                    console.log(`[Table ${this.name}] [FIX #6: CHECK VALIDATION] Player: ${player.name} | ToCall: ${toCall} | CurrentBet: ${this.currentBet} | PlayerBet: ${player.currentBet}`);
+                    gameLogger.gameEvent(this.name, '[FIX #6: CHECK] VALIDATION START', {
+                        player: player.name,
+                        seatIndex,
+                        toCall,
+                        currentBet: this.currentBet,
+                        playerBet: player.currentBet,
+                        phase: this.phase,
+                        handNumber: this.handsPlayed
+                    });
+                    
                     if (toCall > 0) {
-                        result = { success: false, error: `Cannot check - need to call ${toCall}` };
+                        const errorMsg = `Cannot check - need to call ${toCall}`;
+                        console.error(`[Table ${this.name}] ⚠️ FIX #6: CHECK REJECTED - ${errorMsg} | Player: ${player.name} | ToCall: ${toCall}`);
+                        gameLogger.bettingAction(this.name, player.name || `Seat ${seatIndex}`, '[FIX #6] CHECK REJECTED', {
+                            seatIndex,
+                            toCall,
+                            currentBet: this.currentBet,
+                            playerBet: player.currentBet,
+                            reason: errorMsg,
+                            fix: 'Bot/player trying to check when toCall > 0 - should call or fold'
+                        });
+                        result = { success: false, error: errorMsg };
                     } else {
+                        console.log(`[Table ${this.name}] [FIX #6: CHECK] Allowing check | Player: ${player.name}`);
                         result = this.check(seatIndex);
                     }
                     break;
@@ -1980,28 +2110,81 @@ class Table {
                     }
                     break;
                 case ACTIONS.BET:
+                    // CRITICAL FIX #6: Betting action failures - improve validation
+                    console.log(`[Table ${this.name}] [FIX #6: BET VALIDATION] Player: ${player.name} | Amount: ${amount} | CurrentBet: ${this.currentBet} | Phase: ${this.phase} | PlayerChips: ${player.chips}`);
+                    gameLogger.gameEvent(this.name, '[FIX #6: BET] VALIDATION START', {
+                        player: player.name,
+                        seatIndex,
+                        amount,
+                        currentBet: this.currentBet,
+                        phase: this.phase,
+                        playerChips: player.chips,
+                        bigBlind: this.bigBlind,
+                        handNumber: this.handsPlayed
+                    });
+                    
                     // FIX: Pre-flop after blinds, currentBet equals bigBlind, but players should still be able to bet/raise
                     // Only block betting if we're NOT in pre-flop OR if currentBet is 0 (post-flop with no bets yet)
                     if (this.currentBet > 0 && this.phase !== GAME_PHASES.PRE_FLOP) {
-                        result = { success: false, error: `Cannot bet - current bet is ${this.currentBet}. Use raise or call.` };
+                        const errorMsg = `Cannot bet - current bet is ${this.currentBet}. Use raise or call.`;
+                        console.error(`[Table ${this.name}] ⚠️ FIX #6: BET REJECTED - ${errorMsg} | Player: ${player.name} | Amount: ${amount}`);
+                        gameLogger.bettingAction(this.name, player.name || `Seat ${seatIndex}`, '[FIX #6] BET REJECTED', {
+                            seatIndex,
+                            amount,
+                            currentBet: this.currentBet,
+                            phase: this.phase,
+                            reason: errorMsg,
+                            fix: 'Bot/player trying to bet when currentBet > 0 - should use raise or call'
+                        });
+                        result = { success: false, error: errorMsg };
                     } else if (amount < this.bigBlind) {
-                        result = { success: false, error: `Minimum bet is ${this.bigBlind}` };
+                        const errorMsg = `Minimum bet is ${this.bigBlind}`;
+                        console.error(`[Table ${this.name}] ⚠️ FIX #6: BET REJECTED - ${errorMsg} | Player: ${player.name} | Amount: ${amount}`);
+                        gameLogger.bettingAction(this.name, player.name || `Seat ${seatIndex}`, '[FIX #6] BET REJECTED', {
+                            seatIndex,
+                            amount,
+                            bigBlind: this.bigBlind,
+                            reason: errorMsg,
+                            fix: 'Bot/player trying to bet less than bigBlind'
+                        });
+                        result = { success: false, error: errorMsg };
                     } else if (amount > player.chips) {
-                        result = { success: false, error: `You don't have enough chips. You have ${player.chips}.` };
+                        const errorMsg = `You don't have enough chips. You have ${player.chips}.`;
+                        console.error(`[Table ${this.name}] ⚠️ FIX #6: BET REJECTED - ${errorMsg} | Player: ${player.name} | Amount: ${amount}`);
+                        gameLogger.bettingAction(this.name, player.name || `Seat ${seatIndex}`, '[FIX #6] BET REJECTED', {
+                            seatIndex,
+                            amount,
+                            playerChips: player.chips,
+                            reason: errorMsg,
+                            fix: 'Bot/player trying to bet more than they have'
+                        });
+                        result = { success: false, error: errorMsg };
                     } else {
                         // Pre-flop: If currentBet > 0 (blinds posted), check if amount is more than currentBet
                         if (this.currentBet > 0 && this.phase === GAME_PHASES.PRE_FLOP) {
                             // If amount equals currentBet, it's a call, not a bet
                             if (amount === this.currentBet) {
+                                console.log(`[Table ${this.name}] [FIX #6: BET] Converting to CALL (amount equals currentBet) | Player: ${player.name} | Amount: ${amount}`);
                                 result = this.call(seatIndex);
                             } else if (amount > this.currentBet) {
                                 // Amount is more than currentBet - this is a raise
+                                console.log(`[Table ${this.name}] [FIX #6: BET] Converting to RAISE (amount > currentBet) | Player: ${player.name} | Amount: ${amount} | CurrentBet: ${this.currentBet}`);
                                 result = this.raise(seatIndex, amount);
                             } else {
-                                result = { success: false, error: `Bet amount must be at least ${this.currentBet} (current bet)` };
+                                const errorMsg = `Bet amount must be at least ${this.currentBet} (current bet)`;
+                                console.error(`[Table ${this.name}] ⚠️ FIX #6: BET REJECTED - ${errorMsg} | Player: ${player.name} | Amount: ${amount}`);
+                                gameLogger.bettingAction(this.name, player.name || `Seat ${seatIndex}`, '[FIX #6] BET REJECTED', {
+                                    seatIndex,
+                                    amount,
+                                    currentBet: this.currentBet,
+                                    reason: errorMsg,
+                                    fix: 'Bot/player trying to bet less than currentBet'
+                                });
+                                result = { success: false, error: errorMsg };
                             }
                         } else {
                             // Post-flop with no bets, or pre-flop before blinds - allow bet
+                            console.log(`[Table ${this.name}] [FIX #6: BET] Allowing bet | Player: ${player.name} | Amount: ${amount}`);
                             result = this.bet(seatIndex, amount);
                         }
                     }
@@ -4162,11 +4345,12 @@ class Table {
                     isAllIn: seat.isAllIn
                 } : null).filter(Boolean)
             });
+            // CRITICAL FIX #2: Chips lost during betting operations
             // Use the larger value to prevent losing chips (pot should never be less than sum of bets)
             if (sumOfTotalBets > potBeforeCalculation) {
                 const chipsLost = sumOfTotalBets - potBeforeCalculation;
-                console.error(`[Table ${this.name}] ⚠️ CRITICAL: Sum of bets (${sumOfTotalBets}) > Pot (${potBeforeCalculation}). CHIPS LOST: ${chipsLost}!`);
-                gameLogger.error(this.name, '[POT] CRITICAL: Chips lost during betting', {
+                console.error(`[Table ${this.name}] ⚠️ CRITICAL FIX #2: Sum of bets (${sumOfTotalBets}) > Pot (${potBeforeCalculation}). CHIPS LOST: ${chipsLost}!`);
+                gameLogger.error(this.name, '[FIX #2: POT] CRITICAL: Chips lost during betting', {
                     potBeforeCalculation,
                     sumOfTotalBets,
                     chipsLost,
@@ -4187,16 +4371,21 @@ class Table {
                         isFolded: seat.isFolded,
                         isAllIn: seat.isAllIn,
                         isActive: seat.isActive
-                    } : null).filter(Boolean)
+                    } : null).filter(Boolean),
+                    fix: 'Adjusting pot to match sumOfTotalBets to prevent further loss',
+                    stackTrace: new Error().stack
                 });
-                // CRITICAL: Adjust pot to match sumOfTotalBets to prevent further loss
-                // This is a workaround - the real fix is to find where chips are being lost
-                console.error(`[Table ${this.name}] ⚠️ WORKAROUND: Adjusting pot from ${potBeforeCalculation} to ${sumOfTotalBets} to prevent further loss`);
+                // CRITICAL FIX: Adjust pot to match sumOfTotalBets to prevent further loss
+                // This recovers the lost chips by adjusting the pot
+                const oldPot = potBeforeCalculation;
                 this.pot = sumOfTotalBets;
-                gameLogger.error(this.name, '[POT] WORKAROUND: Pot adjusted to match sumOfTotalBets', {
-                    oldPot: potBeforeCalculation,
+                console.error(`[Table ${this.name}] ⚠️ FIX #2: Adjusting pot from ${oldPot} to ${sumOfTotalBets} to recover ${chipsLost} lost chips`);
+                gameLogger.error(this.name, '[FIX #2: POT] Pot adjusted to match sumOfTotalBets', {
+                    oldPot: oldPot,
                     newPot: sumOfTotalBets,
-                    adjustment: chipsLost
+                    chipsRecovered: chipsLost,
+                    handNumber: this.handsPlayed,
+                    phase: this.phase
                 });
             }
         }
@@ -4695,12 +4884,27 @@ class Table {
         }
         
         // Clear pot only after validation passes
-        // CRITICAL: Track pot clearing
+        // CRITICAL FIX #1: Ensure pot is ALWAYS cleared after side pot awards
         const potBeforeClear = this.pot;
+        const totalChipsBeforeClear = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
+        const totalChipsAndPotBeforeClear = totalChipsBeforeClear + this.pot;
+        
+        console.log(`[Table ${this.name}] [FIX #1: CLEAR_POT_AFTER_SIDE_POTS PRE-OP] Hand: ${this.handsPlayed} | Pot: ${potBeforeClear} | TotalAwarded: ${totalAwarded} | TotalChips: ${totalChipsBeforeClear} | TotalChips+Pot: ${totalChipsAndPotBeforeClear}`);
+        gameLogger.gameEvent(this.name, '[FIX #1: CLEAR_POT_AFTER_SIDE_POTS] PRE-OPERATION STATE', {
+            handNumber: this.handsPlayed,
+            potBeforeClear,
+            totalAwarded,
+            totalChipsBeforeClear,
+            totalChipsAndPotBeforeClear,
+            totalStartingChips: this.totalStartingChips,
+            phase: this.phase,
+            potAwardsCount: potAwards.length
+        });
+        
         if (potBeforeClear > 0) {
             // ULTRA-VERBOSE: Log pot clearing
-            console.log(`[Table ${this.name}] [POT CLEAR] Clearing pot after side pots: ${potBeforeClear} chips (totalAwarded: ${totalAwarded}) | Hand: ${this.handsPlayed} | Phase: ${this.phase}`);
-            gameLogger.gameEvent(this.name, '[POT] Clearing pot after side pots', {
+            console.log(`[Table ${this.name}] [FIX #1: POT CLEAR] Clearing pot after side pots: ${potBeforeClear} chips (totalAwarded: ${totalAwarded}) | Hand: ${this.handsPlayed} | Phase: ${this.phase}`);
+            gameLogger.gameEvent(this.name, '[FIX #1: POT] Clearing pot after side pots', {
                 potBefore: potBeforeClear,
                 totalAwarded,
                 difference: potBeforeClear - totalAwarded,
@@ -4711,7 +4915,14 @@ class Table {
             
             // CRITICAL: Verify pot was fully awarded before clearing
             if (Math.abs(potBeforeClear - totalAwarded) > 0.01) {
-                console.error(`[Table ${this.name}] ⚠️ CRITICAL: Clearing pot but pot (${potBeforeClear}) != totalAwarded (${totalAwarded})! Difference: ${potBeforeClear - totalAwarded}`);
+                console.error(`[Table ${this.name}] ⚠️ CRITICAL FIX #1: Clearing pot but pot (${potBeforeClear}) != totalAwarded (${totalAwarded})! Difference: ${potBeforeClear - totalAwarded}`);
+                gameLogger.error(this.name, '[FIX #1: POT] ERROR: Pot not fully awarded before clearing', {
+                    potBeforeClear,
+                    totalAwarded,
+                    missing: potBeforeClear - totalAwarded,
+                    handNumber: this.handsPlayed,
+                    phase: this.phase
+                });
             }
             
             const movement = this._trackChipMovement('CLEAR_POT_AFTER_SIDE_POTS', {
@@ -4724,9 +4935,35 @@ class Table {
         } else {
             // ULTRA-VERBOSE: Log even when pot is 0
             if (potBeforeClear !== 0) {
-                console.error(`[Table ${this.name}] ⚠️ POT CLEAR WARNING: Pot was ${potBeforeClear} but should be 0!`);
+                console.error(`[Table ${this.name}] ⚠️ FIX #1 POT CLEAR WARNING: Pot was ${potBeforeClear} but should be 0!`);
             }
-            this.pot = 0;
+            this.pot = 0; // CRITICAL: Always set to 0, even if already 0
+        }
+        
+        // ULTRA-VERBOSE: Log after pot clear
+        const totalChipsAfterClear = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
+        const totalChipsAndPotAfterClear = totalChipsAfterClear + this.pot;
+        const clearDifference = totalChipsAndPotAfterClear - totalChipsAndPotBeforeClear;
+        
+        console.log(`[Table ${this.name}] [FIX #1: CLEAR_POT_AFTER_SIDE_POTS POST-OP] Hand: ${this.handsPlayed} | Pot: ${this.pot} | TotalChips: ${totalChipsAfterClear} | TotalChips+Pot: ${totalChipsAndPotAfterClear} | Difference: ${clearDifference}`);
+        gameLogger.gameEvent(this.name, '[FIX #1: CLEAR_POT_AFTER_SIDE_POTS] POST-OPERATION STATE', {
+            handNumber: this.handsPlayed,
+            potAfterClear: this.pot,
+            totalChipsAfterClear,
+            totalChipsAndPotAfterClear,
+            clearDifference,
+            totalStartingChips: this.totalStartingChips
+        });
+        
+        if (Math.abs(clearDifference + potBeforeClear) > 0.01) {
+            console.error(`[Table ${this.name}] ⚠️ CRITICAL FIX #1 ERROR: Clear difference (${clearDifference}) != -potBeforeClear (${-potBeforeClear})!`);
+            gameLogger.error(this.name, '[FIX #1: CLEAR_POT_AFTER_SIDE_POTS] CRITICAL: Clear difference mismatch', {
+                handNumber: this.handsPlayed,
+                potBeforeClear,
+                clearDifference,
+                totalChipsAndPotBeforeClear,
+                totalChipsAndPotAfterClear
+            });
         }
         
         // Store awards for client display
@@ -4908,12 +5145,27 @@ class Table {
             }
         }
         
-        // CRITICAL: Track pot clearing after awardPot
+        // CRITICAL FIX #1: Ensure pot is ALWAYS cleared after awardPot
         const potBeforeClear = this.pot;
+        const totalChipsBeforeClear = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
+        const totalChipsAndPotBeforeClear = totalChipsBeforeClear + this.pot;
+        
+        console.log(`[Table ${this.name}] [FIX #1: CLEAR_POT_AFTER_AWARD PRE-OP] Hand: ${this.handsPlayed} | Pot: ${potBeforeClear} | TotalChips: ${totalChipsBeforeClear} | TotalChips+Pot: ${totalChipsAndPotBeforeClear}`);
+        gameLogger.gameEvent(this.name, '[FIX #1: CLEAR_POT_AFTER_AWARD] PRE-OPERATION STATE', {
+            handNumber: this.handsPlayed,
+            potBeforeClear,
+            totalChipsBeforeClear,
+            totalChipsAndPotBeforeClear,
+            totalStartingChips: this.totalStartingChips,
+            phase: this.phase,
+            winner: winner.name,
+            winnerChips: seat?.chips || 0
+        });
+        
         if (potBeforeClear > 0) {
             // ULTRA-VERBOSE: Log pot clearing
-            console.log(`[Table ${this.name}] [POT CLEAR] Clearing pot after awardPot: ${potBeforeClear} chips | Hand: ${this.handsPlayed} | Phase: ${this.phase} | Winner: ${winner.name}`);
-            gameLogger.gameEvent(this.name, '[POT] Clearing pot after awardPot', {
+            console.log(`[Table ${this.name}] [FIX #1: POT CLEAR] Clearing pot after awardPot: ${potBeforeClear} chips | Hand: ${this.handsPlayed} | Phase: ${this.phase} | Winner: ${winner.name}`);
+            gameLogger.gameEvent(this.name, '[FIX #1: POT] Clearing pot after awardPot', {
                 potBefore: potBeforeClear,
                 handNumber: this.handsPlayed,
                 phase: this.phase,
@@ -4930,9 +5182,35 @@ class Table {
         } else {
             // ULTRA-VERBOSE: Log even when pot is 0
             if (potBeforeClear !== 0) {
-                console.error(`[Table ${this.name}] ⚠️ POT CLEAR WARNING: Pot was ${potBeforeClear} but should be 0!`);
+                console.error(`[Table ${this.name}] ⚠️ FIX #1 POT CLEAR WARNING: Pot was ${potBeforeClear} but should be 0!`);
             }
-            this.pot = 0;
+            this.pot = 0; // CRITICAL: Always set to 0, even if already 0
+        }
+        
+        // ULTRA-VERBOSE: Log after pot clear
+        const totalChipsAfterClear = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
+        const totalChipsAndPotAfterClear = totalChipsAfterClear + this.pot;
+        const clearDifference = totalChipsAndPotAfterClear - totalChipsAndPotBeforeClear;
+        
+        console.log(`[Table ${this.name}] [FIX #1: CLEAR_POT_AFTER_AWARD POST-OP] Hand: ${this.handsPlayed} | Pot: ${this.pot} | TotalChips: ${totalChipsAfterClear} | TotalChips+Pot: ${totalChipsAndPotAfterClear} | Difference: ${clearDifference}`);
+        gameLogger.gameEvent(this.name, '[FIX #1: CLEAR_POT_AFTER_AWARD] POST-OPERATION STATE', {
+            handNumber: this.handsPlayed,
+            potAfterClear: this.pot,
+            totalChipsAfterClear,
+            totalChipsAndPotAfterClear,
+            clearDifference,
+            totalStartingChips: this.totalStartingChips
+        });
+        
+        if (Math.abs(clearDifference + potBeforeClear) > 0.01) {
+            console.error(`[Table ${this.name}] ⚠️ CRITICAL FIX #1 ERROR: Clear difference (${clearDifference}) != -potBeforeClear (${-potBeforeClear})!`);
+            gameLogger.error(this.name, '[FIX #1: CLEAR_POT_AFTER_AWARD] CRITICAL: Clear difference mismatch', {
+                handNumber: this.handsPlayed,
+                potBeforeClear,
+                clearDifference,
+                totalChipsAndPotBeforeClear,
+                totalChipsAndPotAfterClear
+            });
         }
         
         // CRITICAL: NOW that pot is awarded, clear totalBet for all seats

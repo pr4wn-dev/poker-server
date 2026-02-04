@@ -311,23 +311,40 @@ class BotManager {
      */
     checkBotTurn(tableId) {
         const table = this.gameManager.tables.get(tableId);
-        if (!table || !table.gameStarted) {
+        
+        // CRITICAL FIX #5: Validate game state before allowing bot actions
+        if (!table) {
+            console.error(`[BotManager] ⚠️ FIX #5: checkBotTurn called but table not found: ${tableId}`);
             return;
         }
         
-        // CRITICAL: Don't trigger bot turns during non-betting phases
+        if (!table.gameStarted) {
+            console.log(`[BotManager] [FIX #5] checkBotTurn: Game not started for table ${tableId}`);
+            return;
+        }
+        
+        // CRITICAL FIX #5: Don't trigger bot turns during non-betting phases
         const validPhases = ['preflop', 'flop', 'turn', 'river'];
         if (!validPhases.includes(table.phase)) {
             // Showdown, waiting, ready_up, countdown - bots don't act
+            console.log(`[BotManager] [FIX #5] checkBotTurn: Invalid phase ${table.phase} for bot action`);
+            return;
+        }
+        
+        // CRITICAL FIX #4: Validate currentPlayerIndex is valid
+        if (table.currentPlayerIndex === -1 || table.currentPlayerIndex === null || table.currentPlayerIndex === undefined) {
+            console.log(`[BotManager] [FIX #4] checkBotTurn: No current player (currentPlayerIndex: ${table.currentPlayerIndex})`);
             return;
         }
         
         const currentSeat = table.seats[table.currentPlayerIndex];
         if (!currentSeat) {
+            console.log(`[BotManager] [FIX #4] checkBotTurn: No seat at currentPlayerIndex ${table.currentPlayerIndex}`);
             return;
         }
         
         if (!currentSeat.isBot) {
+            // Not a bot's turn - this is normal, just return
             return;
         }
         
