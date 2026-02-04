@@ -4578,60 +4578,112 @@ class Table {
                     isAllIn: seat.isAllIn
                 } : null).filter(Boolean)
             });
-            // CRITICAL FIX #2: Chips lost during betting operations
-            // Use the larger value to prevent losing chips (pot should never be less than sum of bets)
-            const chipsLostDuringBetting = sumOfTotalBets > potBeforeCalculation;
-            if (chipsLostDuringBetting) {
-                const chipsLost = sumOfTotalBets - potBeforeCalculation;
-                console.error(`[Table ${this.name}] ⚠️ CRITICAL FIX #2: Sum of bets (${sumOfTotalBets}) > Pot (${potBeforeCalculation}). CHIPS LOST: ${chipsLost}!`);
-                gameLogger.error(this.name, '[FIX #2: POT] CRITICAL: Chips lost during betting', {
-                    potBeforeCalculation,
-                    sumOfTotalBets,
-                    chipsLost,
-                    handNumber: this.handsPlayed,
-                    phase: this.phase,
-                    allContributors: allContributors.map(p => ({
-                        name: p.name,
-                        totalBet: p.totalBet,
-                        isFolded: p.isFolded,
-                        isAllIn: p.isAllIn
-                    })),
-                    allSeats: this.seats.map((seat, idx) => seat ? {
-                        seatIndex: idx,
-                        name: seat.name,
-                        chips: seat.chips,
-                        totalBet: seat.totalBet || 0,
-                        currentBet: seat.currentBet || 0,
-                        isFolded: seat.isFolded,
-                        isAllIn: seat.isAllIn,
-                        isActive: seat.isActive
-                    } : null).filter(Boolean),
-                    fix: 'Adjusting pot to match sumOfTotalBets to prevent further loss',
-                    stackTrace: new Error().stack
-                });
-                // CRITICAL FIX: Adjust pot to match sumOfTotalBets to prevent further loss
-                // This recovers the lost chips by adjusting the pot
-                const oldPot = potBeforeCalculation;
-                this.pot = sumOfTotalBets;
-                console.error(`[Table ${this.name}] ⚠️ FIX #2: Adjusting pot from ${oldPot} to ${sumOfTotalBets} to recover ${chipsLost} lost chips`);
-                gameLogger.error(this.name, '[FIX #2: POT] Pot adjusted to match sumOfTotalBets', {
-                    oldPot: oldPot,
-                    newPot: sumOfTotalBets,
-                    chipsRecovered: chipsLost,
-                    handNumber: this.handsPlayed,
-                    phase: this.phase
-                });
-                
-                // Record fix attempt - this is a failure because chips were lost
-                this._recordFixAttempt('FIX_2_CHIPS_LOST_BETTING', false, {
-                    potBeforeCalculation,
-                    sumOfTotalBets,
-                    chipsLost,
-                    oldPot,
-                    newPot: this.pot,
-                    handNumber: this.handsPlayed,
-                    phase: this.phase
-                });
+            // CRITICAL FIX #2: Pot mismatch - adjust to prevent chip loss or creation
+            const potMismatch = potBeforeCalculation - sumOfTotalBets;
+            if (Math.abs(potMismatch) > 0.01) {
+                if (sumOfTotalBets > potBeforeCalculation) {
+                    // Chips lost: pot is less than sum of bets
+                    const chipsLost = sumOfTotalBets - potBeforeCalculation;
+                    console.error(`[Table ${this.name}] ⚠️ CRITICAL FIX #2: Sum of bets (${sumOfTotalBets}) > Pot (${potBeforeCalculation}). CHIPS LOST: ${chipsLost}!`);
+                    gameLogger.error(this.name, '[FIX #2: POT] CRITICAL: Chips lost during betting', {
+                        potBeforeCalculation,
+                        sumOfTotalBets,
+                        chipsLost,
+                        handNumber: this.handsPlayed,
+                        phase: this.phase,
+                        allContributors: allContributors.map(p => ({
+                            name: p.name,
+                            totalBet: p.totalBet,
+                            isFolded: p.isFolded,
+                            isAllIn: p.isAllIn
+                        })),
+                        allSeats: this.seats.map((seat, idx) => seat ? {
+                            seatIndex: idx,
+                            name: seat.name,
+                            chips: seat.chips,
+                            totalBet: seat.totalBet || 0,
+                            currentBet: seat.currentBet || 0,
+                            isFolded: seat.isFolded,
+                            isAllIn: seat.isAllIn,
+                            isActive: seat.isActive
+                        } : null).filter(Boolean),
+                        fix: 'Adjusting pot to match sumOfTotalBets to prevent further loss',
+                        stackTrace: new Error().stack
+                    });
+                    // CRITICAL FIX: Adjust pot to match sumOfTotalBets to prevent further loss
+                    const oldPot = potBeforeCalculation;
+                    this.pot = sumOfTotalBets;
+                    console.error(`[Table ${this.name}] ⚠️ FIX #2: Adjusting pot from ${oldPot} to ${sumOfTotalBets} to recover ${chipsLost} lost chips`);
+                    gameLogger.error(this.name, '[FIX #2: POT] Pot adjusted to match sumOfTotalBets', {
+                        oldPot: oldPot,
+                        newPot: sumOfTotalBets,
+                        chipsRecovered: chipsLost,
+                        handNumber: this.handsPlayed,
+                        phase: this.phase
+                    });
+                    
+                    // Record fix attempt - this is a failure because chips were lost
+                    this._recordFixAttempt('FIX_2_CHIPS_LOST_BETTING', false, {
+                        potBeforeCalculation,
+                        sumOfTotalBets,
+                        chipsLost,
+                        oldPot,
+                        newPot: this.pot,
+                        handNumber: this.handsPlayed,
+                        phase: this.phase
+                    });
+                } else {
+                    // Chips created: pot is more than sum of bets
+                    const chipsCreated = potBeforeCalculation - sumOfTotalBets;
+                    console.error(`[Table ${this.name}] ⚠️ CRITICAL FIX #2: Pot (${potBeforeCalculation}) > Sum of bets (${sumOfTotalBets}). CHIPS CREATED: ${chipsCreated}!`);
+                    gameLogger.error(this.name, '[FIX #2: POT] CRITICAL: Chips created during betting', {
+                        potBeforeCalculation,
+                        sumOfTotalBets,
+                        chipsCreated,
+                        handNumber: this.handsPlayed,
+                        phase: this.phase,
+                        allContributors: allContributors.map(p => ({
+                            name: p.name,
+                            totalBet: p.totalBet,
+                            isFolded: p.isFolded,
+                            isAllIn: p.isAllIn
+                        })),
+                        allSeats: this.seats.map((seat, idx) => seat ? {
+                            seatIndex: idx,
+                            name: seat.name,
+                            chips: seat.chips,
+                            totalBet: seat.totalBet || 0,
+                            currentBet: seat.currentBet || 0,
+                            isFolded: seat.isFolded,
+                            isAllIn: seat.isAllIn,
+                            isActive: seat.isActive
+                        } : null).filter(Boolean),
+                        fix: 'Adjusting pot to match sumOfTotalBets to prevent chip creation',
+                        stackTrace: new Error().stack
+                    });
+                    // CRITICAL FIX: Adjust pot down to match sumOfTotalBets to prevent chip creation
+                    const oldPot = potBeforeCalculation;
+                    this.pot = sumOfTotalBets;
+                    console.error(`[Table ${this.name}] ⚠️ FIX #2: Adjusting pot from ${oldPot} to ${sumOfTotalBets} to remove ${chipsCreated} created chips`);
+                    gameLogger.error(this.name, '[FIX #2: POT] Pot adjusted down to match sumOfTotalBets', {
+                        oldPot: oldPot,
+                        newPot: sumOfTotalBets,
+                        chipsRemoved: chipsCreated,
+                        handNumber: this.handsPlayed,
+                        phase: this.phase
+                    });
+                    
+                    // Record fix attempt - this is a failure because chips were created
+                    this._recordFixAttempt('FIX_2_CHIPS_CREATED_BETTING', false, {
+                        potBeforeCalculation,
+                        sumOfTotalBets,
+                        chipsCreated,
+                        oldPot,
+                        newPot: this.pot,
+                        handNumber: this.handsPlayed,
+                        phase: this.phase
+                    });
+                }
             } else {
                 // Record fix attempt - success if no chips lost
                 this._recordFixAttempt('FIX_2_CHIPS_LOST_BETTING', true, {
