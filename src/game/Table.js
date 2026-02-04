@@ -3636,17 +3636,77 @@ class Table {
                             reason: 'All eligible players at bet level folded'
                         });
                     } else {
-                        console.error(`[Table ${this.name}] ⚠️ CRITICAL: No non-folded contributors found - pot will be lost!`);
-                        gameLogger.error(this.name, 'No non-folded contributors for folded pot', {
-                            potAmount,
-                            betLevel: player.totalBet,
-                            allContributors: allContributors.map(p => ({
-                                name: p.name,
-                                totalBet: p.totalBet,
-                                isFolded: p.isFolded,
-                                hasHandResult: !!p.handResult
-                            }))
-                        });
+                        // CRITICAL FIX: If no non-folded contributors, award to best contributor at this level (even if folded)
+                        // OR find the last remaining active player
+                        // This prevents pot from being lost when all players at a bet level fold
+                        const bestContributorAtLevel = allContributors
+                            .filter(p => p.totalBet >= player.totalBet)
+                            .sort((a, b) => {
+                                // Prefer non-folded, then by hand result, then by chips
+                                if (!a.isFolded && b.isFolded) return -1;
+                                if (a.isFolded && !b.isFolded) return 1;
+                                if (a.handResult && b.handResult) {
+                                    return HandEvaluator.compare(b.handResult, a.handResult);
+                                }
+                                if (a.handResult && !b.handResult) return -1;
+                                if (!a.handResult && b.handResult) return 1;
+                                const seatA = this.seats.find(s => s?.playerId === a.playerId);
+                                const seatB = this.seats.find(s => s?.playerId === b.playerId);
+                                return (seatB?.chips || 0) - (seatA?.chips || 0);
+                            })[0];
+                        
+                        // If still no one, find last remaining active player
+                        const lastActivePlayer = activePlayers
+                            .filter(p => {
+                                const seat = this.seats.find(s => s?.playerId === p.playerId);
+                                return seat && seat.isActive !== false;
+                            })
+                            .sort((a, b) => {
+                                if (a.handResult && b.handResult) {
+                                    return HandEvaluator.compare(b.handResult, a.handResult);
+                                }
+                                return 0;
+                            })[0];
+                        
+                        const winner = bestContributorAtLevel || (lastActivePlayer ? {
+                            playerId: lastActivePlayer.playerId,
+                            name: lastActivePlayer.name,
+                            handResult: lastActivePlayer.handResult
+                        } : null);
+                        
+                        if (winner) {
+                            const seat = this.seats.find(s => s?.playerId === winner.playerId);
+                            const handName = winner.handResult ? winner.handResult.name : (seat?.isFolded ? 'Folded' : 'No Hand');
+                            potAwards.push({
+                                playerId: winner.playerId,
+                                name: winner.name,
+                                amount: potAmount,
+                                handName: handName,
+                                potType: previousBetLevel === 0 ? 'main' : 'side',
+                                reason: bestContributorAtLevel ? 'All players at bet level folded - awarded to best contributor' : 'Awarded to last remaining active player'
+                            });
+                            console.log(`[Table ${this.name}] FIX: Awarding ${potAmount} to ${winner.name} (all folded at level, hand: ${handName})`);
+                            gameLogger.gameEvent(this.name, '[POT] Awarded to best contributor (all folded)', {
+                                winner: winner.name,
+                                amount: potAmount,
+                                betLevel: player.totalBet,
+                                handName: handName,
+                                reason: 'All players at bet level folded - awarded to best contributor or last active player'
+                            });
+                        } else {
+                            console.error(`[Table ${this.name}] ⚠️ CRITICAL: No eligible winner found - pot will be lost!`);
+                            gameLogger.error(this.name, 'No eligible winner for folded pot', {
+                                potAmount,
+                                betLevel: player.totalBet,
+                                allContributors: allContributors.map(p => ({
+                                    name: p.name,
+                                    totalBet: p.totalBet,
+                                    isFolded: p.isFolded,
+                                    hasHandResult: !!p.handResult
+                                })),
+                                activePlayersCount: activePlayers.length
+                            });
+                        }
                     }
                 }
                 
