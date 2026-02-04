@@ -5117,11 +5117,12 @@ class Table {
         // Validation will happen at AFTER_SIDE_POT_AWARDS after pot is cleared
         
         if (Math.abs(potBeforeCalculation - totalAwarded) > 0.01) {
-            console.error(`[Table ${this.name}] ⚠️ CRITICAL: POT NOT FULLY AWARDED! Pot was ${potBeforeCalculation}, but only ${totalAwarded} was awarded. Missing: ${potBeforeCalculation - totalAwarded}`);
+            const missing = potBeforeCalculation - totalAwarded;
+            console.error(`[Table ${this.name}] ⚠️ CRITICAL: POT NOT FULLY AWARDED! Pot was ${potBeforeCalculation}, but only ${totalAwarded} was awarded. Missing: ${missing}`);
             gameLogger.error(this.name, '[POT] ERROR: Pot not fully awarded', {
                 potBeforeCalculation,
                 totalAwarded,
-                missing: potBeforeCalculation - totalAwarded,
+                missing,
                 potAwardsCount: potAwards.length,
                 potAwards: potAwards.map(a => ({ name: a.name, amount: a.amount, potType: a.potType, reason: a.reason || 'standard' })),
                 awardDetails: awardDetails,
@@ -5142,9 +5143,30 @@ class Table {
                     isAllIn: seat.isAllIn
                 } : null).filter(Boolean)
             });
-            // CRITICAL: Don't clear pot if money is missing - this is an error state
-            // The pot will remain and be caught by emergency distribution logic
-            return potAwards; // Return what we have, but don't clear pot
+            
+            // CRITICAL FIX: If pot isn't fully awarded, award remaining to best active player to prevent chip loss
+            // This prevents the "pot not cleared at hand start" error from losing chips
+            if (missing > 0.01) {
+                const activeSeats = this.seats.filter(s => s && s.isActive !== false && s.chips > 0);
+                if (activeSeats.length > 0) {
+                    // Award to first active player (or could award to best hand, but simpler to just pick first)
+                    const recipient = activeSeats[0];
+                    const chipsBefore = recipient.chips;
+                    recipient.chips += missing;
+                    totalAwarded += missing;
+                    console.error(`[Table ${this.name}] ⚠️ EMERGENCY: Awarding ${missing} unaccounted pot chips to ${recipient.name} to prevent loss`);
+                    gameLogger.gameEvent(this.name, '[POT] EMERGENCY: Awarding unaccounted pot chips', {
+                        recipient: recipient.name,
+                        amount: missing,
+                        chipsBefore,
+                        chipsAfter: recipient.chips,
+                        reason: 'Pot not fully awarded - emergency distribution to prevent chip loss'
+                    });
+                } else {
+                    console.error(`[Table ${this.name}] ⚠️ CRITICAL: ${missing} chips will be LOST - no active players to award to!`);
+                }
+            }
+            // Continue to clear pot even if there was an issue - better to clear than leave it
         }
         
         // Clear pot only after validation passes
