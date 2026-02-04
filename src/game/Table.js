@@ -492,7 +492,9 @@ class Table {
         // Timing
         this.turnTimeout = null;
         this.turnStartTime = null;
-        this.turnTimeLimit = options.turnTimeLimit || 20000; // 20 seconds per turn (default)
+        // CRITICAL: Simulations need very fast turn timers (100ms) to run quickly
+        // Regular games use 20 seconds, but simulations should be instant
+        this.turnTimeLimit = options.turnTimeLimit || (this.isSimulation ? 100 : 20000); // 100ms for simulations, 20 seconds for regular games
         
         // Blind increase timer (tournament-style)
         // 0 = disabled (blinds never increase)

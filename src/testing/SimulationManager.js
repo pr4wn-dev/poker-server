@@ -186,7 +186,7 @@ class SimulationManager {
             buyIn,
             isPrivate: true,
             practiceMode: true,
-            turnTimeLimit: this.fastMode ? Math.min(turnTimeLimit, 5000) : turnTimeLimit, // 5 sec max in fast mode
+            turnTimeLimit: this.fastMode ? 100 : turnTimeLimit, // 100ms for fast mode simulations (10x faster)
             blindIncreaseInterval: this.fastMode ? 30000 : blindIncreaseInterval, // 30 sec blind increase in fast mode
             readyUpDuration: this.fastMode ? 5000 : 60000, // 5 sec ready-up in fast mode
             countdownDuration: this.fastMode ? 3000 : 10000, // 3 sec countdown in fast mode
