@@ -331,7 +331,7 @@ class SimulationManager {
                     name: `NetPlayer_${i + 1}`,
                     minDelay: simulation.fastMode ? 50 : 800,
                     maxDelay: simulation.fastMode ? 200 : 2500,
-                    aggressiveness: 0.2 + Math.random() * 0.4,
+                    aggressiveness: 0.4 + Math.random() * 0.4,  // Increased from 0.2-0.6 to 0.4-0.8 (more aggressive, fold less)
                     fastMode: simulation.fastMode,
                     // Network simulation (reduced in fast mode)
                     networkLatency: simulation.fastMode ? 10 : profile.latency,
