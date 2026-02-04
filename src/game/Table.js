@@ -154,7 +154,9 @@ class Table {
             movement.afterState = afterState;
             
             const difference = afterState.totalChipsInSystem - afterState.totalStartingChips;
-            const isValid = Math.abs(difference) < 0.01; // Allow tiny floating point errors
+            // CRITICAL: Only validate if game has started (totalStartingChips > 0)
+            // Before game start, chips can be added/removed without validation
+            const isValid = this.totalStartingChips === 0 || Math.abs(difference) < 0.01; // Allow tiny floating point errors
             
             // Log after state
             gameLogger.gameEvent(this.name, `[CHIP TRACK] ${movement.operation} - AFTER`, {
@@ -162,7 +164,8 @@ class Table {
                 afterState,
                 difference,
                 isValid: isValid ? 'PASS' : 'FAIL',
-                context
+                context,
+                gameStarted: this.totalStartingChips > 0
             });
             
             if (!isValid && this.totalStartingChips > 0) {
@@ -1091,13 +1094,17 @@ class Table {
             this.seats[seatIndex] = null;
         }
         
-        // CRITICAL: If game already started, update totalStartingChips
+        // CRITICAL: Don't modify totalStartingChips when players leave mid-game
+        // The chips are still in the system (just not with that player), so totalStartingChips should remain constant
+        // Only track totalStartingChips at game start - it represents the total chips in the system at that moment
+        // If we decrement it when players leave, we'll get false validation failures
+        // The actual chips are still in the system (with other players or in pot), so validation should still pass
         if (this.gameStarted) {
-            this.totalStartingChips -= chips;
-            gameLogger.gameEvent(this.name, 'Player left, removed from totalStartingChips', {
+            gameLogger.gameEvent(this.name, 'Player left mid-game (totalStartingChips unchanged)', {
                 player: player.name,
                 chips,
-                newTotalStartingChips: this.totalStartingChips
+                totalStartingChips: this.totalStartingChips,
+                reason: 'Chips still in system, just transferred to other players/pot'
             });
         }
         
