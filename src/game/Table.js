@@ -5381,6 +5381,13 @@ class Table {
             const chipsAfter = seat.chips;
             totalAwarded += award.amount;
             
+            // CRITICAL: Clear totalBet and currentBet immediately after award
+            // This prevents them from persisting to the next hand
+            if (seat.totalBet > 0 || seat.currentBet > 0) {
+                seat.totalBet = 0;
+                seat.currentBet = 0;
+            }
+            
             // ULTRA-VERBOSE: Verify award immediately
             if (seat.chips !== chipsBeforeAward + award.amount) {
                 console.error(`[Table ${this.name}] ⚠️ CRITICAL AWARD ERROR: Chips calculation failed! Player: ${award.name}, Before: ${chipsBeforeAward}, Amount: ${award.amount}, After: ${seat.chips}, Expected: ${chipsBeforeAward + award.amount}`);
@@ -5731,17 +5738,29 @@ class Table {
             }
         }
         
-        // Record fix attempt - if we had to clear totalBet or currentBet, it means they weren't cleared earlier (failure)
-        if (totalBetClearedCount > 0 || currentBetClearedCount > 0) {
+        // Record fix attempt - verify that all totalBet/currentBet were successfully cleared
+        // Check if any still remain (which would be a failure)
+        let remainingTotalBet = 0;
+        let remainingCurrentBet = 0;
+        for (const seat of this.seats) {
+            if (seat) {
+                if (seat.totalBet > 0) remainingTotalBet++;
+                if (seat.currentBet > 0) remainingCurrentBet++;
+            }
+        }
+        
+        if (remainingTotalBet > 0 || remainingCurrentBet > 0) {
             this._recordFixAttempt('FIX_1_TOTAL_BET_NOT_CLEARED', false, {
                 context: 'AFTER_CALCULATE_AND_AWARD_SIDE_POTS',
-                playersWithTotalBet: totalBetClearedCount,
-                playersWithCurrentBet: currentBetClearedCount,
+                playersWithTotalBet: remainingTotalBet,
+                playersWithCurrentBet: remainingCurrentBet,
                 handNumber: this.handsPlayed
             });
         } else {
             this._recordFixAttempt('FIX_1_TOTAL_BET_NOT_CLEARED', true, {
                 context: 'AFTER_CALCULATE_AND_AWARD_SIDE_POTS',
+                totalBetCleared: totalBetClearedCount,
+                currentBetCleared: currentBetClearedCount,
                 handNumber: this.handsPlayed
             });
         }
