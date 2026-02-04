@@ -250,7 +250,7 @@ class Table {
             if (this.totalStartingChips > 0) {
                 const difference = totalChipsAndPot - this.totalStartingChips;
                 const absDifference = Math.abs(difference);
-                const isValid = difference <= 0.01; // Allow for floating point errors
+                const isValid = Math.abs(difference) <= 0.01; // Allow for floating point errors (check both creation AND loss)
                 
                 if (!isValid) {
                     const missing = this.totalStartingChips - totalChipsAndPot;
