@@ -361,6 +361,47 @@ class Table {
                             isFolded: s.isFolded
                         }))
                     });
+                    
+                    // Record fix attempt for validation failures
+                    this._recordFixAttempt('FIX_7_VALIDATION_FAILURES', false, {
+                        context,
+                        expected: this.totalStartingChips,
+                        actual: totalChipsAndPot,
+                        missing,
+                        currentTotalChips,
+                        pot: this.pot,
+                        phase: this.phase,
+                        handNumber: this.handsPlayed
+                    });
+                } else {
+                    // Record successful validation
+                    this._recordFixAttempt('FIX_7_VALIDATION_FAILURES', true, {
+                        context,
+                        expected: this.totalStartingChips,
+                        actual: totalChipsAndPot,
+                        phase: this.phase,
+                        handNumber: this.handsPlayed
+                    });
+                }
+                
+                // Record fix attempt for pot mismatch
+                if (potMismatch > 0.01 && this.pot > 0) {
+                    this._recordFixAttempt('FIX_8_POT_MISMATCH', false, {
+                        context,
+                        pot: this.pot,
+                        sumOfAllTotalBets,
+                        difference: this.pot - sumOfAllTotalBets,
+                        handNumber: this.handsPlayed,
+                        phase: this.phase
+                    });
+                } else if (this.pot > 0) {
+                    this._recordFixAttempt('FIX_8_POT_MISMATCH', true, {
+                        context,
+                        pot: this.pot,
+                        sumOfAllTotalBets,
+                        handNumber: this.handsPlayed,
+                        phase: this.phase
+                    });
                 } else {
                     gameLogger.gameEvent(this.name, '[MONEY] VALIDATION PASSED', {
                         context,
