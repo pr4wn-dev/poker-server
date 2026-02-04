@@ -4838,7 +4838,24 @@ class Table {
                     isAllIn: s.isAllIn
                 }))
             });
-            // Don't clear pot if we can't calculate - this is an error state
+            // CRITICAL FIX: Even if we can't calculate, we MUST clear the pot to prevent chip loss
+            // Award pot to first active player as emergency measure
+            const activeSeats = this.seats.filter(s => s && s.isActive !== false && s.chips > 0);
+            if (activeSeats.length > 0 && this.pot > 0) {
+                const emergencyRecipient = activeSeats[0];
+                const chipsBefore = emergencyRecipient.chips;
+                emergencyRecipient.chips += this.pot;
+                console.error(`[Table ${this.name}] ⚠️ EMERGENCY: Cannot calculate side pots, awarding ${this.pot} to ${emergencyRecipient.name} to prevent loss`);
+                gameLogger.gameEvent(this.name, '[POT] EMERGENCY: Awarding pot due to calculation failure', {
+                    recipient: emergencyRecipient.name,
+                    amount: this.pot,
+                    chipsBefore,
+                    chipsAfter: emergencyRecipient.chips,
+                    reason: 'Side pot calculation failed - emergency distribution'
+                });
+            }
+            // CRITICAL: Always clear pot, even on error
+            this.pot = 0;
             return [];
         }
         
@@ -5057,7 +5074,24 @@ class Table {
                     hasHandResult: !!p.handResult
                 }))
             });
-            // Don't clear pot if we couldn't distribute it
+            // CRITICAL FIX: Even if we can't distribute, we MUST clear the pot to prevent chip loss
+            // Award pot to first active player as emergency measure
+            const activeSeats = this.seats.filter(s => s && s.isActive !== false && s.chips > 0);
+            if (activeSeats.length > 0 && this.pot > 0) {
+                const emergencyRecipient = activeSeats[0];
+                const chipsBefore = emergencyRecipient.chips;
+                emergencyRecipient.chips += this.pot;
+                console.error(`[Table ${this.name}] ⚠️ EMERGENCY: Cannot distribute pot, awarding ${this.pot} to ${emergencyRecipient.name} to prevent loss`);
+                gameLogger.gameEvent(this.name, '[POT] EMERGENCY: Awarding pot due to distribution failure', {
+                    recipient: emergencyRecipient.name,
+                    amount: this.pot,
+                    chipsBefore,
+                    chipsAfter: emergencyRecipient.chips,
+                    reason: 'Pot distribution failed - emergency distribution'
+                });
+            }
+            // CRITICAL: Always clear pot, even on error
+            this.pot = 0;
             return [];
         }
         
@@ -5541,6 +5575,8 @@ class Table {
                 chipsAfter: seat.chips,
                 calculationCheck: chipsBefore + potAmount === seat.chips ? 'CORRECT' : 'ERROR'
             });
+            // CRITICAL: Always clear pot after awarding
+            this.pot = 0;
         } else if (seat && seat.isActive === false) {
             // CRITICAL FIX: Eliminated player won pot - redistribute to best active player
             console.error(`[Table ${this.name}] ⚠️ CRITICAL: Eliminated player ${winner.name} won pot ${potAmount} - redistributing to best active player`);
@@ -5587,6 +5623,8 @@ class Table {
                     chipsBefore,
                     chipsAfter: bestActive.chips
                 });
+                // CRITICAL: Always clear pot after redistribution
+                this.pot = 0;
             } else {
                 // No active players - this is a game over scenario, but pot should have been handled earlier
                 console.error(`[Table ${this.name}] ⚠️ CRITICAL: No active players to redistribute ${potAmount} to - pot will be lost!`);
@@ -5597,8 +5635,35 @@ class Table {
             }
         }
         
-        // CRITICAL FIX #1: Ensure pot is ALWAYS cleared after awardPot
+        // CRITICAL FIX #1: Ensure pot is ALWAYS cleared after awardPot, even if errors occurred
         const potBeforeClear = this.pot;
+        if (potBeforeClear > 0) {
+            // Pot wasn't cleared - this is a critical error, but we MUST clear it to prevent chip loss
+            console.error(`[Table ${this.name}] ⚠️ CRITICAL: Pot (${potBeforeClear}) not cleared in awardPot - FORCING CLEAR to prevent chip loss!`);
+            gameLogger.error(this.name, '[POT] CRITICAL: Pot not cleared in awardPot - forcing clear', {
+                potBeforeClear,
+                winner: winner?.name,
+                handNumber: this.handsPlayed,
+                phase: this.phase,
+                reason: 'Pot should have been cleared but wasn\'t - emergency clear to prevent chip loss'
+            });
+            // Emergency: Award to first active player if possible
+            const activeSeats = this.seats.filter(s => s && s.isActive !== false && s.chips > 0);
+            if (activeSeats.length > 0) {
+                const emergencyRecipient = activeSeats[0];
+                const chipsBefore = emergencyRecipient.chips;
+                emergencyRecipient.chips += potBeforeClear;
+                console.error(`[Table ${this.name}] ⚠️ EMERGENCY: Awarding ${potBeforeClear} to ${emergencyRecipient.name} to prevent loss`);
+                gameLogger.gameEvent(this.name, '[POT] EMERGENCY: Awarding unclaimed pot in awardPot', {
+                    recipient: emergencyRecipient.name,
+                    amount: potBeforeClear,
+                    chipsBefore,
+                    chipsAfter: emergencyRecipient.chips
+                });
+            }
+            // Always clear pot, even if we couldn't award it
+            this.pot = 0;
+        }
         const totalChipsBeforeClear = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
         const totalChipsAndPotBeforeClear = totalChipsBeforeClear + this.pot;
         
