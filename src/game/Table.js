@@ -4609,6 +4609,38 @@ class Table {
             }
         }
         
+        // ULTRA-VERBOSE: Log state after awarding pots
+        const totalChipsAfterAwards = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
+        const totalChipsAndPotAfterAwards = totalChipsAfterAwards + this.pot;
+        const chipsDifferenceAfterAwards = totalChipsAndPotAfterAwards - totalChipsAndPotBeforeAwards;
+        
+        console.log(`[Table ${this.name}] [AWARD_POTS POST-OP] Hand: ${this.handsPlayed} | Pot: ${this.pot} | TotalChips: ${totalChipsAfterAwards} | TotalChips+Pot: ${totalChipsAndPotAfterAwards} | TotalAwarded: ${totalAwarded} | Difference: ${chipsDifferenceAfterAwards}`);
+        gameLogger.gameEvent(this.name, '[AWARD_POTS] POST-OPERATION STATE', {
+            handNumber: this.handsPlayed,
+            pot: this.pot,
+            totalChipsBeforeAwards,
+            totalChipsAfterAwards,
+            totalChipsAndPotBeforeAwards,
+            totalChipsAndPotAfterAwards,
+            chipsDifferenceAfterAwards,
+            totalAwarded,
+            totalStartingChips: this.totalStartingChips,
+            awardDetails
+        });
+        
+        if (Math.abs(chipsDifferenceAfterAwards) > 0.01) {
+            console.error(`[Table ${this.name}] ⚠️ CRITICAL AWARD_POTS ERROR: Total chips changed! Before: ${totalChipsAndPotBeforeAwards}, After: ${totalChipsAndPotAfterAwards}, Difference: ${chipsDifferenceAfterAwards}`);
+            gameLogger.error(this.name, '[AWARD_POTS] CRITICAL: Total chips changed', {
+                handNumber: this.handsPlayed,
+                totalChipsAndPotBeforeAwards,
+                totalChipsAndPotAfterAwards,
+                chipsDifferenceAfterAwards,
+                totalAwarded,
+                potBeforeCalculation,
+                potAfterAwards: this.pot
+            });
+        }
+        
         // CRITICAL: Validate that all pot money was awarded
         // CRITICAL: Log detailed breakdown for debugging
         gameLogger.gameEvent(this.name, '[POT] Award summary', {
