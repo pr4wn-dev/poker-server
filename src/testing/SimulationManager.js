@@ -269,7 +269,7 @@ class SimulationManager {
                 smallBlind,
                 bigBlind,
                 buyIn,
-                turnTimeLimit: this.fastMode ? Math.min(turnTimeLimit, 5000) : turnTimeLimit,
+                turnTimeLimit: this.fastMode ? 100 : turnTimeLimit, // 100ms for fast mode simulations
                 blindIncreaseInterval: this.fastMode ? 30000 : blindIncreaseInterval
             }
         };
