@@ -2097,6 +2097,19 @@ class Table {
         const potBeforeAdd = this.pot;
         const chipsBeforeSubtract = player.chips;
         const totalChipsBefore = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
+        // CRITICAL: Ensure pot is 0 before posting blinds (should have been cleared in startNewHand)
+        // If pot is not 0, this means it persisted from previous hand - clear it now
+        if (this.pot > 0 && potBeforeAdd === this.pot) {
+            console.error(`[Table ${this.name}] ⚠️ CRITICAL: Pot (${this.pot}) not cleared before posting blinds! Clearing now to prevent chip loss.`);
+            gameLogger.error(this.name, '[BLIND] CRITICAL: Pot not cleared before posting blinds - clearing now', {
+                potBeforeClear: this.pot,
+                handNumber: this.handsPlayed,
+                player: player.name,
+                blindAmount
+            });
+            this.pot = 0;
+        }
+        
         const totalChipsAndPotBefore = totalChipsBefore + this.pot;
         
         console.log(`[Table ${this.name}] [BLIND PRE-OP] Hand: ${this.handsPlayed} | Player: ${player.name} | Blind: ${blindAmount} | PlayerChips: ${chipsBeforeSubtract} | Pot: ${potBeforeAdd} | TotalChips: ${totalChipsBefore} | TotalChips+Pot: ${totalChipsAndPotBefore}`);
