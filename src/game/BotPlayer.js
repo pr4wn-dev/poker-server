@@ -119,7 +119,9 @@ class BotPlayer {
             }
             
             // Fold weak hands
-            if (effectiveStrength < this.traits.callThreshold && !shouldBluff && !shouldAllInRandom) {
+            // SIMULATION MODE: Lower call threshold to fold less and keep games interesting
+            const adjustedCallThreshold = isSimulation ? this.traits.callThreshold * 0.7 : this.traits.callThreshold;
+            if (effectiveStrength < adjustedCallThreshold && !shouldBluff && !shouldAllInRandom) {
                 return { action: 'fold' };
             }
             

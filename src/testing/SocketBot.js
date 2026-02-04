@@ -845,21 +845,22 @@ class SocketBot {
                 action = 'fold';
             }
         } else if (potOdds > 0.5) {
-            // Bad pot odds, usually fold
-            if (Math.random() < 0.3) {
+            // Bad pot odds, but in simulation mode be more aggressive
+            // Call more often to keep games interesting
+            if (Math.random() < 0.5) {  // Increased from 0.3 to 0.5
                 action = 'call';
             } else {
                 action = 'fold';
             }
         } else {
-            // Decent situation
+            // Decent situation - be more aggressive, fold less
             const roll = Math.random();
-            if (roll < this.aggressiveness * 0.5) {
+            if (roll < this.aggressiveness * 0.7) {  // Increased from 0.5 to 0.7
                 // Raise
                 action = 'raise';
                 const raiseAmount = toCall + Math.floor((state.pot + toCall) * (0.5 + Math.random()));
                 amount = Math.min(raiseAmount, myChips);
-            } else if (roll < 0.8) {
+            } else if (roll < 0.9) {  // Increased from 0.8 to 0.9 (fold less)
                 action = 'call';
             } else {
                 action = 'fold';
