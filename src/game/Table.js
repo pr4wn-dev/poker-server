@@ -3899,13 +3899,12 @@ class Table {
             }
         }
         
-        // CRITICAL: NOW that pot is calculated and awarded, we can safely remove eliminated bots
+        // CRITICAL: NOW that pot is calculated and awarded, we can safely remove eliminated players
         // Their totalBet has been used for pot calculation, so we can clear it and remove them
         for (let i = 0; i < this.seats.length; i++) {
             const seat = this.seats[i];
-            if (seat && seat.isActive === false && seat.isBot) {
-                console.log(`[Table ${this.name}] Removing eliminated bot ${seat.name} after pot calculation`);
-                // CRITICAL FIX: Subtract their buy-in from totalStartingChips since they're no longer in the game
+            if (seat && seat.isActive === false) {
+                // CRITICAL FIX: Subtract their buy-in from totalStartingChips for ALL eliminated players (bots AND socket bots)
                 // Their chips were already lost (they had 0 chips when eliminated), but totalStartingChips still included their buy-in
                 if (this.totalStartingChips > 0) {
                     const oldTotalStartingChips = this.totalStartingChips;
@@ -3915,10 +3914,16 @@ class Table {
                         player: seat.name,
                         buyIn: this.buyIn,
                         oldTotalStartingChips,
-                        newTotalStartingChips: this.totalStartingChips
+                        newTotalStartingChips: this.totalStartingChips,
+                        isBot: seat.isBot || false
                     });
                 }
-                this.seats[i] = null;
+                
+                // Only remove regular bots (socket bots are managed by SimulationManager)
+                if (seat.isBot) {
+                    console.log(`[Table ${this.name}] Removing eliminated bot ${seat.name} after pot calculation`);
+                    this.seats[i] = null;
+                }
             }
         }
         
@@ -4024,12 +4029,11 @@ class Table {
             }
         }
         
-        // CRITICAL: NOW that pot is awarded, we can safely remove eliminated bots
+        // CRITICAL: NOW that pot is awarded, we can safely remove eliminated players
         for (let i = 0; i < this.seats.length; i++) {
             const seat = this.seats[i];
-            if (seat && seat.isActive === false && seat.isBot) {
-                console.log(`[Table ${this.name}] Removing eliminated bot ${seat.name} after pot award`);
-                // CRITICAL FIX: Subtract their buy-in from totalStartingChips since they're no longer in the game
+            if (seat && seat.isActive === false) {
+                // CRITICAL FIX: Subtract their buy-in from totalStartingChips for ALL eliminated players (bots AND socket bots)
                 // Their chips were already lost (they had 0 chips when eliminated), but totalStartingChips still included their buy-in
                 if (this.totalStartingChips > 0) {
                     const oldTotalStartingChips = this.totalStartingChips;
@@ -4039,10 +4043,16 @@ class Table {
                         player: seat.name,
                         buyIn: this.buyIn,
                         oldTotalStartingChips,
-                        newTotalStartingChips: this.totalStartingChips
+                        newTotalStartingChips: this.totalStartingChips,
+                        isBot: seat.isBot || false
                     });
                 }
-                this.seats[i] = null;
+                
+                // Only remove regular bots (socket bots are managed by SimulationManager)
+                if (seat.isBot) {
+                    console.log(`[Table ${this.name}] Removing eliminated bot ${seat.name} after pot award`);
+                    this.seats[i] = null;
+                }
             }
         }
         
