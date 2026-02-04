@@ -4254,28 +4254,12 @@ class Table {
         // 2. Active (isActive !== false) - not eliminated
         // 3. Not folded this hand
         // 4. Have cards to evaluate
-        // 5. CRITICAL FIX: Have chips > 0 - players who went all-in and lost (0 chips) should NOT be eligible
-        //    They should be marked as eliminated, but if they're not yet, exclude them here
+        // NOTE: All-in players with 0 chips CAN still win if they have the best hand
+        // They will be evaluated and if they win, they'll get the pot award (chips will go from 0 to award amount)
+        // If they lose, they won't be in the winners list and won't get any award
         const activePlayers = this.seats
-            .map((seat, index) => {
-                // CRITICAL: Exclude players with 0 chips - they went all-in and lost, shouldn't get money back
-                if (seat && seat.chips <= 0 && seat.isAllIn) {
-                    // Mark as eliminated if not already
-                    if (seat.isActive !== false) {
-                        console.warn(`[Table ${this.name}] ⚠️ Player ${seat.name} has 0 chips and is all-in - marking as eliminated before showdown`);
-                        seat.isActive = false;
-                        gameLogger.gameEvent(this.name, '[ELIMINATION] Marking all-in player with 0 chips as eliminated', {
-                            player: seat.name,
-                            chips: seat.chips,
-                            isAllIn: seat.isAllIn,
-                            handNumber: this.handsPlayed
-                        });
-                    }
-                    return null; // Exclude from activePlayers
-                }
-                return seat && seat.isActive !== false && !seat.isFolded && seat.cards?.length >= 2 
-                    ? { ...seat, seatIndex: index } : null;
-            })
+            .map((seat, index) => seat && seat.isActive !== false && !seat.isFolded && seat.cards?.length >= 2 
+                ? { ...seat, seatIndex: index } : null)
             .filter(p => p !== null);
         
         // CRITICAL FIX: Also evaluate hands for eliminated players who contributed to the pot
@@ -5195,10 +5179,12 @@ class Table {
         for (const award of potAwards) {
             const seat = this.seats.find(s => s?.playerId === award.playerId);
             
-            // CRITICAL FIX: Double-check that player is still active AND has chips > 0
-            // Players who went all-in and lost (0 chips) should NOT receive awards
-            if (seat && seat.isActive !== false && seat.chips > 0) {
-                // Only award chips to active (non-eliminated) players who have chips
+            // CRITICAL: Only award to active (non-eliminated) players
+            // NOTE: All-in players with 0 chips CAN receive awards if they WON (they're in potAwards because they have best hand)
+            // After receiving the award, their chips will go from 0 to award amount
+            // If they lost, they won't be in potAwards at all, so they won't get anything
+            if (seat && seat.isActive !== false) {
+                // Award chips to active players (including all-in winners who currently have 0 chips)
             const chipsBefore = seat.chips;
             
             // CRITICAL: Track chip award BEFORE operation
