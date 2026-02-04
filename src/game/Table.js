@@ -5701,12 +5701,15 @@ class Table {
             potAwardsCount: potAwards.length
         });
         
-        // CRITICAL: NOW that pot is calculated and awarded, clear totalBet for all seats
+        // CRITICAL: NOW that pot is calculated and awarded, clear totalBet and currentBet for all seats
         // This is safe because the pot has been fully distributed
-        // CRITICAL FIX: Clear totalBet IMMEDIATELY after pot awards to prevent persistence
+        // CRITICAL FIX: Clear totalBet and currentBet IMMEDIATELY after pot awards to prevent persistence
+        let totalBetClearedCount = 0;
+        let currentBetClearedCount = 0;
         for (const seat of this.seats) {
             if (seat) {
                 if (seat.totalBet > 0) {
+                    totalBetClearedCount++;
                     console.log(`[Table ${this.name}] [FIX] Clearing totalBet=${seat.totalBet} for ${seat.name} after pot awards`);
                     gameLogger.gameEvent(this.name, '[FIX] Clearing totalBet after pot awards', {
                         player: seat.name,
@@ -5714,8 +5717,33 @@ class Table {
                         handNumber: this.handsPlayed
                     });
                 }
+                if (seat.currentBet > 0) {
+                    currentBetClearedCount++;
+                    console.log(`[Table ${this.name}] [FIX] Clearing currentBet=${seat.currentBet} for ${seat.name} after pot awards`);
+                    gameLogger.gameEvent(this.name, '[FIX] Clearing currentBet after pot awards', {
+                        player: seat.name,
+                        currentBet: seat.currentBet,
+                        handNumber: this.handsPlayed
+                    });
+                }
                 seat.totalBet = 0;
+                seat.currentBet = 0;
             }
+        }
+        
+        // Record fix attempt - if we had to clear totalBet or currentBet, it means they weren't cleared earlier (failure)
+        if (totalBetClearedCount > 0 || currentBetClearedCount > 0) {
+            this._recordFixAttempt('FIX_1_TOTAL_BET_NOT_CLEARED', false, {
+                context: 'AFTER_CALCULATE_AND_AWARD_SIDE_POTS',
+                playersWithTotalBet: totalBetClearedCount,
+                playersWithCurrentBet: currentBetClearedCount,
+                handNumber: this.handsPlayed
+            });
+        } else {
+            this._recordFixAttempt('FIX_1_TOTAL_BET_NOT_CLEARED', true, {
+                context: 'AFTER_CALCULATE_AND_AWARD_SIDE_POTS',
+                handNumber: this.handsPlayed
+            });
         }
         
         // CRITICAL: NOW that pot is calculated and awarded, we can safely remove eliminated players
@@ -5776,10 +5804,11 @@ class Table {
         
         // CRITICAL FIX: Ensure pot is ALWAYS cleared before returning, even if there was an error
         // This prevents pot from persisting to next hand and causing chip loss
-        if (this.pot > 0) {
-            console.error(`[Table ${this.name}] ⚠️ CRITICAL: Pot still has ${this.pot} chips after calculateAndAwardSidePots! Forcing clear.`);
+        const potBeforeFinalCheck = this.pot;
+        if (potBeforeFinalCheck > 0) {
+            console.error(`[Table ${this.name}] ⚠️ CRITICAL: Pot still has ${potBeforeFinalCheck} chips after calculateAndAwardSidePots! Forcing clear.`);
             gameLogger.error(this.name, '[POT] CRITICAL: Pot not cleared after calculateAndAwardSidePots - forcing clear', {
-                pot: this.pot,
+                pot: potBeforeFinalCheck,
                 handNumber: this.handsPlayed,
                 phase: this.phase,
                 totalAwarded,
@@ -5789,14 +5818,39 @@ class Table {
             // Adjust totalStartingChips to account for lost chips
             const oldTotalStartingChips = this.totalStartingChips;
             const actualTotalChips = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
-            const actualTotalChipsAndPot = actualTotalChips + this.pot;
-            this.totalStartingChips = actualTotalChips; // Adjust to actual chips (pot will be lost)
+            // Subtract the lost pot from totalStartingChips
+            this.totalStartingChips = this.totalStartingChips - potBeforeFinalCheck;
+            console.error(`[Table ${this.name}] ⚠️ ADJUSTING totalStartingChips: ${oldTotalStartingChips} → ${this.totalStartingChips} (lost ${potBeforeFinalCheck} chips due to pot not cleared)`);
             this._logTotalStartingChipsChange('ADJUST_FOR_UNCLAIMED_POT', 'CALCULATE_AND_AWARD_SIDE_POTS', oldTotalStartingChips, this.totalStartingChips, {
                 reason: 'Pot not cleared after awards - adjusting totalStartingChips to account for lost chips',
-                potLost: this.pot,
+                potLost: potBeforeFinalCheck,
                 actualTotalChips,
                 handNumber: this.handsPlayed
             });
+            
+            // Record fix attempt - pot not cleared is a failure
+            this._recordFixAttempt('FIX_1_POT_NOT_CLEARED_IN_AWARDPOT', false, {
+                context: 'CALCULATE_AND_AWARD_SIDE_POTS',
+                potBeforeFinalCheck,
+                totalAwarded,
+                handNumber: this.handsPlayed,
+                phase: this.phase,
+                potAwardsCount: potAwards.length
+            });
+            
+            // Always clear pot, even if we couldn't award it
+            this.pot = 0;
+        } else {
+            // Pot was correctly cleared - record success
+            this._recordFixAttempt('FIX_1_POT_NOT_CLEARED_IN_AWARDPOT', true, {
+                context: 'CALCULATE_AND_AWARD_SIDE_POTS',
+                potBeforeFinalCheck: 0,
+                totalAwarded,
+                handNumber: this.handsPlayed,
+                phase: this.phase,
+                potAwardsCount: potAwards.length
+            });
+        }
             
             this.pot = 0; // Force clear
         }
@@ -6025,10 +6079,11 @@ class Table {
             });
         }
         
-        // CRITICAL: NOW that pot is awarded, clear totalBet for all seats
+        // CRITICAL: NOW that pot is awarded, clear totalBet and currentBet for all seats
         // This is safe because the pot has been fully distributed
-        // CRITICAL FIX: Clear totalBet IMMEDIATELY after pot award to prevent persistence
+        // CRITICAL FIX: Clear totalBet and currentBet IMMEDIATELY after pot award to prevent persistence
         let totalBetClearedCount = 0;
+        let currentBetClearedCount = 0;
         for (const seat of this.seats) {
             if (seat) {
                 if (seat.totalBet > 0) {
@@ -6040,16 +6095,27 @@ class Table {
                         handNumber: this.handsPlayed
                     });
                 }
+                if (seat.currentBet > 0) {
+                    currentBetClearedCount++;
+                    console.log(`[Table ${this.name}] [FIX] Clearing currentBet=${seat.currentBet} for ${seat.name} after awardPot`);
+                    gameLogger.gameEvent(this.name, '[FIX] Clearing currentBet after awardPot', {
+                        player: seat.name,
+                        currentBet: seat.currentBet,
+                        handNumber: this.handsPlayed
+                    });
+                }
                 seat.totalBet = 0;
+                seat.currentBet = 0;
             }
         }
         
-        // Record fix attempt - if we had to clear totalBet, it means it wasn't cleared earlier (failure)
-        // If no totalBet to clear, that's success (it was already cleared or never set)
-        if (totalBetClearedCount > 0) {
+        // Record fix attempt - if we had to clear totalBet or currentBet, it means they weren't cleared earlier (failure)
+        // If no totalBet/currentBet to clear, that's success (they were already cleared or never set)
+        if (totalBetClearedCount > 0 || currentBetClearedCount > 0) {
             this._recordFixAttempt('FIX_1_TOTAL_BET_NOT_CLEARED', false, {
                 context: 'AFTER_AWARD_POT',
                 playersWithTotalBet: totalBetClearedCount,
+                playersWithCurrentBet: currentBetClearedCount,
                 handNumber: this.handsPlayed
             });
         } else {
