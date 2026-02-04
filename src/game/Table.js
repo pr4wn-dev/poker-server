@@ -1530,18 +1530,20 @@ class Table {
                 // Mark as eliminated
                 seat.isActive = false;
                 
-                // CRITICAL FIX: Subtract eliminated player's buy-in from totalStartingChips
-                // Since eliminated players (isActive = false) are not counted in _validateMoney,
-                // we need to adjust totalStartingChips to match
+                // CRITICAL FIX: DO NOT subtract eliminated player's buy-in from totalStartingChips
                 // The player's chips were redistributed to other players or are in the pot,
-                // but their buy-in should no longer be counted in totalStartingChips
-                const oldTotalStartingChips = this.totalStartingChips;
-                this.totalStartingChips = Math.max(0, this.totalStartingChips - this.buyIn);
-                this._logTotalStartingChipsChange('SUBTRACT_ELIMINATED', 'PLAYER_ELIMINATED', oldTotalStartingChips, this.totalStartingChips, {
+                // so the total chips in the system remains constant (equal to totalStartingChips)
+                // totalStartingChips represents the total chips that started the game and should NEVER change
+                // The validation counts active players' chips + pot, which should equal totalStartingChips
+                // because eliminated players' chips were redistributed to active players
+                console.log(`[Table ${this.name}] [ELIMINATION] ${seat.name} eliminated - NOT subtracting buy-in from totalStartingChips (chips redistributed, total remains constant)`);
+                gameLogger.gameEvent(this.name, '[ELIMINATION] Player eliminated - NOT modifying totalStartingChips', {
                     player: seat.name,
                     playerId: seat.playerId,
                     buyIn: this.buyIn,
-                    seatIndex: i
+                    seatIndex: i,
+                    totalStartingChips: this.totalStartingChips,
+                    reason: 'Chips redistributed to other players - totalStartingChips remains constant'
                 });
                 
                 // CRITICAL: Preserve totalBet even after elimination - it's needed for pot calculation
