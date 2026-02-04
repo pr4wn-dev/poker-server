@@ -5053,8 +5053,17 @@ class Table {
         }
         
         // ULTRA-VERBOSE: Log state after awarding pots
+        // CRITICAL FIX: After awarding pots, the chips moved from pot to players
+        // So: totalChipsAfterAwards = totalChipsBeforeAwards + totalAwarded
+        // And: totalChipsAndPotAfterAwards should equal totalChipsAndPotBeforeAwards (chips conserved)
+        // Since pot will be cleared (set to 0), totalChipsAndPotAfterAwards = totalChipsAfterAwards + 0
+        // But pot hasn't been cleared yet, so we need to account for: pot should equal totalAwarded
+        // Therefore: totalChipsAndPotAfterAwards = totalChipsAfterAwards + (this.pot - totalAwarded)
+        // If pot == totalAwarded (correct), then totalChipsAndPotAfterAwards = totalChipsAfterAwards
         const totalChipsAfterAwards = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
-        const totalChipsAndPotAfterAwards = totalChipsAfterAwards + this.pot;
+        // CRITICAL: The pot money was moved to players, so after clearing pot=0, total = totalChipsAfterAwards
+        // But since pot isn't cleared yet, subtract the awarded amount from pot to get correct total
+        const totalChipsAndPotAfterAwards = totalChipsAfterAwards + Math.max(0, this.pot - totalAwarded);
         const chipsDifferenceAfterAwards = totalChipsAndPotAfterAwards - totalChipsAndPotBeforeAwards;
         
         console.log(`[Table ${this.name}] [AWARD_POTS POST-OP] Hand: ${this.handsPlayed} | Pot: ${this.pot} | TotalChips: ${totalChipsAfterAwards} | TotalChips+Pot: ${totalChipsAndPotAfterAwards} | TotalAwarded: ${totalAwarded} | Difference: ${chipsDifferenceAfterAwards}`);
