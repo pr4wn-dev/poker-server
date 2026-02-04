@@ -3833,8 +3833,8 @@ class Table {
             } : null).filter(Boolean)
         });
         
-        // CRITICAL: Validate money after pot awards
-        this._validateMoney('AFTER_POT_AWARDS');
+        // CRITICAL: Don't validate here - pot hasn't been cleared yet
+        // Validation will happen at AFTER_SIDE_POT_AWARDS after pot is cleared
         
         if (Math.abs(potBeforeCalculation - totalAwarded) > 0.01) {
             console.error(`[Table ${this.name}] ⚠️ CRITICAL: POT NOT FULLY AWARDED! Pot was ${potBeforeCalculation}, but only ${totalAwarded} was awarded. Missing: ${potBeforeCalculation - totalAwarded}`);
