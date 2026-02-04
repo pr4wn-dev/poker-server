@@ -239,7 +239,8 @@ class SimulationManager {
             gamesPlayed: 0,
             fastMode: this.fastMode,
             originalSmallBlind: smallBlind,  // Store original blinds for reference
-            originalBigBlind: bigBlind
+            originalBigBlind: bigBlind,
+            isRestarting: false  // Guard to prevent multiple simultaneous restarts
         };
         this.activeSimulations.set(tableId, simulation);
         
@@ -418,6 +419,12 @@ class SimulationManager {
                 return;
             }
             
+            // CRITICAL: Prevent multiple simultaneous restarts
+            if (simulation.isRestarting) {
+                this.log('WARN', 'Restart already in progress, skipping duplicate callback', { tableId });
+                return;
+            }
+            
             // Game over detected via callback - restart immediately
             simulation.gamesPlayed++;
             
@@ -468,7 +475,16 @@ class SimulationManager {
         // we need to wrap it. SocketHandler will call originalOnGameOver, so we set ours as the "original"
         // and wrap SocketHandler's callback to call ours.
         // If we set up first, SocketHandler will preserve our callback.
+        // CRITICAL: Only set up if not already set up to prevent duplicate callbacks
         if (existingOnGameOver && existingOnGameOver !== simulationCallback) {
+            // Check if it's already wrapped (contains our callback)
+            const isAlreadyWrapped = existingOnGameOver.toString().includes('simulationCallback') || 
+                                    existingOnGameOver.toString().includes('_restartGame');
+            if (isAlreadyWrapped) {
+                this.log('INFO', 'Auto-restart callback already wrapped, skipping setup', { tableId });
+                return;
+            }
+            
             // SocketHandler's callback exists - we need to ensure both are called
             // SocketHandler calls originalOnGameOver, so we set ours as original and wrap SocketHandler's
             const socketHandlerCallback = existingOnGameOver;
@@ -478,9 +494,12 @@ class SimulationManager {
                 // Then call our callback (restarts game)
                 simulationCallback(winner);
             };
-        } else {
+        } else if (!existingOnGameOver || existingOnGameOver === simulationCallback) {
             // No existing callback or it's already ours - just set it
             table.onGameOver = simulationCallback;
+        } else {
+            // Already set up with a different callback - don't override
+            this.log('WARN', 'onGameOver already set with different callback, not overriding', { tableId });
         }
         
         this.log('INFO', 'Auto-restart callback set up', { tableId });
@@ -499,7 +518,16 @@ class SimulationManager {
             return;
         }
         
-        this.log('INFO', `Restarting game ${simulation.gamesPlayed + 1} - randomizing settings and bots`, { tableId });
+        // CRITICAL: Guard against multiple simultaneous restarts
+        if (simulation.isRestarting) {
+            this.log('WARN', 'Restart already in progress, skipping duplicate restart', { tableId });
+            return;
+        }
+        
+        simulation.isRestarting = true;
+        
+        try {
+            this.log('INFO', `Restarting game ${simulation.gamesPlayed + 1} - randomizing settings and bots`, { tableId });
         
         // Generate NEW random settings for this game
         const newSettings = this._generateRandomSettings();
@@ -841,6 +869,15 @@ class SimulationManager {
                 }
             }
         }, startDelay);
+        
+        // CRITICAL: Reset restart guard after a delay to allow restart to complete
+        setTimeout(() => {
+            simulation.isRestarting = false;
+        }, startDelay + 5000);
+        } catch (error) {
+            this.log('ERROR', 'Error during restart', { tableId, error: error.message });
+            simulation.isRestarting = false;
+        }
     }
     
     /**

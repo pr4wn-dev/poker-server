@@ -1530,6 +1530,20 @@ class Table {
                 // Mark as eliminated
                 seat.isActive = false;
                 
+                // CRITICAL FIX: Subtract eliminated player's buy-in from totalStartingChips
+                // Since eliminated players (isActive = false) are not counted in _validateMoney,
+                // we need to adjust totalStartingChips to match
+                // The player's chips were redistributed to other players or are in the pot,
+                // but their buy-in should no longer be counted in totalStartingChips
+                const oldTotalStartingChips = this.totalStartingChips;
+                this.totalStartingChips = Math.max(0, this.totalStartingChips - this.buyIn);
+                this._logTotalStartingChipsChange('SUBTRACT_ELIMINATED', 'PLAYER_ELIMINATED', oldTotalStartingChips, this.totalStartingChips, {
+                    player: seat.name,
+                    playerId: seat.playerId,
+                    buyIn: this.buyIn,
+                    seatIndex: i
+                });
+                
                 // CRITICAL: Preserve totalBet even after elimination - it's needed for pot calculation
                 // Don't clear it here - it will be cleared after pot is awarded
                 

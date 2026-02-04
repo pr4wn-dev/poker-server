@@ -62,9 +62,10 @@ class BotManager {
         
         // Check actual seats first (most reliable)
         // CRITICAL: Use case-insensitive comparison to handle any name variations
+        // CRITICAL FIX: Only check ACTIVE seats - inactive/eliminated bots don't count
         const botProfileNameLower = botProfileName.toLowerCase();
         for (const seat of table.seats) {
-            if (seat && seat.isBot) {
+            if (seat && seat.isBot && seat.isActive !== false) {
                 const seatNameLower = (seat.name || '').toLowerCase();
                 // Check exact match or if names contain each other (handles variations)
                 if (seatNameLower === botProfileNameLower || 
