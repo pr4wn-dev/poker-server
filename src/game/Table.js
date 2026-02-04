@@ -97,6 +97,74 @@ class Table {
             enabled: true
         };
         
+        // CRITICAL: Fix attempt tracking system - tracks how many times each fix has been attempted and failed
+        // This helps identify which fixes aren't working and need a different approach
+        this._fixAttempts = {
+            'FIX_1_POT_NOT_CLEARED': { attempts: 0, failures: 0, lastFailure: null },
+            'FIX_2_CHIPS_LOST_BETTING': { attempts: 0, failures: 0, lastFailure: null },
+            'FIX_3_CUMULATIVE_CHIP_LOSS': { attempts: 0, failures: 0, lastFailure: null },
+            'FIX_4_ACTION_NOT_YOUR_TURN': { attempts: 0, failures: 0, lastFailure: null },
+            'FIX_5_ACTION_GAME_NOT_IN_PROGRESS': { attempts: 0, failures: 0, lastFailure: null },
+            'FIX_6_BETTING_ACTION_FAILURES': { attempts: 0, failures: 0, lastFailure: null },
+            'FIX_7_VALIDATION_FAILURES': { attempts: 0, failures: 0, lastFailure: null },
+            'FIX_8_POT_MISMATCH': { attempts: 0, failures: 0, lastFailure: null }
+        };
+        
+        // Helper to record fix attempt
+        this._recordFixAttempt = (fixId, success, details = {}) => {
+            if (!this._fixAttempts[fixId]) {
+                this._fixAttempts[fixId] = { attempts: 0, failures: 0, lastFailure: null };
+            }
+            
+            const fix = this._fixAttempts[fixId];
+            fix.attempts++;
+            
+            if (!success) {
+                fix.failures++;
+                fix.lastFailure = {
+                    timestamp: Date.now(),
+                    handNumber: this.handsPlayed,
+                    phase: this.phase,
+                    ...details
+                };
+                
+                console.error(`[Table ${this.name}] ⚠️ FIX ATTEMPT FAILED: ${fixId} | Attempt #${fix.attempts} | Total Failures: ${fix.failures} | Success Rate: ${((fix.attempts - fix.failures) / fix.attempts * 100).toFixed(1)}%`);
+                gameLogger.error(this.name, `[FIX ATTEMPT] ${fixId} FAILED`, {
+                    fixId,
+                    attemptNumber: fix.attempts,
+                    totalFailures: fix.failures,
+                    successRate: ((fix.attempts - fix.failures) / fix.attempts * 100).toFixed(1) + '%',
+                    handNumber: this.handsPlayed,
+                    phase: this.phase,
+                    ...details
+                });
+            } else {
+                console.log(`[Table ${this.name}] ✓ FIX ATTEMPT SUCCESS: ${fixId} | Attempt #${fix.attempts} | Total Failures: ${fix.failures} | Success Rate: ${((fix.attempts - fix.failures) / fix.attempts * 100).toFixed(1)}%`);
+                gameLogger.gameEvent(this.name, `[FIX ATTEMPT] ${fixId} SUCCESS`, {
+                    fixId,
+                    attemptNumber: fix.attempts,
+                    totalFailures: fix.failures,
+                    successRate: ((fix.attempts - fix.failures) / fix.attempts * 100).toFixed(1) + '%',
+                    handNumber: this.handsPlayed,
+                    phase: this.phase,
+                    ...details
+                });
+            }
+            
+            // Log summary if failures are accumulating
+            if (fix.failures > 0 && fix.failures % 5 === 0) {
+                console.error(`[Table ${this.name}] ⚠️⚠️⚠️ FIX ${fixId} HAS FAILED ${fix.failures} TIMES! Consider changing approach! ⚠️⚠️⚠️`);
+                gameLogger.error(this.name, `[FIX ATTEMPT] ${fixId} MULTIPLE FAILURES`, {
+                    fixId,
+                    totalFailures: fix.failures,
+                    totalAttempts: fix.attempts,
+                    successRate: ((fix.attempts - fix.failures) / fix.attempts * 100).toFixed(1) + '%',
+                    recommendation: 'Consider changing fix approach - current method is not working',
+                    lastFailure: fix.lastFailure
+                });
+            }
+        };
+        
         // CRITICAL: Ultra-verbose logging helper for totalStartingChips modifications
         this._logTotalStartingChipsChange = (operation, context, oldValue, newValue, details = {}) => {
             const stackTrace = new Error().stack;
@@ -1990,6 +2058,15 @@ class Table {
                     handNumber: this.handsPlayed,
                     fix: 'Bot/player trying to act when game not in progress - this should be prevented by bot state checking'
                 });
+                
+                // Record fix attempt failure
+                this._recordFixAttempt('FIX_5_ACTION_GAME_NOT_IN_PROGRESS', false, {
+                    playerId,
+                    action,
+                    phase: this.phase,
+                    handNumber: this.handsPlayed
+                });
+                
                 this._processingAction = false;
                 return { success: false, error: 'Game not in progress' };
             }
@@ -2092,6 +2169,19 @@ class Table {
                             reason: errorMsg,
                             fix: 'Bot/player trying to check when toCall > 0 - should call or fold'
                         });
+                        
+                        // Record fix attempt failure
+                        this._recordFixAttempt('FIX_6_BETTING_ACTION_FAILURES', false, {
+                            action: 'check',
+                            player: player.name,
+                            toCall,
+                            currentBet: this.currentBet,
+                            playerBet: player.currentBet,
+                            reason: errorMsg,
+                            handNumber: this.handsPlayed,
+                            phase: this.phase
+                        });
+                        
                         result = { success: false, error: errorMsg };
                     } else {
                         console.log(`[Table ${this.name}] [FIX #6: CHECK] Allowing check | Player: ${player.name}`);
@@ -2136,6 +2226,18 @@ class Table {
                             reason: errorMsg,
                             fix: 'Bot/player trying to bet when currentBet > 0 - should use raise or call'
                         });
+                        
+                        // Record fix attempt failure
+                        this._recordFixAttempt('FIX_6_BETTING_ACTION_FAILURES', false, {
+                            action: 'bet',
+                            player: player.name,
+                            amount,
+                            currentBet: this.currentBet,
+                            phase: this.phase,
+                            reason: errorMsg,
+                            handNumber: this.handsPlayed
+                        });
+                        
                         result = { success: false, error: errorMsg };
                     } else if (amount < this.bigBlind) {
                         const errorMsg = `Minimum bet is ${this.bigBlind}`;
@@ -2147,6 +2249,18 @@ class Table {
                             reason: errorMsg,
                             fix: 'Bot/player trying to bet less than bigBlind'
                         });
+                        
+                        // Record fix attempt failure
+                        this._recordFixAttempt('FIX_6_BETTING_ACTION_FAILURES', false, {
+                            action: 'bet',
+                            player: player.name,
+                            amount,
+                            bigBlind: this.bigBlind,
+                            reason: errorMsg,
+                            handNumber: this.handsPlayed,
+                            phase: this.phase
+                        });
+                        
                         result = { success: false, error: errorMsg };
                     } else if (amount > player.chips) {
                         const errorMsg = `You don't have enough chips. You have ${player.chips}.`;
@@ -2158,6 +2272,18 @@ class Table {
                             reason: errorMsg,
                             fix: 'Bot/player trying to bet more than they have'
                         });
+                        
+                        // Record fix attempt failure
+                        this._recordFixAttempt('FIX_6_BETTING_ACTION_FAILURES', false, {
+                            action: 'bet',
+                            player: player.name,
+                            amount,
+                            playerChips: player.chips,
+                            reason: errorMsg,
+                            handNumber: this.handsPlayed,
+                            phase: this.phase
+                        });
+                        
                         result = { success: false, error: errorMsg };
                     } else {
                         // Pre-flop: If currentBet > 0 (blinds posted), check if amount is more than currentBet
@@ -2180,6 +2306,18 @@ class Table {
                                     reason: errorMsg,
                                     fix: 'Bot/player trying to bet less than currentBet'
                                 });
+                                
+                                // Record fix attempt failure
+                                this._recordFixAttempt('FIX_6_BETTING_ACTION_FAILURES', false, {
+                                    action: 'bet',
+                                    player: player.name,
+                                    amount,
+                                    currentBet: this.currentBet,
+                                    reason: errorMsg,
+                                    handNumber: this.handsPlayed,
+                                    phase: this.phase
+                                });
+                                
                                 result = { success: false, error: errorMsg };
                             }
                         } else {
@@ -4347,7 +4485,8 @@ class Table {
             });
             // CRITICAL FIX #2: Chips lost during betting operations
             // Use the larger value to prevent losing chips (pot should never be less than sum of bets)
-            if (sumOfTotalBets > potBeforeCalculation) {
+            const chipsLostDuringBetting = sumOfTotalBets > potBeforeCalculation;
+            if (chipsLostDuringBetting) {
                 const chipsLost = sumOfTotalBets - potBeforeCalculation;
                 console.error(`[Table ${this.name}] ⚠️ CRITICAL FIX #2: Sum of bets (${sumOfTotalBets}) > Pot (${potBeforeCalculation}). CHIPS LOST: ${chipsLost}!`);
                 gameLogger.error(this.name, '[FIX #2: POT] CRITICAL: Chips lost during betting', {
@@ -4384,6 +4523,26 @@ class Table {
                     oldPot: oldPot,
                     newPot: sumOfTotalBets,
                     chipsRecovered: chipsLost,
+                    handNumber: this.handsPlayed,
+                    phase: this.phase
+                });
+                
+                // Record fix attempt - this is a failure because chips were lost
+                this._recordFixAttempt('FIX_2_CHIPS_LOST_BETTING', false, {
+                    potBeforeCalculation,
+                    sumOfTotalBets,
+                    chipsLost,
+                    oldPot,
+                    newPot: this.pot,
+                    handNumber: this.handsPlayed,
+                    phase: this.phase
+                });
+            } else {
+                // Record fix attempt - success if no chips lost
+                this._recordFixAttempt('FIX_2_CHIPS_LOST_BETTING', true, {
+                    potBeforeCalculation,
+                    sumOfTotalBets,
+                    difference: potBeforeCalculation - sumOfTotalBets,
                     handNumber: this.handsPlayed,
                     phase: this.phase
                 });
