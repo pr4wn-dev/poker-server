@@ -1600,11 +1600,13 @@ class Table {
         // This ensures totalBet from previous hand doesn't persist and cause chip loss
         // Even though totalBet should be cleared after pot is awarded, we clear it here as a safety measure
         // to prevent bugs where totalBet persists from previous hand
+        let totalBetNotClearedCount = 0;
         for (const seat of this.seats) {
             if (seat) {
                 // CRITICAL: Clear totalBet to prevent it from persisting from previous hand
                 // This fixes the bug where sumOfTotalBets > pot because totalBet wasn't cleared
                 if (seat.totalBet > 0) {
+                    totalBetNotClearedCount++;
                     console.warn(`[Table ${this.name}] WARNING: Clearing totalBet=${seat.totalBet} for ${seat.name} at start of new hand - should have been cleared after pot award!`);
                     gameLogger.gameEvent(this.name, '[FIX] Clearing totalBet at hand start', {
                         player: seat.name,
@@ -1616,6 +1618,20 @@ class Table {
                 seat.totalBet = 0;
                 seat.currentBet = 0;
             }
+        }
+        
+        // Record fix attempt - if any totalBet was not cleared, this is a failure
+        if (totalBetNotClearedCount > 0) {
+            this._recordFixAttempt('FIX_1_TOTAL_BET_NOT_CLEARED', false, {
+                context: 'HAND_START',
+                playersWithTotalBet: totalBetNotClearedCount,
+                handNumber: this.handsPlayed + 1
+            });
+        } else {
+            this._recordFixAttempt('FIX_1_TOTAL_BET_NOT_CLEARED', true, {
+                context: 'HAND_START',
+                handNumber: this.handsPlayed + 1
+            });
         }
         
         // NOW check for eliminated players (0 chips with no pending pot money)
@@ -1764,6 +1780,23 @@ class Table {
                 potBeforeReset,
                 handNumber: this.handsPlayed
             });
+            
+            // Record fix attempt - this is a failure because pot should have been cleared
+            this._recordFixAttempt('FIX_1_POT_NOT_CLEARED', false, {
+                context: 'HAND_START',
+                potBeforeReset,
+                chipsLost,
+                handNumber: this.handsPlayed,
+                phase: this.phase
+            });
+        } else {
+            // Pot was correctly cleared - record success
+            this._recordFixAttempt('FIX_1_POT_NOT_CLEARED', true, {
+                context: 'HAND_START',
+                potBeforeReset: 0,
+                handNumber: this.handsPlayed,
+                phase: this.phase
+            });
         }
         
         // CRITICAL: ALWAYS clear pot, even if it should already be 0
@@ -1799,6 +1832,19 @@ class Table {
                 handNumber: this.handsPlayed,
                 totalChipsAndPotAfterReset,
                 calculation: `${oldTotalStartingChips} - ${potBeforeForceClear} = ${this.totalStartingChips}`
+            });
+            
+            // Record fix attempt - this is a mitigation, but chips were still lost
+            // Success = we adjusted totalStartingChips to prevent cascading failures
+            // Failure = we couldn't adjust or adjustment didn't work
+            const adjustmentSuccess = Math.abs(this.totalStartingChips - (oldTotalStartingChips - potBeforeForceClear)) < 0.01;
+            this._recordFixAttempt('FIX_1_TOTAL_STARTING_CHIPS_ADJUSTMENT', adjustmentSuccess, {
+                context: 'HAND_START',
+                oldTotalStartingChips,
+                newTotalStartingChips: this.totalStartingChips,
+                chipsLost: potBeforeForceClear,
+                handNumber: this.handsPlayed,
+                totalChipsAndPotAfterReset
             });
         }
         
@@ -2292,6 +2338,17 @@ class Table {
                     handNumber: this.handsPlayed,
                     fix: 'Bot/player trying to act out of turn - bot should check currentPlayerIndex before acting'
                 });
+                
+                // Record fix attempt - rejecting out-of-turn action is a success
+                this._recordFixAttempt('FIX_4_ACTION_NOT_YOUR_TURN', true, {
+                    playerId,
+                    seatIndex,
+                    currentPlayerIndex: this.currentPlayerIndex,
+                    action,
+                    phase: this.phase,
+                    handNumber: this.handsPlayed
+                });
+                
                 this._processingAction = false;
                 return { success: false, error: 'Not your turn' };
             }
@@ -5866,10 +5923,12 @@ class Table {
             });
             // Emergency: Award to first active player if possible
             const activeSeats = this.seats.filter(s => s && s.isActive !== false && s.chips > 0);
+            let emergencyAwardSuccess = false;
             if (activeSeats.length > 0) {
                 const emergencyRecipient = activeSeats[0];
                 const chipsBefore = emergencyRecipient.chips;
                 emergencyRecipient.chips += potBeforeClear;
+                emergencyAwardSuccess = true;
                 console.error(`[Table ${this.name}] ⚠️ EMERGENCY: Awarding ${potBeforeClear} to ${emergencyRecipient.name} to prevent loss`);
                 gameLogger.gameEvent(this.name, '[POT] EMERGENCY: Awarding unclaimed pot in awardPot', {
                     recipient: emergencyRecipient.name,
@@ -5880,6 +5939,25 @@ class Table {
             }
             // Always clear pot, even if we couldn't award it
             this.pot = 0;
+            
+            // Record fix attempt - pot not cleared is a failure, but emergency clear is a mitigation
+            this._recordFixAttempt('FIX_1_POT_NOT_CLEARED_IN_AWARDPOT', emergencyAwardSuccess, {
+                context: 'AWARD_POT',
+                potBeforeClear,
+                winner: winner?.name,
+                handNumber: this.handsPlayed,
+                phase: this.phase,
+                emergencyAwardSuccess
+            });
+        } else {
+            // Pot was correctly cleared - record success
+            this._recordFixAttempt('FIX_1_POT_NOT_CLEARED_IN_AWARDPOT', true, {
+                context: 'AWARD_POT',
+                potBeforeClear: 0,
+                winner: winner?.name,
+                handNumber: this.handsPlayed,
+                phase: this.phase
+            });
         }
         const totalChipsBeforeClear = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
         const totalChipsAndPotBeforeClear = totalChipsBeforeClear + this.pot;
@@ -5950,9 +6028,11 @@ class Table {
         // CRITICAL: NOW that pot is awarded, clear totalBet for all seats
         // This is safe because the pot has been fully distributed
         // CRITICAL FIX: Clear totalBet IMMEDIATELY after pot award to prevent persistence
+        let totalBetClearedCount = 0;
         for (const seat of this.seats) {
             if (seat) {
                 if (seat.totalBet > 0) {
+                    totalBetClearedCount++;
                     console.log(`[Table ${this.name}] [FIX] Clearing totalBet=${seat.totalBet} for ${seat.name} after awardPot`);
                     gameLogger.gameEvent(this.name, '[FIX] Clearing totalBet after awardPot', {
                         player: seat.name,
@@ -5962,6 +6042,21 @@ class Table {
                 }
                 seat.totalBet = 0;
             }
+        }
+        
+        // Record fix attempt - if we had to clear totalBet, it means it wasn't cleared earlier (failure)
+        // If no totalBet to clear, that's success (it was already cleared or never set)
+        if (totalBetClearedCount > 0) {
+            this._recordFixAttempt('FIX_1_TOTAL_BET_NOT_CLEARED', false, {
+                context: 'AFTER_AWARD_POT',
+                playersWithTotalBet: totalBetClearedCount,
+                handNumber: this.handsPlayed
+            });
+        } else {
+            this._recordFixAttempt('FIX_1_TOTAL_BET_NOT_CLEARED', true, {
+                context: 'AFTER_AWARD_POT',
+                handNumber: this.handsPlayed
+            });
         }
         
         // CRITICAL: NOW that pot is awarded, we can safely remove eliminated players
