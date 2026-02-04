@@ -2077,7 +2077,9 @@ class Table {
             currentBetBefore
         });
         
-        player.chips -= amount;
+        // CRITICAL FIX: Subtract only the additional bet from chips, not the full amount
+        // The player's previous bet was already paid and is in the pot
+        player.chips -= additionalBet;
         player.currentBet = amount; // Set to total bet amount
         player.totalBet = (player.totalBet || 0) + additionalBet; // Only add the additional amount
         this.pot += additionalBet; // Only add the additional amount to pot
@@ -2103,15 +2105,15 @@ class Table {
             currentBetAfter: player.currentBet,
             phase: this.phase,
             validation: {
-                chipsCorrect: player.chips === beforeChips - amount,
+                chipsCorrect: player.chips === beforeChips - additionalBet,
                 potCorrect: this.pot === potBefore + additionalBet,
                 totalBetCorrect: player.totalBet === totalBetBefore + additionalBet
             }
         });
         
         // CRITICAL: Verify calculations
-        if (player.chips !== beforeChips - amount) {
-            console.error(`[Table ${this.name}] ⚠️ RAISE ERROR: Chips calculation wrong. Before: ${beforeChips}, Amount: ${amount}, After: ${player.chips}`);
+        if (player.chips !== beforeChips - additionalBet) {
+            console.error(`[Table ${this.name}] ⚠️ RAISE ERROR: Chips calculation wrong. Before: ${beforeChips}, AdditionalBet: ${additionalBet}, After: ${player.chips}`);
         }
         if (this.pot !== potBefore + additionalBet) {
             console.error(`[Table ${this.name}] ⚠️ RAISE ERROR: Pot calculation wrong. Before: ${potBefore}, Additional: ${additionalBet}, After: ${this.pot}`);
