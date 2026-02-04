@@ -247,10 +247,30 @@ class Table {
                 isAllIn: s.isAllIn || false
             } : { seatIndex: i, isNull: true });
             
+            // ULTRA-VERBOSE: Calculate sum of all totalBets to detect pot mismatches
+            const sumOfAllTotalBets = this.seats
+                .filter(s => s !== null)
+                .reduce((sum, seat) => sum + (seat.totalBet || 0), 0);
+            
             if (this.totalStartingChips > 0) {
                 const difference = totalChipsAndPot - this.totalStartingChips;
                 const absDifference = Math.abs(difference);
                 const isValid = Math.abs(difference) <= 0.01; // Allow for floating point errors (check both creation AND loss)
+                
+                // ULTRA-VERBOSE: Check for pot mismatch (pot should equal sum of totalBets)
+                const potMismatch = Math.abs(this.pot - sumOfAllTotalBets);
+                if (potMismatch > 0.01 && this.pot > 0) {
+                    console.error(`[Table ${this.name}] ⚠️ POT MISMATCH DETECTED in validation: Pot=${this.pot}, Sum of totalBets=${sumOfAllTotalBets}, Difference=${this.pot - sumOfAllTotalBets} | Context: ${context}`);
+                    gameLogger.error(this.name, '[MONEY] POT MISMATCH in validation', {
+                        context,
+                        pot: this.pot,
+                        sumOfAllTotalBets,
+                        difference: this.pot - sumOfAllTotalBets,
+                        handNumber: this.handsPlayed,
+                        phase: this.phase,
+                        allSeats: playerBreakdown
+                    });
+                }
                 
                 if (!isValid) {
                     const missing = this.totalStartingChips - totalChipsAndPot;
@@ -1416,6 +1436,17 @@ class Table {
         // Reset state
         this.deck.shuffle();
         this.communityCards = [];
+        
+        // ULTRA-VERBOSE: Log pot reset at hand start
+        const potBeforeReset = this.pot;
+        if (potBeforeReset > 0) {
+            console.error(`[Table ${this.name}] ⚠️ CRITICAL: Pot was ${potBeforeReset} at hand start! Pot should be 0! | Hand: ${this.handsPlayed}`);
+            gameLogger.error(this.name, '[POT] ERROR: Pot not cleared at hand start', {
+                potBeforeReset,
+                handNumber: this.handsPlayed,
+                phase: this.phase
+            });
+        }
         this.pot = 0;
         this.sidePots = [];
         this.currentBet = 0;
@@ -1593,10 +1624,22 @@ class Table {
             blindType: amount === this.smallBlind ? 'small' : 'big'
         });
         
+        // ULTRA-VERBOSE: Log before operation
+        const potBeforeAdd = this.pot;
+        const chipsBeforeSubtract = player.chips;
+        
         player.chips -= blindAmount;
         player.currentBet = blindAmount;
         player.totalBet = blindAmount;
         this.pot += blindAmount;
+        
+        // ULTRA-VERBOSE: Verify operation immediately
+        if (player.chips !== chipsBeforeSubtract - blindAmount) {
+            console.error(`[Table ${this.name}] ⚠️ CRITICAL BLIND ERROR: Chips calculation failed! Before: ${chipsBeforeSubtract}, Amount: ${blindAmount}, After: ${player.chips}, Expected: ${chipsBeforeSubtract - blindAmount}`);
+        }
+        if (this.pot !== potBeforeAdd + blindAmount) {
+            console.error(`[Table ${this.name}] ⚠️ CRITICAL BLIND ERROR: Pot calculation failed! Before: ${potBeforeAdd}, Amount: ${blindAmount}, After: ${this.pot}, Expected: ${potBeforeAdd + blindAmount}`);
+        }
         
         // CRITICAL: Validate after operation
         this._validateChipMovement(movement, 'POST_BLIND');
@@ -1947,10 +1990,22 @@ class Table {
             currentBetBefore
         });
         
+        // ULTRA-VERBOSE: Log before operation
+        const potBeforeAdd = this.pot;
+        const chipsBeforeSubtract = player.chips;
+        
         player.chips -= toCall;
         player.currentBet += toCall;
         player.totalBet = (player.totalBet || 0) + toCall;
         this.pot += toCall;
+        
+        // ULTRA-VERBOSE: Verify operation immediately
+        if (player.chips !== chipsBeforeSubtract - toCall) {
+            console.error(`[Table ${this.name}] ⚠️ CRITICAL CALL ERROR: Chips calculation failed! Before: ${chipsBeforeSubtract}, Amount: ${toCall}, After: ${player.chips}, Expected: ${chipsBeforeSubtract - toCall}`);
+        }
+        if (this.pot !== potBeforeAdd + toCall) {
+            console.error(`[Table ${this.name}] ⚠️ CRITICAL CALL ERROR: Pot calculation failed! Before: ${potBeforeAdd}, Amount: ${toCall}, After: ${this.pot}, Expected: ${potBeforeAdd + toCall}`);
+        }
         
         // CRITICAL: Validate after operation
         this._validateChipMovement(movement, 'CALL');
@@ -2036,10 +2091,22 @@ class Table {
             totalBetBefore
         });
         
+        // ULTRA-VERBOSE: Log before operation
+        const potBeforeAdd = this.pot;
+        const chipsBeforeSubtract = player.chips;
+        
         player.chips -= amount;
         player.currentBet = amount;
         player.totalBet = (player.totalBet || 0) + amount;
         this.pot += amount;
+        
+        // ULTRA-VERBOSE: Verify operation immediately
+        if (player.chips !== chipsBeforeSubtract - amount) {
+            console.error(`[Table ${this.name}] ⚠️ CRITICAL BET ERROR: Chips calculation failed! Before: ${chipsBeforeSubtract}, Amount: ${amount}, After: ${player.chips}, Expected: ${chipsBeforeSubtract - amount}`);
+        }
+        if (this.pot !== potBeforeAdd + amount) {
+            console.error(`[Table ${this.name}] ⚠️ CRITICAL BET ERROR: Pot calculation failed! Before: ${potBeforeAdd}, Amount: ${amount}, After: ${this.pot}, Expected: ${potBeforeAdd + amount}`);
+        }
         
         // CRITICAL: Validate after operation
         this._validateChipMovement(movement, 'BET');
@@ -2180,10 +2247,22 @@ class Table {
         
         // CRITICAL FIX: Subtract only the additional bet from chips, not the full amount
         // The player's previous bet was already paid and is in the pot
+        // ULTRA-VERBOSE: Log before operation
+        const potBeforeAdd = this.pot;
+        const chipsBeforeSubtract = player.chips;
+        
         player.chips -= additionalBet;
         player.currentBet = amount; // Set to total bet amount
         player.totalBet = (player.totalBet || 0) + additionalBet; // Only add the additional amount
         this.pot += additionalBet; // Only add the additional amount to pot
+        
+        // ULTRA-VERBOSE: Verify operation immediately
+        if (player.chips !== chipsBeforeSubtract - additionalBet) {
+            console.error(`[Table ${this.name}] ⚠️ CRITICAL RAISE ERROR: Chips calculation failed! Before: ${chipsBeforeSubtract}, AdditionalBet: ${additionalBet}, After: ${player.chips}, Expected: ${chipsBeforeSubtract - additionalBet}`);
+        }
+        if (this.pot !== potBeforeAdd + additionalBet) {
+            console.error(`[Table ${this.name}] ⚠️ CRITICAL RAISE ERROR: Pot calculation failed! Before: ${potBeforeAdd}, AdditionalBet: ${additionalBet}, After: ${this.pot}, Expected: ${potBeforeAdd + additionalBet}`);
+        }
         this.currentBet = player.currentBet;
         
         // CRITICAL: Validate after operation
@@ -2286,10 +2365,25 @@ class Table {
             newCurrentBet
         });
 
+        // ULTRA-VERBOSE: Log before operation
+        const potBeforeAdd = this.pot;
+        const chipsBeforeSubtract = player.chips;
+        
         player.chips = 0;
         player.currentBet = newCurrentBet;
         player.totalBet = (player.totalBet || 0) + amount; // Add all chips to totalBet
         this.pot += amount; // Add all chips to pot
+        
+        // ULTRA-VERBOSE: Verify operation immediately
+        if (player.chips !== 0) {
+            console.error(`[Table ${this.name}] ⚠️ CRITICAL ALL-IN ERROR: Chips should be 0 but are ${player.chips}! Amount: ${amount}`);
+        }
+        if (this.pot !== potBeforeAdd + amount) {
+            console.error(`[Table ${this.name}] ⚠️ CRITICAL ALL-IN ERROR: Pot calculation failed! Before: ${potBeforeAdd}, Amount: ${amount}, After: ${this.pot}, Expected: ${potBeforeAdd + amount}`);
+        }
+        if (chipsBeforeSubtract !== amount) {
+            console.error(`[Table ${this.name}] ⚠️ CRITICAL ALL-IN ERROR: Amount mismatch! Player chips before: ${chipsBeforeSubtract}, Amount being bet: ${amount}`);
+        }
         player.isAllIn = true;
         
         // CRITICAL: Validate after operation
@@ -3545,8 +3639,40 @@ class Table {
             });
             // Use the larger value to prevent losing chips (pot should never be less than sum of bets)
             if (sumOfTotalBets > potBeforeCalculation) {
-                console.error(`[Table ${this.name}] ⚠️ CRITICAL: Sum of bets (${sumOfTotalBets}) > Pot (${potBeforeCalculation}). This indicates chips were lost!`);
-                // Can't fix this retroactively, but log it
+                const chipsLost = sumOfTotalBets - potBeforeCalculation;
+                console.error(`[Table ${this.name}] ⚠️ CRITICAL: Sum of bets (${sumOfTotalBets}) > Pot (${potBeforeCalculation}). CHIPS LOST: ${chipsLost}!`);
+                gameLogger.error(this.name, '[POT] CRITICAL: Chips lost during betting', {
+                    potBeforeCalculation,
+                    sumOfTotalBets,
+                    chipsLost,
+                    handNumber: this.handsPlayed,
+                    phase: this.phase,
+                    allContributors: allContributors.map(p => ({
+                        name: p.name,
+                        totalBet: p.totalBet,
+                        isFolded: p.isFolded,
+                        isAllIn: p.isAllIn
+                    })),
+                    allSeats: this.seats.map((seat, idx) => seat ? {
+                        seatIndex: idx,
+                        name: seat.name,
+                        chips: seat.chips,
+                        totalBet: seat.totalBet || 0,
+                        currentBet: seat.currentBet || 0,
+                        isFolded: seat.isFolded,
+                        isAllIn: seat.isAllIn,
+                        isActive: seat.isActive
+                    } : null).filter(Boolean)
+                });
+                // CRITICAL: Adjust pot to match sumOfTotalBets to prevent further loss
+                // This is a workaround - the real fix is to find where chips are being lost
+                console.error(`[Table ${this.name}] ⚠️ WORKAROUND: Adjusting pot from ${potBeforeCalculation} to ${sumOfTotalBets} to prevent further loss`);
+                this.pot = sumOfTotalBets;
+                gameLogger.error(this.name, '[POT] WORKAROUND: Pot adjusted to match sumOfTotalBets', {
+                    oldPot: potBeforeCalculation,
+                    newPot: sumOfTotalBets,
+                    adjustment: chipsLost
+                });
             }
         }
         
@@ -3822,9 +3948,27 @@ class Table {
                 handName: award.handName
             });
             
+            // ULTRA-VERBOSE: Log before award
+            const potBeforeAward = this.pot;
+            const chipsBeforeAward = seat.chips;
+            
             seat.chips += award.amount;
             const chipsAfter = seat.chips;
             totalAwarded += award.amount;
+            
+            // ULTRA-VERBOSE: Verify award immediately
+            if (seat.chips !== chipsBeforeAward + award.amount) {
+                console.error(`[Table ${this.name}] ⚠️ CRITICAL AWARD ERROR: Chips calculation failed! Player: ${award.name}, Before: ${chipsBeforeAward}, Amount: ${award.amount}, After: ${seat.chips}, Expected: ${chipsBeforeAward + award.amount}`);
+                gameLogger.error(this.name, '[POT] CRITICAL: Award calculation error', {
+                    player: award.name,
+                    chipsBefore: chipsBeforeAward,
+                    amount: award.amount,
+                    chipsAfter: seat.chips,
+                    expected: chipsBeforeAward + award.amount,
+                    handNumber: this.handsPlayed,
+                    phase: this.phase
+                });
+            }
             
             // CRITICAL: Validate after award
             this._validateChipMovement(movement, 'AWARD_POT');
@@ -3888,8 +4032,16 @@ class Table {
                             chipsBefore
                         });
                         
+                        // ULTRA-VERBOSE: Log before redistribution
+                        const chipsBeforeRedist = bestActive.chips;
+                        
                         bestActive.chips += award.amount;
                         totalAwarded += award.amount; // Count it as awarded
+                        
+                        // ULTRA-VERBOSE: Verify redistribution immediately
+                        if (bestActive.chips !== chipsBeforeRedist + award.amount) {
+                            console.error(`[Table ${this.name}] ⚠️ CRITICAL REDISTRIBUTE ERROR: Chips calculation failed! To: ${bestActive.name}, Before: ${chipsBeforeRedist}, Amount: ${award.amount}, After: ${bestActive.chips}, Expected: ${chipsBeforeRedist + award.amount}`);
+                        }
                         
                         // CRITICAL: Validate after redistribution
                         this._validateChipMovement(movement, 'REDISTRIBUTE_POT_FROM_ELIMINATED');
@@ -3970,6 +4122,22 @@ class Table {
         // CRITICAL: Track pot clearing
         const potBeforeClear = this.pot;
         if (potBeforeClear > 0) {
+            // ULTRA-VERBOSE: Log pot clearing
+            console.log(`[Table ${this.name}] [POT CLEAR] Clearing pot after side pots: ${potBeforeClear} chips (totalAwarded: ${totalAwarded}) | Hand: ${this.handsPlayed} | Phase: ${this.phase}`);
+            gameLogger.gameEvent(this.name, '[POT] Clearing pot after side pots', {
+                potBefore: potBeforeClear,
+                totalAwarded,
+                difference: potBeforeClear - totalAwarded,
+                handNumber: this.handsPlayed,
+                phase: this.phase,
+                potAwardsCount: potAwards.length
+            });
+            
+            // CRITICAL: Verify pot was fully awarded before clearing
+            if (Math.abs(potBeforeClear - totalAwarded) > 0.01) {
+                console.error(`[Table ${this.name}] ⚠️ CRITICAL: Clearing pot but pot (${potBeforeClear}) != totalAwarded (${totalAwarded})! Difference: ${potBeforeClear - totalAwarded}`);
+            }
+            
             const movement = this._trackChipMovement('CLEAR_POT_AFTER_SIDE_POTS', {
                 potBefore: potBeforeClear,
                 totalAwarded,
@@ -3978,6 +4146,10 @@ class Table {
             this.pot = 0;
             this._validateChipMovement(movement, 'CLEAR_POT_AFTER_SIDE_POTS');
         } else {
+            // ULTRA-VERBOSE: Log even when pot is 0
+            if (potBeforeClear !== 0) {
+                console.error(`[Table ${this.name}] ⚠️ POT CLEAR WARNING: Pot was ${potBeforeClear} but should be 0!`);
+            }
             this.pot = 0;
         }
         
@@ -4077,7 +4249,25 @@ class Table {
         
         if (seat && seat.isActive !== false) {
             // Only award chips to active (non-eliminated) players
+            // ULTRA-VERBOSE: Log before award
+            const potBeforeAward = this.pot;
+            const chipsBeforeAward = seat.chips;
+            
             seat.chips += potAmount;
+            
+            // ULTRA-VERBOSE: Verify award immediately
+            if (seat.chips !== chipsBeforeAward + potAmount) {
+                console.error(`[Table ${this.name}] ⚠️ CRITICAL AWARD_POT ERROR: Chips calculation failed! Player: ${winner.name}, Before: ${chipsBeforeAward}, Amount: ${potAmount}, After: ${seat.chips}, Expected: ${chipsBeforeAward + potAmount}`);
+                gameLogger.error(this.name, '[POT] CRITICAL: awardPot calculation error', {
+                    player: winner.name,
+                    chipsBefore: chipsBeforeAward,
+                    potAmount,
+                    chipsAfter: seat.chips,
+                    expected: chipsBeforeAward + potAmount,
+                    handNumber: this.handsPlayed,
+                    phase: this.phase
+                });
+            }
             
             gameLogger.gameEvent(this.name, '[POT] Chips awarded', {
                 winner: winner.name,
@@ -4112,7 +4302,15 @@ class Table {
                     chipsBefore
                 });
                 
+                // ULTRA-VERBOSE: Log before redistribution
+                const chipsBeforeRedist = bestActive.chips;
+                
                 bestActive.chips += potAmount;
+                
+                // ULTRA-VERBOSE: Verify redistribution immediately
+                if (bestActive.chips !== chipsBeforeRedist + potAmount) {
+                    console.error(`[Table ${this.name}] ⚠️ CRITICAL REDISTRIBUTE_WINNER ERROR: Chips calculation failed! To: ${bestActive.name}, Before: ${chipsBeforeRedist}, Amount: ${potAmount}, After: ${bestActive.chips}, Expected: ${chipsBeforeRedist + potAmount}`);
+                }
                 
                 // CRITICAL: Validate after redistribution
                 this._validateChipMovement(movement, 'REDISTRIBUTE_POT_FROM_ELIMINATED_WINNER');
@@ -4137,6 +4335,16 @@ class Table {
         // CRITICAL: Track pot clearing after awardPot
         const potBeforeClear = this.pot;
         if (potBeforeClear > 0) {
+            // ULTRA-VERBOSE: Log pot clearing
+            console.log(`[Table ${this.name}] [POT CLEAR] Clearing pot after awardPot: ${potBeforeClear} chips | Hand: ${this.handsPlayed} | Phase: ${this.phase} | Winner: ${winner.name}`);
+            gameLogger.gameEvent(this.name, '[POT] Clearing pot after awardPot', {
+                potBefore: potBeforeClear,
+                handNumber: this.handsPlayed,
+                phase: this.phase,
+                winner: winner.name,
+                winnerChips: seat?.chips || 0
+            });
+            
             const movement = this._trackChipMovement('CLEAR_POT_AFTER_AWARD', {
                 potBefore: potBeforeClear,
                 reason: 'Pot awarded in awardPot(), clearing'
@@ -4144,6 +4352,10 @@ class Table {
             this.pot = 0;
             this._validateChipMovement(movement, 'CLEAR_POT_AFTER_AWARD');
         } else {
+            // ULTRA-VERBOSE: Log even when pot is 0
+            if (potBeforeClear !== 0) {
+                console.error(`[Table ${this.name}] ⚠️ POT CLEAR WARNING: Pot was ${potBeforeClear} but should be 0!`);
+            }
             this.pot = 0;
         }
         
