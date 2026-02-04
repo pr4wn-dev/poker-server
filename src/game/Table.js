@@ -97,6 +97,48 @@ class Table {
             enabled: true
         };
         
+        // CRITICAL: Ultra-verbose logging helper for totalStartingChips modifications
+        this._logTotalStartingChipsChange = (operation, context, oldValue, newValue, details = {}) => {
+            const stackTrace = new Error().stack;
+            const stackLines = stackTrace ? stackTrace.split('\n').slice(2, 8).join(' | ') : 'NO_STACK';
+            
+            const logData = {
+                operation,
+                context,
+                oldValue,
+                newValue,
+                change: newValue - oldValue,
+                handNumber: this.handsPlayed,
+                phase: this.phase,
+                gameStarted: this.gameStarted,
+                timestamp: Date.now(),
+                stackTrace: stackLines,
+                ...details,
+                fullState: {
+                    totalStartingChips: this.totalStartingChips,
+                    activePlayers: this.seats.filter(s => s && s.isActive !== false).map(s => ({
+                        name: s.name,
+                        chips: s.chips,
+                        seatIndex: this.seats.indexOf(s),
+                        isActive: s.isActive
+                    })),
+                    eliminatedPlayers: this.seats.filter(s => s && s.isActive === false).map(s => ({
+                        name: s.name,
+                        chips: s.chips,
+                        seatIndex: this.seats.indexOf(s),
+                        isActive: s.isActive,
+                        totalBet: s.totalBet || 0
+                    })),
+                    pot: this.pot,
+                    currentTotalChips: this.seats.filter(s => s && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0),
+                    totalChipsInSystem: this.seats.filter(s => s && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0) + this.pot
+                }
+            };
+            
+            console.log(`[Table ${this.name}] [TOTAL_STARTING_CHIPS] ${operation} | ${context} | ${oldValue} → ${newValue} (change: ${newValue - oldValue}) | Hand: ${this.handsPlayed} | Phase: ${this.phase}`);
+            gameLogger.gameEvent(this.name, `[TOTAL_STARTING_CHIPS] ${operation}`, logData);
+        };
+        
         // Helper to get current chip state snapshot
         // CRITICAL FIX: Only count ACTIVE players (not eliminated ones) to match totalStartingChips
         this._getChipState = () => {
@@ -193,8 +235,21 @@ class Table {
                 .reduce((sum, seat) => sum + (seat.chips || 0), 0);
             const totalChipsAndPot = currentTotalChips + this.pot;
             
+            // ULTRA-VERBOSE: Log every validation with complete breakdown
+            const playerBreakdown = this.seats.map((s, i) => s ? {
+                seatIndex: i,
+                name: s.name,
+                chips: s.chips,
+                isActive: s.isActive,
+                totalBet: s.totalBet || 0,
+                currentBet: s.currentBet || 0,
+                isFolded: s.isFolded || false,
+                isAllIn: s.isAllIn || false
+            } : { seatIndex: i, isNull: true });
+            
             if (this.totalStartingChips > 0) {
-                const difference = Math.abs(totalChipsAndPot - this.totalStartingChips);
+                const difference = totalChipsAndPot - this.totalStartingChips;
+                const absDifference = Math.abs(difference);
                 const isValid = difference <= 0.01; // Allow for floating point errors
                 
                 if (!isValid) {
@@ -699,12 +754,17 @@ class Table {
             this.simulationMaxGames = 0;
         }
         
-        console.log(`[Table ${this.name}] handleGameStart: Resetting totalStartingChips from ${oldTotalStartingChips} to 0 (will recalculate for this game)`);
-        gameLogger.gameEvent(this.name, 'RESETTING totalStartingChips for new game', {
-            oldTotalStartingChips,
-            newTotalStartingChips: 0,
+        this._logTotalStartingChipsChange('RESET', 'HANDLE_GAME_START', oldTotalStartingChips, 0, {
+            reason: 'New game starting - resetting totalStartingChips',
             buyIn: this.buyIn,
-            playerCount: this.seats.filter(s => s && s.isActive !== false).length
+            playerCount: this.seats.filter(s => s && s.isActive !== false).length,
+            allSeats: this.seats.map((s, i) => s ? {
+                seatIndex: i,
+                name: s.name,
+                chips: s.chips,
+                isActive: s.isActive,
+                playerId: s.playerId
+            } : { seatIndex: i, isNull: true })
         });
         
         // CRITICAL: Only reset chips for players who are actually active and seated
@@ -726,7 +786,16 @@ class Table {
                 // CRITICAL: Always reset to buyIn to ensure consistency
                 // Even if chips were reset in _restartGame, we need to ensure they match this.buyIn
                 seat.chips = this.buyIn;
+                const oldTotalStartingChips = this.totalStartingChips;
                 this.totalStartingChips += this.buyIn;  // Track starting chips
+                this._logTotalStartingChipsChange('ADD_BUYIN', 'RESET_CHIPS_FOR_NEW_GAME', oldTotalStartingChips, this.totalStartingChips, {
+                    player: seat.name,
+                    playerId: seat.playerId,
+                    buyIn: this.buyIn,
+                    oldChips,
+                    newChips: seat.chips,
+                    seatIndex: this.seats.indexOf(seat)
+                });
                 
                 // CRITICAL: Validate after reset
                 this._validateChipMovement(movement, 'RESET_CHIPS_FOR_NEW_GAME');
@@ -1034,11 +1103,14 @@ class Table {
         
         // CRITICAL: If game already started, update totalStartingChips
         if (this.gameStarted) {
+            const oldTotalStartingChips = this.totalStartingChips;
             this.totalStartingChips += chips;
-            gameLogger.gameEvent(this.name, 'Late joiner added to totalStartingChips', {
+            this._logTotalStartingChipsChange('ADD_LATE_JOINER', 'ADD_PLAYER', oldTotalStartingChips, this.totalStartingChips, {
                 player: name,
+                playerId,
+                seatIndex,
                 chips,
-                newTotalStartingChips: this.totalStartingChips
+                reason: 'Late joiner - adding chips to totalStartingChips'
             });
         }
         
@@ -1284,6 +1356,35 @@ class Table {
                 // CRITICAL: Preserve totalBet even after elimination - it's needed for pot calculation
                 // Don't clear it here - it will be cleared after pot is awarded
                 
+                // ULTRA-VERBOSE: Log elimination with full context
+                const eliminationLogData = {
+                    player: seat.name,
+                    playerId: seat.playerId,
+                    seatIndex: i,
+                    chips: seat.chips,
+                    totalBet: seat.totalBet || 0,
+                    currentBet: seat.currentBet || 0,
+                    isBot: seat.isBot || false,
+                    handNumber: this.handsPlayed,
+                    phase: this.phase,
+                    pot: this.pot,
+                    totalStartingChips: this.totalStartingChips,
+                    buyIn: this.buyIn,
+                    allActivePlayers: this.seats.filter(s => s && s.isActive !== false).map(s => ({
+                        name: s.name,
+                        chips: s.chips,
+                        seatIndex: this.seats.indexOf(s)
+                    })),
+                    allEliminatedPlayers: this.seats.filter(s => s && s.isActive === false).map(s => ({
+                        name: s.name,
+                        chips: s.chips,
+                        seatIndex: this.seats.indexOf(s),
+                        totalBet: s.totalBet || 0
+                    }))
+                };
+                console.log(`[Table ${this.name}] [ELIMINATION] ${seat.name} eliminated (0 chips) - preserving seat for pot calculation | Hand: ${this.handsPlayed} | Phase: ${this.phase} | totalStartingChips: ${this.totalStartingChips}`);
+                gameLogger.gameEvent(this.name, '[ELIMINATION] Player eliminated', eliminationLogData);
+                
                 // Notify about elimination
                 if (this.onPlayerEliminated) {
                     this.onPlayerEliminated({
@@ -1293,8 +1394,6 @@ class Table {
                         isBot: seat.isBot || false
                     });
                 }
-                
-                console.log(`[Table ${this.name}] ${seat.name} eliminated (0 chips) - preserving seat for pot calculation`);
                 // CRITICAL FIX: Don't set seat to null yet - we need their totalBet for pot calculation
                 // They'll be removed after the pot is properly calculated and awarded
                 // This prevents chips from being lost when eliminated players contributed to the pot
@@ -3911,13 +4010,30 @@ class Table {
                 if (this.totalStartingChips > 0) {
                     const oldTotalStartingChips = this.totalStartingChips;
                     this.totalStartingChips = Math.max(0, this.totalStartingChips - this.buyIn);
-                    console.log(`[Table ${this.name}] Adjusted totalStartingChips: ${oldTotalStartingChips} → ${this.totalStartingChips} (removed ${seat.name}'s buy-in: ${this.buyIn})`);
-                    gameLogger.gameEvent(this.name, 'ADJUSTED totalStartingChips after eliminated player removal', {
+                    this._logTotalStartingChipsChange('SUBTRACT_BUYIN', 'CALCULATE_AND_AWARD_SIDE_POTS', oldTotalStartingChips, this.totalStartingChips, {
+                        player: seat.name,
+                        playerId: seat.playerId,
+                        seatIndex: i,
+                        buyIn: this.buyIn,
+                        isBot: seat.isBot || false,
+                        playerChips: seat.chips,
+                        playerTotalBet: seat.totalBet || 0,
+                        reason: 'Player eliminated - subtracting buy-in from totalStartingChips',
+                        allEliminatedPlayers: this.seats.filter(s => s && s.isActive === false).map(s => ({
+                            name: s.name,
+                            seatIndex: this.seats.indexOf(s),
+                            chips: s.chips,
+                            totalBet: s.totalBet || 0
+                        }))
+                    });
+                } else {
+                    console.error(`[Table ${this.name}] [ERROR] Attempted to subtract buy-in from totalStartingChips but it's 0! Player: ${seat.name}, buyIn: ${this.buyIn}`);
+                    gameLogger.error(this.name, 'Attempted to subtract buy-in from zero totalStartingChips', {
                         player: seat.name,
                         buyIn: this.buyIn,
-                        oldTotalStartingChips,
-                        newTotalStartingChips: this.totalStartingChips,
-                        isBot: seat.isBot || false
+                        totalStartingChips: this.totalStartingChips,
+                        handNumber: this.handsPlayed,
+                        phase: this.phase
                     });
                 }
                 
@@ -3928,6 +4044,23 @@ class Table {
                 }
             }
         }
+        
+        // ULTRA-VERBOSE: Log complete state after side pot awards
+        const finalState = this._getChipState();
+        console.log(`[Table ${this.name}] [AFTER_SIDE_POT_AWARDS] Complete state | Hand: ${this.handsPlayed} | Phase: ${this.phase} | totalStartingChips: ${this.totalStartingChips} | totalChipsInSystem: ${finalState.totalChipsInSystem} | difference: ${finalState.difference}`);
+        gameLogger.gameEvent(this.name, '[AFTER_SIDE_POT_AWARDS] Complete state snapshot', {
+            handNumber: this.handsPlayed,
+            phase: this.phase,
+            totalStartingChips: this.totalStartingChips,
+            finalState,
+            potAwardsCount: potAwards.length,
+            potAwards: potAwards.map(a => ({
+                playerId: a.playerId,
+                name: a.name,
+                amount: a.amount,
+                potType: a.potType
+            }))
+        });
         
         // CRITICAL: Validate money after side pot awards
         this._validateMoney('AFTER_SIDE_POT_AWARDS');
@@ -4040,13 +4173,30 @@ class Table {
                 if (this.totalStartingChips > 0) {
                     const oldTotalStartingChips = this.totalStartingChips;
                     this.totalStartingChips = Math.max(0, this.totalStartingChips - this.buyIn);
-                    console.log(`[Table ${this.name}] Adjusted totalStartingChips: ${oldTotalStartingChips} → ${this.totalStartingChips} (removed ${seat.name}'s buy-in: ${this.buyIn})`);
-                    gameLogger.gameEvent(this.name, 'ADJUSTED totalStartingChips after eliminated player removal', {
+                    this._logTotalStartingChipsChange('SUBTRACT_BUYIN', 'AWARD_POT', oldTotalStartingChips, this.totalStartingChips, {
+                        player: seat.name,
+                        playerId: seat.playerId,
+                        seatIndex: i,
+                        buyIn: this.buyIn,
+                        isBot: seat.isBot || false,
+                        playerChips: seat.chips,
+                        playerTotalBet: seat.totalBet || 0,
+                        reason: 'Player eliminated - subtracting buy-in from totalStartingChips',
+                        allEliminatedPlayers: this.seats.filter(s => s && s.isActive === false).map(s => ({
+                            name: s.name,
+                            seatIndex: this.seats.indexOf(s),
+                            chips: s.chips,
+                            totalBet: s.totalBet || 0
+                        }))
+                    });
+                } else {
+                    console.error(`[Table ${this.name}] [ERROR] Attempted to subtract buy-in from totalStartingChips but it's 0! Player: ${seat.name}, buyIn: ${this.buyIn}`);
+                    gameLogger.error(this.name, 'Attempted to subtract buy-in from zero totalStartingChips', {
                         player: seat.name,
                         buyIn: this.buyIn,
-                        oldTotalStartingChips,
-                        newTotalStartingChips: this.totalStartingChips,
-                        isBot: seat.isBot || false
+                        totalStartingChips: this.totalStartingChips,
+                        handNumber: this.handsPlayed,
+                        phase: this.phase
                     });
                 }
                 
@@ -4057,6 +4207,19 @@ class Table {
                 }
             }
         }
+        
+        // ULTRA-VERBOSE: Log complete state after pot award
+        const finalState = this._getChipState();
+        console.log(`[Table ${this.name}] [AFTER_AWARD_POT] Complete state | Winner: ${winner.name} | Hand: ${this.handsPlayed} | Phase: ${this.phase} | totalStartingChips: ${this.totalStartingChips} | totalChipsInSystem: ${finalState.totalChipsInSystem} | difference: ${finalState.difference}`);
+        gameLogger.gameEvent(this.name, '[AFTER_AWARD_POT] Complete state snapshot', {
+            winner: winner.name,
+            winnerId: winner.playerId,
+            handNumber: this.handsPlayed,
+            phase: this.phase,
+            totalStartingChips: this.totalStartingChips,
+            finalState,
+            potAmount
+        });
         
         // CRITICAL: Validate money after pot award
         this._validateMoney(`AFTER_AWARD_POT_${winner.name}`);
