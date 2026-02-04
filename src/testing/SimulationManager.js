@@ -601,21 +601,13 @@ class SimulationManager {
             }
         }
         
-        // CRITICAL: Remove ALL bots before restart to ensure clean state
+        // CRITICAL: Clear ALL seats before restart to ensure clean state
         // This prevents "already at this table" errors and ensures bots are properly reset
-        // Track current bots
-        const currentRegularBots = table.seats.filter(s => s && s.isBot).map((seat, idx) => ({ seat, index: idx }));
+        // We need to explicitly clear seats because eliminated players might not be removed by leaveTable
+        this.log('INFO', 'Clearing all seats before restart', { tableId });
+        
+        // Disconnect ALL socket bots first (we'll add the correct ones back)
         const connectedSocketBots = simulation.socketBots.filter(bot => bot.socket && bot.socket.connected);
-        
-        // Remove ALL regular bots (we'll add the correct ones back)
-        for (const { seat, index } of currentRegularBots) {
-            if (seat && seat.isBot) {
-                this.log('INFO', `Removing regular bot before restart: ${seat.name}`, { seatIndex: index });
-                this.gameManager.leaveTable(seat.playerId, true); // Skip empty check during restart
-            }
-        }
-        
-        // Disconnect ALL socket bots (we'll add the correct ones back)
         for (const bot of connectedSocketBots) {
             if (bot) {
                 this.log('INFO', `Disconnecting socket bot before restart: ${bot.name}`, { userId: bot.userId });
@@ -630,6 +622,25 @@ class SimulationManager {
             }
             return true;
         });
+        
+        // CRITICAL: Explicitly clear ALL seats (set to null) before trying to add new bots
+        // This ensures eliminated players and old bots are completely removed
+        for (let i = 0; i < table.seats.length; i++) {
+            const seat = table.seats[i];
+            if (seat) {
+                this.log('DEBUG', `Clearing seat ${i}: ${seat.name}`, { 
+                    isBot: seat.isBot, 
+                    isActive: seat.isActive,
+                    isSocketBot: seat.name && seat.name.startsWith('NetPlayer')
+                });
+                // For regular bots, also call leaveTable to clean up BotManager state
+                if (seat.isBot) {
+                    this.gameManager.leaveTable(seat.playerId, true);
+                }
+                // Explicitly clear the seat
+                table.seats[i] = null;
+            }
+        }
         
         // CRITICAL: Wait for bot removals to complete before proceeding
         // This ensures seats are cleared and BotManager state is updated
