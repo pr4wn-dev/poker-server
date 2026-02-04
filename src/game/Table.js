@@ -4932,6 +4932,8 @@ class Table {
         
         let previousBetLevel = 0;
         const potAwards = [];
+        // Track winners from lower pot levels to check if they can win higher levels
+        let previousLevelWinners = [];
         
         for (const player of sortedByBet) {
             if (player.totalBet > previousBetLevel) {
@@ -4966,23 +4968,79 @@ class Table {
                         }
                     }
                     
-                    // Split among winners
-                    // CRITICAL: Use actual potAmount (already scaled to match real pot)
-                    const totalPotToAward = potAmount;
+                    // POKER RULE: If a lower-betting player won a previous pot, they can't win higher pots
+                    // Example: A all-in $1000, B all-in $500, C calls $1000. If B wins main pot:
+                    //   - B wins main pot ($1500)
+                    //   - A and C each get $500 back (the side pot they contributed to that B can't win)
                     
-                    const winAmount = Math.floor(totalPotToAward / winners.length);
-                    const remainder = totalPotToAward % winners.length;
+                    // Check if any previous level winner can win this pot level
+                    const previousWinnerMaxBet = previousLevelWinners.length > 0 
+                        ? Math.max(...previousLevelWinners.map(w => {
+                            const winnerContributor = allContributors.find(c => c.playerId === w.playerId);
+                            return winnerContributor ? winnerContributor.totalBet : 0;
+                        }))
+                        : 0;
                     
-                    for (let i = 0; i < winners.length; i++) {
-                        const award = winAmount + (i === 0 ? remainder : 0);
-                        potAwards.push({
-                            playerId: winners[i].playerId,
-                            name: winners[i].name,
-                            amount: award,
-                            handName: winners[i].handResult.name,
-                            potType: previousBetLevel === 0 ? 'main' : 'side',
-                            reason: undefined
-                        });
+                    // Also check current level winners' max bet
+                    const currentWinnerMaxBet = winners.length > 0
+                        ? Math.max(...winners.map(w => {
+                            const winnerContributor = allContributors.find(c => c.playerId === w.playerId);
+                            return winnerContributor ? winnerContributor.totalBet : 0;
+                        }))
+                        : 0;
+                    
+                    // CRITICAL: If previous level winner's max bet is LESS than this pot level, they can't win this pot
+                    // OR if current winners can't win this level (shouldn't happen, but safety check)
+                    // Players who contributed to this level should get their chips back
+                    if (previousWinnerMaxBet > 0 && previousWinnerMaxBet < player.totalBet) {
+                        // Previous level winner can't win this pot - refund to all contributors at this level
+                        const contributorsAtThisLevel = eligiblePlayers.filter(p => p.totalBet >= player.totalBet);
+                        const refundPerPlayer = Math.floor(potAmount / contributorsAtThisLevel.length);
+                        const refundRemainder = potAmount % contributorsAtThisLevel.length;
+                        
+                        for (let i = 0; i < contributorsAtThisLevel.length; i++) {
+                            const refundAmount = refundPerPlayer + (i === 0 ? refundRemainder : 0);
+                            const contributor = contributorsAtThisLevel[i];
+                            potAwards.push({
+                                playerId: contributor.playerId,
+                                name: contributor.name,
+                                amount: refundAmount,
+                                handName: 'Refund',
+                                potType: previousBetLevel === 0 ? 'main' : 'side',
+                                reason: `Refund: Previous winner bet ${previousWinnerMaxBet} but this pot level is ${player.totalBet} - returning ${refundAmount}`
+                            });
+                            console.log(`[Table ${this.name}] REFUND: ${contributor.name} gets ${refundAmount} back (previous winner bet ${previousWinnerMaxBet}, pot level ${player.totalBet})`);
+                            gameLogger.gameEvent(this.name, '[POT] Refund to higher-betting player', {
+                                player: contributor.name,
+                                refundAmount,
+                                previousWinnerMaxBet,
+                                potLevel: player.totalBet,
+                                reason: 'Previous level winner cannot win this pot level - returning chips to contributors'
+                            });
+                        }
+                    } else {
+                        // Winner CAN win this pot - award normally
+                        // Split among winners
+                        // CRITICAL: Use actual potAmount (already scaled to match real pot)
+                        const totalPotToAward = potAmount;
+                        
+                        const winAmount = Math.floor(totalPotToAward / winners.length);
+                        const remainder = totalPotToAward % winners.length;
+                        
+                        for (let i = 0; i < winners.length; i++) {
+                            const award = winAmount + (i === 0 ? remainder : 0);
+                            potAwards.push({
+                                playerId: winners[i].playerId,
+                                name: winners[i].name,
+                                amount: award,
+                                handName: winners[i].handResult.name,
+                                potType: previousBetLevel === 0 ? 'main' : 'side',
+                                reason: undefined
+                            });
+                        }
+                        
+                        // Update previous level winners for next iteration
+                        previousLevelWinners = winners;
                     }
                 } else if (potAmount > 0 && eligibleHands.length === 0) {
                     // CRITICAL: Pot exists but all eligible players folded - award to best non-folded player who contributed
