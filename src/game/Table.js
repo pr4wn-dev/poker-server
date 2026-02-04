@@ -3483,10 +3483,10 @@ class Table {
         const sortedByBet = [...allContributors].sort((a, b) => a.totalBet - b.totalBet);
         
         // CRITICAL: Track remaining pot to prevent over-awarding
-        // If pot < sumOfTotalBets, scale down proportionally
+        // If pot < sumOfTotalBets, we MUST use ONLY the actual pot amount
         let remainingPot = potBeforeCalculation;
         const totalTheoreticalPot = sumOfTotalBets;
-        const potScaleFactor = totalTheoreticalPot > 0 ? Math.min(1, remainingPot / totalTheoreticalPot) : 1;
+        const potIsShort = potBeforeCalculation < sumOfTotalBets;
         
         let previousBetLevel = 0;
         const potAwards = [];
@@ -3497,8 +3497,12 @@ class Table {
                 const betDiff = player.totalBet - previousBetLevel;
                 const eligiblePlayers = allContributors.filter(p => p.totalBet >= player.totalBet);
                 const theoreticalPotAmount = eligiblePlayers.length * betDiff;
-                // CRITICAL: Use actual remaining pot, not theoretical amount
-                const potAmount = Math.min(theoreticalPotAmount * potScaleFactor, remainingPot);
+                
+                // CRITICAL: If pot is short, use ONLY remaining pot, not theoretical calculations
+                // Otherwise, use theoretical amount but cap at remaining pot
+                const potAmount = potIsShort 
+                    ? Math.min(remainingPot, theoreticalPotAmount)  // When short, use what's left
+                    : Math.min(theoreticalPotAmount, remainingPot); // Normal case: use theoretical but cap
                 
                 // Find best eligible hand that isn't folded AND is still active
                 // CRITICAL: Only include players who are still active (not eliminated)
