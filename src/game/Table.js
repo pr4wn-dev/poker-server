@@ -705,9 +705,19 @@ class Table {
             playerCount: this.seats.filter(s => s && s.isActive !== false).length
         });
         
+        // CRITICAL: Remove ALL eliminated players before resetting chips for new game
+        // This prevents eliminated players from being counted in totalChipsInSystem
+        // but not in totalStartingChips (which only counts active players)
+        for (let i = 0; i < this.seats.length; i++) {
+            const seat = this.seats[i];
+            if (seat && seat.isActive === false) {
+                console.log(`[Table ${this.name}] Removing eliminated player ${seat.name} before new game start`);
+                this.seats[i] = null;
+            }
+        }
+        
         // CRITICAL: Only reset chips for players who are actually active and seated
-        // Don't reset chips for players who have already been eliminated (isActive === false)
-        // But DO reset chips for players who are active (isActive !== false)
+        // Eliminated players have been removed above, so all remaining players are active
         for (const seat of this.seats) {
             if (seat && seat.isActive !== false) {
                 const oldChips = seat.chips;
