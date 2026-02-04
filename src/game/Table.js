@@ -3387,7 +3387,7 @@ class Table {
                 if (difference > 0.01) {
                     const missing = this.totalStartingChips - totalChipsAndPot;
                     console.error(`[Table ${this.name}] ⚠️ CRITICAL: MONEY LOST! Total chips + pot (${totalChipsAndPot}) != total starting chips (${this.totalStartingChips}). Missing: ${missing}`);
-                    gameLogger.error(this.name, '[MONEY] ERROR: Money lost - total chips + pot != total starting chips', {
+                    gameLogger.gameEvent(this.name, '[MONEY] ERROR: Money lost - total chips + pot != total starting chips', {
                         totalChipsAndPot,
                         totalStartingChips: this.totalStartingChips,
                         missing,
