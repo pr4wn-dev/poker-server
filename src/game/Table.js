@@ -1808,14 +1808,14 @@ class Table {
         const totalChipsAndPotAfterReset = totalChipsAfterReset + this.pot;
         const resetDifference = totalChipsAndPotAfterReset - totalChipsAndPotBeforeReset;
         
-        // CRITICAL FIX: If chips were lost due to pot clearing, adjust totalStartingChips to match reality
+        // CRITICAL FIX: If chips were lost due to pot clearing, reset totalStartingChips to actual chips
         // This prevents validation failures from cascading through the game
-        // NOTE: potBeforeForceClear is the amount of chips that were in the pot and are now lost
-        // We need to subtract this from totalStartingChips to reflect the actual chips in the system
+        // NOTE: Instead of subtracting, we reset to actual chips to prevent drift
         if (potBeforeForceClear > 0 && this.totalStartingChips > 0) {
             const oldTotalStartingChips = this.totalStartingChips;
-            // Subtract the lost chips from totalStartingChips
-            this.totalStartingChips = this.totalStartingChips - potBeforeForceClear;
+            // CRITICAL: Reset to actual chips instead of subtracting to prevent drift
+            // This ensures totalStartingChips always matches reality
+            this.totalStartingChips = totalChipsAndPotAfterReset;
             console.error(`[Table ${this.name}] ⚠️ ADJUSTING totalStartingChips: ${oldTotalStartingChips} → ${this.totalStartingChips} (lost ${potBeforeForceClear} chips due to pot clearing)`);
             this._logTotalStartingChipsChange('ADJUST_FOR_POT_CLEAR', 'HAND_START', oldTotalStartingChips, this.totalStartingChips, {
                 reason: 'Pot was cleared at hand start, chips were lost',
@@ -1831,13 +1831,13 @@ class Table {
                 chipsLost: potBeforeForceClear,
                 handNumber: this.handsPlayed,
                 totalChipsAndPotAfterReset,
-                calculation: `${oldTotalStartingChips} - ${potBeforeForceClear} = ${this.totalStartingChips}`
+                calculation: `Reset to actual: ${this.totalStartingChips} (was ${oldTotalStartingChips}, lost ${potBeforeForceClear})`
             });
             
             // Record fix attempt - this is a mitigation, but chips were still lost
-            // Success = we adjusted totalStartingChips to prevent cascading failures
-            // Failure = we couldn't adjust or adjustment didn't work
-            const adjustmentSuccess = Math.abs(this.totalStartingChips - (oldTotalStartingChips - potBeforeForceClear)) < 0.01;
+            // Success = we reset totalStartingChips to actual chips to prevent cascading failures
+            // Failure = we couldn't reset or reset didn't work
+            const adjustmentSuccess = Math.abs(this.totalStartingChips - totalChipsAndPotAfterReset) < 0.01;
             this._recordFixAttempt('FIX_1_TOTAL_STARTING_CHIPS_ADJUSTMENT', adjustmentSuccess, {
                 context: 'HAND_START',
                 oldTotalStartingChips,
