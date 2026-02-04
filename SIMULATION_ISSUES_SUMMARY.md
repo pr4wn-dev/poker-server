@@ -1,55 +1,76 @@
 # Simulation Issues Found - Feb 4, 2026
 
-## Critical Issues Identified
+## ✅ FIXED Issues
 
-### 1. **MASSIVE MONEY LOSS** (953,173 chips lost)
-**Location**: Hand 51, Game 2
-- **Expected**: 1,176,000 chips (3 players × 392,000 buy-in)
-- **Actual**: 222,827 chips
-- **Missing**: 953,173 chips (81% of money lost!)
+### 1. **RAISE Operation Bug** ✅ FIXED
+**Problem**: Subtracted full bet amount from chips but only added additional bet to pot
+**Fix**: Only subtract `additionalBet` from chips (previous bet already in pot)
+**Commit**: `c3d3a23`
 
-**Root Cause**: Chips are being lost throughout gameplay, not just at pot awards. This suggests:
-- Chips being deducted but not added to pot
-- Chips being added to pot but not deducted from players
-- Multiple operations happening without proper tracking
+### 2. **Pot Calculation Bug** ✅ FIXED
+**Problem**: Used theoretical pot amounts instead of actual pot, creating money
+**Fix**: Use actual pot amount, scale awards proportionally if pot < sumOfTotalBets
+**Commit**: Multiple commits
 
-**Next Steps**: 
-- Check CHIP TRACK logs for the exact operation where money disappears
-- Look for operations that modify chips without going through tracked functions
+### 3. **Pot Not Fully Awarded** ✅ FIXED
+**Problem**: Side pot calculation failed when all players at a bet level folded
+**Fix**: Award pot to best non-folded contributor when all eligible players fold
+**Commit**: Multiple commits
+
+### 4. **Eliminated Player Chip Tracking** ✅ FIXED
+**Problem**: Eliminated players' buy-ins weren't subtracted from `totalStartingChips`
+**Fix**: Adjust `totalStartingChips` when eliminated players are removed
+**Commit**: `50fe510`, `8d7943e`
+
+### 5. **Socket Bot Chip Tracking** ✅ FIXED
+**Problem**: Only regular bots had buy-ins subtracted, socket bots didn't
+**Fix**: Apply `totalStartingChips` adjustment to ALL eliminated players
+**Commit**: `8d7943e`
+
+### 6. **Active Player Validation** ✅ FIXED
+**Problem**: Validation counted all players (including eliminated), causing simulation to stop
+**Fix**: Only count active players in `_validateMoney` and `_getChipState`
+**Commit**: `34d092c`
+
+### 7. **Bot Timeout Issue** ✅ FIXED
+**Problem**: Bots timed out after game restarts because they weren't in `activeBots` map
+**Fix**: Re-sync bots from seats when not found in `activeBots` map
+**Commit**: `c8d09b2`
+
+### 8. **Simulation "Not Enough Players" Error** ✅ FIXED
+**Problem**: Eliminated players weren't removed, preventing new bots from being added
+**Fix**: Explicitly clear all seats before restart, disconnect socket bots first
+**Commit**: `31f9eda`
+
+### 9. **Leave Table for Spectators/Creator** ✅ FIXED
+**Problem**: Leave table button didn't work for spectators or table creator
+**Fix**: Search all tables if `currentTableId` not set, handle both spectators and creators
+**Commit**: `9aab65b`
 
 ---
 
-### 2. **POT NOT FULLY AWARDED** (126,000 chips lost)
-**Location**: Hand 51, Game 2
-- **Pot**: 130,000 chips
-- **Awarded**: 4,000 chips (to Tex)
-- **Lost**: 126,000 chips
+## ⚠️ REMAINING Issues
 
-**Error Message**: 
-```
-[POT] ERROR: Pot exists but all eligible players folded
-No non-folded contributors for folded pot
-```
+### 1. **Money Creation During Pot Awards** (NEW)
+**Location**: Hand 89, Game 9
+- **Expected**: 148,800 chips
+- **Actual**: 297,600 chips (pot: 148,800)
+- **Created**: 148,800 chips (100% money creation!)
 
-**Root Cause**: Side pot calculation logic fails when all players fold. The code tries to find "non-folded contributors" but if everyone folded, there are none, so the pot is lost.
+**Symptoms**: 
+- `expected: 148800, actual: 297600, missing: -148800`
+- Pot is 148,800, but totalChipsInSystem is 297,600
+- All players have 0 chips except winner (148,800 chips)
 
-**Fix Needed**: When all players fold, award pot to the last remaining player (the one who didn't fold), or if everyone truly folded, award to the player who contributed most.
+**Possible Root Cause**: 
+- Pot might be counted twice (in both `currentTotalChips` and `pot`)
+- Or chips are being added to winner without subtracting from pot
+- Need to check `awardPot` and `calculateAndAwardSidePots` logic
 
----
-
-### 3. **PLAYER_JOIN Validation Fails (False Positive)**
-**Location**: Before game start
-- **Issue**: Chip tracking validates PLAYER_JOIN operations before `totalStartingChips` is set
-- **Impact**: Creates noise in logs, but doesn't cause actual problems
-- **Fix**: Only validate chip movements after `totalStartingChips > 0` (game has started)
-
----
-
-### 4. **totalStartingChips Not Updated When Players Leave Mid-Game**
-**Location**: Game 2, after NetPlayer_1 left
-- **Issue**: When a player leaves mid-game, `totalStartingChips` is decremented, but this creates validation errors because the chips are still in the system (just not with that player)
-- **Impact**: False validation failures
-- **Fix**: Don't modify `totalStartingChips` when players leave mid-game - only track it at game start
+**Next Steps**:
+- Check if pot is being cleared after awards
+- Verify winner chips are added correctly
+- Check if pot is counted in both places during validation
 
 ---
 
