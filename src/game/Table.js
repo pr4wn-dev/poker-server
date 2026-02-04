@@ -91,6 +91,96 @@ class Table {
         this.totalStartingChips = 0;  // Sum of all buy-ins when game starts
         this._gameOverCalled = false;  // Guard to prevent duplicate onGameOver calls
         
+        // CRITICAL: Comprehensive chip tracking system - tracks EVERY chip movement
+        this._chipTracking = {
+            movements: [],  // History of all chip movements
+            enabled: true
+        };
+        
+        // Helper to get current chip state snapshot
+        this._getChipState = () => {
+            const playerChips = this.seats
+                .filter(s => s !== null)
+                .reduce((sum, seat) => sum + (seat.chips || 0), 0);
+            const totalChipsInSystem = playerChips + this.pot;
+            return {
+                playerChips,
+                pot: this.pot,
+                totalChipsInSystem,
+                totalStartingChips: this.totalStartingChips,
+                difference: totalChipsInSystem - this.totalStartingChips,
+                players: this.seats
+                    .map((s, i) => s ? { 
+                        seatIndex: i, 
+                        name: s.name, 
+                        chips: s.chips, 
+                        isActive: s.isActive,
+                        totalBet: s.totalBet || 0,
+                        currentBet: s.currentBet || 0
+                    } : null)
+                    .filter(p => p !== null)
+            };
+        };
+        
+        // Track a chip movement with before/after states
+        this._trackChipMovement = (operation, details) => {
+            if (!this._chipTracking.enabled) return null;
+            
+            const beforeState = this._getChipState();
+            const movement = {
+                timestamp: Date.now(),
+                operation,
+                beforeState,
+                details,
+                afterState: null
+            };
+            this._chipTracking.movements.push(movement);
+            
+            // Log immediately
+            gameLogger.gameEvent(this.name, `[CHIP TRACK] ${operation} - BEFORE`, {
+                operation,
+                beforeState,
+                details
+            });
+            
+            return movement;
+        };
+        
+        // Validate chip state after an operation
+        this._validateChipMovement = (movement, context = '') => {
+            if (!movement || !this._chipTracking.enabled) return { isValid: true };
+            
+            const afterState = this._getChipState();
+            movement.afterState = afterState;
+            
+            const difference = afterState.totalChipsInSystem - afterState.totalStartingChips;
+            const isValid = Math.abs(difference) < 0.01; // Allow tiny floating point errors
+            
+            // Log after state
+            gameLogger.gameEvent(this.name, `[CHIP TRACK] ${movement.operation} - AFTER`, {
+                operation: movement.operation,
+                afterState,
+                difference,
+                isValid: isValid ? 'PASS' : 'FAIL',
+                context
+            });
+            
+            if (!isValid && this.totalStartingChips > 0) {
+                const errorType = difference > 0 ? 'CREATED' : 'LOST';
+                const errorMsg = `[CHIP TRACK] ${context} - Money ${errorType}: ${Math.abs(difference)} chips`;
+                console.error(`[Table ${this.name}] ⚠️ ${errorMsg}`);
+                gameLogger.error(this.name, errorMsg, {
+                    operation: movement.operation,
+                    beforeState: movement.beforeState,
+                    afterState,
+                    difference,
+                    details: movement.details
+                });
+            }
+            
+            return { isValid, difference, afterState };
+        };
+        
         // CRITICAL: Money validation helper - validates chips are conserved at every point
         this._validateMoney = (context) => {
             const currentTotalChips = this.seats
@@ -590,6 +680,13 @@ class Table {
         this.totalStartingChips = 0;
         this._gameOverCalled = false;  // Reset game over guard for new game
         
+        // CRITICAL: Initialize chip tracking system
+        this._chipTracking = {
+            totalChipsInSystem: 0,  // Sum of all player chips + pot
+            totalStartingChips: 0,   // What we expect total to be
+            movements: []           // History of all chip movements
+        };
+        
         // CRITICAL: Do NOT reset simulationGamesPlayed here - it's managed by SimulationManager
         // Only reset if this is NOT a simulation (simulation counter persists across games)
         if (!this.isSimulation) {
@@ -611,10 +708,24 @@ class Table {
         for (const seat of this.seats) {
             if (seat && seat.isActive !== false) {
                 const oldChips = seat.chips;
+                
+                // CRITICAL: Track chip reset BEFORE operation
+                const movement = this._trackChipMovement('RESET_CHIPS_FOR_NEW_GAME', {
+                    player: seat.name,
+                    oldChips,
+                    newChips: this.buyIn,
+                    buyIn: this.buyIn,
+                    totalStartingChipsBefore: this.totalStartingChips
+                });
+                
                 // CRITICAL: Always reset to buyIn to ensure consistency
                 // Even if chips were reset in _restartGame, we need to ensure they match this.buyIn
                 seat.chips = this.buyIn;
                 this.totalStartingChips += this.buyIn;  // Track starting chips
+                
+                // CRITICAL: Validate after reset
+                this._validateChipMovement(movement, 'RESET_CHIPS_FOR_NEW_GAME');
+                
                 console.log(`[Table ${this.name}] Reset ${seat.name} chips: ${oldChips} → ${seat.chips}, totalStartingChips now: ${this.totalStartingChips}`);
                 gameLogger.gameEvent(this.name, 'CHIPS RESET for new game', {
                     player: seat.name,
@@ -1316,10 +1427,23 @@ class Table {
         const chipsBefore = player.chips;
         const potBefore = this.pot;
         
+        // CRITICAL: Track chip movement BEFORE operation
+        const movement = this._trackChipMovement('POST_BLIND', {
+            player: player.name,
+            seatIndex,
+            blindAmount,
+            chipsBefore,
+            potBefore,
+            blindType: amount === this.smallBlind ? 'small' : 'big'
+        });
+        
         player.chips -= blindAmount;
         player.currentBet = blindAmount;
         player.totalBet = blindAmount;
         this.pot += blindAmount;
+        
+        // CRITICAL: Validate after operation
+        this._validateChipMovement(movement, 'POST_BLIND');
         
         // CRITICAL: Log chip movement for money tracking
         gameLogger.gameEvent(this.name, '[CHIPS] Blind Posted - chip movement', {
@@ -1656,10 +1780,24 @@ class Table {
         const totalBetBefore = player.totalBet || 0;
         const currentBetBefore = player.currentBet || 0;
         
+        // CRITICAL: Track chip movement BEFORE operation
+        const movement = this._trackChipMovement('CALL', {
+            player: player.name,
+            seatIndex,
+            toCall,
+            chipsBefore: beforeChips,
+            potBefore,
+            totalBetBefore,
+            currentBetBefore
+        });
+        
         player.chips -= toCall;
         player.currentBet += toCall;
         player.totalBet = (player.totalBet || 0) + toCall;
         this.pot += toCall;
+        
+        // CRITICAL: Validate after operation
+        this._validateChipMovement(movement, 'CALL');
         
         // CRITICAL: Log chip movement for money tracking
         gameLogger.gameEvent(this.name, '[CHIPS] Call - chip movement', {
@@ -1732,10 +1870,23 @@ class Table {
         const potBefore = this.pot;
         const totalBetBefore = player.totalBet || 0;
         
+        // CRITICAL: Track chip movement BEFORE operation
+        const movement = this._trackChipMovement('BET', {
+            player: player.name,
+            seatIndex,
+            amount,
+            chipsBefore: beforeChips,
+            potBefore,
+            totalBetBefore
+        });
+        
         player.chips -= amount;
         player.currentBet = amount;
         player.totalBet = (player.totalBet || 0) + amount;
         this.pot += amount;
+        
+        // CRITICAL: Validate after operation
+        this._validateChipMovement(movement, 'BET');
         
         // CRITICAL: Log chip movement for money tracking
         gameLogger.gameEvent(this.name, '[CHIPS] Bet - chip movement', {
@@ -1859,11 +2010,26 @@ class Table {
         // toCall already calculated above
         const additionalBet = amount - player.currentBet; // How much MORE than current bet
         
+        // CRITICAL: Track chip movement BEFORE operation
+        const movement = this._trackChipMovement('RAISE', {
+            player: player.name,
+            seatIndex,
+            amount,
+            additionalBet,
+            chipsBefore: beforeChips,
+            potBefore,
+            totalBetBefore,
+            currentBetBefore
+        });
+        
         player.chips -= amount;
         player.currentBet = amount; // Set to total bet amount
         player.totalBet = (player.totalBet || 0) + additionalBet; // Only add the additional amount
         this.pot += additionalBet; // Only add the additional amount to pot
         this.currentBet = player.currentBet;
+        
+        // CRITICAL: Validate after operation
+        this._validateChipMovement(movement, 'RAISE');
         
         // CRITICAL: Log chip movement for money tracking
         gameLogger.gameEvent(this.name, '[CHIPS] Raise - chip movement', {
@@ -1950,11 +2116,26 @@ class Table {
         // This goes to pot and totalBet (it's the additional amount they're betting)
         const newCurrentBet = player.currentBet + amount; // Their total bet after all-in
 
+        // CRITICAL: Track chip movement BEFORE operation
+        const movement = this._trackChipMovement('ALL_IN', {
+            player: player.name,
+            seatIndex,
+            amount,
+            chipsBefore: chipsBefore,
+            potBefore,
+            totalBetBefore,
+            currentBetBefore,
+            newCurrentBet
+        });
+
         player.chips = 0;
         player.currentBet = newCurrentBet;
         player.totalBet = (player.totalBet || 0) + amount; // Add all chips to totalBet
         this.pot += amount; // Add all chips to pot
         player.isAllIn = true;
+        
+        // CRITICAL: Validate after operation
+        this._validateChipMovement(movement, 'ALL_IN');
         
         // CRITICAL: Log chip movement for money tracking
         gameLogger.gameEvent(this.name, '[CHIPS] All-In - chip movement', {
@@ -2877,7 +3058,19 @@ class Table {
                         const seat = this.seats.find(s => s?.playerId === winner.playerId);
                         if (seat && seat.isActive !== false) {
                             const chipsBefore = seat.chips;
+                            
+                            // CRITICAL: Track emergency distribution BEFORE operation
+                            const movement = this._trackChipMovement('EMERGENCY_POT_DISTRIBUTION', {
+                                winner: winner.name,
+                                pot: this.pot,
+                                chipsBefore
+                            });
+                            
                             seat.chips += this.pot;
+                            
+                            // CRITICAL: Validate after emergency distribution
+                            this._validateChipMovement(movement, 'EMERGENCY_POT_DISTRIBUTION');
+                            
                             console.log(`[Table ${this.name}] EMERGENCY: ${winner.name} wins entire pot ${this.pot} (chips: ${chipsBefore} → ${seat.chips})`);
                             gameLogger.gameEvent(this.name, '[POT] EMERGENCY distribution', {
                                 winner: winner.name,
@@ -2918,7 +3111,18 @@ class Table {
                         
                         const winner = sorted[0].seat;
                         const chipsBefore = winner.chips;
+                        
+                        // CRITICAL: Track emergency distribution BEFORE operation
+                        const movement = this._trackChipMovement('EMERGENCY_POT_DISTRIBUTION_NO_ACTIVE', {
+                            winner: winner.name,
+                            pot: this.pot,
+                            chipsBefore
+                        });
+                        
                         winner.chips += this.pot;
+                        
+                        // CRITICAL: Validate after emergency distribution
+                        this._validateChipMovement(movement, 'EMERGENCY_POT_DISTRIBUTION_NO_ACTIVE');
                         console.log(`[Table ${this.name}] EMERGENCY: ${winner.name} wins entire pot ${this.pot} (no active players, chips: ${chipsBefore} → ${winner.chips})`);
                         gameLogger.gameEvent(this.name, '[POT] EMERGENCY distribution (no active players)', {
                             winner: winner.name,
@@ -2936,7 +3140,18 @@ class Table {
                         
                         if (bestPlayer) {
                             const chipsBefore = bestPlayer.chips;
+                            
+                            // CRITICAL: Track emergency distribution BEFORE operation
+                            const movement = this._trackChipMovement('EMERGENCY_POT_DISTRIBUTION_LAST_RESORT', {
+                                winner: bestPlayer.name,
+                                pot: this.pot,
+                                chipsBefore
+                            });
+                            
                             bestPlayer.chips += this.pot;
+                            
+                            // CRITICAL: Validate after emergency distribution
+                            this._validateChipMovement(movement, 'EMERGENCY_POT_DISTRIBUTION_LAST_RESORT');
                             console.log(`[Table ${this.name}] EMERGENCY: ${bestPlayer.name} wins entire pot ${this.pot} (last resort, chips: ${chipsBefore} → ${bestPlayer.chips})`);
                             gameLogger.gameEvent(this.name, '[POT] EMERGENCY distribution (last resort)', {
                                 winner: bestPlayer.name,
@@ -3417,12 +3632,26 @@ class Table {
         
         for (const award of potAwards) {
             const seat = this.seats.find(s => s?.playerId === award.playerId);
-            if (seat && seat.isActive !== false) {
-                // Only award chips to active (non-eliminated) players
-                const chipsBefore = seat.chips;
-                seat.chips += award.amount;
-                const chipsAfter = seat.chips;
-                totalAwarded += award.amount;
+        if (seat && seat.isActive !== false) {
+            // Only award chips to active (non-eliminated) players
+            const chipsBefore = seat.chips;
+            
+            // CRITICAL: Track chip award BEFORE operation
+            const movement = this._trackChipMovement('AWARD_POT', {
+                player: award.name,
+                seatIndex: this.seats.indexOf(seat),
+                amount: award.amount,
+                chipsBefore,
+                potType: award.potType,
+                handName: award.handName
+            });
+            
+            seat.chips += award.amount;
+            const chipsAfter = seat.chips;
+            totalAwarded += award.amount;
+            
+            // CRITICAL: Validate after award
+            this._validateChipMovement(movement, 'AWARD_POT');
                 
                 awardDetails.push({
                     playerId: award.playerId,
@@ -3471,11 +3700,23 @@ class Table {
                     .filter(p => p.handResult)
                     .sort((a, b) => HandEvaluator.compare(b.handResult, a.handResult));
                 
-                if (activeSeats.length > 0) {
-                    const bestActive = activeSeats[0].seat;
-                    const chipsBefore = bestActive.chips;
-                    bestActive.chips += award.amount;
-                    totalAwarded += award.amount; // Count it as awarded
+                    if (activeSeats.length > 0) {
+                        const bestActive = activeSeats[0].seat;
+                        const chipsBefore = bestActive.chips;
+                        
+                        // CRITICAL: Track redistribution BEFORE operation
+                        const movement = this._trackChipMovement('REDISTRIBUTE_POT_FROM_ELIMINATED', {
+                            from: award.name,
+                            to: bestActive.name,
+                            amount: award.amount,
+                            chipsBefore
+                        });
+                        
+                        bestActive.chips += award.amount;
+                        totalAwarded += award.amount; // Count it as awarded
+                        
+                        // CRITICAL: Validate after redistribution
+                        this._validateChipMovement(movement, 'REDISTRIBUTE_POT_FROM_ELIMINATED');
                     console.log(`[Table ${this.name}] FIX: Redistributed ${award.amount} from eliminated ${award.name} to ${bestActive.name} (chips: ${chipsBefore} → ${bestActive.chips})`);
                     gameLogger.gameEvent(this.name, '[POT] Redistributed from eliminated player', {
                         from: award.name,
@@ -3631,7 +3872,19 @@ class Table {
             if (activeSeats.length > 0) {
                 const bestActive = activeSeats[0];
                 const chipsBefore = bestActive.chips;
+                
+                // CRITICAL: Track redistribution BEFORE operation
+                const movement = this._trackChipMovement('REDISTRIBUTE_POT_FROM_ELIMINATED_WINNER', {
+                    from: winner.name,
+                    to: bestActive.name,
+                    potAmount,
+                    chipsBefore
+                });
+                
                 bestActive.chips += potAmount;
+                
+                // CRITICAL: Validate after redistribution
+                this._validateChipMovement(movement, 'REDISTRIBUTE_POT_FROM_ELIMINATED_WINNER');
                 console.log(`[Table ${this.name}] FIX: Redistributed ${potAmount} from eliminated ${winner.name} to ${bestActive.name} (chips: ${chipsBefore} → ${bestActive.chips})`);
                 gameLogger.gameEvent(this.name, '[POT] Redistributed from eliminated winner', {
                     from: winner.name,
