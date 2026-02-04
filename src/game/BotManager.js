@@ -331,16 +331,49 @@ class BotManager {
             return;
         }
         
-        const tableBots = this.activeBots.get(tableId);
+        let tableBots = this.activeBots.get(tableId);
         if (!tableBots) {
-            console.log(`[BotManager] ERROR: No activeBots map for table ${tableId}`);
-            return;
+            // CRITICAL FIX: If activeBots map doesn't exist, create it
+            // This can happen after game restarts when activeBots was cleared
+            tableBots = new Map();
+            this.activeBots.set(tableId, tableBots);
+            console.log(`[BotManager] Created new activeBots map for table ${tableId}`);
         }
         
-        const bot = tableBots.get(table.currentPlayerIndex);
+        let bot = tableBots.get(table.currentPlayerIndex);
         if (!bot) {
-            console.log(`[BotManager] ERROR: Bot not found in activeBots for seat ${table.currentPlayerIndex}. Active seats: ${Array.from(tableBots.keys()).join(', ')}`);
-            return;
+            // CRITICAL FIX: Bot not in activeBots map - try to re-sync from seat
+            // This can happen after game restarts when activeBots was cleared but bots are still in seats
+            console.log(`[BotManager] Bot not found in activeBots for seat ${table.currentPlayerIndex} - attempting to re-sync`);
+            
+            // Try to find or recreate the bot from the seat
+            const { createBot, BOT_PROFILES } = require('./BotPlayer');
+            const botName = currentSeat.name;
+            
+            // Map bot names to profile keys (use BOT_PROFILES to find correct profile)
+            let profileKey = null;
+            for (const [key, profile] of Object.entries(BOT_PROFILES)) {
+                if (profile.name === botName) {
+                    profileKey = key;
+                    break;
+                }
+            }
+            
+            if (!profileKey) {
+                console.error(`[BotManager] Cannot re-sync bot ${botName} - unknown bot name`);
+                return;
+            }
+            
+            bot = createBot(profileKey);
+            bot.chips = currentSeat.chips;
+            bot.currentBet = currentSeat.currentBet;
+            bot.cards = currentSeat.cards || [];
+            bot.folded = currentSeat.isFolded;
+            bot.allIn = currentSeat.isAllIn;
+            
+            // Add to activeBots map
+            tableBots.set(table.currentPlayerIndex, bot);
+            console.log(`[BotManager] Re-synced bot ${botName} at seat ${table.currentPlayerIndex} from seat data`);
         }
         
         // Don't double-trigger - include phase and hand count to ensure unique key per turn
