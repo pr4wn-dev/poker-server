@@ -5851,9 +5851,6 @@ class Table {
                 potAwardsCount: potAwards.length
             });
         }
-            
-            this.pot = 0; // Force clear
-        }
         
         return potAwards;
     }
