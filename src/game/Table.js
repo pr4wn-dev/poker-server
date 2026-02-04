@@ -98,9 +98,10 @@ class Table {
         };
         
         // Helper to get current chip state snapshot
+        // CRITICAL FIX: Only count ACTIVE players (not eliminated ones) to match totalStartingChips
         this._getChipState = () => {
             const playerChips = this.seats
-                .filter(s => s !== null)
+                .filter(s => s !== null && s.isActive !== false)  // Only count active players
                 .reduce((sum, seat) => sum + (seat.chips || 0), 0);
             const totalChipsInSystem = playerChips + this.pot;
             return {
@@ -185,9 +186,10 @@ class Table {
         };
         
         // CRITICAL: Money validation helper - validates chips are conserved at every point
+        // CRITICAL FIX: Only count ACTIVE players (not eliminated ones) to match totalStartingChips
         this._validateMoney = (context) => {
             const currentTotalChips = this.seats
-                .filter(s => s !== null)
+                .filter(s => s !== null && s.isActive !== false)  // Only count active players
                 .reduce((sum, seat) => sum + (seat.chips || 0), 0);
             const totalChipsAndPot = currentTotalChips + this.pot;
             
@@ -705,19 +707,9 @@ class Table {
             playerCount: this.seats.filter(s => s && s.isActive !== false).length
         });
         
-        // CRITICAL: Remove ALL eliminated players before resetting chips for new game
-        // This prevents eliminated players from being counted in totalChipsInSystem
-        // but not in totalStartingChips (which only counts active players)
-        for (let i = 0; i < this.seats.length; i++) {
-            const seat = this.seats[i];
-            if (seat && seat.isActive === false) {
-                console.log(`[Table ${this.name}] Removing eliminated player ${seat.name} before new game start`);
-                this.seats[i] = null;
-            }
-        }
-        
         // CRITICAL: Only reset chips for players who are actually active and seated
-        // Eliminated players have been removed above, so all remaining players are active
+        // Eliminated players (isActive === false) are NOT counted in totalStartingChips
+        // and are NOT counted in _validateMoney or _getChipState (they only count active players)
         for (const seat of this.seats) {
             if (seat && seat.isActive !== false) {
                 const oldChips = seat.chips;
