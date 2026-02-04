@@ -480,6 +480,12 @@ class Table {
         this.MAX_TURNS_PER_PHASE = 30;  // Safety valve - force advance if exceeded (raised for heads-up with lots of raising)
         this.MAX_CONSECUTIVE_SAME_PLAYER = 3;  // ONLY warn if same player acts 3x IN A ROW without anyone else acting
         
+        // Stuck player detection
+        this.consecutiveAdvanceGameCalls = 0;  // Track consecutive advanceGame calls without state change
+        this.lastAdvanceGameState = null;  // Track last state to detect stuck scenarios
+        this.playerWaitStartTime = null;  // Track when current player started waiting
+        this.lastWaitingPlayer = -1;  // Track which player is waiting
+        
         // CRITICAL FIX: Action lock to prevent multiple simultaneous actions from rapid clicks
         this._processingAction = false;
 
@@ -1035,10 +1041,23 @@ class Table {
         }
         
         const player = this.seats[this.currentPlayerIndex];
-        this.turnStartTime = Date.now();
+        if (!player) {
+            console.error(`[Table ${this.name}] ERROR: startTurnTimer called but no player at seat ${this.currentPlayerIndex}`);
+            return;
+        }
         
-        // Timer start logging removed - too verbose (logs every turn)
-        // Only log timer errors or timeouts
+        this.turnStartTime = Date.now();
+        this.playerWaitStartTime = Date.now(); // Track when player's turn started
+        this.lastWaitingPlayer = this.currentPlayerIndex;
+        
+        // Log when starting timer for stuck player detection
+        gameLogger.gameEvent(this.name, '[TIMER] Turn timer started', {
+            player: player.name,
+            seatIndex: this.currentPlayerIndex,
+            phase: this.phase,
+            turnTimeLimit: this.turnTimeLimit,
+            handNumber: this.handsPlayed
+        });
         
         this.turnTimeout = setTimeout(() => {
             this.handleTurnTimeout();
