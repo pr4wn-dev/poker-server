@@ -5035,14 +5035,15 @@ class Table {
         
         if (Math.abs(chipsDifferenceAfterAwards) > 0.01) {
             console.error(`[Table ${this.name}] ⚠️ CRITICAL AWARD_POTS ERROR: Total chips changed! Before: ${totalChipsAndPotBeforeAwards}, After: ${totalChipsAndPotAfterAwards}, Difference: ${chipsDifferenceAfterAwards}`);
-            gameLogger.error(this.name, '[AWARD_POTS] CRITICAL: Total chips changed', {
+            gameLogger.gameEvent(this.name, '[AWARD_POTS] CRITICAL: Total chips changed', {
                 handNumber: this.handsPlayed,
                 totalChipsAndPotBeforeAwards,
                 totalChipsAndPotAfterAwards,
                 chipsDifferenceAfterAwards,
                 totalAwarded,
                 potBeforeCalculation,
-                potAfterAwards: this.pot
+                potAfterAwards: this.pot,
+                totalStartingChips: this.totalStartingChips
             });
         }
         
