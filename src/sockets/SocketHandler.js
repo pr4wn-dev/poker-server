@@ -536,13 +536,35 @@ class SocketHandler {
                 console.log(`[SocketHandler] LEAVE_TABLE REQUEST | userId=${user.userId}, username=${user.profile?.username || 'unknown'}`);
                 
                 const player = this.gameManager.players.get(user.userId);
-                const tableId = player?.currentTableId;
+                let tableId = player?.currentTableId;
+                let table = tableId ? this.gameManager.getTable(tableId) : null;
                 
-                // Check if spectating
-                const table = tableId ? this.gameManager.getTable(tableId) : null;
-                if (table?.isSpectator(user.userId)) {
+                // CRITICAL FIX: If currentTableId is not set, search all tables to find if user is a spectator
+                // This handles cases where the creator or spectator's currentTableId wasn't set properly
+                if (!tableId || !table) {
+                    // Search all tables to find if user is a spectator
+                    for (const [tid, t] of this.gameManager.tables) {
+                        if (t.isSpectator(user.userId)) {
+                            tableId = tid;
+                            table = t;
+                            console.log(`[SocketHandler] Found spectator ${user.profile?.username} at table ${tableId} (currentTableId was not set)`);
+                            break;
+                        }
+                        // Also check if user is the creator (even if not in a seat or as spectator)
+                        if (t.creatorId === user.userId && !tableId) {
+                            tableId = tid;
+                            table = t;
+                            console.log(`[SocketHandler] Found creator ${user.profile?.username} at table ${tableId}`);
+                            break;
+                        }
+                    }
+                }
+                
+                // Check if spectating (either found via currentTableId or by searching)
+                if (table && table.isSpectator(user.userId)) {
                     table.removeSpectator(user.userId);
                     socket.leave(`table:${tableId}`);
+                    socket.leave(`spectator:${tableId}`);
                     socket.to(`table:${tableId}`).emit('spectator_left', { userId: user.userId });
                     
                     // Clear spectator's table tracking
@@ -555,31 +577,33 @@ class SocketHandler {
                     return respond({ success: true });
                 }
                 
-                if (!tableId) {
-                    console.log(`[SocketHandler] LEAVE_TABLE FAILED | No tableId for user ${user.userId}`);
-                    return respond({ success: false, error: 'Not at a table' });
-                }
-                
-                const result = this.gameManager.leaveTable(user.userId);
-                
-                if (result.success && tableId) {
-                    // Save chips back to database
-                    if (player) {
-                        await userRepo.setChips(user.userId, player.chips);
+                // Check if user is in a seat (regular player)
+                if (tableId && table) {
+                    const result = this.gameManager.leaveTable(user.userId);
+                    
+                    if (result.success) {
+                        // Save chips back to database
+                        if (player) {
+                            await userRepo.setChips(user.userId, player.chips);
+                        }
+                        
+                        socket.leave(`table:${tableId}`);
+                        socket.leave(`spectator:${tableId}`);
+                        socket.to(`table:${tableId}`).emit('player_left', {
+                            userId: user.userId
+                        });
+                        
+                        console.log(`[SocketHandler] ${user.profile?.username || user.userId} left table ${tableId}`);
+                    } else {
+                        console.log(`[SocketHandler] LEAVE_TABLE FAILED | Error: ${result.error}`);
                     }
                     
-                    socket.leave(`table:${tableId}`);
-                    socket.leave(`spectator:${tableId}`);
-                    socket.to(`table:${tableId}`).emit('player_left', {
-                        userId: user.userId
-                    });
-                    
-                    console.log(`[SocketHandler] ${user.profile?.username || user.userId} left table ${tableId}`);
-                } else {
-                    console.log(`[SocketHandler] LEAVE_TABLE FAILED | Error: ${result.error}`);
+                    return respond(result);
                 }
-
-                respond(result);
+                
+                // If we get here, user is not at any table
+                console.log(`[SocketHandler] LEAVE_TABLE FAILED | User ${user.userId} is not at any table`);
+                return respond({ success: false, error: 'Not at a table' });
             });
 
             // ============ Game Actions ============
