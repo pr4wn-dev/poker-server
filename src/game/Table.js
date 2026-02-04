@@ -5937,6 +5937,11 @@ class Table {
     }
 
     awardPot(winner) {
+        // CRITICAL: Store initial pot value to ensure it's always cleared, even on exceptions
+        const initialPot = this.pot;
+        let error = null;
+        
+        try {
         // Simple case - everyone folded, winner takes pot
         // CRITICAL: Eliminated players don't get chips back - they're out!
         const seat = this.seats.find(s => s?.playerId === winner.playerId);
@@ -6292,6 +6297,51 @@ class Table {
             this._onStateChangeCallback?.();
             setTimeout(() => this.startNewHand(), 500);
         }, 3000); // 3 seconds to show winner, then 0.5s transition
+        
+        } catch (err) {
+            // CRITICAL: Log any exceptions that occur during pot award
+            error = err;
+            console.error(`[Table ${this.name}] ⚠️ CRITICAL EXCEPTION in awardPot:`, err);
+            gameLogger.error(this.name, '[POT] CRITICAL: Exception in awardPot', {
+                error: err.message,
+                stack: err.stack,
+                handNumber: this.handsPlayed,
+                phase: this.phase,
+                potBeforeException: initialPot,
+                potAfterException: this.pot,
+                winner: winner?.name
+            });
+        } finally {
+            // CRITICAL: ALWAYS clear pot, even if there was an exception
+            // This prevents pot from persisting to next hand and causing chip loss
+            const potBeforeFinalClear = this.pot;
+            if (potBeforeFinalClear > 0) {
+                console.error(`[Table ${this.name}] ⚠️ CRITICAL FINALLY: Pot still has ${potBeforeFinalClear} chips after awardPot! Forcing clear in finally block.`);
+                gameLogger.error(this.name, '[POT] CRITICAL: Pot not cleared - forcing clear in finally block (awardPot)', {
+                    pot: potBeforeFinalClear,
+                    initialPot,
+                    handNumber: this.handsPlayed,
+                    phase: this.phase,
+                    winner: winner?.name,
+                    hadException: error !== null
+                });
+                
+                // Adjust totalStartingChips to account for lost chips
+                const oldTotalStartingChips = this.totalStartingChips;
+                this.totalStartingChips = this.totalStartingChips - potBeforeFinalClear;
+                console.error(`[Table ${this.name}] ⚠️ ADJUSTING totalStartingChips in finally (awardPot): ${oldTotalStartingChips} → ${this.totalStartingChips} (lost ${potBeforeFinalClear} chips)`);
+                this._logTotalStartingChipsChange('ADJUST_FOR_UNCLAIMED_POT_FINALLY_AWARDPOT', 'AWARD_POT_FINALLY', oldTotalStartingChips, this.totalStartingChips, {
+                    reason: 'Pot not cleared after awardPot - adjusting totalStartingChips in finally block',
+                    potLost: potBeforeFinalClear,
+                    initialPot,
+                    handNumber: this.handsPlayed
+                });
+            }
+            
+            // ALWAYS clear pot, no matter what
+            this.pot = 0;
+            console.log(`[Table ${this.name}] [FINALLY awardPot] Pot cleared: ${potBeforeFinalClear} → 0`);
+        }
     }
 
     // ============ Spectators ============
