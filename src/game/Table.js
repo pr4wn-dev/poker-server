@@ -1565,16 +1565,25 @@ class Table {
             return;
         }
         
-        // Remove players with no chips
-        // CRITICAL FIX: Don't clear totalBet here - it's needed for pot calculation!
-        // totalBet tracks how much each player contributed to the pot this hand
-        // It will be cleared AFTER the pot is calculated and awarded (in showdown or after awardPot)
-        // Only clear currentBet (for new hand betting)
+        // CRITICAL FIX: Clear totalBet at the start of a new hand
+        // This ensures totalBet from previous hand doesn't persist and cause chip loss
+        // Even though totalBet should be cleared after pot is awarded, we clear it here as a safety measure
+        // to prevent bugs where totalBet persists from previous hand
         for (const seat of this.seats) {
             if (seat) {
+                // CRITICAL: Clear totalBet to prevent it from persisting from previous hand
+                // This fixes the bug where sumOfTotalBets > pot because totalBet wasn't cleared
+                if (seat.totalBet > 0) {
+                    console.warn(`[Table ${this.name}] WARNING: Clearing totalBet=${seat.totalBet} for ${seat.name} at start of new hand - should have been cleared after pot award!`);
+                    gameLogger.gameEvent(this.name, '[FIX] Clearing totalBet at hand start', {
+                        player: seat.name,
+                        totalBet: seat.totalBet,
+                        handNumber: this.handsPlayed + 1,
+                        warning: 'totalBet should have been cleared after pot award in previous hand'
+                    });
+                }
+                seat.totalBet = 0;
                 seat.currentBet = 0;
-                // CRITICAL: Preserve totalBet - it's needed for pot calculation in showdown()
-                // totalBet will be cleared after pot is awarded
             }
         }
         
