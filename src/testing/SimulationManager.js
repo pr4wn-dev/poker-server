@@ -625,6 +625,9 @@ class SimulationManager {
         
         // CRITICAL: Explicitly clear ALL seats (set to null) before trying to add new bots
         // This ensures eliminated players and old bots are completely removed
+        // NOTE: Spectators are stored separately in table.spectators (Map), NOT in table.seats
+        // Clearing seats does NOT affect spectators - they remain untouched
+        const spectatorCountBefore = table.spectators.size;
         for (let i = 0; i < table.seats.length; i++) {
             const seat = table.seats[i];
             if (seat) {
@@ -640,6 +643,12 @@ class SimulationManager {
                 // Explicitly clear the seat
                 table.seats[i] = null;
             }
+        }
+        // Verify spectators are preserved
+        if (table.spectators.size !== spectatorCountBefore) {
+            this.log('WARN', `Spectator count changed during seat clearing! Before: ${spectatorCountBefore}, After: ${table.spectators.size}`, { tableId });
+        } else {
+            this.log('DEBUG', `Spectators preserved: ${spectatorCountBefore} spectators remain`, { tableId });
         }
         
         // CRITICAL: Wait for bot removals to complete before proceeding
