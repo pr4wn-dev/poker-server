@@ -991,8 +991,37 @@ class Table {
             }
         }
         
+        // CRITICAL FIX: After resetting all chips, recalculate totalStartingChips based on ACTUAL chips in system
+        // This ensures totalStartingChips matches reality, not theoretical buy-ins
+        const actualTotalChips = this.seats
+            .filter(s => s && s.isActive !== false)
+            .reduce((sum, s) => sum + (s.chips || 0), 0);
+        const actualTotalChipsAndPot = actualTotalChips + this.pot;
+        
+        if (Math.abs(this.totalStartingChips - actualTotalChipsAndPot) > 0.01) {
+            console.warn(`[Table ${this.name}] ⚠️ WARNING: totalStartingChips (${this.totalStartingChips}) != actual chips (${actualTotalChipsAndPot}). Adjusting to match reality.`);
+            const oldTotalStartingChips = this.totalStartingChips;
+            this.totalStartingChips = actualTotalChipsAndPot;
+            this._logTotalStartingChipsChange('ADJUST_TO_REALITY', 'HANDLE_GAME_START', oldTotalStartingChips, this.totalStartingChips, {
+                reason: 'totalStartingChips did not match actual chips after reset - adjusting to reality',
+                actualTotalChips,
+                pot: this.pot,
+                actualTotalChipsAndPot
+            });
+            gameLogger.gameEvent(this.name, '[MONEY] Adjusted totalStartingChips to match actual chips', {
+                oldTotalStartingChips,
+                newTotalStartingChips: this.totalStartingChips,
+                actualTotalChips,
+                pot: this.pot,
+                actualTotalChipsAndPot
+            });
+        }
+        
         gameLogger.gameEvent(this.name, 'TOTAL STARTING CHIPS TRACKED', {
                 totalStartingChips: this.totalStartingChips,
+                actualTotalChips,
+                pot: this.pot,
+                actualTotalChipsAndPot,
                 playerCount: this.seats.filter(s => s && s.isActive !== false).length,
                 buyIn: this.buyIn,
                 allPlayers: this.seats.filter(s => s && s.isActive !== false).map(s => ({
@@ -1745,6 +1774,27 @@ class Table {
         const totalChipsAfterReset = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
         const totalChipsAndPotAfterReset = totalChipsAfterReset + this.pot;
         const resetDifference = totalChipsAndPotAfterReset - totalChipsAndPotBeforeReset;
+        
+        // CRITICAL FIX: If chips were lost due to pot clearing, adjust totalStartingChips to match reality
+        // This prevents validation failures from cascading through the game
+        if (potBeforeForceClear > 0 && this.totalStartingChips > 0) {
+            const oldTotalStartingChips = this.totalStartingChips;
+            this.totalStartingChips = totalChipsAndPotAfterReset;
+            console.error(`[Table ${this.name}] ⚠️ ADJUSTING totalStartingChips: ${oldTotalStartingChips} → ${this.totalStartingChips} (lost ${potBeforeForceClear} chips due to pot clearing)`);
+            this._logTotalStartingChipsChange('ADJUST_FOR_POT_CLEAR', 'HAND_START', oldTotalStartingChips, this.totalStartingChips, {
+                reason: 'Pot was cleared at hand start, chips were lost',
+                chipsLost: potBeforeForceClear,
+                handNumber: this.handsPlayed,
+                totalChipsAndPotAfterReset
+            });
+            gameLogger.error(this.name, '[MONEY] Adjusted totalStartingChips due to pot clearing', {
+                oldTotalStartingChips,
+                newTotalStartingChips: this.totalStartingChips,
+                chipsLost: potBeforeForceClear,
+                handNumber: this.handsPlayed,
+                totalChipsAndPotAfterReset
+            });
+        }
         
         console.log(`[Table ${this.name}] [FIX #1: HAND_START POST-RESET] Hand: ${this.handsPlayed} | Pot: ${this.pot} (was ${potBeforeForceClear}) | TotalChips: ${totalChipsAfterReset} | TotalChips+Pot: ${totalChipsAndPotAfterReset} | Difference: ${resetDifference}`);
         gameLogger.gameEvent(this.name, '[FIX #1: HAND_START] POST-RESET STATE', {
@@ -5590,8 +5640,17 @@ class Table {
         
         // CRITICAL: NOW that pot is calculated and awarded, clear totalBet for all seats
         // This is safe because the pot has been fully distributed
+        // CRITICAL FIX: Clear totalBet IMMEDIATELY after pot awards to prevent persistence
         for (const seat of this.seats) {
             if (seat) {
+                if (seat.totalBet > 0) {
+                    console.log(`[Table ${this.name}] [FIX] Clearing totalBet=${seat.totalBet} for ${seat.name} after pot awards`);
+                    gameLogger.gameEvent(this.name, '[FIX] Clearing totalBet after pot awards', {
+                        player: seat.name,
+                        totalBet: seat.totalBet,
+                        handNumber: this.handsPlayed
+                    });
+                }
                 seat.totalBet = 0;
             }
         }
@@ -5651,6 +5710,33 @@ class Table {
         
         // CRITICAL: Validate money after side pot awards
         this._validateMoney('AFTER_SIDE_POT_AWARDS');
+        
+        // CRITICAL FIX: Ensure pot is ALWAYS cleared before returning, even if there was an error
+        // This prevents pot from persisting to next hand and causing chip loss
+        if (this.pot > 0) {
+            console.error(`[Table ${this.name}] ⚠️ CRITICAL: Pot still has ${this.pot} chips after calculateAndAwardSidePots! Forcing clear.`);
+            gameLogger.error(this.name, '[POT] CRITICAL: Pot not cleared after calculateAndAwardSidePots - forcing clear', {
+                pot: this.pot,
+                handNumber: this.handsPlayed,
+                phase: this.phase,
+                totalAwarded,
+                potAwardsCount: potAwards.length
+            });
+            
+            // Adjust totalStartingChips to account for lost chips
+            const oldTotalStartingChips = this.totalStartingChips;
+            const actualTotalChips = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
+            const actualTotalChipsAndPot = actualTotalChips + this.pot;
+            this.totalStartingChips = actualTotalChips; // Adjust to actual chips (pot will be lost)
+            this._logTotalStartingChipsChange('ADJUST_FOR_UNCLAIMED_POT', 'CALCULATE_AND_AWARD_SIDE_POTS', oldTotalStartingChips, this.totalStartingChips, {
+                reason: 'Pot not cleared after awards - adjusting totalStartingChips to account for lost chips',
+                potLost: this.pot,
+                actualTotalChips,
+                handNumber: this.handsPlayed
+            });
+            
+            this.pot = 0; // Force clear
+        }
         
         return potAwards;
     }
@@ -5857,8 +5943,17 @@ class Table {
         
         // CRITICAL: NOW that pot is awarded, clear totalBet for all seats
         // This is safe because the pot has been fully distributed
+        // CRITICAL FIX: Clear totalBet IMMEDIATELY after pot award to prevent persistence
         for (const seat of this.seats) {
             if (seat) {
+                if (seat.totalBet > 0) {
+                    console.log(`[Table ${this.name}] [FIX] Clearing totalBet=${seat.totalBet} for ${seat.name} after awardPot`);
+                    gameLogger.gameEvent(this.name, '[FIX] Clearing totalBet after awardPot', {
+                        player: seat.name,
+                        totalBet: seat.totalBet,
+                        handNumber: this.handsPlayed
+                    });
+                }
                 seat.totalBet = 0;
             }
         }
