@@ -5194,8 +5194,11 @@ class Table {
         
         for (const award of potAwards) {
             const seat = this.seats.find(s => s?.playerId === award.playerId);
-        if (seat && seat.isActive !== false) {
-            // Only award chips to active (non-eliminated) players
+            
+            // CRITICAL FIX: Double-check that player is still active AND has chips > 0
+            // Players who went all-in and lost (0 chips) should NOT receive awards
+            if (seat && seat.isActive !== false && seat.chips > 0) {
+                // Only award chips to active (non-eliminated) players who have chips
             const chipsBefore = seat.chips;
             
             // CRITICAL: Track chip award BEFORE operation
