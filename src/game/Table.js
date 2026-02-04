@@ -2094,7 +2094,7 @@ class Table {
             seatIndex,
             chipsBefore: beforeChips,
             chipsAfter: player.chips,
-            chipsMoved: amount,
+            chipsMoved: additionalBet,
             additionalBet,
             potBefore,
             potAfter: this.pot,
