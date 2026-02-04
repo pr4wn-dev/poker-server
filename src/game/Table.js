@@ -3791,7 +3791,19 @@ class Table {
         }
         
         // Clear pot only after validation passes
-        this.pot = 0;
+        // CRITICAL: Track pot clearing
+        const potBeforeClear = this.pot;
+        if (potBeforeClear > 0) {
+            const movement = this._trackChipMovement('CLEAR_POT_AFTER_SIDE_POTS', {
+                potBefore: potBeforeClear,
+                totalAwarded,
+                reason: 'Side pots calculated and awarded, clearing main pot'
+            });
+            this.pot = 0;
+            this._validateChipMovement(movement, 'CLEAR_POT_AFTER_SIDE_POTS');
+        } else {
+            this.pot = 0;
+        }
         
         // Store awards for client display
         this.lastPotAwards = potAwards;
@@ -3902,7 +3914,19 @@ class Table {
                 });
             }
         }
-        this.pot = 0;
+        
+        // CRITICAL: Track pot clearing after awardPot
+        const potBeforeClear = this.pot;
+        if (potBeforeClear > 0) {
+            const movement = this._trackChipMovement('CLEAR_POT_AFTER_AWARD', {
+                potBefore: potBeforeClear,
+                reason: 'Pot awarded in awardPot(), clearing'
+            });
+            this.pot = 0;
+            this._validateChipMovement(movement, 'CLEAR_POT_AFTER_AWARD');
+        } else {
+            this.pot = 0;
+        }
         
         // CRITICAL: NOW that pot is awarded, clear totalBet for all seats
         // This is safe because the pot has been fully distributed
