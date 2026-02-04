@@ -497,7 +497,9 @@ class Table {
         this.turnStartTime = null;
         // CRITICAL: Simulations need very fast turn timers (100ms) to run quickly
         // Regular games use 20 seconds, but simulations should be instant
-        this.turnTimeLimit = options.turnTimeLimit || (this.isSimulation ? 100 : 20000); // 100ms for simulations, 20 seconds for regular games
+        // CRITICAL: For simulations, ALWAYS use 100ms regardless of what's passed in options
+        // This ensures fast simulations even if SimulationManager passes a higher value
+        this.turnTimeLimit = this.isSimulation ? 100 : (options.turnTimeLimit || 20000); // 100ms for simulations, 20 seconds for regular games
         
         // Blind increase timer (tournament-style)
         // 0 = disabled (blinds never increase)
@@ -4752,21 +4754,19 @@ class Table {
                         phase: this.phase
                     });
                     
-                    // CRITICAL: Adjust totalStartingChips to reflect the chips that were lost
-                    // This prevents validation from failing continuously
-                    const oldTotalStartingChips = this.totalStartingChips;
-                    if (this.totalStartingChips > 0 && chipsLost > 0) {
-                        this.totalStartingChips = Math.max(0, this.totalStartingChips - chipsLost);
-                        this._logTotalStartingChipsChange('ADJUST_FOR_CHIP_LOSS', 'FIX_2_CHIPS_LOST_BETTING', oldTotalStartingChips, this.totalStartingChips, {
-                            chipsLost,
-                            potBeforeCalculation,
-                            sumOfTotalBets,
-                            handNumber: this.handsPlayed,
-                            phase: this.phase,
-                            reason: 'Chips lost during betting - adjusting totalStartingChips to match reality'
-                        });
-                        console.error(`[Table ${this.name}] ⚠️ ADJUSTED totalStartingChips from ${oldTotalStartingChips} to ${this.totalStartingChips} to account for ${chipsLost} lost chips`);
-                    }
+                    // CRITICAL FIX: DO NOT adjust totalStartingChips - this hides the real problem!
+                    // Instead, we should investigate why chips are being lost during betting.
+                    // The pot adjustment recovers the chips for this hand, but the root cause needs to be fixed.
+                    // Log this as a critical error that needs investigation.
+                    console.error(`[Table ${this.name}] ⚠️ CRITICAL: ${chipsLost} chips were LOST during betting! Pot adjusted to recover them, but root cause must be investigated!`);
+                    gameLogger.error(this.name, '[CRITICAL] Chips lost during betting - pot adjusted but root cause needs investigation', {
+                        chipsLost,
+                        potBeforeCalculation,
+                        sumOfTotalBets,
+                        handNumber: this.handsPlayed,
+                        phase: this.phase,
+                        warning: 'DO NOT adjust totalStartingChips - this hides the problem. Investigate why chips are being lost during betting.'
+                    });
                     
                     // Record fix attempt - this is a failure because chips were lost
                     this._recordFixAttempt('FIX_2_CHIPS_LOST_BETTING', false, {
