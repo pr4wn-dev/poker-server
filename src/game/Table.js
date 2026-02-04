@@ -4097,6 +4097,30 @@ class Table {
      * Side pots occur when players are all-in for different amounts
      */
     calculateAndAwardSidePots(activePlayers) {
+        // ULTRA-VERBOSE: Log FULL STATE before pot calculation
+        const totalChipsBeforeCalc = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
+        const totalChipsAndPotBeforeCalc = totalChipsBeforeCalc + this.pot;
+        
+        console.log(`[Table ${this.name}] [CALCULATE_SIDE_POTS PRE-OP] Hand: ${this.handsPlayed} | Pot: ${this.pot} | TotalChips: ${totalChipsBeforeCalc} | TotalChips+Pot: ${totalChipsAndPotBeforeCalc} | totalStartingChips: ${this.totalStartingChips}`);
+        gameLogger.gameEvent(this.name, '[CALCULATE_SIDE_POTS] PRE-OPERATION STATE', {
+            handNumber: this.handsPlayed,
+            pot: this.pot,
+            totalChipsBeforeCalc,
+            totalChipsAndPotBeforeCalc,
+            totalStartingChips: this.totalStartingChips,
+            phase: this.phase,
+            allSeats: this.seats.map((s, i) => s ? {
+                seatIndex: i,
+                name: s.name,
+                chips: s.chips,
+                totalBet: s.totalBet || 0,
+                currentBet: s.currentBet || 0,
+                isActive: s.isActive,
+                isFolded: s.isFolded,
+                isAllIn: s.isAllIn
+            } : null).filter(Boolean)
+        });
+        
         // CRITICAL: Store pot before calculation for verification
         const potBeforeCalculation = this.pot;
         
@@ -4427,6 +4451,25 @@ class Table {
             // Don't clear pot if we couldn't distribute it
             return [];
         }
+        
+        // ULTRA-VERBOSE: Log state before awarding pots
+        const totalChipsBeforeAwards = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
+        const totalChipsAndPotBeforeAwards = totalChipsBeforeAwards + this.pot;
+        
+        console.log(`[Table ${this.name}] [AWARD_POTS PRE-OP] Hand: ${this.handsPlayed} | Pot: ${this.pot} | TotalChips: ${totalChipsBeforeAwards} | TotalChips+Pot: ${totalChipsAndPotBeforeAwards} | Awards: ${potAwards.length}`);
+        gameLogger.gameEvent(this.name, '[AWARD_POTS] PRE-OPERATION STATE', {
+            handNumber: this.handsPlayed,
+            pot: this.pot,
+            totalChipsBeforeAwards,
+            totalChipsAndPotBeforeAwards,
+            totalStartingChips: this.totalStartingChips,
+            potAwardsCount: potAwards.length,
+            potAwards: potAwards.map(a => ({
+                name: a.name,
+                amount: a.amount,
+                potType: a.potType
+            }))
+        });
         
         // Award the pots
         // CRITICAL: Eliminated players don't get chips back - they're out!
