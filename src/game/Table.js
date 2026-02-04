@@ -1001,6 +1001,16 @@ class Table {
             }
         }
 
+        // CRITICAL: Track chip addition when player joins
+        const movement = this._trackChipMovement('PLAYER_JOIN', {
+            player: name,
+            playerId,
+            seatIndex,
+            chips,
+            gameStarted: this.gameStarted,
+            phase: this.phase
+        });
+        
         const seat = {
             playerId,
             name,
@@ -1016,6 +1026,19 @@ class Table {
         };
         
         this.seats[seatIndex] = seat;
+        
+        // CRITICAL: If game already started, update totalStartingChips
+        if (this.gameStarted) {
+            this.totalStartingChips += chips;
+            gameLogger.gameEvent(this.name, 'Late joiner added to totalStartingChips', {
+                player: name,
+                chips,
+                newTotalStartingChips: this.totalStartingChips
+            });
+        }
+        
+        // CRITICAL: Validate after player join
+        this._validateChipMovement(movement, 'PLAYER_JOIN');
 
         console.log(`[Table ${this.name}] ${name} joined at seat ${seatIndex}`);
 
@@ -1036,6 +1059,18 @@ class Table {
                           this.phase !== GAME_PHASES.READY_UP && 
                           this.phase !== GAME_PHASES.COUNTDOWN;
         
+        // CRITICAL: Track chip removal when player leaves
+        const movement = this._trackChipMovement('PLAYER_LEAVE', {
+            player: player.name,
+            playerId,
+            seatIndex,
+            chips,
+            wasInGame,
+            wasCurrentPlayer,
+            gameStarted: this.gameStarted,
+            phase: this.phase
+        });
+        
         console.log(`[Table ${this.name}] ${player.name} left`);
 
         // Handle mid-game removal - fold BEFORE removing from seat
@@ -1055,6 +1090,19 @@ class Table {
             // Not their turn - just remove
             this.seats[seatIndex] = null;
         }
+        
+        // CRITICAL: If game already started, update totalStartingChips
+        if (this.gameStarted) {
+            this.totalStartingChips -= chips;
+            gameLogger.gameEvent(this.name, 'Player left, removed from totalStartingChips', {
+                player: player.name,
+                chips,
+                newTotalStartingChips: this.totalStartingChips
+            });
+        }
+        
+        // CRITICAL: Validate after player leave
+        this._validateChipMovement(movement, 'PLAYER_LEAVE');
 
         // Check if countdown should be cancelled (not enough players)
         this.checkStartCountdown();
