@@ -4002,40 +4002,31 @@ class Table {
         
         // CRITICAL: NOW that pot is calculated and awarded, we can safely remove eliminated players
         // Their totalBet has been used for pot calculation, so we can clear it and remove them
+        // CRITICAL FIX: DO NOT subtract buy-in from totalStartingChips when players are eliminated!
+        // The chips are still in the system (just redistributed to other players), so totalStartingChips should remain constant.
+        // totalStartingChips represents the total chips at game start, which never changes during gameplay.
         for (let i = 0; i < this.seats.length; i++) {
             const seat = this.seats[i];
             if (seat && seat.isActive === false) {
-                // CRITICAL FIX: Subtract their buy-in from totalStartingChips for ALL eliminated players (bots AND socket bots)
-                // Their chips were already lost (they had 0 chips when eliminated), but totalStartingChips still included their buy-in
-                if (this.totalStartingChips > 0) {
-                    const oldTotalStartingChips = this.totalStartingChips;
-                    this.totalStartingChips = Math.max(0, this.totalStartingChips - this.buyIn);
-                    this._logTotalStartingChipsChange('SUBTRACT_BUYIN', 'CALCULATE_AND_AWARD_SIDE_POTS', oldTotalStartingChips, this.totalStartingChips, {
-                        player: seat.name,
-                        playerId: seat.playerId,
-                        seatIndex: i,
-                        buyIn: this.buyIn,
-                        isBot: seat.isBot || false,
-                        playerChips: seat.chips,
-                        playerTotalBet: seat.totalBet || 0,
-                        reason: 'Player eliminated - subtracting buy-in from totalStartingChips',
-                        allEliminatedPlayers: this.seats.filter(s => s && s.isActive === false).map(s => ({
-                            name: s.name,
-                            seatIndex: this.seats.indexOf(s),
-                            chips: s.chips,
-                            totalBet: s.totalBet || 0
-                        }))
-                    });
-                } else {
-                    console.error(`[Table ${this.name}] [ERROR] Attempted to subtract buy-in from totalStartingChips but it's 0! Player: ${seat.name}, buyIn: ${this.buyIn}`);
-                    gameLogger.error(this.name, 'Attempted to subtract buy-in from zero totalStartingChips', {
-                        player: seat.name,
-                        buyIn: this.buyIn,
-                        totalStartingChips: this.totalStartingChips,
-                        handNumber: this.handsPlayed,
-                        phase: this.phase
-                    });
-                }
+                // Log elimination but DO NOT modify totalStartingChips
+                console.log(`[Table ${this.name}] [ELIMINATION] ${seat.name} eliminated - NOT subtracting buy-in from totalStartingChips (chips still in system)`);
+                gameLogger.gameEvent(this.name, '[ELIMINATION] Player eliminated - NOT modifying totalStartingChips', {
+                    player: seat.name,
+                    playerId: seat.playerId,
+                    seatIndex: i,
+                    buyIn: this.buyIn,
+                    isBot: seat.isBot || false,
+                    playerChips: seat.chips,
+                    playerTotalBet: seat.totalBet || 0,
+                    totalStartingChips: this.totalStartingChips,
+                    reason: 'Chips still in system (redistributed to other players) - totalStartingChips remains constant',
+                    allEliminatedPlayers: this.seats.filter(s => s && s.isActive === false).map(s => ({
+                        name: s.name,
+                        seatIndex: this.seats.indexOf(s),
+                        chips: s.chips,
+                        totalBet: s.totalBet || 0
+                    }))
+                });
                 
                 // Only remove regular bots (socket bots are managed by SimulationManager)
                 if (seat.isBot) {
@@ -4165,40 +4156,31 @@ class Table {
         }
         
         // CRITICAL: NOW that pot is awarded, we can safely remove eliminated players
+        // CRITICAL FIX: DO NOT subtract buy-in from totalStartingChips when players are eliminated!
+        // The chips are still in the system (just redistributed to other players), so totalStartingChips should remain constant.
+        // totalStartingChips represents the total chips at game start, which never changes during gameplay.
         for (let i = 0; i < this.seats.length; i++) {
             const seat = this.seats[i];
             if (seat && seat.isActive === false) {
-                // CRITICAL FIX: Subtract their buy-in from totalStartingChips for ALL eliminated players (bots AND socket bots)
-                // Their chips were already lost (they had 0 chips when eliminated), but totalStartingChips still included their buy-in
-                if (this.totalStartingChips > 0) {
-                    const oldTotalStartingChips = this.totalStartingChips;
-                    this.totalStartingChips = Math.max(0, this.totalStartingChips - this.buyIn);
-                    this._logTotalStartingChipsChange('SUBTRACT_BUYIN', 'AWARD_POT', oldTotalStartingChips, this.totalStartingChips, {
-                        player: seat.name,
-                        playerId: seat.playerId,
-                        seatIndex: i,
-                        buyIn: this.buyIn,
-                        isBot: seat.isBot || false,
-                        playerChips: seat.chips,
-                        playerTotalBet: seat.totalBet || 0,
-                        reason: 'Player eliminated - subtracting buy-in from totalStartingChips',
-                        allEliminatedPlayers: this.seats.filter(s => s && s.isActive === false).map(s => ({
-                            name: s.name,
-                            seatIndex: this.seats.indexOf(s),
-                            chips: s.chips,
-                            totalBet: s.totalBet || 0
-                        }))
-                    });
-                } else {
-                    console.error(`[Table ${this.name}] [ERROR] Attempted to subtract buy-in from totalStartingChips but it's 0! Player: ${seat.name}, buyIn: ${this.buyIn}`);
-                    gameLogger.error(this.name, 'Attempted to subtract buy-in from zero totalStartingChips', {
-                        player: seat.name,
-                        buyIn: this.buyIn,
-                        totalStartingChips: this.totalStartingChips,
-                        handNumber: this.handsPlayed,
-                        phase: this.phase
-                    });
-                }
+                // Log elimination but DO NOT modify totalStartingChips
+                console.log(`[Table ${this.name}] [ELIMINATION] ${seat.name} eliminated - NOT subtracting buy-in from totalStartingChips (chips still in system)`);
+                gameLogger.gameEvent(this.name, '[ELIMINATION] Player eliminated - NOT modifying totalStartingChips', {
+                    player: seat.name,
+                    playerId: seat.playerId,
+                    seatIndex: i,
+                    buyIn: this.buyIn,
+                    isBot: seat.isBot || false,
+                    playerChips: seat.chips,
+                    playerTotalBet: seat.totalBet || 0,
+                    totalStartingChips: this.totalStartingChips,
+                    reason: 'Chips still in system (redistributed to other players) - totalStartingChips remains constant',
+                    allEliminatedPlayers: this.seats.filter(s => s && s.isActive === false).map(s => ({
+                        name: s.name,
+                        seatIndex: this.seats.indexOf(s),
+                        chips: s.chips,
+                        totalBet: s.totalBet || 0
+                    }))
+                });
                 
                 // Only remove regular bots (socket bots are managed by SimulationManager)
                 if (seat.isBot) {
