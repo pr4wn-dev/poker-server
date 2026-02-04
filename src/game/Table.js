@@ -4254,9 +4254,28 @@ class Table {
         // 2. Active (isActive !== false) - not eliminated
         // 3. Not folded this hand
         // 4. Have cards to evaluate
+        // 5. CRITICAL FIX: Have chips > 0 - players who went all-in and lost (0 chips) should NOT be eligible
+        //    They should be marked as eliminated, but if they're not yet, exclude them here
         const activePlayers = this.seats
-            .map((seat, index) => seat && seat.isActive !== false && !seat.isFolded && seat.cards?.length >= 2 
-                ? { ...seat, seatIndex: index } : null)
+            .map((seat, index) => {
+                // CRITICAL: Exclude players with 0 chips - they went all-in and lost, shouldn't get money back
+                if (seat && seat.chips <= 0 && seat.isAllIn) {
+                    // Mark as eliminated if not already
+                    if (seat.isActive !== false) {
+                        console.warn(`[Table ${this.name}] ⚠️ Player ${seat.name} has 0 chips and is all-in - marking as eliminated before showdown`);
+                        seat.isActive = false;
+                        gameLogger.gameEvent(this.name, '[ELIMINATION] Marking all-in player with 0 chips as eliminated', {
+                            player: seat.name,
+                            chips: seat.chips,
+                            isAllIn: seat.isAllIn,
+                            handNumber: this.handsPlayed
+                        });
+                    }
+                    return null; // Exclude from activePlayers
+                }
+                return seat && seat.isActive !== false && !seat.isFolded && seat.cards?.length >= 2 
+                    ? { ...seat, seatIndex: index } : null;
+            })
             .filter(p => p !== null);
         
         // CRITICAL FIX: Also evaluate hands for eliminated players who contributed to the pot
