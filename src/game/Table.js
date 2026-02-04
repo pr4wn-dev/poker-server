@@ -3905,6 +3905,19 @@ class Table {
             const seat = this.seats[i];
             if (seat && seat.isActive === false && seat.isBot) {
                 console.log(`[Table ${this.name}] Removing eliminated bot ${seat.name} after pot calculation`);
+                // CRITICAL FIX: Subtract their buy-in from totalStartingChips since they're no longer in the game
+                // Their chips were already lost (they had 0 chips when eliminated), but totalStartingChips still included their buy-in
+                if (this.totalStartingChips > 0) {
+                    const oldTotalStartingChips = this.totalStartingChips;
+                    this.totalStartingChips = Math.max(0, this.totalStartingChips - this.buyIn);
+                    console.log(`[Table ${this.name}] Adjusted totalStartingChips: ${oldTotalStartingChips} → ${this.totalStartingChips} (removed ${seat.name}'s buy-in: ${this.buyIn})`);
+                    gameLogger.gameEvent(this.name, 'ADJUSTED totalStartingChips after eliminated player removal', {
+                        player: seat.name,
+                        buyIn: this.buyIn,
+                        oldTotalStartingChips,
+                        newTotalStartingChips: this.totalStartingChips
+                    });
+                }
                 this.seats[i] = null;
             }
         }
@@ -4016,6 +4029,19 @@ class Table {
             const seat = this.seats[i];
             if (seat && seat.isActive === false && seat.isBot) {
                 console.log(`[Table ${this.name}] Removing eliminated bot ${seat.name} after pot award`);
+                // CRITICAL FIX: Subtract their buy-in from totalStartingChips since they're no longer in the game
+                // Their chips were already lost (they had 0 chips when eliminated), but totalStartingChips still included their buy-in
+                if (this.totalStartingChips > 0) {
+                    const oldTotalStartingChips = this.totalStartingChips;
+                    this.totalStartingChips = Math.max(0, this.totalStartingChips - this.buyIn);
+                    console.log(`[Table ${this.name}] Adjusted totalStartingChips: ${oldTotalStartingChips} → ${this.totalStartingChips} (removed ${seat.name}'s buy-in: ${this.buyIn})`);
+                    gameLogger.gameEvent(this.name, 'ADJUSTED totalStartingChips after eliminated player removal', {
+                        player: seat.name,
+                        buyIn: this.buyIn,
+                        oldTotalStartingChips,
+                        newTotalStartingChips: this.totalStartingChips
+                    });
+                }
                 this.seats[i] = null;
             }
         }
