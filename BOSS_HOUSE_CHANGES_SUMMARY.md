@@ -15,11 +15,11 @@
 - **Total Commits Since Feb 2**: 40+ commits
 
 ### Client Repo (poker-client-unity)
-- **Status**: ✅ Merged successfully
-- **Backup Created**: Commit `928cc4c` (tagged `backup-boss-house-feb3-928cc4c`)
-- **Merge Commit**: `9703602` - "Merge remote changes: simulation features, spectator fixes, UI improvements"
-- **Remote Changes**: 16 commits merged (simulation features, spectator fixes, UI improvements)
-- **Conflicts Resolved**: CardVisual.cs, PlayerSeat.cs, PokerTableView.cs (accepted remote version - logging disabled)
+- **Status**: ✅ Restored to correct state
+- **Correct Commit**: `4556d54` - "Final commit before leaving - all changes saved" (pushed from boss house)
+- **Critical Lesson**: Never mix files from different commits - always use the complete pushed commit
+- **What Was Wrong**: Used local backup commit `928cc4c` instead of actual pushed commit `4556d54`
+- **Fix Applied**: Reset to `4556d54` which contains all boss house changes in complete working state
 
 ---
 
