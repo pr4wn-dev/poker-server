@@ -129,7 +129,7 @@ class Table {
                 };
                 
                 console.error(`[Table ${this.name}] ⚠️ FIX ATTEMPT FAILED: ${fixId} | Attempt #${fix.attempts} | Total Failures: ${fix.failures} | Success Rate: ${((fix.attempts - fix.failures) / fix.attempts * 100).toFixed(1)}%`);
-                gameLogger.error(this.name, `[FIX ATTEMPT] ${fixId} FAILED`, {
+                gameLogger.gameEvent(this.name, `[FIX ATTEMPT] ${fixId} FAILED`, {
                     fixId,
                     attemptNumber: fix.attempts,
                     totalFailures: fix.failures,
@@ -154,7 +154,7 @@ class Table {
             // Log summary if failures are accumulating
             if (fix.failures > 0 && fix.failures % 5 === 0) {
                 console.error(`[Table ${this.name}] ⚠️⚠️⚠️ FIX ${fixId} HAS FAILED ${fix.failures} TIMES! Consider changing approach! ⚠️⚠️⚠️`);
-                gameLogger.error(this.name, `[FIX ATTEMPT] ${fixId} MULTIPLE FAILURES`, {
+                gameLogger.gameEvent(this.name, `[FIX ATTEMPT] ${fixId} MULTIPLE FAILURES`, {
                     fixId,
                     totalFailures: fix.failures,
                     totalAttempts: fix.attempts,
@@ -329,7 +329,7 @@ class Table {
                 const potMismatch = Math.abs(this.pot - sumOfAllTotalBets);
                 if (potMismatch > 0.01 && this.pot > 0) {
                     console.error(`[Table ${this.name}] ⚠️ POT MISMATCH DETECTED in validation: Pot=${this.pot}, Sum of totalBets=${sumOfAllTotalBets}, Difference=${this.pot - sumOfAllTotalBets} | Context: ${context}`);
-                    gameLogger.error(this.name, '[MONEY] POT MISMATCH in validation', {
+                    gameLogger.gameEvent(this.name, '[MONEY] POT MISMATCH in validation', {
                         context,
                         pot: this.pot,
                         sumOfAllTotalBets,
