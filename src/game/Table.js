@@ -4917,6 +4917,11 @@ class Table {
         }
         
         // Sort by total bet to create side pots
+        // POKER RULE: Players who go all-in for MORE money can win BOTH main pot AND side pots
+        // Example: Player A all-in $1000, Player B all-in $500, Player C calls $1000
+        //   - Main pot ($500 level): All 3 eligible → $1500 pot
+        //   - Side pot ($1000 level): Only A and C eligible → $1000 pot
+        //   - A or C can win both pots, B can only win main pot
         const sortedByBet = [...allContributors].sort((a, b) => a.totalBet - b.totalBet);
         
         // CRITICAL: Track remaining pot to prevent over-awarding
