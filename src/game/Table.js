@@ -3771,7 +3771,18 @@ class Table {
             });
             this.clearTurnTimer();
             this.awardPot(activePlayers[0]);
-            setTimeout(() => this.startNewHand(), 3000);
+            setTimeout(() => {
+                // CRITICAL: Clear pot one final time before starting new hand (safeguard)
+                if (this.pot > 0) {
+                    console.error(`[Table ${this.name}] ⚠️ CRITICAL: Pot still has ${this.pot} chips before startNewHand! Clearing now.`);
+                    gameLogger.error(this.name, '[POT] CRITICAL: Pot not cleared before startNewHand - forcing clear', {
+                        pot: this.pot,
+                        handNumber: this.handsPlayed
+                    });
+                    this.pot = 0;
+                }
+                this.startNewHand();
+            }, 3000);
             return;
         }
 
@@ -4022,7 +4033,18 @@ class Table {
                 console.log(`[Table ${this.name}] ONLY ONE PLAYER REMAINS: ${winner?.name} wins by default!`);
                 this.clearTurnTimer();
                 this.awardPot(winner);
-                setTimeout(() => this.startNewHand(), 3000);
+                setTimeout(() => {
+                    // CRITICAL: Clear pot one final time before starting new hand (safeguard)
+                    if (this.pot > 0) {
+                        console.error(`[Table ${this.name}] ⚠️ CRITICAL: Pot still has ${this.pot} chips before startNewHand! Clearing now.`);
+                        gameLogger.error(this.name, '[POT] CRITICAL: Pot not cleared before startNewHand - forcing clear', {
+                            pot: this.pot,
+                            handNumber: this.handsPlayed
+                        });
+                        this.pot = 0;
+                    }
+                    this.startNewHand();
+                }, 3000);
                 return;  // GUARANTEED EXIT - game over
             }
             
@@ -4360,7 +4382,18 @@ class Table {
                 pot: this.pot,
                 reason: 'Pot was awarded earlier (by fold)'
             });
-            setTimeout(() => this.startNewHand(), 3000);
+            setTimeout(() => {
+                // CRITICAL: Clear pot one final time before starting new hand (safeguard)
+                if (this.pot > 0) {
+                    console.error(`[Table ${this.name}] ⚠️ CRITICAL: Pot still has ${this.pot} chips before startNewHand! Clearing now.`);
+                    gameLogger.error(this.name, '[POT] CRITICAL: Pot not cleared before startNewHand - forcing clear', {
+                        pot: this.pot,
+                        handNumber: this.handsPlayed
+                    });
+                    this.pot = 0;
+                }
+                this.startNewHand();
+            }, 3000);
             return;
         }
         
@@ -4763,7 +4796,18 @@ class Table {
                 });
             }
             this._onStateChangeCallback?.();
-            setTimeout(() => this.startNewHand(), 500);
+            setTimeout(() => {
+                // CRITICAL: Clear pot one final time before starting new hand (safeguard)
+                if (this.pot > 0) {
+                    console.error(`[Table ${this.name}] ⚠️ CRITICAL: Pot still has ${this.pot} chips before startNewHand! Clearing now.`);
+                    gameLogger.error(this.name, '[POT] CRITICAL: Pot not cleared before startNewHand - forcing clear', {
+                        pot: this.pot,
+                        handNumber: this.handsPlayed
+                    });
+                    this.pot = 0;
+                }
+                this.startNewHand();
+            }, 500);
         }, 4000); // 4 seconds to show winner, then 0.5s transition
     }
 
@@ -6308,7 +6352,18 @@ class Table {
                 });
             }
             this._onStateChangeCallback?.();
-            setTimeout(() => this.startNewHand(), 500);
+            setTimeout(() => {
+                // CRITICAL: Clear pot one final time before starting new hand (safeguard)
+                if (this.pot > 0) {
+                    console.error(`[Table ${this.name}] ⚠️ CRITICAL: Pot still has ${this.pot} chips before startNewHand! Clearing now.`);
+                    gameLogger.error(this.name, '[POT] CRITICAL: Pot not cleared before startNewHand - forcing clear', {
+                        pot: this.pot,
+                        handNumber: this.handsPlayed
+                    });
+                    this.pot = 0;
+                }
+                this.startNewHand();
+            }, 500);
         }, 3000); // 3 seconds to show winner, then 0.5s transition
         
         } catch (err) {
