@@ -1088,13 +1088,19 @@ class Table {
             return;
         }
         
+        const waitTime = this.playerWaitStartTime ? Date.now() - this.playerWaitStartTime : this.turnTimeLimit;
         gameLogger.gameEvent(this.name, '[TIMER] TURN TIMEOUT - auto-folding', {
             player: player.name,
             seatIndex: this.currentPlayerIndex,
             turnTimeLimit: this.turnTimeLimit,
-            phase: this.phase
+            waitTimeMs: waitTime,
+            phase: this.phase,
+            handNumber: this.handsPlayed,
+            isFolded: player.isFolded,
+            isAllIn: player.isAllIn,
+            chips: player.chips
         });
-        console.log(`[Table ${this.name}] ${player.name} timed out - auto-folding`);
+        console.log(`[Table ${this.name}] ${player.name} timed out after ${Math.floor(waitTime/1000)}s - auto-folding`);
         
         // Auto-fold (fold() now has validation, so it's safe)
         const foldResult = this.fold(this.currentPlayerIndex);
@@ -3521,13 +3527,78 @@ class Table {
             return;
         }
         
+        // ============ STUCK PLAYER DETECTION ============
+        // Track consecutive advanceGame calls without state change
+        const currentState = `${this.phase}_${this.currentPlayerIndex}_${this.currentBet}_${this.pot}`;
+        if (this.lastAdvanceGameState === currentState) {
+            this.consecutiveAdvanceGameCalls = (this.consecutiveAdvanceGameCalls || 0) + 1;
+        } else {
+            this.consecutiveAdvanceGameCalls = 0;
+            this.lastAdvanceGameState = currentState;
+        }
+        
+        // Log if we're calling advanceGame repeatedly without progress
+        if (this.consecutiveAdvanceGameCalls > 0) {
+            gameLogger.gameEvent(this.name, 'WARNING: advanceGame() called repeatedly without state change', {
+                consecutiveCalls: this.consecutiveAdvanceGameCalls,
+                phase: this.phase,
+                currentPlayerIndex: this.currentPlayerIndex,
+                currentBet: this.currentBet,
+                pot: this.pot,
+                lastRaiserIndex: this.lastRaiserIndex
+            });
+            console.warn(`[Table ${this.name}] WARNING: advanceGame() called ${this.consecutiveAdvanceGameCalls} times without state change! Phase: ${this.phase}, Player: ${this.currentPlayerIndex}`);
+        }
+        
+        // Force advance if stuck too long
+        if (this.consecutiveAdvanceGameCalls >= 5) {
+            gameLogger.gameEvent(this.name, 'CRITICAL: STUCK - Force advancing phase after 5 consecutive advanceGame calls', {
+                phase: this.phase,
+                currentPlayerIndex: this.currentPlayerIndex,
+                currentBet: this.currentBet,
+                pot: this.pot
+            });
+            console.error(`[Table ${this.name}] CRITICAL: STUCK - Force advancing phase after 5 consecutive advanceGame calls!`);
+            this.consecutiveAdvanceGameCalls = 0;
+            this.hasPassedLastRaiser = false;
+            this.advancePhase();
+            return;
+        }
+        
+        // Track how long current player has been waiting
+        if (this.currentPlayerIndex >= 0) {
+            const currentPlayer = this.seats[this.currentPlayerIndex];
+            if (currentPlayer) {
+                if (!this.playerWaitStartTime || this.lastWaitingPlayer !== this.currentPlayerIndex) {
+                    this.playerWaitStartTime = Date.now();
+                    this.lastWaitingPlayer = this.currentPlayerIndex;
+                }
+                
+                const waitTime = Date.now() - this.playerWaitStartTime;
+                if (waitTime > 30000) { // 30 seconds
+                    gameLogger.gameEvent(this.name, 'WARNING: Player waiting too long without action', {
+                        player: currentPlayer.name,
+                        seatIndex: this.currentPlayerIndex,
+                        waitTimeMs: waitTime,
+                        phase: this.phase,
+                        isFolded: currentPlayer.isFolded,
+                        isAllIn: currentPlayer.isAllIn,
+                        chips: currentPlayer.chips
+                    });
+                    console.warn(`[Table ${this.name}] WARNING: ${currentPlayer.name} has been waiting ${Math.floor(waitTime/1000)}s without action!`);
+                }
+            }
+        }
+        // ============ END STUCK PLAYER DETECTION ============
+        
         gameLogger.gameEvent(this.name, 'advanceGame() called', {
             phase: this.phase,
             currentPlayerIndex: this.currentPlayerIndex,
             lastRaiserIndex: this.lastRaiserIndex,
             hasPassedLastRaiser: this.hasPassedLastRaiser,
             currentBet: this.currentBet,
-            pot: this.pot
+            pot: this.pot,
+            consecutiveCalls: this.consecutiveAdvanceGameCalls || 0
         });
         
         // Check for winner (all but one folded)
@@ -3873,6 +3944,12 @@ class Table {
         const oldCurrentPlayer = this.currentPlayerIndex >= 0 ? this.seats[this.currentPlayerIndex]?.name : null;
         this.currentPlayerIndex = nextPlayer;
         const nextPlayerSeat = this.seats[this.currentPlayerIndex];
+        
+        // Reset wait time tracking when player changes
+        if (this.lastWaitingPlayer !== nextPlayer) {
+            this.playerWaitStartTime = Date.now();
+            this.lastWaitingPlayer = nextPlayer;
+        }
         
         // ============ LOOP DETECTION ============
         this.turnsThisPhase++;
