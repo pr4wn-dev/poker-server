@@ -4759,6 +4759,13 @@ class Table {
      * Side pots occur when players are all-in for different amounts
      */
     calculateAndAwardSidePots(activePlayers) {
+        // CRITICAL: Store initial pot value to ensure it's always cleared, even on exceptions
+        const initialPot = this.pot;
+        let potAwards = [];
+        let totalAwarded = 0;
+        let error = null;
+        
+        try {
         // ULTRA-VERBOSE: Log FULL STATE before pot calculation
         const totalChipsBeforeCalc = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
         const totalChipsAndPotBeforeCalc = totalChipsBeforeCalc + this.pot;
@@ -5044,8 +5051,8 @@ class Table {
         const potIsShort = potBeforeCalculation < sumOfTotalBets;
         
         let previousBetLevel = 0;
-        const potAwards = [];
         // Track winners from lower pot levels to check if they can win higher levels
+        // NOTE: potAwards is already declared at function start
         let previousLevelWinners = [];
         
         for (const player of sortedByBet) {
@@ -5349,7 +5356,7 @@ class Table {
         
         // Award the pots
         // CRITICAL: Eliminated players don't get chips back - they're out!
-        let totalAwarded = 0;
+        // NOTE: totalAwarded is already declared at function start
         const awardDetails = []; // Track all awards for detailed logging
         
         for (const award of potAwards) {
@@ -5869,6 +5876,61 @@ class Table {
                 phase: this.phase,
                 potAwardsCount: potAwards.length
             });
+        }
+        
+        } catch (err) {
+            // CRITICAL: Log any exceptions that occur during pot calculation
+            error = err;
+            console.error(`[Table ${this.name}] ⚠️ CRITICAL EXCEPTION in calculateAndAwardSidePots:`, err);
+            gameLogger.error(this.name, '[POT] CRITICAL: Exception in calculateAndAwardSidePots', {
+                error: err.message,
+                stack: err.stack,
+                handNumber: this.handsPlayed,
+                phase: this.phase,
+                potBeforeException: initialPot,
+                potAfterException: this.pot
+            });
+        } finally {
+            // CRITICAL: ALWAYS clear pot, even if there was an exception
+            // This prevents pot from persisting to next hand and causing chip loss
+            const potBeforeFinalClear = this.pot;
+            if (potBeforeFinalClear > 0) {
+                console.error(`[Table ${this.name}] ⚠️ CRITICAL FINALLY: Pot still has ${potBeforeFinalClear} chips after calculateAndAwardSidePots! Forcing clear in finally block.`);
+                gameLogger.error(this.name, '[POT] CRITICAL: Pot not cleared - forcing clear in finally block', {
+                    pot: potBeforeFinalClear,
+                    initialPot,
+                    totalAwarded,
+                    handNumber: this.handsPlayed,
+                    phase: this.phase,
+                    potAwardsCount: potAwards.length,
+                    hadException: error !== null
+                });
+                
+                // Adjust totalStartingChips to account for lost chips
+                const oldTotalStartingChips = this.totalStartingChips;
+                this.totalStartingChips = this.totalStartingChips - potBeforeFinalClear;
+                console.error(`[Table ${this.name}] ⚠️ ADJUSTING totalStartingChips in finally: ${oldTotalStartingChips} → ${this.totalStartingChips} (lost ${potBeforeFinalClear} chips)`);
+                this._logTotalStartingChipsChange('ADJUST_FOR_UNCLAIMED_POT_FINALLY', 'CALCULATE_AND_AWARD_SIDE_POTS_FINALLY', oldTotalStartingChips, this.totalStartingChips, {
+                    reason: 'Pot not cleared after awards - adjusting totalStartingChips in finally block',
+                    potLost: potBeforeFinalClear,
+                    initialPot,
+                    handNumber: this.handsPlayed
+                });
+                
+                // Record fix attempt - pot not cleared is a failure
+                this._recordFixAttempt('FIX_1_POT_NOT_CLEARED_IN_AWARDPOT', false, {
+                    context: 'CALCULATE_AND_AWARD_SIDE_POTS_FINALLY',
+                    potBeforeFinalClear,
+                    totalAwarded,
+                    handNumber: this.handsPlayed,
+                    phase: this.phase,
+                    potAwardsCount: potAwards.length
+                });
+            }
+            
+            // ALWAYS clear pot, no matter what
+            this.pot = 0;
+            console.log(`[Table ${this.name}] [FINALLY] Pot cleared: ${potBeforeFinalClear} → 0`);
         }
         
         return potAwards;
