@@ -2,6 +2,47 @@
 
 This file tracks all issues encountered and their solutions. **Search this file first** before debugging.
 
+---
+
+## CRITICAL LESSON: Never Mix Files from Different Commits (Feb 3, 2026)
+
+### Issue: File Mismatches After Pulling Boss House Changes
+**Symptoms:** Unity compilation errors, missing methods/fields, files not matching what worked at boss house.
+
+**Root Cause:** 
+- Mixed files from different sources (local backup commit, remote commits, partial restores)
+- Used incomplete backup commit (`928cc4c`) instead of actual pushed commit (`4556d54`)
+- Tried to "fix" errors by patching individual files instead of using complete working state
+
+**Solution:**
+1. **ALWAYS use the complete commit that was pushed**, not local backups or partial commits
+2. **NEVER mix files** from different commits/sources - use `git reset --hard <commit>` to get complete state
+3. **If changes were pushed from another machine**, use that exact commit hash, not local backups
+4. **Check commit messages** - "Final commit before leaving" = actual working state, "BACKUP" = incomplete local copy
+
+**Correct Workflow:**
+```powershell
+# Find the actual pushed commit
+git log --oneline --all --since="date" | grep "Final commit\|before leaving"
+
+# Reset to that exact commit (complete state)
+git reset --hard <actual-pushed-commit-hash>
+
+# Verify it matches remote
+git fetch origin
+git reset --hard origin/master
+```
+
+**Wrong Approach (DON'T DO THIS):**
+- ❌ Mixing files: `git checkout backup-commit -- file1.cs; git checkout remote -- file2.cs`
+- ❌ Using local backup commits instead of actual pushed commits
+- ❌ Patching individual files to "fix" errors
+- ❌ Force pushing wrong commits to overwrite correct ones
+
+**Key Principle:** One complete commit = one working state. Don't mix and match.
+
+---
+
 ## Card Visibility & UI Issues
 
 ### Cards Disappearing (Fixed)
