@@ -176,6 +176,8 @@ class Table {
                     this._failedFixes.add(fixId); // Add to failed set - prevents any future attempts
                     console.error(`[Table ${this.name}] 🚫🚫🚫 FIX ${fixId} PERMANENTLY DISABLED - ${fix.failures} FAILURES (limit: ${MAX_FAILURES}) - TRY A DIFFERENT APPROACH! 🚫🚫🚫`);
                     console.error(`[Table ${this.name}] ⚠️ WARNING: ${fixId} will NEVER be tried again - must use a completely different fix approach!`);
+                    console.error(`[Table ${this.name}] ⚠️ CRITICAL: When a fix is permanently disabled, you MUST investigate the root cause!`);
+                    console.error(`[Table ${this.name}] ⚠️ The fix failing ${fix.failures} times indicates a deeper problem that needs to be addressed!`);
                     gameLogger.gameEvent(this.name, `[FIX ATTEMPT] ${fixId} PERMANENTLY DISABLED - TOO MANY FAILURES`, {
                         fixId,
                         totalFailures: fix.failures,
@@ -185,7 +187,8 @@ class Table {
                         recommendation: `Fix has failed ${fix.failures} times. Current approach is not working - MUST try a completely different approach! This fix will NEVER be re-enabled.`,
                         lastFailure: fix.lastFailure,
                         permanentlyDisabled: true,
-                        warning: 'DO NOT re-enable this fix - it has been proven to not work. Use a different approach instead.'
+                        warning: 'DO NOT re-enable this fix - it has been proven to not work. Use a different approach instead.',
+                        investigationRequired: `CRITICAL: When a fix is permanently disabled, you MUST investigate the root cause. The fix failing ${fix.failures} times indicates a deeper problem in the code that needs to be fixed at the source, not patched with workarounds. Check the lastFailure details and trace back to find where the actual bug is occurring.`
                     });
                 }
             } else {
