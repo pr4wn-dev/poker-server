@@ -6364,6 +6364,10 @@ class Table {
             console.error(`[Table ${this.name}] ⚠️ CRITICAL AWARD_POTS ERROR: Total chips changed! Before: ${totalChipsAndPotBeforeAwards}, After: ${totalChipsAndPotAfterAwards}, Difference: ${chipsDifferenceAfterAwards}`);
             gameLogger.gameEvent(this.name, '[AWARD_POTS] CRITICAL: Total chips changed', {
                 handNumber: this.handsPlayed,
+                totalChipsAndPotBeforeAwards,
+                totalChipsAndPotAfterAwards,
+                chipsDifferenceAfterAwards
+            });
             // Record fix attempt - total chips changed during award is a failure
             this._recordFixAttempt('FIX_43_AWARD_POTS_TOTAL_CHIPS_CHANGED', false, {
                 context: 'AWARD_POTS',
