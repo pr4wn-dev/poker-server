@@ -299,6 +299,18 @@ class SimulationManager {
         
         this.log('INFO', 'Starting background bot spawn', { tableId, regularBots: regularBotCount, socketBots: socketBotCount });
         
+        // ROOT TRACING: Log initial table state
+        const initialTable = this.gameManager.tables.get(tableId);
+        this.log('INFO', '[ROOT TRACE] Bot spawn START', {
+            tableId,
+            phase: initialTable?.phase || 'unknown',
+            seatedPlayers: initialTable?.getSeatedPlayerCount() || 0,
+            maxPlayers: initialTable?.maxPlayers || 0,
+            gameStarted: initialTable?.gameStarted || false,
+            regularBotCount,
+            socketBotCount
+        });
+        
         // IMPORTANT: Add regular bots FIRST before socket bots join
         // This is because socket bots count as "human players" and would block bot approval
         // Regular bots auto-approve when only the creator is at the table
@@ -309,7 +321,30 @@ class SimulationManager {
         // Phase 1: Add all regular bots first
         for (let i = 0; i < regularBotCount && i < botProfiles.length; i++) {
             const botProfile = botProfiles[i % botProfiles.length];
+            
+            // ROOT TRACING: Before bot invite
+            const tableBefore = this.gameManager.tables.get(tableId);
+            this.log('INFO', '[ROOT TRACE] Inviting regular bot', {
+                botProfile,
+                attempt: i + 1,
+                totalRegularBots: regularBotCount,
+                tablePhase: tableBefore?.phase,
+                seatedPlayers: tableBefore?.getSeatedPlayerCount() || 0
+            });
+            
             const result = await this.gameManager.inviteBot(tableId, botProfile, creatorId, buyIn);
+            
+            // ROOT TRACING: After bot invite
+            const tableAfter = this.gameManager.tables.get(tableId);
+            this.log('INFO', '[ROOT TRACE] Regular bot invite result', {
+                botProfile,
+                success: result.success,
+                seatIndex: result.seatIndex,
+                error: result.error,
+                tablePhase: tableAfter?.phase,
+                seatedPlayers: tableAfter?.getSeatedPlayerCount() || 0,
+                gameStarted: tableAfter?.gameStarted || false
+            });
             
             if (result.success && result.seatIndex !== undefined) {
                 // For simulation tables, bots auto-approve when only creator exists
@@ -338,6 +373,17 @@ class SimulationManager {
             // Assign network profile (cycles through profiles)
             const profile = networkProfiles[i % networkProfiles.length];
             
+            // ROOT TRACING: Before socket bot creation
+            const tableBefore = this.gameManager.tables.get(tableId);
+            this.log('INFO', '[ROOT TRACE] Creating socket bot', {
+                botNumber: i + 1,
+                totalSocketBots: socketBotCount,
+                botName: `NetPlayer_${i + 1}`,
+                tablePhase: tableBefore?.phase,
+                seatedPlayers: tableBefore?.getSeatedPlayerCount() || 0,
+                networkProfile: profile.name
+            });
+            
             try {
                 const bot = new SocketBot({
                     serverUrl: this.serverUrl,
@@ -363,15 +409,53 @@ class SimulationManager {
                     disconnectChance: `${(profile.disconnectChance * 100).toFixed(1)}%`
                 });
                 
+                // ROOT TRACING: Before bot connect
+                this.log('INFO', '[ROOT TRACE] Socket bot connecting', {
+                    botName: bot.name,
+                    serverUrl: this.serverUrl
+                });
+                
                 await bot.connect();
+                
+                // ROOT TRACING: After connect, before register
+                this.log('INFO', '[ROOT TRACE] Socket bot connected, registering', {
+                    botName: bot.name,
+                    connected: bot.socket?.connected || false
+                });
+                
                 await bot.register();
+                
+                // ROOT TRACING: After register, before joinTable
+                const tableBeforeJoin = this.gameManager.tables.get(tableId);
+                this.log('INFO', '[ROOT TRACE] Socket bot registered, joining table', {
+                    botName: bot.name,
+                    tableId,
+                    tablePhase: tableBeforeJoin?.phase,
+                    seatedPlayers: tableBeforeJoin?.getSeatedPlayerCount() || 0,
+                    buyIn
+                });
+                
                 await bot.joinTable(tableId, buyIn);
+                
+                // ROOT TRACING: After joinTable
+                const tableAfterJoin = this.gameManager.tables.get(tableId);
+                this.log('INFO', '[ROOT TRACE] Socket bot joined table', {
+                    botName: bot.name,
+                    seatIndex: bot.seatIndex,
+                    tablePhase: tableAfterJoin?.phase,
+                    seatedPlayers: tableAfterJoin?.getSeatedPlayerCount() || 0,
+                    gameStarted: tableAfterJoin?.gameStarted || false
+                });
                 
                 simulation.socketBots.push(bot);
                 this.log('INFO', `Socket bot joined: ${bot.name}`, { seatIndex: bot.seatIndex });
                 socketAdded++;
             } catch (error) {
-                this.log('ERROR', `Failed to add socket bot`, { error: error.message });
+                this.log('ERROR', `[ROOT TRACE] Failed to add socket bot`, { 
+                    botNumber: i + 1,
+                    error: error.message,
+                    stack: error.stack
+                });
             }
             
             // 1-2 second delay between socket bots
@@ -380,6 +464,21 @@ class SimulationManager {
         
         simulation.status = 'ready';
         const table = this.gameManager.tables.get(tableId);
+        
+        // ROOT TRACING: Final state after all bots spawned
+        this.log('INFO', '[ROOT TRACE] All bots spawned - final state', {
+            tableId,
+            seatedPlayers: table?.getSeatedPlayerCount() || 0,
+            maxPlayers: table?.maxPlayers || 0,
+            regularBots: regularAdded,
+            socketBots: socketAdded,
+            totalExpected: regularBotCount + socketBotCount,
+            tablePhase: table?.phase,
+            gameStarted: table?.gameStarted || false,
+            itemAnteEnabled: table?.itemAnteEnabled || false,
+            itemAnteStatus: table?.itemAnte?.status || 'none'
+        });
+        
         this.log('INFO', 'All bots joined, auto-starting game...', {
             tableId,
             seatedPlayers: table?.getSeatedPlayerCount() || 0,
@@ -390,14 +489,45 @@ class SimulationManager {
         // Auto-start the game after a short delay for spectators to see all bots
         const startDelay = simulation.fastMode ? 500 : 2000;
         setTimeout(() => {
-            if (table && table.phase === 'waiting') {
+            const tableAtStart = this.gameManager.tables.get(tableId);
+            
+            // ROOT TRACING: Before startReadyUp
+            this.log('INFO', '[ROOT TRACE] Attempting to start ready-up', {
+                tableId,
+                tableExists: !!tableAtStart,
+                phase: tableAtStart?.phase,
+                seatedPlayers: tableAtStart?.getSeatedPlayerCount() || 0,
+                maxPlayers: tableAtStart?.maxPlayers || 0,
+                gameStarted: tableAtStart?.gameStarted || false,
+                creatorId,
+                startDelay
+            });
+            
+            if (tableAtStart && tableAtStart.phase === 'waiting') {
                 // Start ready-up phase (bots and socket bots will auto-ready)
-                const result = table.startReadyUp(creatorId);
+                const result = tableAtStart.startReadyUp(creatorId);
+                
+                // ROOT TRACING: After startReadyUp
+                this.log('INFO', '[ROOT TRACE] startReadyUp result', {
+                    tableId,
+                    success: result.success,
+                    error: result.error,
+                    newPhase: tableAtStart?.phase,
+                    gameStarted: tableAtStart?.gameStarted || false
+                });
+                
                 if (result.success) {
                     this.log('INFO', 'Ready-up phase started automatically', { tableId });
                 } else {
                     this.log('WARN', 'Failed to auto-start ready-up', { error: result.error });
                 }
+            } else {
+                this.log('WARN', '[ROOT TRACE] Cannot start ready-up - conditions not met', {
+                    tableId,
+                    tableExists: !!tableAtStart,
+                    phase: tableAtStart?.phase,
+                    expectedPhase: 'waiting'
+                });
             }
         }, startDelay);
     }

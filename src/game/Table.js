@@ -1087,9 +1087,36 @@ class Table {
      * Initiates the ready-up phase where all players must confirm
      */
     startReadyUp(creatorId) {
-        this._traceUniversal('START_READY_UP', { creatorId, currentPhase: this.phase });
+        // ROOT TRACING: Comprehensive state before startReadyUp
+        const seatedPlayers = this.seats.filter(s => s !== null).map(s => ({
+            seatIndex: this.seats.indexOf(s),
+            name: s.name,
+            playerId: s.playerId,
+            isBot: s.isBot || false,
+            isActive: s.isActive !== false,
+            chips: s.chips || 0
+        }));
+        
+        this._traceUniversal('START_READY_UP', { 
+            creatorId, 
+            currentPhase: this.phase,
+            isSimulation: this.isSimulation,
+            gameStarted: this.gameStarted,
+            seatedPlayers: seatedPlayers.length,
+            activePlayerCount: this.getActivePlayerCount(),
+            maxPlayers: this.maxPlayers,
+            itemAnteEnabled: this.itemAnteEnabled,
+            itemAnteStatus: this.itemAnte?.status || 'none',
+            players: seatedPlayers
+        });
         
         if (this.phase !== GAME_PHASES.WAITING) {
+            gameLogger.gameEvent(this.name, '[ROOT TRACE] startReadyUp FAILED - wrong phase', {
+                currentPhase: this.phase,
+                expectedPhase: GAME_PHASES.WAITING,
+                creatorId,
+                isSimulation: this.isSimulation
+            });
             this._traceUniversalAfter('START_READY_UP', { success: false, error: 'Game already in progress' });
             return { success: false, error: 'Game already in progress' };
         }
@@ -1097,11 +1124,30 @@ class Table {
         // CRITICAL: For simulation tables, allow auto-start without creatorId check
         // This allows SimulationManager to restart games automatically
         if (!this.isSimulation && this.creatorId !== creatorId) {
+            gameLogger.gameEvent(this.name, '[ROOT TRACE] startReadyUp FAILED - not creator', {
+                creatorId,
+                tableCreatorId: this.creatorId,
+                isSimulation: this.isSimulation
+            });
             return { success: false, error: 'Only the table creator can start the game' };
         }
         
         const playerCount = this.getActivePlayerCount();
+        gameLogger.gameEvent(this.name, '[ROOT TRACE] startReadyUp - player count check', {
+            playerCount,
+            minRequired: 2,
+            seatedPlayers: seatedPlayers.length,
+            activePlayers: this.seats.filter(s => s && s.isActive !== false).length,
+            players: seatedPlayers
+        });
+        
         if (playerCount < 2) {
+            gameLogger.gameEvent(this.name, '[ROOT TRACE] startReadyUp FAILED - not enough players', {
+                playerCount,
+                required: 2,
+                seatedPlayers: seatedPlayers.length,
+                players: seatedPlayers
+            });
             return { success: false, error: 'Need at least 2 players to start' };
         }
         
