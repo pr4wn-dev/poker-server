@@ -8,6 +8,7 @@ const db = require('../database/Database');
 const AdventureManager = require('../adventure/AdventureManager');
 const TournamentManager = require('../game/TournamentManager');
 const SimulationManager = require('../testing/SimulationManager');
+const gameLogger = require('../utils/GameLogger');
 
 class SocketHandler {
     constructor(io, gameManager) {
