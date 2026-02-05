@@ -1115,16 +1115,25 @@ class SimulationManager {
         
         this.log('INFO', 'Simulation paused', { tableId, reason });
         
-        // Notify spectators
+        // Notify Unity clients and spectators
         if (this.io) {
             const table = this.gameManager.tables.get(tableId);
             if (table) {
-                const spectatorRoom = `spectator:${tableId}`;
-                this.io.to(spectatorRoom).emit('simulation_paused', {
+                const pauseEvent = {
                     tableId,
                     reason,
                     pausedAt: simulation.pausedAt
-                });
+                };
+                
+                // Emit to table room (where Unity clients are)
+                const tableRoom = `table:${tableId}`;
+                this.io.to(tableRoom).emit('simulation_paused', pauseEvent);
+                
+                // Also emit to spectator room
+                const spectatorRoom = `spectator:${tableId}`;
+                this.io.to(spectatorRoom).emit('simulation_paused', pauseEvent);
+                
+                console.log(`[SimulationManager] Pause event emitted to table:${tableId} and spectator:${tableId}`);
             }
         }
         
@@ -1158,15 +1167,24 @@ class SimulationManager {
         
         this.log('INFO', 'Simulation resumed', { tableId, pauseDuration: `${Math.floor(pauseDuration / 1000)}s` });
         
-        // Notify spectators
+        // Notify Unity clients and spectators
         if (this.io) {
             const table = this.gameManager.tables.get(tableId);
             if (table) {
-                const spectatorRoom = `spectator:${tableId}`;
-                this.io.to(spectatorRoom).emit('simulation_resumed', {
+                const resumeEvent = {
                     tableId,
                     pauseDuration
-                });
+                };
+                
+                // Emit to table room (where Unity clients are)
+                const tableRoom = `table:${tableId}`;
+                this.io.to(tableRoom).emit('simulation_resumed', resumeEvent);
+                
+                // Also emit to spectator room
+                const spectatorRoom = `spectator:${tableId}`;
+                this.io.to(spectatorRoom).emit('simulation_resumed', resumeEvent);
+                
+                console.log(`[SimulationManager] Resume event emitted to table:${tableId} and spectator:${tableId}`);
             }
         }
         
