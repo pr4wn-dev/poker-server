@@ -3127,7 +3127,7 @@ class Table {
                     lastRaiserIndex: this.lastRaiserIndex
                 });
                 
-                this.clearTurnTimer();
+                // Timer already cleared at start of handleAction - no need to clear again
                 
                 // Notify about the action (for all players including bots)
                 this.onPlayerAction?.(playerId, result.action, result.amount || 0);
