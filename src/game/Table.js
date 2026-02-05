@@ -6918,6 +6918,23 @@ class Table {
                 chipsAfter: seat.chips,
                 calculationCheck: chipsBefore + potAmount === seat.chips ? 'CORRECT' : 'ERROR'
             });
+            
+            // CRITICAL: Calculate total chips BEFORE clearing pot to verify chips are in system
+            const totalChipsAfterAward = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
+            const totalChipsAndPotAfterAward = totalChipsAfterAward + this.pot;
+            
+            // CRITICAL: Verify chips are in system after award (before clearing pot)
+            if (this.pot !== potAmount) {
+                console.error(`[Table ${this.name}] ⚠️⚠️⚠️ CRITICAL: Pot changed after award! Before award: ${potAmount}, After award: ${this.pot}`);
+                gameLogger.error(this.name, '[ROOT CAUSE] Pot changed after award', {
+                    potAmount,
+                    potAfterAward: this.pot,
+                    winner: winner.name,
+                    handNumber: this.handsPlayed,
+                    phase: this.phase
+                });
+            }
+            
             // CRITICAL: Always clear pot after awarding
             // ROOT CAUSE: Trace pot clearing - chips should already be in winner's chips
             const beforeClearState = this._getChipState();
@@ -6926,15 +6943,23 @@ class Table {
             this._traceOperation('AWARD_POT_CLEAR', beforeClearState, afterClearState);
             
             // CRITICAL: Verify chips weren't lost when clearing pot
-            if (afterClearState.totalChipsInSystem < beforeClearState.totalChipsInSystem) {
+            // When we clear pot, totalChipsInSystem should stay the same (chips moved from pot to player)
+            const expectedTotalAfterClear = beforeClearState.totalChipsInSystem; // Should be same (chips in player + pot = chips in player + 0)
+            if (Math.abs(afterClearState.totalChipsInSystem - expectedTotalAfterClear) > 0.01) {
                 const chipsLost = beforeClearState.totalChipsInSystem - afterClearState.totalChipsInSystem;
                 console.error(`[Table ${this.name}] ⚠️⚠️⚠️ CRITICAL: ${chipsLost} chips LOST when clearing pot after award!`);
+                console.error(`[Table ${this.name}] Before clear: totalChips=${beforeClearState.totalChipsInSystem}, pot=${beforeClearState.pot}, playerChips=${beforeClearState.playerChips}`);
+                console.error(`[Table ${this.name}] After clear: totalChips=${afterClearState.totalChipsInSystem}, pot=${afterClearState.pot}, playerChips=${afterClearState.playerChips}`);
                 gameLogger.error(this.name, '[ROOT CAUSE] Chips lost when clearing pot after award', {
                     chipsLost,
                     potAmount,
                     beforeClearState,
                     afterClearState,
+                    totalChipsAfterAward,
+                    totalChipsAndPotAfterAward,
                     winner: winner.name,
+                    winnerChipsBefore: chipsBefore,
+                    winnerChipsAfter: seat.chips,
                     handNumber: this.handsPlayed,
                     phase: this.phase
                 });
