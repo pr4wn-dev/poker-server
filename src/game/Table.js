@@ -1463,7 +1463,8 @@ class Table {
                 pot: potBeforeClear,
                 handNumber: this.handsPlayed
             });
-            this.pot = 0;
+            // CRITICAL: Use _clearPotWithTrace instead of direct assignment
+            this._clearPotWithTrace('HANDLE_GAME_START_FORCE_CLEAR', 'Pot not cleared before startNewHand');
             // Record fix attempt - pot not cleared is a failure, but clearing it is a mitigation
             this._recordFixAttempt('FIX_10_POT_NOT_CLEARED_IN_HANDLE_GAME_START', false, {
                 potBeforeClear,
@@ -1973,12 +1974,29 @@ class Table {
             // Add their remaining chips to the pot before removing them
             if (player.chips > 0) {
                 const chipsToPot = player.chips;
+                const potBefore = this.pot;
+                const chipsBefore = player.chips;
+                
+                // CRITICAL: Track chip movement BEFORE operation
+                const movement = this._trackChipMovement('REMOVE_PLAYER_CHIPS_TO_POT', {
+                    player: player.name,
+                    seatIndex,
+                    chipsToPot,
+                    chipsBefore,
+                    potBefore,
+                    reason: 'Player left mid-game during their turn - chips added to pot'
+                });
+                
                 this.pot += chipsToPot;
                 player.chips = 0;
+                
+                // CRITICAL: Validate after operation
+                this._validateChipMovement(movement, 'REMOVE_PLAYER_CHIPS_TO_POT');
+                
                 gameLogger.gameEvent(this.name, 'Player left mid-game - chips added to pot', {
                     player: player.name,
                     chipsAddedToPot: chipsToPot,
-                    potBefore: this.pot - chipsToPot,
+                    potBefore,
                     potAfter: this.pot
                 });
             }
@@ -1995,12 +2013,29 @@ class Table {
             // CRITICAL FIX: When player leaves mid-game (not their turn), their chips should go to the pot
             if (player.chips > 0) {
                 const chipsToPot = player.chips;
+                const potBefore = this.pot;
+                const chipsBefore = player.chips;
+                
+                // CRITICAL: Track chip movement BEFORE operation
+                const movement = this._trackChipMovement('REMOVE_PLAYER_CHIPS_TO_POT', {
+                    player: player.name,
+                    seatIndex,
+                    chipsToPot,
+                    chipsBefore,
+                    potBefore,
+                    reason: 'Player left mid-game (not their turn) - chips added to pot'
+                });
+                
                 this.pot += chipsToPot;
                 player.chips = 0;
+                
+                // CRITICAL: Validate after operation
+                this._validateChipMovement(movement, 'REMOVE_PLAYER_CHIPS_TO_POT');
+                
                 gameLogger.gameEvent(this.name, 'Player left mid-game - chips added to pot', {
                     player: player.name,
                     chipsAddedToPot: chipsToPot,
-                    potBefore: this.pot - chipsToPot,
+                    potBefore,
                     potAfter: this.pot
                 });
             }
@@ -4863,7 +4898,8 @@ class Table {
                         pot: this.pot,
                         handNumber: this.handsPlayed
                     });
-                    this.pot = 0;
+                    // CRITICAL: Use _clearPotWithTrace instead of direct assignment
+                    this._clearPotWithTrace('ADVANCE_GAME_FORCE_CLEAR_BEFORE_START_NEW_HAND', 'Pot not cleared before startNewHand');
                 }
                 this.startNewHand();
             }, 3000);
@@ -5125,7 +5161,8 @@ class Table {
                             pot: this.pot,
                             handNumber: this.handsPlayed
                         });
-                        this.pot = 0;
+                        // CRITICAL: Use _clearPotWithTrace instead of direct assignment
+                        this._clearPotWithTrace('ADVANCE_GAME_FORCE_CLEAR_BEFORE_START_NEW_HAND_TIMEOUT', 'Pot not cleared before startNewHand in timeout');
                     }
                     this.startNewHand();
                 }, 3000);
@@ -5477,7 +5514,8 @@ class Table {
                         pot: this.pot,
                         handNumber: this.handsPlayed
                     });
-                    this.pot = 0;
+                    // CRITICAL: Use _clearPotWithTrace instead of direct assignment
+                    this._clearPotWithTrace('ADVANCE_GAME_FORCE_CLEAR_BEFORE_START_NEW_HAND', 'Pot not cleared before startNewHand');
                 }
                 this.startNewHand();
             }, 3000);
@@ -5720,7 +5758,8 @@ class Table {
                             chipsAfter: winner.chips,
                             contributors: contributors.map(c => c.seat.name)
                         });
-                        this.pot = 0;
+                        // CRITICAL: Use _clearPotWithTrace instead of direct assignment
+                        this._clearPotWithTrace('AWARD_POT_EMERGENCY_DISTRIBUTION_NO_ACTIVE', 'Emergency pot distribution - no active players');
                     } else {
                         // Last resort: give to player with most chips
                         const bestPlayer = this.seats
@@ -6242,8 +6281,8 @@ class Table {
                     reason: 'Side pot calculation failed - emergency distribution'
                 });
             }
-            // CRITICAL: Always clear pot, even on error
-            this.pot = 0;
+            // CRITICAL: Always clear pot, even on error - use _clearPotWithTrace
+            this._clearPotWithTrace('CALCULATE_AND_AWARD_SIDE_POTS_ERROR_CLEAR_EARLY', 'Pot clear after early error in calculateAndAwardSidePots');
             return [];
         }
         
@@ -6561,18 +6600,34 @@ class Table {
             if (activeSeats.length > 0 && this.pot > 0) {
                 const emergencyRecipient = activeSeats[0];
                 const chipsBefore = emergencyRecipient.chips;
-                emergencyRecipient.chips += this.pot;
-                console.error(`[Table ${this.name}] ⚠️ EMERGENCY: Cannot distribute pot, awarding ${this.pot} to ${emergencyRecipient.name} to prevent loss`);
+                const potAmount = this.pot;
+                
+                // CRITICAL: Track chip movement BEFORE operation
+                const movement = this._trackChipMovement('EMERGENCY_POT_DISTRIBUTION_FAILURE', {
+                    recipient: emergencyRecipient.name,
+                    amount: potAmount,
+                    chipsBefore,
+                    potBefore: potAmount,
+                    reason: 'Pot distribution failed - emergency distribution to prevent chip loss'
+                });
+                
+                emergencyRecipient.chips += potAmount;
+                this.pot -= potAmount; // Decrement pot as chips are moved
+                
+                // CRITICAL: Validate after operation
+                this._validateChipMovement(movement, 'EMERGENCY_POT_DISTRIBUTION_FAILURE');
+                
+                console.error(`[Table ${this.name}] ⚠️ EMERGENCY: Cannot distribute pot, awarding ${potAmount} to ${emergencyRecipient.name} to prevent loss`);
                 gameLogger.gameEvent(this.name, '[POT] EMERGENCY: Awarding pot due to distribution failure', {
                     recipient: emergencyRecipient.name,
-                    amount: this.pot,
+                    amount: potAmount,
                     chipsBefore,
                     chipsAfter: emergencyRecipient.chips,
                     reason: 'Pot distribution failed - emergency distribution'
                 });
             }
-            // CRITICAL: Always clear pot, even on error
-            this.pot = 0;
+            // CRITICAL: Always clear pot, even on error - use _clearPotWithTrace
+            this._clearPotWithTrace('CALCULATE_AND_AWARD_SIDE_POTS_ERROR_CLEAR', 'Pot clear after distribution failure');
             return [];
         }
         
@@ -7249,8 +7304,8 @@ class Table {
                 potAwardsCount: potAwards.length
             });
             
-            // Always clear pot, even if we couldn't award it
-            this.pot = 0;
+            // Always clear pot, even if we couldn't award it - use _clearPotWithTrace
+            this._clearPotWithTrace('CALCULATE_AND_AWARD_SIDE_POTS_POT_NOT_CLEARED', 'Pot not cleared after awards - forcing clear');
         } else {
             // Pot was correctly cleared - record success
             this._recordFixAttempt('FIX_1_POT_NOT_CLEARED_IN_AWARDPOT', true, {
@@ -7375,10 +7430,23 @@ class Table {
             const potBeforeAward = this.pot;
             const chipsBeforeAward = seat.chips;
             
+            // CRITICAL: Track chip movement BEFORE operation
+            const movement = this._trackChipMovement('AWARD_POT_SIMPLE', {
+                winner: winner.name,
+                seatIndex: this.seats.indexOf(seat),
+                amount: potAmount,
+                chipsBefore: chipsBeforeAward,
+                potBefore: potBeforeAward,
+                reason: 'Everyone folded - winner takes pot'
+            });
+            
             // CRITICAL FIX: Decrement pot when awarding chips to prevent double-counting
             // Chips move from pot to player, so pot must decrease by award amount
             seat.chips += potAmount;
             this.pot -= potAmount; // FIX: Decrement pot to match chip transfer
+            
+            // CRITICAL: Validate after operation
+            this._validateChipMovement(movement, 'AWARD_POT_SIMPLE');
             
             // CRITICAL DEBUG: Verify chips are actually in the seat object
             const seatIndex = this.seats.indexOf(seat);
@@ -7509,8 +7577,8 @@ class Table {
                     chipsBefore,
                     chipsAfter: bestActive.chips
                 });
-                // CRITICAL: Always clear pot after redistribution
-                this.pot = 0;
+                // CRITICAL: Always clear pot after redistribution - use _clearPotWithTrace
+                this._clearPotWithTrace('AWARD_POT_REDISTRIBUTE_ELIMINATED_WINNER', 'Pot cleared after redistributing from eliminated winner');
             } else {
                 // No active players - this is a game over scenario, but pot should have been handled earlier
                 console.error(`[Table ${this.name}] ⚠️ CRITICAL: No active players to redistribute ${potAmount} to - pot will be lost!`);
@@ -7785,7 +7853,8 @@ class Table {
                         pot: this.pot,
                         handNumber: this.handsPlayed
                     });
-                    this.pot = 0;
+                    // CRITICAL: Use _clearPotWithTrace instead of direct assignment
+                    this._clearPotWithTrace('ADVANCE_GAME_FORCE_CLEAR_BEFORE_START_NEW_HAND', 'Pot not cleared before startNewHand');
                 }
                 this.startNewHand();
             }, 500);
@@ -7851,8 +7920,8 @@ class Table {
                 });
             }
             
-            // ALWAYS clear pot, no matter what
-            this.pot = 0;
+            // ALWAYS clear pot, no matter what - use _clearPotWithTrace
+            this._clearPotWithTrace('AWARD_POT_FINALLY', 'Pot cleared in finally block of awardPot');
             // console.log(`[Table ${this.name}] [FINALLY awardPot] Pot cleared: ${potBeforeFinalClear} → 0`);
         }
     }
