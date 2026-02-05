@@ -6937,10 +6937,11 @@ class Table {
             
             // CRITICAL: Always clear pot after awarding
             // ROOT CAUSE: Trace pot clearing - chips should already be in winner's chips
+            // CRITICAL FIX: Use _clearPotWithTrace instead of direct assignment to ensure proper tracing
             const beforeClearState = this._getChipState();
-            this.pot = 0;
+            this._clearPotWithTrace('AWARD_POT_CLEAR', 'Pot cleared after awarding to winner');
             const afterClearState = this._getChipState();
-            this._traceOperation('AWARD_POT_CLEAR', beforeClearState, afterClearState);
+            this._traceOperation('AWARD_POT_CLEAR_TRACE', beforeClearState, afterClearState);
             
             // CRITICAL: Verify chips weren't lost when clearing pot
             // When we clear pot, totalChipsInSystem should stay the same (chips moved from pot to player)
