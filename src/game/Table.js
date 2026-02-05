@@ -1252,39 +1252,60 @@ class Table {
             }
         }
         
-        // CRITICAL FIX: Calculate totalStartingChips correctly by summing all player chips AFTER reset
-        // DO NOT adjust totalStartingChips to match reality - that masks the problem!
-        // Instead, calculate it correctly from the actual chips in the system at game start
+        // CRITICAL FIX: totalStartingChips should be calculated from buy-ins, NOT from actual chips
+        // DO NOT set it to actual chips - that masks the problem!
+        // totalStartingChips should equal: number of active players × buyIn
+        // If actual chips don't match, that's a BUG that must be fixed, not masked
         const actualTotalChips = this.seats
             .filter(s => s && s.isActive !== false)
             .reduce((sum, s) => sum + (s.chips || 0), 0);
         const actualTotalChipsAndPot = actualTotalChips + this.pot;
         
-        // CRITICAL: Set totalStartingChips to the ACTUAL chips in system at game start
-        // This is the correct value - if chips are missing, we'll detect it in validation
-        const oldTotalStartingChips = this.totalStartingChips;
-        this.totalStartingChips = actualTotalChipsAndPot;
+        // CRITICAL: Calculate expected totalStartingChips from buy-ins (NOT from actual chips)
+        const expectedTotalStartingChips = this.seats.filter(s => s && s.isActive !== false).length * this.buyIn;
         
-        if (Math.abs(oldTotalStartingChips - actualTotalChipsAndPot) > 0.01) {
-            console.log(`[Table ${this.name}] Setting totalStartingChips to ${actualTotalChipsAndPot} (was ${oldTotalStartingChips}) at game start`);
-            this._logTotalStartingChipsChange('SET_AT_GAME_START', 'HANDLE_GAME_START', oldTotalStartingChips, this.totalStartingChips, {
-                reason: 'Setting totalStartingChips to actual chips in system at game start',
-                actualTotalChips,
-                pot: this.pot,
-                actualTotalChipsAndPot
+        // CRITICAL: Verify totalStartingChips matches expected (calculated from buy-ins)
+        // If it doesn't match, that means chips were lost during reset - this is a BUG
+        if (Math.abs(this.totalStartingChips - expectedTotalStartingChips) > 0.01) {
+            const missingDuringReset = expectedTotalStartingChips - this.totalStartingChips;
+            console.error(`[Table ${this.name}] ⚠️⚠️⚠️ CRITICAL BUG: ${missingDuringReset} chips LOST during chip reset!`);
+            console.error(`[Table ${this.name}] Expected totalStartingChips: ${expectedTotalStartingChips} (${this.seats.filter(s => s && s.isActive !== false).length} players × ${this.buyIn} buy-in)`);
+            console.error(`[Table ${this.name}] Actual totalStartingChips: ${this.totalStartingChips}`);
+            gameLogger.error(this.name, '[CRITICAL] Chips lost during chip reset', {
+                expectedTotalStartingChips,
+                actualTotalStartingChips: this.totalStartingChips,
+                missingDuringReset,
+                playerCount: this.seats.filter(s => s && s.isActive !== false).length,
+                buyIn: this.buyIn,
+                allSeats: this.seats.map((s, i) => s ? {
+                    seatIndex: i,
+                    name: s.name,
+                    chips: s.chips,
+                    isActive: s.isActive,
+                    expectedChips: this.buyIn
+                } : null).filter(s => s !== null)
+            });
+            
+            // CRITICAL: Fix the bug by setting totalStartingChips to the correct value
+            // This is NOT masking - this is fixing the calculation error
+            const oldTotalStartingChips = this.totalStartingChips;
+            this.totalStartingChips = expectedTotalStartingChips;
+            this._logTotalStartingChipsChange('FIX_CALCULATION_ERROR', 'HANDLE_GAME_START', oldTotalStartingChips, this.totalStartingChips, {
+                reason: 'Fixing totalStartingChips calculation error - should be calculated from buy-ins, not actual chips',
+                expectedTotalStartingChips,
+                oldTotalStartingChips
             });
         }
         
-        // CRITICAL: If chips are already missing at game start, this is a MAJOR PROBLEM
-        // Log it but don't adjust - we need to find where chips were lost
-        const expectedChips = this.seats.filter(s => s && s.isActive !== false).length * this.buyIn;
-        if (Math.abs(actualTotalChipsAndPot - expectedChips) > 0.01) {
-            const missingAtStart = expectedChips - actualTotalChipsAndPot;
-            console.error(`[Table ${this.name}] ⚠️⚠️⚠️ CRITICAL: ${missingAtStart} chips ALREADY MISSING at game start!`);
-            console.error(`[Table ${this.name}] Expected: ${expectedChips} (${this.seats.filter(s => s && s.isActive !== false).length} players × ${this.buyIn} buy-in)`);
+        // CRITICAL: Verify actual chips match expected (after fixing totalStartingChips)
+        // If chips are missing, this is a DIFFERENT bug that must be fixed
+        if (Math.abs(actualTotalChipsAndPot - expectedTotalStartingChips) > 0.01) {
+            const missingAtStart = expectedTotalStartingChips - actualTotalChipsAndPot;
+            console.error(`[Table ${this.name}] ⚠️⚠️⚠️ CRITICAL BUG: ${missingAtStart} chips ALREADY MISSING at game start!`);
+            console.error(`[Table ${this.name}] Expected: ${expectedTotalStartingChips} (${this.seats.filter(s => s && s.isActive !== false).length} players × ${this.buyIn} buy-in)`);
             console.error(`[Table ${this.name}] Actual: ${actualTotalChipsAndPot}`);
             gameLogger.error(this.name, '[CRITICAL] Chips missing at game start', {
-                expectedChips,
+                expectedChips: expectedTotalStartingChips,
                 actualTotalChipsAndPot,
                 missingAtStart,
                 playerCount: this.seats.filter(s => s && s.isActive !== false).length,
@@ -1293,9 +1314,15 @@ class Table {
                     seatIndex: i,
                     name: s.name,
                     chips: s.chips,
-                    isActive: s.isActive
+                    isActive: s.isActive,
+                    expectedChips: this.buyIn
                 } : null).filter(s => s !== null)
             });
+            
+            // CRITICAL: Pause simulation when chips are missing at game start
+            if (this.isSimulation && this.onPauseSimulation) {
+                this.onPauseSimulation(`CRITICAL: ${missingAtStart} chips missing at game start (Hand ${this.handsPlayed})`);
+            }
         }
         
         gameLogger.gameEvent(this.name, 'TOTAL STARTING CHIPS TRACKED', {
@@ -5614,43 +5641,29 @@ class Table {
                         fix: 'Adjusting pot to match sumOfTotalBets to prevent further loss',
                         stackTrace: new Error().stack
                     });
-                    // CRITICAL FIX: Adjust pot to match sumOfTotalBets to prevent further loss
-                    // NOTE: This recovers the chips by adjusting the pot, but the chips were already lost from the system
-                    // We need to adjust totalStartingChips to reflect this loss so validation doesn't keep failing
-                    const oldPot = potBeforeCalculation;
-                    this.pot = sumOfTotalBets;
-                    console.error(`[Table ${this.name}] ⚠️ FIX #2: Adjusting pot from ${oldPot} to ${sumOfTotalBets} to recover ${chipsLost} lost chips`);
-                    gameLogger.gameEvent(this.name, '[FIX #2: POT] Pot adjusted to match sumOfTotalBets', {
-                        oldPot: oldPot,
-                        newPot: sumOfTotalBets,
-                        chipsRecovered: chipsLost,
-                        handNumber: this.handsPlayed,
-                        phase: this.phase
-                    });
-                    
-                    // CRITICAL FIX: totalStartingChips should NEVER be decreased
-                    // If chips are lost, this is a CRITICAL BUG that must be fixed, not masked
-                    // We adjust the pot to recover the chips for this hand, but we MUST pause the simulation
-                    // to investigate the root cause
-                    console.error(`[Table ${this.name}] ⚠️⚠️⚠️ CRITICAL BUG: ${chipsLost} chips were LOST during betting! totalStartingChips MUST NOT be decreased!`);
-                    gameLogger.error(this.name, '[CRITICAL] Chips lost during betting - totalStartingChips NOT adjusted (should never decrease)', {
+                    // CRITICAL: DO NOT adjust pot to mask the problem!
+                    // Chips were lost - this is a CRITICAL BUG that must be fixed, not masked
+                    // We MUST pause the simulation and investigate the root cause
+                    console.error(`[Table ${this.name}] ⚠️⚠️⚠️ CRITICAL BUG: ${chipsLost} chips were LOST during betting!`);
+                    console.error(`[Table ${this.name}] DO NOT adjust pot - this masks the problem!`);
+                    console.error(`[Table ${this.name}] Pot should be ${sumOfTotalBets} but is ${potBeforeCalculation}`);
+                    console.error(`[Table ${this.name}] Root cause MUST be investigated - chips are being lost somewhere in the betting logic`);
+                    gameLogger.error(this.name, '[CRITICAL] Chips lost during betting - DO NOT MASK - investigate root cause', {
                         chipsLost,
                         potBeforeCalculation,
                         sumOfTotalBets,
                         totalStartingChips: this.totalStartingChips,
                         handNumber: this.handsPlayed,
                         phase: this.phase,
-                        warning: 'Chips were lost during betting. Pot adjusted to recover them, but totalStartingChips NOT adjusted (should never decrease). Root cause MUST be investigated.'
-                    });
-                    gameLogger.error(this.name, '[CRITICAL] Chips lost during betting - pot and totalStartingChips adjusted but root cause needs investigation', {
-                        chipsLost,
-                        potBeforeCalculation,
-                        sumOfTotalBets,
-                        oldTotalStartingChips,
-                        newTotalStartingChips: this.totalStartingChips,
-                        handNumber: this.handsPlayed,
-                        phase: this.phase,
-                        warning: 'Chips were lost during betting. Pot and totalStartingChips adjusted to prevent validation failures. Root cause needs investigation.'
+                        warning: 'Chips were lost during betting. DO NOT adjust pot or totalStartingChips - this masks the problem. Root cause MUST be investigated and fixed.',
+                        allContributors: allContributors.map(p => ({
+                            name: p.name,
+                            totalBet: p.totalBet,
+                            currentBet: p.currentBet || 0,
+                            chips: p.chips,
+                            isFolded: p.isFolded,
+                            isAllIn: p.isAllIn
+                        }))
                     });
                     
                     // Record fix attempt - this is a failure because chips were lost
@@ -5699,44 +5712,41 @@ class Table {
                         fix: 'Adjusting pot to match sumOfTotalBets to prevent chip creation',
                         stackTrace: new Error().stack
                     });
-                    // CRITICAL FIX: Adjust pot down to match sumOfTotalBets to prevent chip creation
-                    // NOTE: This removes created chips from the pot, but the chips were already created in the system
-                    // We need to adjust totalStartingChips to reflect this creation so validation doesn't keep failing
-                    const oldPot = potBeforeCalculation;
-                    this.pot = sumOfTotalBets;
-                    console.error(`[Table ${this.name}] ⚠️ FIX #2: Adjusting pot from ${oldPot} to ${sumOfTotalBets} to remove ${chipsCreated} created chips`);
-                    gameLogger.gameEvent(this.name, '[FIX #2: POT] Pot adjusted down to match sumOfTotalBets', {
-                        oldPot: oldPot,
-                        newPot: sumOfTotalBets,
-                        chipsRemoved: chipsCreated,
-                        handNumber: this.handsPlayed,
-                        phase: this.phase
-                    });
-                    
-                    // CRITICAL FIX: totalStartingChips should NEVER be increased after game start
-                    // If chips are created, this is a CRITICAL BUG that must be fixed, not masked
-                    // We adjust the pot to remove the created chips, but we MUST pause the simulation
-                    // to investigate the root cause
-                    console.error(`[Table ${this.name}] ⚠️⚠️⚠️ CRITICAL BUG: ${chipsCreated} chips were CREATED during betting! totalStartingChips MUST NOT be increased!`);
-                    gameLogger.error(this.name, '[CRITICAL] Chips created during betting - totalStartingChips NOT adjusted (should never increase after game start)', {
+                    // CRITICAL: DO NOT adjust pot to mask the problem!
+                    // Chips were created - this is a CRITICAL BUG that must be fixed, not masked
+                    // We MUST pause the simulation and investigate the root cause
+                    console.error(`[Table ${this.name}] ⚠️⚠️⚠️ CRITICAL BUG: ${chipsCreated} chips were CREATED during betting!`);
+                    console.error(`[Table ${this.name}] DO NOT adjust pot - this masks the problem!`);
+                    console.error(`[Table ${this.name}] Pot should be ${sumOfTotalBets} but is ${potBeforeCalculation}`);
+                    console.error(`[Table ${this.name}] Root cause MUST be investigated - chips are being created somewhere in the betting logic`);
+                    gameLogger.error(this.name, '[CRITICAL] Chips created during betting - DO NOT MASK - investigate root cause', {
                         chipsCreated,
                         potBeforeCalculation,
                         sumOfTotalBets,
                         totalStartingChips: this.totalStartingChips,
                         handNumber: this.handsPlayed,
                         phase: this.phase,
-                        warning: 'Chips were created during betting. Pot adjusted to remove them, but totalStartingChips NOT adjusted (should never increase after game start). Root cause MUST be investigated.'
+                        warning: 'Chips were created during betting. DO NOT adjust pot or totalStartingChips - this masks the problem. Root cause MUST be investigated and fixed.',
+                        allContributors: allContributors.map(p => ({
+                            name: p.name,
+                            totalBet: p.totalBet,
+                            currentBet: p.currentBet || 0,
+                            chips: p.chips,
+                            isFolded: p.isFolded,
+                            isAllIn: p.isAllIn
+                        }))
                     });
+                    
+                    // CRITICAL: Pause simulation when chips are created
+                    if (this.isSimulation && this.onPauseSimulation) {
+                        this.onPauseSimulation(`CHIPS CREATED: ${chipsCreated} chips created during betting (Hand ${this.handsPlayed}, ${this.phase})`);
+                    }
                     
                     // Record fix attempt - this is a failure because chips were created
                     this._recordFixAttempt('FIX_2_CHIPS_CREATED_BETTING', false, {
                         potBeforeCalculation,
                         sumOfTotalBets,
                         chipsCreated,
-                        oldPot,
-                        newPot: this.pot,
-                        oldTotalStartingChips,
-                        newTotalStartingChips: this.totalStartingChips,
                         handNumber: this.handsPlayed,
                         phase: this.phase
                     });
