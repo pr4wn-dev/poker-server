@@ -856,8 +856,8 @@ class SocketBot {
         // CRITICAL FIX: toCall === 0 means we've matched, but we can only BET if currentBet === 0
         // If currentBet > 0 and toCall === 0, we must CHECK or RAISE (not bet)
         if (toCall === 0) {
-            // Can check for free
-            if (Math.random() < this.aggressiveness) {
+            // Can check for free - be VERY aggressive, bet/raise most of the time
+            if (Math.random() < this.aggressiveness * 1.2) {  // 72-108% (capped at 100%), so bet/raise most of the time
                 // Want to be aggressive - check if we can bet or need to raise
                 if (state.currentBet === 0) {
                     // No bets yet - we can open with a bet
@@ -873,40 +873,39 @@ class SocketBot {
                     amount = Math.min(amount, myChips);
                 }
             } else {
-                action = 'check';
+                action = 'check';  // Only check if we're not being aggressive
             }
         } else if (toCall >= myChips) {
-            // All-in or fold situation
-            if (Math.random() < 0.5 || potOdds < 0.3) {
+            // All-in or fold situation - be aggressive, go all-in most of the time
+            if (Math.random() < 0.8 || potOdds < 0.4) {  // 80% chance to go all-in
                 action = 'allin';
             } else {
-                action = 'fold';
+                action = 'fold';  // Only 20% fold even when all-in required
             }
         } else if (potOdds > 0.5) {
-            // Bad pot odds, but in simulation mode be more aggressive
-            // Raise sometimes even with bad pot odds, call more often
+            // Bad pot odds, but in simulation mode be VERY aggressive - almost never fold
             const roll = Math.random();
-            if (roll < this.aggressiveness * 0.3) {  // 18-27% chance to raise even with bad odds
+            if (roll < this.aggressiveness * 0.5) {  // 30-45% chance to raise even with bad odds
                 action = 'raise';
                 const raiseAmount = toCall + Math.floor((state.pot + toCall) * (0.3 + Math.random() * 0.4));
                 amount = Math.min(raiseAmount, myChips);
-            } else if (roll < 0.7) {  // 70% total chance, so 43-52% to call
+            } else if (roll < 0.95) {  // 95% total chance, so 50-65% to call
                 action = 'call';
             } else {
-                action = 'fold';
+                action = 'fold';  // Only 5% fold chance even with bad odds
             }
         } else {
-            // Decent situation - be very aggressive, raise often
+            // Decent situation - be EXTREMELY aggressive, almost always raise
             const roll = Math.random();
-            if (roll < this.aggressiveness * 0.9) {  // 54-81% chance to raise (very aggressive)
+            if (roll < this.aggressiveness * 1.0) {  // 60-90% chance to raise (extremely aggressive)
                 // Raise
                 action = 'raise';
                 const raiseAmount = toCall + Math.floor((state.pot + toCall) * (0.5 + Math.random() * 0.5));
                 amount = Math.min(raiseAmount, myChips);
-            } else if (roll < 0.95) {  // 95% total chance, so 14-41% to call
+            } else if (roll < 0.98) {  // 98% total chance, so 8-38% to call
                 action = 'call';
             } else {
-                action = 'fold';  // Only 5% fold chance
+                action = 'fold';  // Only 2% fold chance
             }
         }
         
