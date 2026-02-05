@@ -1773,6 +1773,19 @@ class Table {
         this.deck.shuffle();
         this.communityCards = [];
         
+        // CRITICAL: Clear pot IMMEDIATELY before PRE-RESET logging (final safeguard)
+        // This catches any pot that was set after the initial clear at function start
+        if (this.pot > 0) {
+            const potBeforeFinalClear = this.pot;
+            console.error(`[Table ${this.name}] ⚠️ CRITICAL: Pot has ${potBeforeFinalClear} chips BEFORE PRE-RESET logging! Clearing now.`);
+            gameLogger.error(this.name, '[POT] CRITICAL: Pot not cleared before PRE-RESET - final clear', {
+                pot: potBeforeFinalClear,
+                handNumber: this.handsPlayed,
+                phase: this.phase
+            });
+            this.pot = 0;
+        }
+        
         // CRITICAL FIX #1: Pot not cleared at hand start - ULTRA-VERBOSE logging
         const potBeforeReset = this.pot;
         const totalChipsBeforeReset = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
