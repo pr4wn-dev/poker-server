@@ -153,9 +153,14 @@ function resumeSimulation(tableId) {
     
     // Use SimulationManager if available
     if (simulationManager) {
-        const result = simulationManager.resumeSimulation(tableId);
-        if (result.success) {
-            console.log(`[LogWatcher] ✓ Simulation resumed via SimulationManager`);
+        try {
+            const result = simulationManager.resumeSimulation(tableId);
+            if (result && result.success) {
+                console.log(`[LogWatcher] ✓ Simulation resumed via SimulationManager`);
+            }
+        } catch (error) {
+            console.error(`[LogWatcher] Error resuming simulation: ${error.message}`);
+            // Continue anyway - table state is already updated
         }
     }
     
