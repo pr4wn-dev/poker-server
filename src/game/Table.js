@@ -5179,20 +5179,11 @@ class Table {
                 seatIndex: this.seats.indexOf(activePlayers[0])
             });
             this.clearTurnTimer();
+            // CRITICAL FIX: awardPot will handle calling startNewHand - don't call it here
+            // The setTimeout in advanceGame was racing with awardPot's setTimeout, causing pot to be cleared before awardPot finished
+            // This was causing chip loss (9,162, 4,671, 5,660 chips lost in recent hands)
             this.awardPot(activePlayers[0]);
-            setTimeout(() => {
-                // CRITICAL: Clear pot one final time before starting new hand (safeguard)
-                if (this.pot > 0) {
-                    console.error(`[Table ${this.name}] ⚠️ CRITICAL: Pot still has ${this.pot} chips before startNewHand! Clearing now.`);
-                    gameLogger.error(this.name, '[POT] CRITICAL: Pot not cleared before startNewHand - forcing clear', {
-                        pot: this.pot,
-                        handNumber: this.handsPlayed
-                    });
-                    // CRITICAL: Use _clearPotWithTrace instead of direct assignment
-                    this._clearPotWithTrace('ADVANCE_GAME_FORCE_CLEAR_BEFORE_START_NEW_HAND', 'Pot not cleared before startNewHand');
-                }
-                this.startNewHand();
-            }, 3000);
+            // awardPot will call startNewHand after awarding - don't duplicate it here
             return;
         }
 
@@ -5442,20 +5433,10 @@ class Table {
                 });
                 // console.log(`[Table ${this.name}] ONLY ONE PLAYER REMAINS: ${winner?.name} wins by default!`);
                 this.clearTurnTimer();
+                // CRITICAL FIX: awardPot will handle calling startNewHand - don't call it here
+                // The setTimeout in advanceGame was racing with awardPot's setTimeout, causing pot to be cleared before awardPot finished
                 this.awardPot(winner);
-                setTimeout(() => {
-                    // CRITICAL: Clear pot one final time before starting new hand (safeguard)
-                    if (this.pot > 0) {
-                        console.error(`[Table ${this.name}] ⚠️ CRITICAL: Pot still has ${this.pot} chips before startNewHand! Clearing now.`);
-                        gameLogger.error(this.name, '[POT] CRITICAL: Pot not cleared before startNewHand - forcing clear', {
-                            pot: this.pot,
-                            handNumber: this.handsPlayed
-                        });
-                        // CRITICAL: Use _clearPotWithTrace instead of direct assignment
-                        this._clearPotWithTrace('ADVANCE_GAME_FORCE_CLEAR_BEFORE_START_NEW_HAND_TIMEOUT', 'Pot not cleared before startNewHand in timeout');
-                    }
-                    this.startNewHand();
-                }, 3000);
+                // awardPot will call startNewHand after awarding - don't duplicate it here
                 return;  // GUARANTEED EXIT - game over
             }
             
@@ -5796,17 +5777,9 @@ class Table {
                 pot: this.pot,
                 reason: 'Pot was awarded earlier (by fold)'
             });
+            // CRITICAL FIX: Pot is already 0, so we can start new hand immediately
+            // No need for setTimeout or pot clearing - pot is already cleared
             setTimeout(() => {
-                // CRITICAL: Clear pot one final time before starting new hand (safeguard)
-                if (this.pot > 0) {
-                    console.error(`[Table ${this.name}] ⚠️ CRITICAL: Pot still has ${this.pot} chips before startNewHand! Clearing now.`);
-                    gameLogger.error(this.name, '[POT] CRITICAL: Pot not cleared before startNewHand - forcing clear', {
-                        pot: this.pot,
-                        handNumber: this.handsPlayed
-                    });
-                    // CRITICAL: Use _clearPotWithTrace instead of direct assignment
-                    this._clearPotWithTrace('ADVANCE_GAME_FORCE_CLEAR_BEFORE_START_NEW_HAND', 'Pot not cleared before startNewHand');
-                }
                 this.startNewHand();
             }, 3000);
             return;
