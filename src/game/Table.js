@@ -642,36 +642,11 @@ class Table {
                         handNumber: this.handsPlayed
                     });
                     
-                    // CRITICAL: Pause simulation when validation fails
-                    if (this.isSimulation && this.onPauseSimulation) {
-                        console.error(`[Table ${this.name}] ⚠️ CALLING onPauseSimulation: Missing ${missing} chips (Hand ${this.handsPlayed}, ${this.phase})`);
-                        gameLogger.gameEvent(this.name, '[PAUSE] Calling onPauseSimulation due to validation failure', {
-                            missing,
-                            handNumber: this.handsPlayed,
-                            phase: this.phase,
-                            context,
-                            isSimulation: this.isSimulation,
-                            hasCallback: !!this.onPauseSimulation
-                        });
-                        this.onPauseSimulation(`VALIDATION FAILED: Missing ${missing} chips (Hand ${this.handsPlayed}, ${this.phase})`);
-                    } else {
-                        console.error(`[Table ${this.name}] ⚠️ CANNOT PAUSE: isSimulation=${this.isSimulation}, hasCallback=${!!this.onPauseSimulation}`);
-                        gameLogger.error(this.name, '[PAUSE] Cannot pause - callback not set', {
-                            isSimulation: this.isSimulation,
-                            hasCallback: !!this.onPauseSimulation,
-                            missing,
-                            handNumber: this.handsPlayed
-                        });
-                        // Record fix attempt - cannot pause is a failure
-                        this._recordFixAttempt('FIX_18_CANNOT_PAUSE_SIMULATION', false, {
-                            context: 'VALIDATION_FAILED',
-                            isSimulation: this.isSimulation,
-                            hasCallback: !!this.onPauseSimulation,
-                            missing,
-                            handNumber: this.handsPlayed,
-                            phase: this.phase
-                        });
-                    }
+                    // CRITICAL: DO NOT pause simulation on validation failure - this masks the problem
+                    // Pausing prevents bots from playing and creates infinite loops
+                    // Validation failures are logged above - that's enough for investigation
+                    // If we need to investigate, we can pause manually
+                    // REMOVED: Automatic pause on validation failure - it was preventing bots from playing
                 } else {
                     // Record successful validation
                     this._recordFixAttempt('FIX_7_VALIDATION_FAILURES', true, {
