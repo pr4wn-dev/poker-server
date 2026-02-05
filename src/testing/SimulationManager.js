@@ -1113,6 +1113,42 @@ class SimulationManager {
         if (table) {
             table.isPaused = true;
             table.pauseReason = reason;
+            
+            // CRITICAL: Broadcast table state immediately so Unity sees isPaused in table_state
+            if (this.io) {
+                // Broadcast to all sockets in table room
+                const tableRoom = `table:${tableId}`;
+                const spectatorRoom = `spectator:${tableId}`;
+                
+                // Get state and broadcast to all connected sockets
+                const tableSockets = this.io.sockets.adapter.rooms.get(tableRoom);
+                if (tableSockets) {
+                    for (const socketId of tableSockets) {
+                        const socket = this.io.sockets.sockets.get(socketId);
+                        if (socket) {
+                            // Get userId from socket if available
+                            const userId = socket.userId || null;
+                            const state = table.getState(userId);
+                            socket.emit('table_state', state);
+                        }
+                    }
+                }
+                
+                // Also broadcast to spectators
+                const spectatorSockets = this.io.sockets.adapter.rooms.get(spectatorRoom);
+                if (spectatorSockets) {
+                    for (const socketId of spectatorSockets) {
+                        const socket = this.io.sockets.sockets.get(socketId);
+                        if (socket) {
+                            const userId = socket.userId || null;
+                            const state = table.getState(userId);
+                            socket.emit('table_state', state);
+                        }
+                    }
+                }
+                
+                console.log(`[SimulationManager] Table state broadcasted with isPaused=true to Unity clients`);
+            }
         }
         
         // Notify all socket bots to pause
@@ -1122,26 +1158,18 @@ class SimulationManager {
         
         this.log('INFO', 'Simulation paused', { tableId, reason });
         
-        // Notify Unity clients and spectators
+        // Also emit simulation_paused event for backwards compatibility
         if (this.io) {
-            const table = this.gameManager.tables.get(tableId);
-            if (table) {
-                const pauseEvent = {
-                    tableId,
-                    reason,
-                    pausedAt: simulation.pausedAt
-                };
-                
-                // Emit to table room (where Unity clients are)
-                const tableRoom = `table:${tableId}`;
-                this.io.to(tableRoom).emit('simulation_paused', pauseEvent);
-                
-                // Also emit to spectator room
-                const spectatorRoom = `spectator:${tableId}`;
-                this.io.to(spectatorRoom).emit('simulation_paused', pauseEvent);
-                
-                console.log(`[SimulationManager] Pause event emitted to table:${tableId} and spectator:${tableId}`);
-            }
+            const pauseEvent = {
+                tableId,
+                reason,
+                pausedAt: simulation.pausedAt
+            };
+            
+            const tableRoom = `table:${tableId}`;
+            const spectatorRoom = `spectator:${tableId}`;
+            this.io.to(tableRoom).emit('simulation_paused', pauseEvent);
+            this.io.to(spectatorRoom).emit('simulation_paused', pauseEvent);
         }
         
         return { success: true, reason };
