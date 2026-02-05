@@ -271,17 +271,26 @@ class SocketHandler {
             socket.on('get_item_ante', (data, callback) => {
                 const user = this.getAuthenticatedUser(socket);
                 if (!user) {
-                    return callback({ success: false, error: 'Not authenticated' });
+                    if (callback && typeof callback === 'function') {
+                        callback({ success: false, error: 'Not authenticated' });
+                    }
+                    return;
                 }
                 
                 const player = this.gameManager.players.get(user.userId);
                 if (!player?.currentTableId) {
-                    return callback({ success: false, error: 'Not at a table' });
+                    if (callback && typeof callback === 'function') {
+                        callback({ success: false, error: 'Not at a table' });
+                    }
+                    return;
                 }
                 
                 const table = this.gameManager.getTable(player.currentTableId);
                 if (!table) {
-                    return callback({ success: false, error: 'Table not found' });
+                    if (callback && typeof callback === 'function') {
+                        callback({ success: false, error: 'Table not found' });
+                    }
+                    return;
                 }
                 
                 // ROOT TRACING: Track item ante view request
@@ -311,7 +320,9 @@ class SocketHandler {
                     approvedCount: itemAnteState?.approvedCount || 0
                 });
                 
-                callback({ success: true, itemAnte: itemAnteState });
+                if (callback && typeof callback === 'function') {
+                    callback({ success: true, itemAnte: itemAnteState });
+                }
                 socket.emit('get_item_ante_response', { success: true, itemAnte: itemAnteState });
             });
             
