@@ -1126,8 +1126,8 @@ class SimulationManager {
                     for (const socketId of tableSockets) {
                         const socket = this.io.sockets.sockets.get(socketId);
                         if (socket) {
-                            // Get userId from socket if available
-                            const userId = socket.userId || null;
+                            // Get userId from socket data or authenticated users
+                            const userId = socket.data?.userId || null;
                             const state = table.getState(userId);
                             socket.emit('table_state', state);
                         }
@@ -1140,7 +1140,7 @@ class SimulationManager {
                     for (const socketId of spectatorSockets) {
                         const socket = this.io.sockets.sockets.get(socketId);
                         if (socket) {
-                            const userId = socket.userId || null;
+                            const userId = socket.data?.userId || null;
                             const state = table.getState(userId);
                             socket.emit('table_state', state);
                         }
