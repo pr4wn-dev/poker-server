@@ -453,6 +453,15 @@ class ItemAnte {
             id: this.id,
             status: this.status,
             creatorId: this.creatorId,
+            // Unity expects creatorItem (not firstItem) for backward compatibility
+            creatorItem: this.firstItem ? {
+                id: this.firstItem.id,
+                name: this.firstItem.name,
+                rarity: this.firstItem.rarity,
+                type: this.firstItem.type,
+                icon: this.firstItem.icon,
+                baseValue: this.firstItem.baseValue
+            } : null,
             firstItem: this.firstItem ? {
                 id: this.firstItem.id,
                 name: this.firstItem.name,
@@ -468,14 +477,17 @@ class ItemAnte {
         };
         
         // Show approved items list
+        // Unity expects oderId (not userId) for backward compatibility
         state.approvedItems = this.approvedItems.map(entry => ({
             userId: entry.userId,
+            oderId: entry.userId,  // Unity compatibility
             item: {
                 id: entry.item.id,
                 name: entry.item.name,
                 rarity: entry.item.rarity,
                 type: entry.item.type,
-                icon: entry.item.icon
+                icon: entry.item.icon,
+                baseValue: entry.item.baseValue  // Include baseValue for display
             }
         }));
         
