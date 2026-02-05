@@ -6961,7 +6961,10 @@ class Table {
             const potBeforeAward = this.pot;
             const chipsBeforeAward = seat.chips;
             
+            // CRITICAL FIX: Decrement pot when awarding chips to prevent double-counting
+            // Chips move from pot to player, so pot must decrease by award amount
             seat.chips += potAmount;
+            this.pot -= potAmount; // FIX: Decrement pot to match chip transfer
             
             // CRITICAL DEBUG: Verify chips are actually in the seat object
             const seatIndex = this.seats.indexOf(seat);
