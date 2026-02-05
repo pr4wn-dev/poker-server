@@ -6919,7 +6919,26 @@ class Table {
                 calculationCheck: chipsBefore + potAmount === seat.chips ? 'CORRECT' : 'ERROR'
             });
             // CRITICAL: Always clear pot after awarding
+            // ROOT CAUSE: Trace pot clearing - chips should already be in winner's chips
+            const beforeClearState = this._getChipState();
             this.pot = 0;
+            const afterClearState = this._getChipState();
+            this._traceOperation('AWARD_POT_CLEAR', beforeClearState, afterClearState);
+            
+            // CRITICAL: Verify chips weren't lost when clearing pot
+            if (afterClearState.totalChipsInSystem < beforeClearState.totalChipsInSystem) {
+                const chipsLost = beforeClearState.totalChipsInSystem - afterClearState.totalChipsInSystem;
+                console.error(`[Table ${this.name}] ⚠️⚠️⚠️ CRITICAL: ${chipsLost} chips LOST when clearing pot after award!`);
+                gameLogger.error(this.name, '[ROOT CAUSE] Chips lost when clearing pot after award', {
+                    chipsLost,
+                    potAmount,
+                    beforeClearState,
+                    afterClearState,
+                    winner: winner.name,
+                    handNumber: this.handsPlayed,
+                    phase: this.phase
+                });
+            }
         } else if (seat && seat.isActive === false) {
             // CRITICAL FIX: Eliminated player won pot - redistribute to best active player
             console.error(`[Table ${this.name}] ⚠️ CRITICAL: Eliminated player ${winner.name} won pot ${potAmount} - redistributing to best active player`);
