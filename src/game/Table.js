@@ -1981,43 +1981,36 @@ class Table {
         const totalChipsAndPotAfterReset = totalChipsAfterReset + this.pot;
         const resetDifference = totalChipsAndPotAfterReset - totalChipsAndPotBeforeReset;
         
-        // CRITICAL FIX: If chips were lost due to pot clearing, reset totalStartingChips to actual chips
-        // This prevents validation failures from cascading through the game
-        // NOTE: Instead of subtracting, we reset to actual chips to prevent drift
+        // CRITICAL FIX: If chips were lost due to pot clearing, this is a CRITICAL BUG
+        // totalStartingChips should NEVER be decreased - it represents the original starting chips
+        // If chips are lost, we must pause the simulation and fix the root cause
         if (potBeforeForceClear > 0 && this.totalStartingChips > 0) {
-            const oldTotalStartingChips = this.totalStartingChips;
-            // CRITICAL: Reset to actual chips instead of subtracting to prevent drift
-            // This ensures totalStartingChips always matches reality
-            this.totalStartingChips = totalChipsAndPotAfterReset;
-            console.error(`[Table ${this.name}] ⚠️ ADJUSTING totalStartingChips: ${oldTotalStartingChips} → ${this.totalStartingChips} (lost ${potBeforeForceClear} chips due to pot clearing)`);
-            this._logTotalStartingChipsChange('ADJUST_FOR_POT_CLEAR', 'HAND_START', oldTotalStartingChips, this.totalStartingChips, {
-                reason: 'Pot was cleared at hand start, chips were lost',
-                chipsLost: potBeforeForceClear,
-                handNumber: this.handsPlayed,
+            const chipsLost = potBeforeForceClear;
+            console.error(`[Table ${this.name}] ⚠️⚠️⚠️ CRITICAL BUG: ${chipsLost} chips LOST due to pot not being cleared! totalStartingChips MUST NOT be decreased!`);
+            gameLogger.error(this.name, '[MONEY] CRITICAL: Chips lost - totalStartingChips NOT adjusted (should never decrease)', {
+                chipsLost,
+                potBeforeForceClear,
+                totalStartingChips: this.totalStartingChips,
                 totalChipsAndPotAfterReset,
-                oldTotalStartingChips,
-                newTotalStartingChips: this.totalStartingChips
-            });
-            gameLogger.error(this.name, '[MONEY] Adjusted totalStartingChips due to pot clearing', {
-                oldTotalStartingChips,
-                newTotalStartingChips: this.totalStartingChips,
-                chipsLost: potBeforeForceClear,
                 handNumber: this.handsPlayed,
-                totalChipsAndPotAfterReset,
-                calculation: `Reset to actual: ${this.totalStartingChips} (was ${oldTotalStartingChips}, lost ${potBeforeForceClear})`
+                reason: 'totalStartingChips should NEVER decrease - represents original starting chips'
             });
             
-            // Record fix attempt - this is a mitigation, but chips were still lost
-            // Success = we reset totalStartingChips to actual chips to prevent cascading failures
-            // Failure = we couldn't reset or reset didn't work
-            const adjustmentSuccess = Math.abs(this.totalStartingChips - totalChipsAndPotAfterReset) < 0.01;
-            this._recordFixAttempt('FIX_1_TOTAL_STARTING_CHIPS_ADJUSTMENT', adjustmentSuccess, {
+            // CRITICAL: Pause simulation when chips are lost
+            if (this.isSimulation && this.onPauseSimulation) {
+                this.onPauseSimulation(`CRITICAL: ${chipsLost} chips lost due to pot not cleared (Hand ${this.handsPlayed})`);
+            }
+            
+            // Record fix attempt - this is a FAILURE because chips were lost
+            this._recordFixAttempt('FIX_1_POT_NOT_CLEARED_AT_HAND_START', false, {
                 context: 'HAND_START',
-                oldTotalStartingChips,
-                newTotalStartingChips: this.totalStartingChips,
-                chipsLost: potBeforeForceClear,
+                chipsLost,
+                potBeforeForceClear,
+                totalStartingChips: this.totalStartingChips,
+                totalChipsAndPotAfterReset,
                 handNumber: this.handsPlayed,
-                totalChipsAndPotAfterReset
+                phase: this.phase,
+                reason: 'Pot was not cleared before hand start - chips were lost'
             });
         }
         
@@ -5116,25 +5109,20 @@ class Table {
                         phase: this.phase
                     });
                     
-                    // CRITICAL FIX: Adjust totalStartingChips to reflect the chips that were lost
-                    // The pot adjustment recovers the chips for this hand, but the chips were already lost from the system
-                    // We MUST adjust totalStartingChips to prevent validation from failing continuously
-                    // This is a temporary fix while we investigate the root cause
-                    const oldTotalStartingChips = this.totalStartingChips;
-                    if (this.totalStartingChips > 0 && chipsLost > 0) {
-                        this.totalStartingChips = this.totalStartingChips - chipsLost;
-                        this._logTotalStartingChipsChange('ADJUST_FOR_CHIP_LOSS', 'FIX_2_CHIPS_LOST_BETTING', oldTotalStartingChips, this.totalStartingChips, {
-                            chipsLost,
-                            potBeforeCalculation,
-                            sumOfTotalBets,
-                            handNumber: this.handsPlayed,
-                            phase: this.phase,
-                            warning: 'Chips were lost during betting. Pot adjusted to recover them, but totalStartingChips adjusted to reflect the loss. Root cause needs investigation.'
-                        });
-                        console.error(`[Table ${this.name}] ⚠️ CRITICAL: ${chipsLost} chips were LOST during betting! Pot adjusted to recover them, totalStartingChips adjusted from ${oldTotalStartingChips} to ${this.totalStartingChips}. Root cause must be investigated!`);
-                    } else {
-                        console.error(`[Table ${this.name}] ⚠️ CRITICAL: ${chipsLost} chips were LOST during betting! Pot adjusted to recover them, but root cause must be investigated!`);
-                    }
+                    // CRITICAL FIX: totalStartingChips should NEVER be decreased
+                    // If chips are lost, this is a CRITICAL BUG that must be fixed, not masked
+                    // We adjust the pot to recover the chips for this hand, but we MUST pause the simulation
+                    // to investigate the root cause
+                    console.error(`[Table ${this.name}] ⚠️⚠️⚠️ CRITICAL BUG: ${chipsLost} chips were LOST during betting! totalStartingChips MUST NOT be decreased!`);
+                    gameLogger.error(this.name, '[CRITICAL] Chips lost during betting - totalStartingChips NOT adjusted (should never decrease)', {
+                        chipsLost,
+                        potBeforeCalculation,
+                        sumOfTotalBets,
+                        totalStartingChips: this.totalStartingChips,
+                        handNumber: this.handsPlayed,
+                        phase: this.phase,
+                        warning: 'Chips were lost during betting. Pot adjusted to recover them, but totalStartingChips NOT adjusted (should never decrease). Root cause MUST be investigated.'
+                    });
                     gameLogger.error(this.name, '[CRITICAL] Chips lost during betting - pot and totalStartingChips adjusted but root cause needs investigation', {
                         chipsLost,
                         potBeforeCalculation,
@@ -5206,21 +5194,20 @@ class Table {
                         phase: this.phase
                     });
                     
-                    // CRITICAL: Adjust totalStartingChips to reflect the chips that were created
-                    // This prevents validation from failing continuously
-                    const oldTotalStartingChips = this.totalStartingChips;
-                    if (this.totalStartingChips > 0 && chipsCreated > 0) {
-                        this.totalStartingChips = this.totalStartingChips + chipsCreated;
-                        this._logTotalStartingChipsChange('ADJUST_FOR_CHIP_CREATION', 'FIX_2_CHIPS_CREATED_BETTING', oldTotalStartingChips, this.totalStartingChips, {
-                            chipsCreated,
-                            potBeforeCalculation,
-                            sumOfTotalBets,
-                            handNumber: this.handsPlayed,
-                            phase: this.phase,
-                            reason: 'Chips created during betting - adjusting totalStartingChips to match reality'
-                        });
-                        console.error(`[Table ${this.name}] ⚠️ ADJUSTED totalStartingChips from ${oldTotalStartingChips} to ${this.totalStartingChips} to account for ${chipsCreated} created chips`);
-                    }
+                    // CRITICAL FIX: totalStartingChips should NEVER be increased after game start
+                    // If chips are created, this is a CRITICAL BUG that must be fixed, not masked
+                    // We adjust the pot to remove the created chips, but we MUST pause the simulation
+                    // to investigate the root cause
+                    console.error(`[Table ${this.name}] ⚠️⚠️⚠️ CRITICAL BUG: ${chipsCreated} chips were CREATED during betting! totalStartingChips MUST NOT be increased!`);
+                    gameLogger.error(this.name, '[CRITICAL] Chips created during betting - totalStartingChips NOT adjusted (should never increase after game start)', {
+                        chipsCreated,
+                        potBeforeCalculation,
+                        sumOfTotalBets,
+                        totalStartingChips: this.totalStartingChips,
+                        handNumber: this.handsPlayed,
+                        phase: this.phase,
+                        warning: 'Chips were created during betting. Pot adjusted to remove them, but totalStartingChips NOT adjusted (should never increase after game start). Root cause MUST be investigated.'
+                    });
                     
                     // Record fix attempt - this is a failure because chips were created
                     this._recordFixAttempt('FIX_2_CHIPS_CREATED_BETTING', false, {
