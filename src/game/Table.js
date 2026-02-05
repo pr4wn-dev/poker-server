@@ -1870,6 +1870,20 @@ class Table {
             // Clear turn timer first
             this.clearTurnTimer();
             
+            // CRITICAL FIX: When player leaves mid-game, their chips should go to the pot (not be lost)
+            // Add their remaining chips to the pot before removing them
+            if (player.chips > 0) {
+                const chipsToPot = player.chips;
+                this.pot += chipsToPot;
+                player.chips = 0;
+                gameLogger.gameEvent(this.name, 'Player left mid-game - chips added to pot', {
+                    player: player.name,
+                    chipsAddedToPot: chipsToPot,
+                    potBefore: this.pot - chipsToPot,
+                    potAfter: this.pot
+                });
+            }
+            
             // Mark as folded and remove
             player.isFolded = true;
             player.isActive = false;
@@ -1878,17 +1892,42 @@ class Table {
             // Advance the game manually since the player is gone
             // console.log(`[Table ${this.name}] Player left during their turn - advancing game`);
             this.advanceGame();
-        } else {
+        } else if (wasInGame) {
+            // CRITICAL FIX: When player leaves mid-game (not their turn), their chips should go to the pot
+            if (player.chips > 0) {
+                const chipsToPot = player.chips;
+                this.pot += chipsToPot;
+                player.chips = 0;
+                gameLogger.gameEvent(this.name, 'Player left mid-game - chips added to pot', {
+                    player: player.name,
+                    chipsAddedToPot: chipsToPot,
+                    potBefore: this.pot - chipsToPot,
+                    potAfter: this.pot
+                });
+            }
             // Not their turn - just remove
+            this.seats[seatIndex] = null;
+        } else {
+            // Not in game - just remove (chips will be returned via return value)
             this.seats[seatIndex] = null;
         }
         
-        // CRITICAL: Don't modify totalStartingChips when players leave mid-game
-        // The chips are still in the system (just not with that player), so totalStartingChips should remain constant
-        // Only track totalStartingChips at game start - it represents the total chips in the system at that moment
-        // If we decrement it when players leave, we'll get false validation failures
-        // The actual chips are still in the system (with other players or in pot), so validation should still pass
-        if (this.gameStarted) {
+        // CRITICAL: Adjust totalStartingChips based on when player leaves
+        // - BEFORE game start: Chips are returned to player, so decrease totalStartingChips
+        // - AFTER game start: Chips stay in system (pot/redistributed), so keep totalStartingChips unchanged
+        if (!this.gameStarted) {
+            // Player left before game started - chips are returned, so decrease totalStartingChips
+            const oldTotalStartingChips = this.totalStartingChips;
+            this.totalStartingChips = Math.max(0, this.totalStartingChips - this.buyIn);
+            this._logTotalStartingChipsChange('DECREASE_FOR_PLAYER_LEAVE', 'REMOVE_PLAYER_BEFORE_GAME_START', oldTotalStartingChips, this.totalStartingChips, {
+                player: player.name,
+                playerId,
+                chips,
+                buyIn: this.buyIn,
+                reason: 'Player left before game start - chips returned, totalStartingChips decreased'
+            });
+        } else {
+            // Player left mid-game - chips stay in system (pot or redistributed), so totalStartingChips unchanged
             gameLogger.gameEvent(this.name, 'Player left mid-game (totalStartingChips unchanged)', {
                 player: player.name,
                 chips,
