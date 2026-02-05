@@ -5638,7 +5638,7 @@ class Table {
                             isAllIn: seat.isAllIn,
                             isActive: seat.isActive
                         } : null).filter(Boolean),
-                        fix: 'Adjusting pot to match sumOfTotalBets to prevent further loss',
+                        fix: 'DO NOT adjust pot - investigate root cause of chip loss',
                         stackTrace: new Error().stack
                     });
                     // CRITICAL: DO NOT adjust pot to mask the problem!
@@ -5709,7 +5709,7 @@ class Table {
                             isAllIn: seat.isAllIn,
                             isActive: seat.isActive
                         } : null).filter(Boolean),
-                        fix: 'Adjusting pot to match sumOfTotalBets to prevent chip creation',
+                        fix: 'DO NOT adjust pot - investigate root cause of chip creation',
                         stackTrace: new Error().stack
                     });
                     // CRITICAL: DO NOT adjust pot to mask the problem!
