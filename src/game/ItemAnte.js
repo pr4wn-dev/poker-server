@@ -90,7 +90,7 @@ class ItemAnte {
             submittedAt: Date.now()
         });
         
-        console.log(`[ItemAnte] Started by ${userId} with item: ${firstItem.name} (value: ${this.minimumValue})`);
+        // console.log(`[ItemAnte] Started by ${userId} with item: ${firstItem.name} (value: ${this.minimumValue})`);
         
         // ROOT TRACING: Log item ante start with full state
         gameLogger.gameEvent(this.tableId, `[ITEM_ANTE] STARTED`, {
@@ -150,7 +150,7 @@ class ItemAnte {
                 submittedAt: Date.now()
             });
             
-            console.log(`[ItemAnte] ${userId} submitted item ${item.name} (value: ${itemValue}) - REJECTED (minimum: ${this.minimumValue})`);
+            // console.log(`[ItemAnte] ${userId} submitted item ${item.name} (value: ${itemValue}) - REJECTED (minimum: ${this.minimumValue})`);
             
             // ROOT TRACING: Log rejected submission
             gameLogger.gameEvent(this.tableId, `[ITEM_ANTE] SUBMISSION_REJECTED`, {
@@ -186,7 +186,7 @@ class ItemAnte {
             item: item
         });
         
-        console.log(`[ItemAnte] ${userId} submitted item ${item.name} (value: ${itemValue}) - APPROVED`);
+        // console.log(`[ItemAnte] ${userId} submitted item ${item.name} (value: ${itemValue}) - APPROVED`);
         
         // ROOT TRACING: Log approved submission
         gameLogger.gameEvent(this.tableId, `[ITEM_ANTE] SUBMISSION_APPROVED`, {
@@ -287,7 +287,7 @@ class ItemAnte {
             this.approvedItems.splice(index, 1);
         }
         
-        console.log(`[ItemAnte] ${userId}'s item declined`);
+        // console.log(`[ItemAnte] ${userId}'s item declined`);
         
         return { success: true };
     }
@@ -315,7 +315,7 @@ class ItemAnte {
                     }
                 } else {
                     submission.status = SUBMISSION_STATUS.DECLINED;
-                    console.log(`[ItemAnte] Auto-declined pending submission from ${userId} (value too low)`);
+                    // console.log(`[ItemAnte] Auto-declined pending submission from ${userId} (value too low)`);
                 }
             }
         }
@@ -327,7 +327,7 @@ class ItemAnte {
         
         this.status = ITEM_ANTE_STATUS.LOCKED;
         
-        console.log(`[ItemAnte] Locked with ${this.approvedItems.length} items`);
+        // console.log(`[ItemAnte] Locked with ${this.approvedItems.length} items`);
         
         // ROOT TRACING: Log item ante lock
         gameLogger.gameEvent(this.tableId, `[ITEM_ANTE] LOCKED`, {
@@ -364,7 +364,7 @@ class ItemAnte {
         // Return the items to be transferred
         const winnings = this.approvedItems.map(entry => entry.item);
         
-        console.log(`[ItemAnte] ${winnerId} won ${winnings.length} items!`);
+        // console.log(`[ItemAnte] ${winnerId} won ${winnings.length} items!`);
         
         // ROOT TRACING: Log item ante award
         gameLogger.gameEvent(this.tableId, `[ITEM_ANTE] AWARDED`, {
@@ -407,7 +407,7 @@ class ItemAnte {
         this.submissions.clear();
         this.approvedItems = [];
         
-        console.log(`[ItemAnte] Cancelled, returning ${itemsToReturn.length} items`);
+        // console.log(`[ItemAnte] Cancelled, returning ${itemsToReturn.length} items`);
         
         return {
             success: true,

@@ -141,13 +141,19 @@ class SocketHandler {
                 try {
                     const inventory = await userRepo.getInventory(user.userId);
                     
-                    // ROOT TRACING: Log inventory request
-                    console.log(`[SocketHandler] [INVENTORY] GET_INVENTORY | userId: ${user.userId} | username: ${user.profile?.username} | itemCount: ${inventory?.length || 0}`);
+                    // ROOT TRACING: Log inventory request (commented out - use gameLogger for tracing)
+                    // console.log(`[SocketHandler] [INVENTORY] GET_INVENTORY | userId: ${user.userId} | username: ${user.profile?.username} | itemCount: ${inventory?.length || 0}`);
                     
                     callback({ success: true, inventory });
                     socket.emit('get_inventory_response', { success: true, inventory });
                 } catch (error) {
-                    console.error(`[SocketHandler] [INVENTORY] GET_INVENTORY_ERROR | userId: ${user.userId} | error: ${error.message}`, error);
+                    // console.error(`[SocketHandler] [INVENTORY] GET_INVENTORY_ERROR | userId: ${user.userId} | error: ${error.message}`, error);
+                    gameLogger.gameEvent('SYSTEM', `[INVENTORY] GET_INVENTORY_ERROR`, {
+                        userId: user.userId,
+                        username: user.profile?.username,
+                        error: error.message,
+                        stackTrace: error.stack
+                    });
                     callback({ success: false, error: error.message });
                 }
             });
@@ -160,8 +166,8 @@ class SocketHandler {
                     return callback({ success: false, error: 'Not authenticated' });
                 }
                 
-                // ROOT TRACING: Log test items request start
-                console.log(`[SocketHandler] [INVENTORY] GET_TEST_ITEMS_START | userId: ${user.userId} | username: ${user.profile?.username}`);
+                // ROOT TRACING: Log test items request start (commented out - use gameLogger for tracing)
+                // console.log(`[SocketHandler] [INVENTORY] GET_TEST_ITEMS_START | userId: ${user.userId} | username: ${user.profile?.username}`);
                 
                 try {
                     const Item = require('../models/Item');
@@ -211,8 +217,14 @@ class SocketHandler {
                     // Get updated inventory
                     const inventory = await userRepo.getInventory(user.userId);
                     
-                    // ROOT TRACING: Log test items completion
-                    console.log(`[SocketHandler] [INVENTORY] GET_TEST_ITEMS_SUCCESS | userId: ${user.userId} | username: ${user.profile?.username} | added: ${testItems.length} | total: ${inventory?.length || 0}`);
+                    // ROOT TRACING: Log test items completion (commented out - use gameLogger for tracing)
+                    // console.log(`[SocketHandler] [INVENTORY] GET_TEST_ITEMS_SUCCESS | userId: ${user.userId} | username: ${user.profile?.username} | added: ${testItems.length} | total: ${inventory?.length || 0}`);
+                    gameLogger.gameEvent('SYSTEM', `[INVENTORY] GET_TEST_ITEMS_SUCCESS`, {
+                        userId: user.userId,
+                        username: user.profile?.username,
+                        added: testItems.length,
+                        total: inventory?.length || 0
+                    });
                     
                     const response = { 
                         success: true, 
@@ -223,11 +235,67 @@ class SocketHandler {
                     callback(response);
                     socket.emit('get_test_items_response', response);
                 } catch (error) {
-                    console.error(`[SocketHandler] [INVENTORY] GET_TEST_ITEMS_ERROR | userId: ${user.userId} | error: ${error.message}`, error);
+                    // console.error(`[SocketHandler] [INVENTORY] GET_TEST_ITEMS_ERROR | userId: ${user.userId} | error: ${error.message}`, error);
+                    gameLogger.gameEvent('SYSTEM', `[INVENTORY] GET_TEST_ITEMS_ERROR`, {
+                        userId: user.userId,
+                        username: user.profile?.username,
+                        error: error.message,
+                        stackTrace: error.stack
+                    });
                     callback({ success: false, error: error.message });
                 }
             });
 
+            // ============ Item Ante View ============
+            
+            // View item ante (for players and spectators to see what's in the ante)
+            socket.on('get_item_ante', (data, callback) => {
+                const user = this.getAuthenticatedUser(socket);
+                if (!user) {
+                    return callback({ success: false, error: 'Not authenticated' });
+                }
+                
+                const player = this.gameManager.players.get(user.userId);
+                if (!player?.currentTableId) {
+                    return callback({ success: false, error: 'Not at a table' });
+                }
+                
+                const table = this.gameManager.getTable(player.currentTableId);
+                if (!table) {
+                    return callback({ success: false, error: 'Table not found' });
+                }
+                
+                // ROOT TRACING: Track item ante view request
+                table._traceUniversal('ITEM_ANTE_VIEW', {
+                    userId: user.userId,
+                    username: user.profile?.username,
+                    isSpectator: table.isSpectator(user.userId),
+                    itemAnteEnabled: table.itemAnteEnabled,
+                    itemAnteStatus: table.itemAnte?.status
+                });
+                
+                const itemAnteState = table.getItemAnteState(user.userId);
+                
+                // ROOT TRACING: Log view result
+                gameLogger.gameEvent(table.name, `[ITEM_ANTE] VIEW`, {
+                    userId: user.userId,
+                    username: user.profile?.username,
+                    isSpectator: table.isSpectator(user.userId),
+                    status: itemAnteState?.status || 'inactive',
+                    approvedCount: itemAnteState?.approvedCount || 0,
+                    totalValue: itemAnteState?.totalValue || 0
+                });
+                
+                table._traceUniversalAfter('ITEM_ANTE_VIEW', {
+                    success: !!itemAnteState,
+                    status: itemAnteState?.status,
+                    approvedCount: itemAnteState?.approvedCount || 0
+                });
+                
+                callback({ success: true, itemAnte: itemAnteState });
+                socket.emit('get_item_ante_response', { success: true, itemAnte: itemAnteState });
+            });
+            
             // ============ Lobby ============
             
             socket.on('get_tables', (data, callback) => {
@@ -1475,18 +1543,24 @@ class SocketHandler {
                 const profile = await userRepo.getFullProfile(user.userId);
                 const item = profile.inventory.find(i => i.id === data.itemId);
                 
-                // ROOT TRACING: Log item ante start attempt
-                console.log(`[SocketHandler] [ITEM_ANTE] START_ATTEMPT | userId: ${user.userId} | tableId: ${player.currentTableId} | itemId: ${data.itemId} | itemFound: ${!!item}`);
+                // ROOT TRACING: Log item ante start attempt (commented out - use gameLogger for tracing)
+                // console.log(`[SocketHandler] [ITEM_ANTE] START_ATTEMPT | userId: ${user.userId} | tableId: ${player.currentTableId} | itemId: ${data.itemId} | itemFound: ${!!item}`);
                 
                 if (!item) {
-                    console.error(`[SocketHandler] [ITEM_ANTE] START_FAILED | userId: ${user.userId} | error: ITEM_NOT_FOUND | itemId: ${data.itemId}`);
+                    // console.error(`[SocketHandler] [ITEM_ANTE] START_FAILED | userId: ${user.userId} | error: ITEM_NOT_FOUND | itemId: ${data.itemId}`);
+                    gameLogger.gameEvent(player.currentTableId, `[ITEM_ANTE] START_FAILED`, {
+                        userId: user.userId,
+                        tableId: player.currentTableId,
+                        error: 'ITEM_NOT_FOUND',
+                        itemId: data.itemId
+                    });
                     return callback({ success: false, error: 'Item not found in inventory' });
                 }
 
                 const result = table.startItemAnte(user.userId, item);
                 
-                // ROOT TRACING: Log item ante start result
-                console.log(`[SocketHandler] [ITEM_ANTE] START_RESULT | userId: ${user.userId} | tableId: ${player.currentTableId} | success: ${result.success} | error: ${result.error || 'none'} | minimumValue: ${result.minimumValue || 'N/A'}`);
+                // ROOT TRACING: Log item ante start result (commented out - use gameLogger for tracing)
+                // console.log(`[SocketHandler] [ITEM_ANTE] START_RESULT | userId: ${user.userId} | tableId: ${player.currentTableId} | success: ${result.success} | error: ${result.error || 'none'} | minimumValue: ${result.minimumValue || 'N/A'}`);
                 
                 if (result.success) {
                     // Broadcast item ante started to all players (keeping old event name for backward compatibility)
@@ -1521,18 +1595,24 @@ class SocketHandler {
                 const profile = await userRepo.getFullProfile(user.userId);
                 const item = profile.inventory.find(i => i.id === data.itemId);
                 
-                // ROOT TRACING: Log item ante submission attempt
-                console.log(`[SocketHandler] [ITEM_ANTE] SUBMIT_ATTEMPT | userId: ${user.userId} | tableId: ${player.currentTableId} | itemId: ${data.itemId} | itemFound: ${!!item}`);
+                // ROOT TRACING: Log item ante submission attempt (commented out - use gameLogger for tracing)
+                // console.log(`[SocketHandler] [ITEM_ANTE] SUBMIT_ATTEMPT | userId: ${user.userId} | tableId: ${player.currentTableId} | itemId: ${data.itemId} | itemFound: ${!!item}`);
                 
                 if (!item) {
-                    console.error(`[SocketHandler] [ITEM_ANTE] SUBMIT_FAILED | userId: ${user.userId} | error: ITEM_NOT_FOUND | itemId: ${data.itemId}`);
+                    // console.error(`[SocketHandler] [ITEM_ANTE] SUBMIT_FAILED | userId: ${user.userId} | error: ITEM_NOT_FOUND | itemId: ${data.itemId}`);
+                    gameLogger.gameEvent(player.currentTableId, `[ITEM_ANTE] SUBMIT_FAILED`, {
+                        userId: user.userId,
+                        tableId: player.currentTableId,
+                        error: 'ITEM_NOT_FOUND',
+                        itemId: data.itemId
+                    });
                     return callback({ success: false, error: 'Item not found in inventory' });
                 }
 
                 const result = table.submitToItemAnte(user.userId, item);
                 
-                // ROOT TRACING: Log item ante submission result
-                console.log(`[SocketHandler] [ITEM_ANTE] SUBMIT_RESULT | userId: ${user.userId} | tableId: ${player.currentTableId} | success: ${result.success} | error: ${result.error || 'none'} | itemValue: ${result.itemValue || 'N/A'} | minimumValue: ${result.minimumValue || 'N/A'}`);
+                // ROOT TRACING: Log item ante submission result (commented out - use gameLogger for tracing)
+                // console.log(`[SocketHandler] [ITEM_ANTE] SUBMIT_RESULT | userId: ${user.userId} | tableId: ${player.currentTableId} | success: ${result.success} | error: ${result.error || 'none'} | itemValue: ${result.itemValue || 'N/A'} | minimumValue: ${result.minimumValue || 'N/A'}`);
                 
                 if (result.success) {
                     // Notify table creator of new submission (keeping old event name for backward compatibility)

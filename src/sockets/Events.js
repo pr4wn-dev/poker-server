@@ -130,6 +130,7 @@ module.exports = {
     OPT_OUT_SIDE_POT: 'opt_out_side_pot',  // Actually opts out of item ante
     APPROVE_SIDE_POT_ITEM: 'approve_side_pot_item',  // Actually approves item ante item
     DECLINE_SIDE_POT_ITEM: 'decline_side_pot_item',  // Actually declines item ante item
+    GET_ITEM_ANTE: 'get_item_ante',  // View item ante (for players and spectators)
     
     // Client -> Server: Inventory
     GET_INVENTORY: 'get_inventory',
@@ -171,6 +172,7 @@ module.exports = {
     YOUR_SIDE_POT_APPROVED: 'your_side_pot_approved',  // Actually your item ante approved
     YOUR_SIDE_POT_DECLINED: 'your_side_pot_declined',  // Actually your item ante declined
     SIDE_POT_AWARDED: 'side_pot_awarded',  // Actually item ante awarded
+    GET_ITEM_ANTE_RESPONSE: 'get_item_ante_response',  // Response to get_item_ante request
     
     // Server -> Client: Inventory
     GET_INVENTORY_RESPONSE: 'get_inventory_response',

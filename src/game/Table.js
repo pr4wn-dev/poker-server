@@ -2154,7 +2154,7 @@ class Table {
             if (needsFirstItem || !hasSubmitted) {
                 // Player needs to submit item - this will be indicated in table state
                 // Unity client should prompt player to select item
-                console.log(`[Table ${this.name}] Player ${name} (${playerId}) needs to submit item for item ante`);
+                // console.log(`[Table ${this.name}] Player ${name} (${playerId}) needs to submit item for item ante`);
             }
         }
 
@@ -6126,9 +6126,18 @@ class Table {
                 });
                 
                 if (itemAnteResult?.success) {
-                    console.log(`[Table ${this.name}] ${itemWinner.name} wins ${itemAnteResult.items.length} items from item ante!`);
+                    // console.log(`[Table ${this.name}] ${itemWinner.name} wins ${itemAnteResult.items.length} items from item ante!`);
+                    gameLogger.gameEvent(this.name, `[ITEM_ANTE] AWARD_SUCCESS`, {
+                        winnerId: itemWinner.playerId,
+                        winnerName: itemWinner.name,
+                        itemCount: itemAnteResult.items.length
+                    });
                 } else {
-                    console.error(`[Table ${this.name}] Failed to award item ante: ${itemAnteResult?.error}`);
+                    // console.error(`[Table ${this.name}] Failed to award item ante: ${itemAnteResult?.error}`);
+                    gameLogger.gameEvent(this.name, `[ITEM_ANTE] AWARD_ERROR`, {
+                        winnerId: itemWinner.playerId,
+                        error: itemAnteResult?.error
+                    });
                 }
             }
         }
@@ -8500,7 +8509,12 @@ class Table {
         }
         if (!this.itemAnte) {
             this._traceUniversalAfter('ITEM_ANTE_START', { success: false, error: 'ITEM_ANTE_NOT_INITIALIZED' });
-            console.error(`[Table ${this.name}] Item ante not initialized but itemAnteEnabled is true!`);
+            // console.error(`[Table ${this.name}] Item ante not initialized but itemAnteEnabled is true!`);
+            gameLogger.gameEvent(this.name, `[ITEM_ANTE] START_ERROR`, {
+                error: 'ITEM_ANTE_NOT_INITIALIZED',
+                userId,
+                itemAnteEnabled: this.itemAnteEnabled
+            });
             return { success: false, error: 'Item ante system not initialized' };
         }
         if (this.gameStarted) {
@@ -8548,7 +8562,12 @@ class Table {
         }
         if (!this.itemAnte) {
             this._traceUniversalAfter('ITEM_ANTE_SUBMIT', { success: false, error: 'ITEM_ANTE_NOT_INITIALIZED' });
-            console.error(`[Table ${this.name}] Item ante not initialized but itemAnteEnabled is true!`);
+            // console.error(`[Table ${this.name}] Item ante not initialized but itemAnteEnabled is true!`);
+            gameLogger.gameEvent(this.name, `[ITEM_ANTE] SUBMIT_ERROR`, {
+                error: 'ITEM_ANTE_NOT_INITIALIZED',
+                userId,
+                itemAnteEnabled: this.itemAnteEnabled
+            });
             return { success: false, error: 'Item ante system not initialized' };
         }
         if (!item) {
@@ -8597,14 +8616,14 @@ class Table {
     getItemAnteState(forUserId = null) {
         try {
             if (!this.itemAnte) {
-                console.warn(`[Table ${this.name}] [ITEM_ANTE_DEBUG] itemAnte not initialized`);
+                // console.warn(`[Table ${this.name}] [ITEM_ANTE_DEBUG] itemAnte not initialized`);
                 return null; // Item ante not initialized
             }
             const state = this.itemAnte.getState(forUserId);
             // Debug logging for item ante state
             if (state && state.status !== 'inactive') {
-                console.log(`[Table ${this.name}] [ITEM_ANTE_DEBUG] Item ante state:`, {
-                    status: state.status,
+                // console.log(`[Table ${this.name}] [ITEM_ANTE_DEBUG] Item ante state:`, {
+                //     status: state.status,
                     approvedCount: state.approvedCount,
                     hasCreatorItem: !!state.creatorItem,
                     forUserId: forUserId || 'all'
@@ -8612,7 +8631,12 @@ class Table {
             }
             return state;
         } catch (error) {
-            console.error(`[Table ${this.name}] Error getting item ante state:`, error);
+            // console.error(`[Table ${this.name}] Error getting item ante state:`, error);
+            gameLogger.gameEvent(this.name, `[ITEM_ANTE] GET_STATE_ERROR`, {
+                error: error.message,
+                stackTrace: error.stack,
+                forUserId: forUserId || 'all'
+            });
             return null; // Return null on error to prevent crashes
         }
     }
