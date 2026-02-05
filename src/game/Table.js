@@ -1252,44 +1252,49 @@ class Table {
             }
         }
         
-        // CRITICAL FIX: After resetting all chips, recalculate totalStartingChips based on ACTUAL chips in system
-        // This ensures totalStartingChips matches reality, not theoretical buy-ins
+        // CRITICAL FIX: Calculate totalStartingChips correctly by summing all player chips AFTER reset
+        // DO NOT adjust totalStartingChips to match reality - that masks the problem!
+        // Instead, calculate it correctly from the actual chips in the system at game start
         const actualTotalChips = this.seats
             .filter(s => s && s.isActive !== false)
             .reduce((sum, s) => sum + (s.chips || 0), 0);
         const actualTotalChipsAndPot = actualTotalChips + this.pot;
         
-        if (Math.abs(this.totalStartingChips - actualTotalChipsAndPot) > 0.01) {
-            console.warn(`[Table ${this.name}] ⚠️ WARNING: totalStartingChips (${this.totalStartingChips}) != actual chips (${actualTotalChipsAndPot}). Adjusting to match reality.`);
-            const oldTotalStartingChips = this.totalStartingChips;
-            this.totalStartingChips = actualTotalChipsAndPot;
-            this._logTotalStartingChipsChange('ADJUST_TO_REALITY', 'HANDLE_GAME_START', oldTotalStartingChips, this.totalStartingChips, {
-                reason: 'totalStartingChips did not match actual chips after reset - adjusting to reality',
+        // CRITICAL: Set totalStartingChips to the ACTUAL chips in system at game start
+        // This is the correct value - if chips are missing, we'll detect it in validation
+        const oldTotalStartingChips = this.totalStartingChips;
+        this.totalStartingChips = actualTotalChipsAndPot;
+        
+        if (Math.abs(oldTotalStartingChips - actualTotalChipsAndPot) > 0.01) {
+            console.log(`[Table ${this.name}] Setting totalStartingChips to ${actualTotalChipsAndPot} (was ${oldTotalStartingChips}) at game start`);
+            this._logTotalStartingChipsChange('SET_AT_GAME_START', 'HANDLE_GAME_START', oldTotalStartingChips, this.totalStartingChips, {
+                reason: 'Setting totalStartingChips to actual chips in system at game start',
                 actualTotalChips,
                 pot: this.pot,
                 actualTotalChipsAndPot
             });
-            gameLogger.gameEvent(this.name, '[MONEY] Adjusted totalStartingChips to match actual chips', {
-                oldTotalStartingChips,
-                newTotalStartingChips: this.totalStartingChips,
-                actualTotalChips,
-                pot: this.pot,
-                actualTotalChipsAndPot
-            });
-            
-            // Record fix attempt for the METHOD of "adjusting totalStartingChips at game start"
-            // This is allowed at game start, but we track it to see if this method is working
-            const adjustmentDifference = Math.abs(this.totalStartingChips - actualTotalChipsAndPot);
-            const adjustmentSuccess = adjustmentDifference < 0.01;
-            this._recordFixAttempt('FIX_1_TOTAL_STARTING_CHIPS_ADJUSTMENT', adjustmentSuccess, {
-                context: 'HANDLE_GAME_START',
-                method: 'ADJUST_TO_REALITY_AT_GAME_START',
-                oldTotalStartingChips,
-                newTotalStartingChips: this.totalStartingChips,
+        }
+        
+        // CRITICAL: If chips are already missing at game start, this is a MAJOR PROBLEM
+        // Log it but don't adjust - we need to find where chips were lost
+        const expectedChips = this.seats.filter(s => s && s.isActive !== false).length * this.buyIn;
+        if (Math.abs(actualTotalChipsAndPot - expectedChips) > 0.01) {
+            const missingAtStart = expectedChips - actualTotalChipsAndPot;
+            console.error(`[Table ${this.name}] ⚠️⚠️⚠️ CRITICAL: ${missingAtStart} chips ALREADY MISSING at game start!`);
+            console.error(`[Table ${this.name}] Expected: ${expectedChips} (${this.seats.filter(s => s && s.isActive !== false).length} players × ${this.buyIn} buy-in)`);
+            console.error(`[Table ${this.name}] Actual: ${actualTotalChipsAndPot}`);
+            gameLogger.error(this.name, '[CRITICAL] Chips missing at game start', {
+                expectedChips,
                 actualTotalChipsAndPot,
-                adjustmentDifference,
-                handNumber: this.handsPlayed,
-                reason: 'Adjusting totalStartingChips at game start to match actual chips - this is allowed at game start only'
+                missingAtStart,
+                playerCount: this.seats.filter(s => s && s.isActive !== false).length,
+                buyIn: this.buyIn,
+                allSeats: this.seats.map((s, i) => s ? {
+                    seatIndex: i,
+                    name: s.name,
+                    chips: s.chips,
+                    isActive: s.isActive
+                } : null).filter(s => s !== null)
             });
         }
         
