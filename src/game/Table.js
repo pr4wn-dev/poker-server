@@ -6100,15 +6100,6 @@ class Table {
                         handNumber: this.handsPlayed,
                         phase: this.phase
                     });
-                } else {
-                    // Record fix attempt - success if no chips created
-                    this._recordFixAttempt('FIX_2_CHIPS_CREATED_BETTING', true, {
-                        potBeforeCalculation,
-                        sumOfTotalBets,
-                        difference: potBeforeCalculation - sumOfTotalBets,
-                        handNumber: this.handsPlayed,
-                        phase: this.phase
-                    });
                 }
             } else {
                 // Record fix attempt - success if no chips lost
