@@ -53,6 +53,8 @@ class Table {
         this.creatorId = options.creatorId || null;
         this.isSimulation = options.isSimulation || false;
         this.onPauseSimulation = options.onPauseSimulation || null; // Callback to pause simulation when issues are found
+        this.isPaused = false; // Pause state for Unity to read
+        this.pauseReason = null; // Reason for pause
         this.createdAt = Date.now();
         
         // Simulation game counter (for display on client)
@@ -6822,6 +6824,8 @@ class Table {
             simulationGamesPlayed: this.isSimulation ? this.simulationGamesPlayed : 0,
             simulationMaxGames: this.isSimulation ? this.simulationMaxGames : 0,
             simulationElapsedTime: this.isSimulation && this.simulationStartTime ? Math.floor((Date.now() - this.simulationStartTime) / 1000) : 0,  // Seconds elapsed
+            isPaused: this.isPaused || false, // Unity reads this to pause itself
+            pauseReason: this.pauseReason || null, // Reason for pause
             practiceMode: this.practiceMode,
             houseRules: this.houseRules?.toJSON?.() || null,
             sidePot: this.getSidePotState(forPlayerId),

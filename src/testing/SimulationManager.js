@@ -1108,6 +1108,12 @@ class SimulationManager {
         simulation.pauseReason = reason;
         simulation.pausedAt = Date.now();
         
+        // Set pause state on Table so Unity can read it from table_state
+        if (table) {
+            table.isPaused = true;
+            table.pauseReason = reason;
+        }
+        
         // Notify all socket bots to pause
         for (const bot of simulation.socketBots) {
             bot.isPaused = true;
@@ -1159,6 +1165,12 @@ class SimulationManager {
         simulation.isPaused = false;
         simulation.pauseReason = null;
         simulation.pausedAt = null;
+        
+        // Clear pause state on Table so Unity can resume
+        if (table) {
+            table.isPaused = false;
+            table.pauseReason = null;
+        }
         
         // Notify all socket bots to resume
         for (const bot of simulation.socketBots) {
