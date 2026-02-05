@@ -1520,6 +1520,20 @@ class Table {
         });
         console.log(`[Table ${this.name}] ${player.name} timed out after ${Math.floor(waitTime/1000)}s - auto-folding`);
         
+        // Record fix attempt - timer timeout is a failure of the timer clear fix
+        // This indicates the fix method (clearing timer at action start) didn't work
+        this._recordFixAttempt('FIX_66_TIMER_CLEARED_AT_ACTION_START', false, {
+            context: 'HANDLE_TURN_TIMEOUT',
+            player: player.name,
+            seatIndex: this.currentPlayerIndex,
+            turnTimeLimit: this.turnTimeLimit,
+            waitTimeMs: waitTime,
+            method: 'CLEAR_TIMER_AT_START',
+            reason: 'Timer still fired despite clearing at action start - indicates action not received in time or race condition',
+            handNumber: this.handsPlayed,
+            phase: this.phase
+        });
+        
         // Auto-fold (fold() now has validation, so it's safe)
         const foldResult = this.fold(this.currentPlayerIndex);
         
