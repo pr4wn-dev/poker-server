@@ -175,7 +175,10 @@ class Table {
             'FIX_67_DISABLE_AUTO_FOLD_FOR_SIMULATION_BOTS': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
             'FIX_68_PREVENT_TOTAL_STARTING_CHIPS_RECALCULATION': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
             'FIX_69_DETECT_WORSENING_DIFFERENCE_IN_ROOT_CAUSE_TRACER': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
-            'FIX_70_INCREASE_TURN_TIME_LIMIT_FOR_SIMULATIONS': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false }
+            'FIX_70_INCREASE_TURN_TIME_LIMIT_FOR_SIMULATIONS': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
+            'FIX_71_PLAYER_WON_MORE_THAN_CONTRIBUTED': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
+            'FIX_72_WINNER_NOT_IN_CONTRIBUTORS': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
+            'FIX_72_PLAYER_WON_POT_LEVEL_NOT_ELIGIBLE': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false }
         };
         
         // Track which fixes have been tried and failed (to prevent going back to them)
@@ -6683,27 +6686,107 @@ class Table {
                         }
                     } else {
                         // Winner CAN win this pot - award normally
-                        // Split among winners
-                        // CRITICAL: Use actual potAmount (already scaled to match real pot)
-                        const totalPotToAward = potAmount;
-                        
-                        const winAmount = Math.floor(totalPotToAward / winners.length);
-                        const remainder = totalPotToAward % winners.length;
-                        
-                        for (let i = 0; i < winners.length; i++) {
-                            const award = winAmount + (i === 0 ? remainder : 0);
-                            potAwards.push({
-                                playerId: winners[i].playerId,
-                                name: winners[i].name,
-                                amount: award,
-                                handName: winners[i].handResult.name,
-                                potType: previousBetLevel === 0 ? 'main' : 'side',
-                                reason: undefined
-                            });
+                        // CRITICAL: Validate each winner is eligible for this pot level
+                        // A player can only win pots at levels they contributed to (totalBet >= pot level)
+                        const validatedWinners = [];
+                        for (const winner of winners) {
+                            const winnerContributor = allContributors.find(c => c.playerId === winner.playerId);
+                            if (!winnerContributor) {
+                                console.error(`[Table ${this.name}] ⚠️ CRITICAL: Winner ${winner.name} not found in contributors!`);
+                                gameLogger.error(this.name, '[POT] Winner not in contributors', {
+                                    winnerName: winner.name,
+                                    winnerId: winner.playerId,
+                                    potLevel: player.totalBet,
+                                    handNumber: this.handsPlayed,
+                                    phase: this.phase
+                                });
+                                this._recordFixAttempt('FIX_72_WINNER_NOT_IN_CONTRIBUTORS', false, {
+                                    context: 'CALCULATE_AND_AWARD_SIDE_POTS',
+                                    winnerName: winner.name,
+                                    winnerId: winner.playerId,
+                                    potLevel: player.totalBet,
+                                    handNumber: this.handsPlayed,
+                                    phase: this.phase
+                                });
+                                continue;
+                            }
+                            
+                            // CRITICAL: Verify winner's totalBet is >= pot level (they must have contributed to this level)
+                            if (winnerContributor.totalBet < player.totalBet) {
+                                console.error(`[Table ${this.name}] ⚠️ CRITICAL POKER RULE VIOLATION: ${winner.name} won pot at level ${player.totalBet} but only bet ${winnerContributor.totalBet}!`);
+                                gameLogger.error(this.name, '[POT] CRITICAL: Player won pot at level they did not contribute to', {
+                                    player: winner.name,
+                                    playerTotalBet: winnerContributor.totalBet,
+                                    potLevel: player.totalBet,
+                                    difference: player.totalBet - winnerContributor.totalBet,
+                                    handNumber: this.handsPlayed,
+                                    phase: this.phase,
+                                    violation: 'Player cannot win pots at levels they did not contribute to'
+                                });
+                                this._recordFixAttempt('FIX_72_PLAYER_WON_POT_LEVEL_NOT_ELIGIBLE', false, {
+                                    context: 'CALCULATE_AND_AWARD_SIDE_POTS',
+                                    player: winner.name,
+                                    playerTotalBet: winnerContributor.totalBet,
+                                    potLevel: player.totalBet,
+                                    handNumber: this.handsPlayed,
+                                    phase: this.phase
+                                });
+                                // DO NOT award this pot to this winner - they're not eligible
+                                continue;
+                            }
+                            
+                            validatedWinners.push(winner);
                         }
                         
-                        // Update previous level winners for next iteration
-                        previousLevelWinners = winners;
+                        // Only award if we have validated winners
+                        if (validatedWinners.length === 0) {
+                            // No valid winners - refund to contributors at this level
+                            const contributorsAtThisLevel = eligiblePlayers.filter(p => p.totalBet >= player.totalBet);
+                            const refundPerPlayer = Math.floor(potAmount / contributorsAtThisLevel.length);
+                            const refundRemainder = potAmount % contributorsAtThisLevel.length;
+                            
+                            for (let i = 0; i < contributorsAtThisLevel.length; i++) {
+                                const refundAmount = refundPerPlayer + (i === 0 ? refundRemainder : 0);
+                                const contributor = contributorsAtThisLevel[i];
+                                potAwards.push({
+                                    playerId: contributor.playerId,
+                                    name: contributor.name,
+                                    amount: refundAmount,
+                                    handName: 'Refund',
+                                    potType: previousBetLevel === 0 ? 'main' : 'side',
+                                    reason: `Refund: No eligible winners for pot level ${player.totalBet} - returning ${refundAmount}`
+                                });
+                                gameLogger.gameEvent(this.name, '[POT] Refund: No eligible winners', {
+                                    player: contributor.name,
+                                    refundAmount,
+                                    potLevel: player.totalBet,
+                                    reason: 'No validated winners for this pot level'
+                                });
+                            }
+                        } else {
+                            // Split among validated winners
+                            // CRITICAL: Use actual potAmount (already scaled to match real pot)
+                            const totalPotToAward = potAmount;
+                            
+                            const winAmount = Math.floor(totalPotToAward / validatedWinners.length);
+                            const remainder = totalPotToAward % validatedWinners.length;
+                            
+                            for (let i = 0; i < validatedWinners.length; i++) {
+                                const award = winAmount + (i === 0 ? remainder : 0);
+                                potAwards.push({
+                                    playerId: validatedWinners[i].playerId,
+                                    name: validatedWinners[i].name,
+                                    amount: award,
+                                    handName: validatedWinners[i].handResult.name,
+                                    potType: previousBetLevel === 0 ? 'main' : 'side',
+                                    potLevel: player.totalBet, // Track which pot level this award came from
+                                    reason: undefined
+                                });
+                            }
+                            
+                            // Update previous level winners for next iteration
+                            previousLevelWinners = validatedWinners;
+                        }
                     }
                 } else if (potAmount > 0 && eligibleHands.length === 0) {
                     // CRITICAL: Pot exists but all eligible players folded - award to best non-folded player who contributed
@@ -6947,6 +7030,74 @@ class Table {
         // CRITICAL: Eliminated players don't get chips back - they're out!
         // NOTE: totalAwarded is already declared at function start
         const awardDetails = []; // Track all awards for detailed logging
+        
+        // CRITICAL: Track each player's total awards to validate they don't exceed their contribution
+        // A player can only win pots at levels they contributed to (totalBet >= pot level)
+        const playerAwards = new Map(); // playerId -> { totalAwarded, totalBet, awards: [] }
+        for (const contributor of allContributors) {
+            playerAwards.set(contributor.playerId, {
+                totalAwarded: 0,
+                totalBet: contributor.totalBet,
+                awards: []
+            });
+        }
+        
+        // CRITICAL: Validate awards BEFORE distributing to catch eligibility issues
+        for (const award of potAwards) {
+            const playerData = playerAwards.get(award.playerId);
+            if (playerData) {
+                playerData.totalAwarded += award.amount;
+                playerData.awards.push(award);
+            }
+        }
+        
+        // CRITICAL: Validate that no player is winning more than they should be eligible for
+        // A player can win pots at levels up to their totalBet, but the total amount won
+        // should be validated against what they contributed and what they're eligible for
+        for (const [playerId, data] of playerAwards.entries()) {
+            const contributor = allContributors.find(c => c.playerId === playerId);
+            if (contributor && data.totalAwarded > 0) {
+                // Calculate maximum eligible winnings: sum of all pots at levels <= their totalBet
+                let maxEligibleWinnings = 0;
+                for (const potAward of potAwards) {
+                    // Find which pot level this award came from by checking the sorted bets
+                    // For now, we'll use a simpler check: if player's totalBet is high enough, they can win
+                    // The real validation is that they shouldn't win pots at levels > their totalBet
+                    // But in poker, you CAN win more than you bet if others bet less
+                    // So we validate differently: check if they won pots at levels they weren't eligible for
+                }
+                
+                // CRITICAL: Log warning if player won significantly more than they contributed
+                // This is a red flag that might indicate a bug in side pot calculation
+                if (data.totalAwarded > contributor.totalBet * 2) {
+                    console.error(`[Table ${this.name}] ⚠️ POTENTIAL ISSUE: ${contributor.name} won ${data.totalAwarded} but only contributed ${contributor.totalBet} (${(data.totalAwarded / contributor.totalBet).toFixed(2)}x)`);
+                    gameLogger.error(this.name, '[POT] Player won significantly more than contributed', {
+                        player: contributor.name,
+                        totalBet: contributor.totalBet,
+                        totalAwarded: data.totalAwarded,
+                        ratio: (data.totalAwarded / contributor.totalBet).toFixed(2),
+                        awards: data.awards.map(a => ({
+                            amount: a.amount,
+                            potType: a.potType,
+                            handName: a.handName
+                        })),
+                        handNumber: this.handsPlayed,
+                        phase: this.phase,
+                        warning: 'Player won more than 2x their contribution - verify side pot calculation is correct'
+                    });
+                    // Record fix attempt - this might indicate a bug
+                    this._recordFixAttempt('FIX_71_PLAYER_WON_MORE_THAN_CONTRIBUTED', false, {
+                        context: 'VALIDATE_POT_AWARDS',
+                        player: contributor.name,
+                        totalBet: contributor.totalBet,
+                        totalAwarded: data.totalAwarded,
+                        ratio: data.totalAwarded / contributor.totalBet,
+                        handNumber: this.handsPlayed,
+                        phase: this.phase
+                    });
+                }
+            }
+        }
         
         for (const award of potAwards) {
             const seat = this.seats.find(s => s?.playerId === award.playerId);
