@@ -200,9 +200,22 @@ function extractTableId(logLine) {
     const match = logLine.match(/\[\[SIM\]\s+([^\]]+)\]/);
     if (match) {
         const tableName = match[1].trim();
-        // Find table by name
+        // Find table by name (with [SIM] prefix)
+        const fullTableName = `[SIM] ${tableName}`;
         for (const [tableId, table] of gameManager.tables) {
-            if (table.name === tableName && table.isSimulation) {
+            if ((table.name === tableName || table.name === fullTableName) && table.isSimulation) {
+                return tableId;
+            }
+        }
+    }
+    
+    // Also try matching without [SIM] prefix in table name
+    if (match) {
+        const tableName = match[1].trim();
+        for (const [tableId, table] of gameManager.tables) {
+            // Table.name might be "[SIM] TableName" or just "TableName"
+            const cleanName = table.name.replace(/^\[SIM\]\s*/, '');
+            if (cleanName === tableName && table.isSimulation) {
                 return tableId;
             }
         }

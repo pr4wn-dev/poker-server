@@ -193,7 +193,9 @@ class SimulationManager {
             countdownDuration: this.fastMode ? 3000 : 10000, // 3 sec countdown in fast mode
             creatorId,
             isSimulation: true,
-            onPauseSimulation: null // Will be set after table is created
+            onPauseSimulation: null, // Will be set after table is created
+            itemAnteEnabled: options.itemAnteEnabled || false, // Allow item ante in simulations for testing
+            itemAnteCollectionTime: options.itemAnteCollectionTime || (this.fastMode ? 10000 : 60000) // 10 sec in fast mode, 60 sec normal
         });
         
         if (!table || !table.id) {
