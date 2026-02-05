@@ -101,9 +101,52 @@ app.post('/api/tables/:tableId/save-snapshot', (req, res) => {
             tableName: table.name,
             snapshotCount: table.stateSnapshot?.snapshots?.length || 0
         });
-    } else {
-        res.status(500).json({ success: false, error: 'Failed to save snapshot' });
     }
+});
+
+// API endpoint to resume paused simulations
+app.post('/api/simulations/:tableId/resume', (req, res) => {
+    if (!socketHandler) {
+        return res.status(503).json({ success: false, error: 'Socket handler not initialized' });
+    }
+    
+    const tableId = req.params.tableId;
+    const result = socketHandler.simulationManager.resumeSimulation(tableId);
+    
+    if (result.success) {
+        res.json({ success: true, message: 'Simulation resumed', tableId });
+    } else {
+        res.status(400).json(result);
+    }
+});
+
+// API endpoint to resume ALL paused simulations
+app.post('/api/simulations/resume-all', (req, res) => {
+    if (!socketHandler) {
+        return res.status(503).json({ success: false, error: 'Socket handler not initialized' });
+    }
+    
+    const resumed = [];
+    const failed = [];
+    
+    for (const [tableId, sim] of socketHandler.simulationManager.activeSimulations) {
+        if (sim.isPaused) {
+            const result = socketHandler.simulationManager.resumeSimulation(tableId);
+            if (result.success) {
+                resumed.push(tableId);
+            } else {
+                failed.push({ tableId, error: result.error });
+            }
+        }
+    }
+    
+    res.json({ 
+        success: true, 
+        resumed: resumed.length,
+        failed: failed.length,
+        resumedTables: resumed,
+        failedTables: failed
+    });
 });
 
 // Server info endpoint - returns local IP and public IP for remote connections
