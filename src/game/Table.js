@@ -4,7 +4,7 @@
 
 const Deck = require('./Deck');
 const HandEvaluator = require('./HandEvaluator');
-const SidePot = require('./SidePot');
+const ItemAnte = require('./ItemAnte');
 const gameLogger = require('../utils/GameLogger');
 const StateSnapshot = require('../testing/StateSnapshot');
 
@@ -921,9 +921,9 @@ class Table {
             return true; // Can't validate if starting chips not tracked
         };
         
-        // Item side pot (optional gambling)
-        this.itemSidePot = new SidePot(this.id, this.creatorId);
-        this.sidePotCollectionTime = options.sidePotCollectionTime || 60000; // 60 seconds default
+        // Item ante - "For Keeps" system where players put items in and winner takes all
+        this.itemAnte = new ItemAnte(this.id, this.creatorId);
+        this.itemAnteCollectionTime = options.itemAnteCollectionTime || 60000; // 60 seconds default
 
         // Position tracking
         this.dealerIndex = -1;
@@ -2589,7 +2589,7 @@ class Table {
         // Lock side pot if it was collecting (first hand only)
         if (!this.gameStarted) {
             this.gameStarted = true;
-            this.lockSidePot();
+            this.lockItemAnte();
             // Start blind increase timer if enabled
             this.startBlindTimer();
         }
@@ -6084,20 +6084,20 @@ class Table {
         // CRITICAL: Broadcast state AFTER chips are awarded so clients see correct chip counts
         this.onStateChange?.();
         
-        // Award item side pot if active
-        let sidePotResult = null;
-        if (this.itemSidePot.status === SidePot.STATUS.LOCKED) {
+        // Award item ante if active
+        let itemAnteResult = null;
+        if (this.itemAnte.status === ItemAnte.STATUS.LOCKED) {
             // Find overall winner (player with most chips gained? or best hand among all?)
             // Use the best hand among participants
             const participants = activePlayers.filter(p => 
-                this.itemSidePot.isParticipating(p.playerId)
+                this.itemAnte.isParticipating(p.playerId)
             );
             if (participants.length > 0) {
                 participants.sort((a, b) => HandEvaluator.compare(b.handResult, a.handResult));
                 const itemWinner = participants[0];
-                sidePotResult = this.itemSidePot.award(itemWinner.playerId);
-                if (sidePotResult?.success) {
-                    // console.log(`[Table ${this.name}] ${itemWinner.name} wins ${sidePotResult.items.length} items from side pot!`);
+                itemAnteResult = this.itemAnte.award(itemWinner.playerId);
+                if (itemAnteResult?.success) {
+                    // console.log(`[Table ${this.name}] ${itemWinner.name} wins ${itemAnteResult.items.length} items from item ante!`);
                 }
             }
         }
@@ -8442,68 +8442,69 @@ class Table {
         this.pendingInvites.delete(userId);
     }
 
-    // ============ Item Side Pot ============
-    // CRITICAL: Item side pot is for ITEMS ONLY - NO MONEY/CHIPS!
+    // ============ Item Ante ("For Keeps") ============
+    // CRITICAL: Item ante is for ITEMS ONLY - NO MONEY/CHIPS!
+    // This is like an ante where each player puts an item in, winner takes all.
     // Real poker chip side pots are handled in calculateAndAwardSidePots() method above
 
     /**
-     * Creator starts the item side pot with their item
+     * Creator starts the item ante with their item
      * CRITICAL: This is for ITEMS ONLY - no money/chips allowed!
      */
-    startSidePot(creatorId, item) {
+    startItemAnte(creatorId, item) {
         if (creatorId !== this.creatorId) {
-            return { success: false, error: 'Only table creator can start side pot' };
+            return { success: false, error: 'Only table creator can start item ante' };
         }
         if (this.gameStarted) {
             return { success: false, error: 'Game already started' };
         }
-        // CRITICAL: itemSidePot only accepts items, never money/chips
-        return this.itemSidePot.start(item, this.sidePotCollectionTime);
+        // CRITICAL: itemAnte only accepts items, never money/chips
+        return this.itemAnte.start(item, this.itemAnteCollectionTime);
     }
 
     /**
-     * Player submits item to side pot for approval
+     * Player submits item to item ante for approval
      * CRITICAL: This is for ITEMS ONLY - no money/chips allowed!
      */
-    submitToSidePot(userId, item) {
-        // CRITICAL: itemSidePot only accepts items, never money/chips
-        return this.itemSidePot.submitItem(userId, item);
+    submitToItemAnte(userId, item) {
+        // CRITICAL: itemAnte only accepts items, never money/chips
+        return this.itemAnte.submitItem(userId, item);
     }
 
     /**
-     * Player opts out of side pot
+     * Player opts out of item ante
      */
-    optOutOfSidePot(userId) {
-        return this.itemSidePot.optOut(userId);
+    optOutOfItemAnte(userId) {
+        return this.itemAnte.optOut(userId);
     }
 
     /**
      * Creator approves a player's item
      */
-    approveSidePotItem(creatorId, userId) {
-        return this.itemSidePot.approveItem(creatorId, userId);
+    approveItemAnteItem(creatorId, userId) {
+        return this.itemAnte.approveItem(creatorId, userId);
     }
 
     /**
      * Creator declines a player's item
      */
-    declineSidePotItem(creatorId, userId) {
-        return this.itemSidePot.declineItem(creatorId, userId);
+    declineItemAnteItem(creatorId, userId) {
+        return this.itemAnte.declineItem(creatorId, userId);
     }
 
     /**
-     * Get side pot state for a user
+     * Get item ante state for a user
      */
-    getSidePotState(forUserId = null) {
+    getItemAnteState(forUserId = null) {
         try {
-            if (!this.itemSidePot) {
-                console.warn(`[Table ${this.name}] [SIDE_POT_DEBUG] itemSidePot not initialized`);
-                return null; // Side pot not initialized
+            if (!this.itemAnte) {
+                console.warn(`[Table ${this.name}] [ITEM_ANTE_DEBUG] itemAnte not initialized`);
+                return null; // Item ante not initialized
             }
-            const state = this.itemSidePot.getState(forUserId);
-            // Debug logging for side pot state
+            const state = this.itemAnte.getState(forUserId);
+            // Debug logging for item ante state
             if (state && state.status !== 'inactive') {
-                console.log(`[Table ${this.name}] [SIDE_POT_DEBUG] Side pot state:`, {
+                console.log(`[Table ${this.name}] [ITEM_ANTE_DEBUG] Item ante state:`, {
                     status: state.status,
                     approvedCount: state.approvedCount,
                     hasCreatorItem: !!state.creatorItem,
@@ -8512,26 +8513,26 @@ class Table {
             }
             return state;
         } catch (error) {
-            console.error(`[Table ${this.name}] Error getting side pot state:`, error);
+            console.error(`[Table ${this.name}] Error getting item ante state:`, error);
             return null; // Return null on error to prevent crashes
         }
     }
 
     /**
-     * Lock side pot when game starts
+     * Lock item ante when game starts
      */
-    lockSidePot() {
-        if (this.itemSidePot.status === SidePot.STATUS.COLLECTING) {
-            return this.itemSidePot.lock();
+    lockItemAnte() {
+        if (this.itemAnte.status === ItemAnte.STATUS.COLLECTING) {
+            return this.itemAnte.lock();
         }
         return { success: true };
     }
 
     /**
-     * Cancel side pot (return items)
+     * Cancel item ante (return items)
      */
-    cancelSidePot() {
-        return this.itemSidePot.cancel();
+    cancelItemAnte() {
+        return this.itemAnte.cancel();
     }
 
     // ============ State ============
@@ -8553,8 +8554,8 @@ class Table {
                 gameStarted: this.gameStarted,
             allowSpectators: this.allowSpectators,
             houseRulesPreset: this.houseRules?.bettingType || 'standard',
-            hasSidePot: this.itemSidePot?.status !== SidePot.STATUS.INACTIVE,
-            sidePotItemCount: this.itemSidePot?.approvedItems?.length || 0,
+            hasItemAnte: this.itemAnte?.status !== ItemAnte.STATUS.INACTIVE,
+            itemAnteCount: this.itemAnte?.approvedItems?.length || 0,
             createdAt: this.createdAt
         };
         } catch (error) {
@@ -8575,8 +8576,8 @@ class Table {
                 gameStarted: false,
                 allowSpectators: this.allowSpectators || false,
                 houseRulesPreset: 'standard',
-                hasSidePot: false,
-                sidePotItemCount: 0,
+                hasItemAnte: false,
+                itemAnteCount: 0,
                 createdAt: this.createdAt || Date.now()
             };
         }
@@ -8625,7 +8626,7 @@ class Table {
             pauseReason: this.pauseReason || null, // Reason for pause
             practiceMode: this.practiceMode,
             houseRules: this.houseRules?.toJSON?.() || null,
-            sidePot: this.getSidePotState(forPlayerId),
+            sidePot: this.getItemAnteState(forPlayerId),  // Keeping field name for Unity backward compatibility
             seats: this.seats.map((seat, index) => {
                 if (!seat) return null;
                 
@@ -8695,7 +8696,7 @@ class Table {
                     isBot: seat.isBot || false,
                     isSittingOut: seat.isSittingOut || false,
                     isReady: seat.isReady || false,
-                    inSidePot: this.itemSidePot.isParticipating(seat.playerId),
+                    inItemAnte: this.itemAnte.isParticipating(seat.playerId),
                     cards: cards
                 };
             })

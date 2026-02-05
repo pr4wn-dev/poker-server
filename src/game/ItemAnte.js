@@ -1,21 +1,22 @@
 /**
- * SidePot - Item gambling side pot for tables
+ * ItemAnte - "For Keeps" item ante system for tables
  * 
- * CRITICAL: This side pot is for ITEMS ONLY - NO MONEY/CHIPS!
- * Real poker chip side pots are handled separately in Table.js calculateAndAwardSidePots()
+ * This is like an ante where each player puts an item in before the game starts,
+ * and the winner takes all items. This is NOT related to poker side pots (which
+ * are for betting when players go all-in with different amounts).
  * 
  * Flow:
- * 1. Table creator starts side pot with their item
+ * 1. Table creator starts the item ante with their item
  * 2. Other players submit items for approval
  * 3. Creator approves/declines each submission
- * 4. When game starts (or timer ends), side pot is locked
- * 5. Winner of the hand/game takes all side pot items
+ * 4. When game starts (or timer ends), item ante is locked
+ * 5. Winner of the hand/game takes all items from the ante
  */
 
 const { v4: uuidv4 } = require('uuid');
 
-const SIDE_POT_STATUS = {
-    INACTIVE: 'inactive',       // No side pot
+const ITEM_ANTE_STATUS = {
+    INACTIVE: 'inactive',       // No item ante
     COLLECTING: 'collecting',   // Accepting submissions
     LOCKED: 'locked',           // Game started, no more changes
     AWARDED: 'awarded'          // Items distributed to winner
@@ -28,12 +29,12 @@ const SUBMISSION_STATUS = {
     OPTED_OUT: 'opted_out'      // Player chose not to participate
 };
 
-class SidePot {
+class ItemAnte {
     constructor(tableId, creatorId) {
         this.id = uuidv4();
         this.tableId = tableId;
         this.creatorId = creatorId;  // Table creator who manages approvals
-        this.status = SIDE_POT_STATUS.INACTIVE;
+        this.status = ITEM_ANTE_STATUS.INACTIVE;
         
         // Creator's item (the "anchor" item)
         this.creatorItem = null;
@@ -54,12 +55,12 @@ class SidePot {
     }
     
     /**
-     * Creator starts the side pot with their item
+     * Creator starts the item ante with their item
      */
     start(creatorItem, collectionDurationMs = 60000) {
-        // CRITICAL: This side pot is for ITEMS ONLY - no money/chips allowed!
-        if (this.status !== SIDE_POT_STATUS.INACTIVE) {
-            return { success: false, error: 'Side pot already active' };
+        // CRITICAL: This ante is for ITEMS ONLY - no money/chips allowed!
+        if (this.status !== ITEM_ANTE_STATUS.INACTIVE) {
+            return { success: false, error: 'Item ante already active' };
         }
         
         // CRITICAL: Must be an item object, not money/chips
@@ -68,7 +69,7 @@ class SidePot {
         }
         
         this.creatorItem = creatorItem;
-        this.status = SIDE_POT_STATUS.COLLECTING;
+        this.status = ITEM_ANTE_STATUS.COLLECTING;
         this.collectionEndTime = Date.now() + collectionDurationMs;
         
         // Add creator's item to approved list
@@ -77,11 +78,11 @@ class SidePot {
             item: creatorItem
         });
         
-        console.log(`[SidePot] Started by creator with item: ${creatorItem.name}`);
+        console.log(`[ItemAnte] Started by creator with item: ${creatorItem.name}`);
         
         return { 
             success: true, 
-            sidePot: this.getState()
+            itemAnte: this.getState()
         };
     }
     
@@ -89,13 +90,13 @@ class SidePot {
      * Player submits an item for approval
      */
     submitItem(userId, item) {
-        // CRITICAL: This side pot is for ITEMS ONLY - no money/chips allowed!
-        if (this.status !== SIDE_POT_STATUS.COLLECTING) {
-            return { success: false, error: 'Side pot not accepting submissions' };
+        // CRITICAL: This ante is for ITEMS ONLY - no money/chips allowed!
+        if (this.status !== ITEM_ANTE_STATUS.COLLECTING) {
+            return { success: false, error: 'Item ante not accepting submissions' };
         }
         
         if (userId === this.creatorId) {
-            return { success: false, error: 'Creator already has item in pot' };
+            return { success: false, error: 'Creator already has item in ante' };
         }
         
         // CRITICAL: Must be an item object, not money/chips
@@ -118,7 +119,7 @@ class SidePot {
             submittedAt: Date.now()
         });
         
-        console.log(`[SidePot] ${userId} submitted item: ${item.name}`);
+        console.log(`[ItemAnte] ${userId} submitted item: ${item.name}`);
         
         return { 
             success: true,
@@ -127,11 +128,11 @@ class SidePot {
     }
     
     /**
-     * Player opts out of side pot
+     * Player opts out of item ante
      */
     optOut(userId) {
-        if (this.status !== SIDE_POT_STATUS.COLLECTING) {
-            return { success: false, error: 'Side pot not active' };
+        if (this.status !== ITEM_ANTE_STATUS.COLLECTING) {
+            return { success: false, error: 'Item ante not active' };
         }
         
         if (userId === this.creatorId) {
@@ -156,8 +157,8 @@ class SidePot {
             return { success: false, error: 'Only creator can approve items' };
         }
         
-        if (this.status !== SIDE_POT_STATUS.COLLECTING) {
-            return { success: false, error: 'Side pot not accepting approvals' };
+        if (this.status !== ITEM_ANTE_STATUS.COLLECTING) {
+            return { success: false, error: 'Item ante not accepting approvals' };
         }
         
         const submission = this.submissions.get(userId);
@@ -177,7 +178,7 @@ class SidePot {
             item: submission.item
         });
         
-        console.log(`[SidePot] Creator approved ${userId}'s item: ${submission.item.name}`);
+        console.log(`[ItemAnte] Creator approved ${userId}'s item: ${submission.item.name}`);
         
         return { 
             success: true,
@@ -193,8 +194,8 @@ class SidePot {
             return { success: false, error: 'Only creator can decline items' };
         }
         
-        if (this.status !== SIDE_POT_STATUS.COLLECTING) {
-            return { success: false, error: 'Side pot not active' };
+        if (this.status !== ITEM_ANTE_STATUS.COLLECTING) {
+            return { success: false, error: 'Item ante not active' };
         }
         
         const submission = this.submissions.get(userId);
@@ -204,24 +205,24 @@ class SidePot {
         
         submission.status = SUBMISSION_STATUS.DECLINED;
         
-        console.log(`[SidePot] Creator declined ${userId}'s item`);
+        console.log(`[ItemAnte] Creator declined ${userId}'s item`);
         
         return { success: true };
     }
     
     /**
-     * Lock the side pot (game is starting)
+     * Lock the item ante (game is starting)
      */
     lock() {
-        if (this.status !== SIDE_POT_STATUS.COLLECTING) {
-            return { success: false, error: 'Side pot not in collection phase' };
+        if (this.status !== ITEM_ANTE_STATUS.COLLECTING) {
+            return { success: false, error: 'Item ante not in collection phase' };
         }
         
         // Clear any pending submissions (not approved in time)
         for (const [userId, submission] of this.submissions) {
             if (submission.status === SUBMISSION_STATUS.PENDING) {
                 submission.status = SUBMISSION_STATUS.DECLINED;
-                console.log(`[SidePot] Auto-declined pending submission from ${userId}`);
+                console.log(`[ItemAnte] Auto-declined pending submission from ${userId}`);
             }
         }
         
@@ -230,9 +231,9 @@ class SidePot {
             this.collectionTimer = null;
         }
         
-        this.status = SIDE_POT_STATUS.LOCKED;
+        this.status = ITEM_ANTE_STATUS.LOCKED;
         
-        console.log(`[SidePot] Locked with ${this.approvedItems.length} items`);
+        console.log(`[ItemAnte] Locked with ${this.approvedItems.length} items`);
         
         return { 
             success: true,
@@ -244,22 +245,22 @@ class SidePot {
      * Award all items to the winner
      */
     award(winnerId) {
-        if (this.status !== SIDE_POT_STATUS.LOCKED) {
-            return { success: false, error: 'Side pot not locked' };
+        if (this.status !== ITEM_ANTE_STATUS.LOCKED) {
+            return { success: false, error: 'Item ante not locked' };
         }
         
         if (this.approvedItems.length === 0) {
-            return { success: false, error: 'No items in side pot' };
+            return { success: false, error: 'No items in item ante' };
         }
         
         this.winnerId = winnerId;
         this.awardedAt = Date.now();
-        this.status = SIDE_POT_STATUS.AWARDED;
+        this.status = ITEM_ANTE_STATUS.AWARDED;
         
         // Return the items to be transferred
         const winnings = this.approvedItems.map(entry => entry.item);
         
-        console.log(`[SidePot] ${winnerId} won ${winnings.length} items!`);
+        console.log(`[ItemAnte] ${winnerId} won ${winnings.length} items!`);
         
         return {
             success: true,
@@ -269,7 +270,7 @@ class SidePot {
     }
     
     /**
-     * Cancel the side pot (return items to owners)
+     * Cancel the item ante (return items to owners)
      */
     cancel() {
         if (this.collectionTimer) {
@@ -278,12 +279,12 @@ class SidePot {
         
         const itemsToReturn = [...this.approvedItems];
         
-        this.status = SIDE_POT_STATUS.INACTIVE;
+        this.status = ITEM_ANTE_STATUS.INACTIVE;
         this.creatorItem = null;
         this.submissions.clear();
         this.approvedItems = [];
         
-        console.log(`[SidePot] Cancelled, returning ${itemsToReturn.length} items`);
+        console.log(`[ItemAnte] Cancelled, returning ${itemsToReturn.length} items`);
         
         return {
             success: true,
@@ -292,7 +293,7 @@ class SidePot {
     }
     
     /**
-     * Check if a player is participating in side pot
+     * Check if a player is participating in item ante
      */
     isParticipating(userId) {
         if (userId === this.creatorId && this.creatorItem) {
@@ -376,7 +377,7 @@ class SidePot {
         }
         
         // If awarded, show winner
-        if (this.status === SIDE_POT_STATUS.AWARDED) {
+        if (this.status === ITEM_ANTE_STATUS.AWARDED) {
             state.winnerId = this.winnerId;
         }
         
@@ -384,8 +385,7 @@ class SidePot {
     }
 }
 
-SidePot.STATUS = SIDE_POT_STATUS;
-SidePot.SUBMISSION_STATUS = SUBMISSION_STATUS;
+ItemAnte.STATUS = ITEM_ANTE_STATUS;
+ItemAnte.SUBMISSION_STATUS = SUBMISSION_STATUS;
 
-module.exports = SidePot;
-
+module.exports = ItemAnte;

@@ -123,12 +123,13 @@ module.exports = {
     ACTION: 'action',
     CHAT: 'chat',
     
-    // Client -> Server: Side Pot
-    START_SIDE_POT: 'start_side_pot',
-    SUBMIT_TO_SIDE_POT: 'submit_to_side_pot',
-    OPT_OUT_SIDE_POT: 'opt_out_side_pot',
-    APPROVE_SIDE_POT_ITEM: 'approve_side_pot_item',
-    DECLINE_SIDE_POT_ITEM: 'decline_side_pot_item',
+    // Client -> Server: Item Ante ("For Keeps" - players put items in, winner takes all)
+    // NOTE: Keeping old event names for backward compatibility with Unity client
+    START_SIDE_POT: 'start_side_pot',  // Actually starts item ante
+    SUBMIT_TO_SIDE_POT: 'submit_to_side_pot',  // Actually submits to item ante
+    OPT_OUT_SIDE_POT: 'opt_out_side_pot',  // Actually opts out of item ante
+    APPROVE_SIDE_POT_ITEM: 'approve_side_pot_item',  // Actually approves item ante item
+    DECLINE_SIDE_POT_ITEM: 'decline_side_pot_item',  // Actually declines item ante item
     
     // Client -> Server: Adventure
     GET_WORLD_MAP: 'get_world_map',
@@ -157,14 +158,15 @@ module.exports = {
     TABLE_STATE: 'table_state',
     CHAT_MESSAGE: 'chat',
     
-    // Server -> Client: Side Pot
-    SIDE_POT_STARTED: 'side_pot_started',
-    SIDE_POT_SUBMISSION: 'side_pot_submission',
-    SIDE_POT_ITEM_APPROVED: 'side_pot_item_approved',
-    SIDE_POT_ITEM_DECLINED: 'side_pot_item_declined',
-    YOUR_SIDE_POT_APPROVED: 'your_side_pot_approved',
-    YOUR_SIDE_POT_DECLINED: 'your_side_pot_declined',
-    SIDE_POT_AWARDED: 'side_pot_awarded',
+    // Server -> Client: Item Ante ("For Keeps")
+    // NOTE: Keeping old event names for backward compatibility with Unity client
+    SIDE_POT_STARTED: 'side_pot_started',  // Actually item ante started
+    SIDE_POT_SUBMISSION: 'side_pot_submission',  // Actually item ante submission
+    SIDE_POT_ITEM_APPROVED: 'side_pot_item_approved',  // Actually item ante item approved
+    SIDE_POT_ITEM_DECLINED: 'side_pot_item_declined',  // Actually item ante item declined
+    YOUR_SIDE_POT_APPROVED: 'your_side_pot_approved',  // Actually your item ante approved
+    YOUR_SIDE_POT_DECLINED: 'your_side_pot_declined',  // Actually your item ante declined
+    SIDE_POT_AWARDED: 'side_pot_awarded',  // Actually item ante awarded
     
     // Server -> Client: Adventure
     WORLD_MAP_STATE: 'world_map_state',

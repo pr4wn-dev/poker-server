@@ -1380,14 +1380,14 @@ class SocketHandler {
                     return callback({ success: false, error: 'Item not found in inventory' });
                 }
 
-                const result = table.startSidePot(user.userId, item);
+                const result = table.startItemAnte(user.userId, item);
                 
                 if (result.success) {
-                    // Broadcast side pot started to all players
+                    // Broadcast item ante started to all players (keeping old event name for backward compatibility)
                     this.io.to(`table:${player.currentTableId}`).emit('side_pot_started', {
                         creatorId: user.userId,
-                        creatorItem: result.sidePot.creatorItem,
-                        collectionEndTime: result.sidePot.collectionEndTime
+                        creatorItem: result.itemAnte.creatorItem,
+                        collectionEndTime: result.itemAnte.collectionEndTime
                     });
                 }
 
@@ -1418,10 +1418,10 @@ class SocketHandler {
                     return callback({ success: false, error: 'Item not found in inventory' });
                 }
 
-                const result = table.submitToSidePot(user.userId, item);
+                const result = table.submitToItemAnte(user.userId, item);
                 
                 if (result.success) {
-                    // Notify table creator of new submission
+                    // Notify table creator of new submission (keeping old event name for backward compatibility)
                     const creatorAuth = this.authenticatedUsers.get(table.creatorId);
                     if (creatorAuth) {
                         this.io.to(creatorAuth.socketId).emit('side_pot_submission', {
@@ -1457,7 +1457,7 @@ class SocketHandler {
                     return callback({ success: false, error: 'Not at a table' });
                 }
 
-                const result = table.optOutOfSidePot(user.userId);
+                const result = table.optOutOfItemAnte(user.userId);
                 callback(result);
             });
 
@@ -1476,10 +1476,10 @@ class SocketHandler {
                     return callback({ success: false, error: 'Not at a table' });
                 }
 
-                const result = table.approveSidePotItem(user.userId, data.userId);
+                const result = table.approveItemAnteItem(user.userId, data.userId);
                 
                 if (result.success) {
-                    // Notify all players of approval
+                    // Notify all players of approval (keeping old event name for backward compatibility)
                     this.io.to(`table:${player.currentTableId}`).emit('side_pot_item_approved', {
                         userId: data.userId,
                         approvedCount: result.approvedItems
@@ -1510,10 +1510,10 @@ class SocketHandler {
                     return callback({ success: false, error: 'Not at a table' });
                 }
 
-                const result = table.declineSidePotItem(user.userId, data.userId);
+                const result = table.declineItemAnteItem(user.userId, data.userId);
                 
                 if (result.success) {
-                    // Notify the declined player
+                    // Notify the declined player (keeping old event name for backward compatibility)
                     const declinedAuth = this.authenticatedUsers.get(data.userId);
                     if (declinedAuth) {
                         this.io.to(declinedAuth.socketId).emit('your_side_pot_declined');
