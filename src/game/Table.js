@@ -760,9 +760,10 @@ class Table {
         this.turnStartTime = null;
         // CRITICAL: Simulations need very fast turn timers (100ms) to run quickly
         // Regular games use 20 seconds, but simulations should be instant
-        // CRITICAL: For simulations, ALWAYS use 100ms regardless of what's passed in options
-        // This ensures fast simulations even if SimulationManager passes a higher value
-        this.turnTimeLimit = this.isSimulation ? 100 : (options.turnTimeLimit || 20000); // 100ms for simulations, 20 seconds for regular games
+        // CRITICAL: For simulations, use 500ms to give bots time to send actions
+        // Bots need 10-50ms delay + network latency, so 100ms was too short
+        // This prevents infinite loops where timer fires before action arrives
+        this.turnTimeLimit = this.isSimulation ? 500 : (options.turnTimeLimit || 20000); // 500ms for simulations, 20 seconds for regular games
         
         // Blind increase timer (tournament-style)
         // 0 = disabled (blinds never increase)
