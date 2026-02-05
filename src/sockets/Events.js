@@ -131,6 +131,10 @@ module.exports = {
     APPROVE_SIDE_POT_ITEM: 'approve_side_pot_item',  // Actually approves item ante item
     DECLINE_SIDE_POT_ITEM: 'decline_side_pot_item',  // Actually declines item ante item
     
+    // Client -> Server: Inventory
+    GET_INVENTORY: 'get_inventory',
+    GET_TEST_ITEMS: 'get_test_items',  // Development/testing only
+    
     // Client -> Server: Adventure
     GET_WORLD_MAP: 'get_world_map',
     GET_AREA_BOSSES: 'get_area_bosses',
@@ -167,6 +171,10 @@ module.exports = {
     YOUR_SIDE_POT_APPROVED: 'your_side_pot_approved',  // Actually your item ante approved
     YOUR_SIDE_POT_DECLINED: 'your_side_pot_declined',  // Actually your item ante declined
     SIDE_POT_AWARDED: 'side_pot_awarded',  // Actually item ante awarded
+    
+    // Server -> Client: Inventory
+    GET_INVENTORY_RESPONSE: 'get_inventory_response',
+    GET_TEST_ITEMS_RESPONSE: 'get_test_items_response',
     
     // Server -> Client: Adventure
     WORLD_MAP_STATE: 'world_map_state',

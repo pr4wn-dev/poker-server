@@ -128,6 +128,85 @@ class SocketHandler {
                 const profile = await userRepo.getFullProfile(user.userId);
                 callback({ success: true, profile });
             });
+            
+            // ============ Inventory ============
+            
+            socket.on('get_inventory', async (callback) => {
+                const user = this.getAuthenticatedUser(socket);
+                if (!user) {
+                    return callback({ success: false, error: 'Not authenticated' });
+                }
+                
+                const inventory = await userRepo.getInventory(user.userId);
+                callback({ success: true, inventory });
+                socket.emit('get_inventory_response', { success: true, inventory });
+            });
+            
+            // Test endpoint: Add test items to inventory (for development/testing)
+            socket.on('get_test_items', async (callback) => {
+                const user = this.getAuthenticatedUser(socket);
+                if (!user) {
+                    return callback({ success: false, error: 'Not authenticated' });
+                }
+                
+                const Item = require('../models/Item');
+                
+                // Create a variety of test items across all rarities
+                const testItems = [
+                    // Common items
+                    new Item({ ...Item.TEMPLATES.XP_BOOST_SMALL, obtainedFrom: 'Test Items' }),
+                    new Item({ ...Item.TEMPLATES.TROPHY_FIRST_BOSS, obtainedFrom: 'Test Items' }),
+                    
+                    // Uncommon items
+                    new Item({ ...Item.TEMPLATES.CARD_BACK_FLAME, obtainedFrom: 'Test Items' }),
+                    new Item({ ...Item.TEMPLATES.TABLE_SKIN_VELVET, obtainedFrom: 'Test Items' }),
+                    new Item({ ...Item.TEMPLATES.AVATAR_WOLF, obtainedFrom: 'Test Items' }),
+                    new Item({ ...Item.TEMPLATES.XP_BOOST_MEDIUM, obtainedFrom: 'Test Items' }),
+                    
+                    // Rare items
+                    new Item({ ...Item.TEMPLATES.AVATAR_SHARK, obtainedFrom: 'Test Items' }),
+                    new Item({ ...Item.TEMPLATES.TROPHY_UNDERGROUND, obtainedFrom: 'Test Items' }),
+                    new Item({ ...Item.TEMPLATES.CHIP_STYLE_CASINO, obtainedFrom: 'Test Items' }),
+                    new Item({ ...Item.TEMPLATES.VEHICLE_YACHT_SMALL, obtainedFrom: 'Test Items' }),
+                    new Item({ ...Item.TEMPLATES.XP_BOOST_LARGE, obtainedFrom: 'Test Items' }),
+                    
+                    // Epic items
+                    new Item({ ...Item.TEMPLATES.CARD_BACK_DIAMOND, obtainedFrom: 'Test Items' }),
+                    new Item({ ...Item.TEMPLATES.AVATAR_DRAGON, obtainedFrom: 'Test Items' }),
+                    new Item({ ...Item.TEMPLATES.UNDERGROUND_PASS, obtainedFrom: 'Test Items' }),
+                    new Item({ ...Item.TEMPLATES.XP_BOOST_MEGA, obtainedFrom: 'Test Items' }),
+                    
+                    // Legendary items
+                    new Item({ ...Item.TEMPLATES.CARD_BACK_GOLDEN, obtainedFrom: 'Test Items' }),
+                    new Item({ ...Item.TEMPLATES.CARD_BACK_HOLOGRAM, obtainedFrom: 'Test Items' }),
+                    new Item({ ...Item.TEMPLATES.TABLE_SKIN_GOLD, obtainedFrom: 'Test Items' }),
+                    new Item({ ...Item.TEMPLATES.CHIP_STYLE_PLATINUM, obtainedFrom: 'Test Items' }),
+                    new Item({ ...Item.TEMPLATES.AVATAR_LEGEND, obtainedFrom: 'Test Items' }),
+                    new Item({ ...Item.TEMPLATES.TROPHY_FINAL, obtainedFrom: 'Test Items' }),
+                    new Item({ ...Item.TEMPLATES.YACHT_INVITATION, obtainedFrom: 'Test Items' }),
+                    new Item({ ...Item.TEMPLATES.VEHICLE_YACHT_GOLD, obtainedFrom: 'Test Items' }),
+                    new Item({ ...Item.TEMPLATES.VEHICLE_JET, obtainedFrom: 'Test Items' })
+                ];
+                
+                // Add all test items to inventory
+                for (const item of testItems) {
+                    await userRepo.addItem(user.userId, item);
+                }
+                
+                // Get updated inventory
+                const inventory = await userRepo.getInventory(user.userId);
+                
+                console.log(`[SocketHandler] Added ${testItems.length} test items to ${user.username}'s inventory`);
+                
+                const response = { 
+                    success: true, 
+                    message: `Added ${testItems.length} test items to inventory`,
+                    inventory 
+                };
+                
+                callback(response);
+                socket.emit('get_test_items_response', response);
+            });
 
             // ============ Lobby ============
             
