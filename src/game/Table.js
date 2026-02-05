@@ -3013,6 +3013,15 @@ class Table {
                 
                 this._processingAction = false;
                 return { success: false, error: 'Game not in progress' };
+            } else {
+                // Record fix attempt - success if game is in progress
+                this._recordFixAttempt('FIX_5_ACTION_GAME_NOT_IN_PROGRESS', true, {
+                    playerId,
+                    action,
+                    phase: this.phase,
+                    handNumber: this.handsPlayed,
+                    reason: 'Game is in progress - action can proceed'
+                });
             }
             
             const seatIndex = this.seats.findIndex(s => s?.playerId === playerId);
@@ -3305,6 +3314,16 @@ class Table {
                     lastRaiserIndex: this.lastRaiserIndex
                 });
                 
+                // Record fix attempt - successful action means betting action validation passed
+                this._recordFixAttempt('FIX_6_BETTING_ACTION_FAILURES', true, {
+                    action: result.action,
+                    player: player.name,
+                    amount: result.amount,
+                    handNumber: this.handsPlayed,
+                    phase: this.phase,
+                    reason: 'Betting action validation passed - action executed successfully'
+                });
+                
                 // Timer already cleared at start of handleAction - no need to clear again
                 
                 // Notify about the action (for all players including bots)
@@ -3323,6 +3342,16 @@ class Table {
                 // CRITICAL FIX: Clear action lock on failure too
                 this._processingAction = false;
             }
+            
+            // Record fix attempt - success if no exception occurred
+            this._recordFixAttempt('FIX_26_HANDLE_ACTION_EXCEPTION', true, {
+                context: 'HANDLE_ACTION',
+                playerId,
+                action,
+                handNumber: this.handsPlayed,
+                phase: this.phase,
+                reason: 'No exception occurred - action processed successfully'
+            });
 
             return result;
         } catch (error) {
@@ -3543,6 +3572,17 @@ class Table {
                 handNumber: this.handsPlayed,
                 phase: this.phase
             });
+        } else {
+            // Record fix attempt - success if chips calculation is correct
+            this._recordFixAttempt('FIX_27_CALL_CHIPS_CALCULATION_ERROR', true, {
+                context: 'CALL',
+                player: player.name,
+                chipsBefore: chipsBeforeSubtract,
+                toCall,
+                chipsAfter: player.chips,
+                handNumber: this.handsPlayed,
+                phase: this.phase
+            });
         }
         if (this.pot !== potBeforeAdd + toCall) {
             console.error(`[Table ${this.name}] ⚠️ CRITICAL CALL ERROR: Pot calculation failed! Before: ${potBeforeAdd}, Amount: ${toCall}, After: ${this.pot}, Expected: ${potBeforeAdd + toCall}`);
@@ -3565,6 +3605,17 @@ class Table {
                 handNumber: this.handsPlayed,
                 phase: this.phase
             });
+        } else {
+            // Record fix attempt - success if pot calculation is correct
+            this._recordFixAttempt('FIX_28_CALL_POT_CALCULATION_ERROR', true, {
+                context: 'CALL',
+                player: player.name,
+                potBefore: potBeforeAdd,
+                toCall,
+                potAfter: this.pot,
+                handNumber: this.handsPlayed,
+                phase: this.phase
+            });
         }
         if (Math.abs(chipsDifference) > 0.01) {
             console.error(`[Table ${this.name}] ⚠️ CRITICAL CALL ERROR: Total chips changed! Before: ${totalChipsAndPotBefore}, After: ${totalChipsAndPotAfter}, Difference: ${chipsDifference}`);
@@ -3577,6 +3628,17 @@ class Table {
             });
             // Record fix attempt - total chips changed during call is a failure
             this._recordFixAttempt('FIX_29_CALL_TOTAL_CHIPS_CHANGED', false, {
+                context: 'CALL',
+                player: player.name,
+                totalChipsAndPotBefore,
+                totalChipsAndPotAfter,
+                chipsDifference,
+                handNumber: this.handsPlayed,
+                phase: this.phase
+            });
+        } else {
+            // Record fix attempt - success if total chips didn't change
+            this._recordFixAttempt('FIX_29_CALL_TOTAL_CHIPS_CHANGED', true, {
                 context: 'CALL',
                 player: player.name,
                 totalChipsAndPotBefore,
@@ -3756,6 +3818,17 @@ class Table {
                 handNumber: this.handsPlayed,
                 phase: this.phase
             });
+        } else {
+            // Record fix attempt - success if chips calculation is correct
+            this._recordFixAttempt('FIX_30_BET_CHIPS_CALCULATION_ERROR', true, {
+                context: 'BET',
+                player: player.name,
+                chipsBefore: chipsBeforeSubtract,
+                amount,
+                chipsAfter: player.chips,
+                handNumber: this.handsPlayed,
+                phase: this.phase
+            });
         }
         if (this.pot !== potBeforeAdd + amount) {
             console.error(`[Table ${this.name}] ⚠️ CRITICAL BET ERROR: Pot calculation failed! Before: ${potBeforeAdd}, Amount: ${amount}, After: ${this.pot}, Expected: ${potBeforeAdd + amount}`);
@@ -3778,6 +3851,17 @@ class Table {
                 handNumber: this.handsPlayed,
                 phase: this.phase
             });
+        } else {
+            // Record fix attempt - success if pot calculation is correct
+            this._recordFixAttempt('FIX_31_BET_POT_CALCULATION_ERROR', true, {
+                context: 'BET',
+                player: player.name,
+                potBefore: potBeforeAdd,
+                amount,
+                potAfter: this.pot,
+                handNumber: this.handsPlayed,
+                phase: this.phase
+            });
         }
         if (Math.abs(chipsDifference) > 0.01) {
             console.error(`[Table ${this.name}] ⚠️ CRITICAL BET ERROR: Total chips changed! Before: ${totalChipsAndPotBefore}, After: ${totalChipsAndPotAfter}, Difference: ${chipsDifference}`);
@@ -3790,6 +3874,17 @@ class Table {
             });
             // Record fix attempt - total chips changed during bet is a failure
             this._recordFixAttempt('FIX_32_BET_TOTAL_CHIPS_CHANGED', false, {
+                context: 'BET',
+                player: player.name,
+                totalChipsAndPotBefore,
+                totalChipsAndPotAfter,
+                chipsDifference,
+                handNumber: this.handsPlayed,
+                phase: this.phase
+            });
+        } else {
+            // Record fix attempt - success if total chips didn't change
+            this._recordFixAttempt('FIX_32_BET_TOTAL_CHIPS_CHANGED', true, {
                 context: 'BET',
                 player: player.name,
                 totalChipsAndPotBefore,
@@ -4026,6 +4121,17 @@ class Table {
                 handNumber: this.handsPlayed,
                 phase: this.phase
             });
+        } else {
+            // Record fix attempt - success if chips calculation is correct
+            this._recordFixAttempt('FIX_33_RAISE_CHIPS_CALCULATION_ERROR', true, {
+                context: 'RAISE',
+                player: player.name,
+                chipsBefore: chipsBeforeSubtract,
+                additionalBet,
+                chipsAfter: player.chips,
+                handNumber: this.handsPlayed,
+                phase: this.phase
+            });
         }
         if (this.pot !== potBeforeAdd + additionalBet) {
             console.error(`[Table ${this.name}] ⚠️ CRITICAL RAISE ERROR: Pot calculation failed! Before: ${potBeforeAdd}, AdditionalBet: ${additionalBet}, After: ${this.pot}, Expected: ${potBeforeAdd + additionalBet}`);
@@ -4048,6 +4154,17 @@ class Table {
                 handNumber: this.handsPlayed,
                 phase: this.phase
             });
+        } else {
+            // Record fix attempt - success if pot calculation is correct
+            this._recordFixAttempt('FIX_34_RAISE_POT_CALCULATION_ERROR', true, {
+                context: 'RAISE',
+                player: player.name,
+                potBefore: potBeforeAdd,
+                additionalBet,
+                potAfter: this.pot,
+                handNumber: this.handsPlayed,
+                phase: this.phase
+            });
         }
         if (Math.abs(chipsDifference) > 0.01) {
             console.error(`[Table ${this.name}] ⚠️ CRITICAL RAISE ERROR: Total chips changed! Before: ${totalChipsAndPotBefore}, After: ${totalChipsAndPotAfter}, Difference: ${chipsDifference}`);
@@ -4060,6 +4177,17 @@ class Table {
             });
             // Record fix attempt - total chips changed during raise is a failure
             this._recordFixAttempt('FIX_35_RAISE_TOTAL_CHIPS_CHANGED', false, {
+                context: 'RAISE',
+                player: player.name,
+                totalChipsAndPotBefore,
+                totalChipsAndPotAfter,
+                chipsDifference,
+                handNumber: this.handsPlayed,
+                phase: this.phase
+            });
+        } else {
+            // Record fix attempt - success if total chips didn't change
+            this._recordFixAttempt('FIX_35_RAISE_TOTAL_CHIPS_CHANGED', true, {
                 context: 'RAISE',
                 player: player.name,
                 totalChipsAndPotBefore,
@@ -4252,6 +4380,16 @@ class Table {
                 handNumber: this.handsPlayed,
                 phase: this.phase
             });
+        } else {
+            // Record fix attempt - success if chips are zero
+            this._recordFixAttempt('FIX_36_ALLIN_CHIPS_NOT_ZERO', true, {
+                context: 'ALL_IN',
+                player: player.name,
+                chipsAfter: player.chips,
+                amount,
+                handNumber: this.handsPlayed,
+                phase: this.phase
+            });
         }
         if (this.pot !== potBeforeAdd + amount) {
             console.error(`[Table ${this.name}] ⚠️ CRITICAL ALL-IN ERROR: Pot calculation failed! Before: ${potBeforeAdd}, Amount: ${amount}, After: ${this.pot}, Expected: ${potBeforeAdd + amount}`);
@@ -4274,6 +4412,17 @@ class Table {
                 handNumber: this.handsPlayed,
                 phase: this.phase
             });
+        } else {
+            // Record fix attempt - success if pot calculation is correct
+            this._recordFixAttempt('FIX_37_ALLIN_POT_CALCULATION_ERROR', true, {
+                context: 'ALL_IN',
+                player: player.name,
+                potBefore: potBeforeAdd,
+                amount,
+                potAfter: this.pot,
+                handNumber: this.handsPlayed,
+                phase: this.phase
+            });
         }
         if (chipsBeforeSubtract !== amount) {
             console.error(`[Table ${this.name}] ⚠️ CRITICAL ALL-IN ERROR: Amount mismatch! Player chips before: ${chipsBeforeSubtract}, Amount being bet: ${amount}`);
@@ -4285,6 +4434,16 @@ class Table {
             });
             // Record fix attempt - all-in amount mismatch is a failure
             this._recordFixAttempt('FIX_38_ALLIN_AMOUNT_MISMATCH', false, {
+                context: 'ALL_IN',
+                player: player.name,
+                chipsBefore: chipsBeforeSubtract,
+                amount,
+                handNumber: this.handsPlayed,
+                phase: this.phase
+            });
+        } else {
+            // Record fix attempt - success if amount matches
+            this._recordFixAttempt('FIX_38_ALLIN_AMOUNT_MISMATCH', true, {
                 context: 'ALL_IN',
                 player: player.name,
                 chipsBefore: chipsBeforeSubtract,
@@ -4304,6 +4463,17 @@ class Table {
             });
             // Record fix attempt - total chips changed during all-in is a failure
             this._recordFixAttempt('FIX_39_ALLIN_TOTAL_CHIPS_CHANGED', false, {
+                context: 'ALL_IN',
+                player: player.name,
+                totalChipsAndPotBefore,
+                totalChipsAndPotAfter,
+                chipsDifference,
+                handNumber: this.handsPlayed,
+                phase: this.phase
+            });
+        } else {
+            // Record fix attempt - success if total chips didn't change
+            this._recordFixAttempt('FIX_39_ALLIN_TOTAL_CHIPS_CHANGED', true, {
                 context: 'ALL_IN',
                 player: player.name,
                 totalChipsAndPotBefore,
@@ -5930,10 +6100,27 @@ class Table {
                         handNumber: this.handsPlayed,
                         phase: this.phase
                     });
+                } else {
+                    // Record fix attempt - success if no chips created
+                    this._recordFixAttempt('FIX_2_CHIPS_CREATED_BETTING', true, {
+                        potBeforeCalculation,
+                        sumOfTotalBets,
+                        difference: potBeforeCalculation - sumOfTotalBets,
+                        handNumber: this.handsPlayed,
+                        phase: this.phase
+                    });
                 }
             } else {
                 // Record fix attempt - success if no chips lost
                 this._recordFixAttempt('FIX_2_CHIPS_LOST_BETTING', true, {
+                    potBeforeCalculation,
+                    sumOfTotalBets,
+                    difference: potBeforeCalculation - sumOfTotalBets,
+                    handNumber: this.handsPlayed,
+                    phase: this.phase
+                });
+                // Also record success for chips created check
+                this._recordFixAttempt('FIX_2_CHIPS_CREATED_BETTING', true, {
                     potBeforeCalculation,
                     sumOfTotalBets,
                     difference: potBeforeCalculation - sumOfTotalBets,
