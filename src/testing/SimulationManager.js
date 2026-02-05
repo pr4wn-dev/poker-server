@@ -1098,12 +1098,15 @@ class SimulationManager {
      * Pause a simulation - bots will stop taking actions
      */
     pauseSimulation(tableId, reason = 'manual_pause') {
+        console.log(`[SimulationManager] pauseSimulation CALLED: tableId=${tableId}, reason=${reason}`);
         const simulation = this.activeSimulations.get(tableId);
         if (!simulation) {
+            console.error(`[SimulationManager] ⚠️ Cannot pause - simulation not found for tableId=${tableId}`);
             this.log('WARN', 'Cannot pause simulation - not found', { tableId });
             return { success: false, error: 'Simulation not found' };
         }
         
+        console.log(`[SimulationManager] ⚠️⚠️⚠️ PAUSING SIMULATION: tableId=${tableId}, reason=${reason}`);
         simulation.isPaused = true;
         simulation.pauseReason = reason;
         simulation.pausedAt = Date.now();
