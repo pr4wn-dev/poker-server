@@ -1069,6 +1069,21 @@ class Table {
                 pot: this.pot,
                 actualTotalChipsAndPot
             });
+            
+            // Record fix attempt for the METHOD of "adjusting totalStartingChips at game start"
+            // This is allowed at game start, but we track it to see if this method is working
+            const adjustmentDifference = Math.abs(this.totalStartingChips - actualTotalChipsAndPot);
+            const adjustmentSuccess = adjustmentDifference < 0.01;
+            this._recordFixAttempt('FIX_1_TOTAL_STARTING_CHIPS_ADJUSTMENT', adjustmentSuccess, {
+                context: 'HANDLE_GAME_START',
+                method: 'ADJUST_TO_REALITY_AT_GAME_START',
+                oldTotalStartingChips,
+                newTotalStartingChips: this.totalStartingChips,
+                actualTotalChipsAndPot,
+                adjustmentDifference,
+                handNumber: this.handsPlayed,
+                reason: 'Adjusting totalStartingChips at game start to match actual chips - this is allowed at game start only'
+            });
         }
         
         gameLogger.gameEvent(this.name, 'TOTAL STARTING CHIPS TRACKED', {
@@ -6090,17 +6105,36 @@ class Table {
                 potAwardsCount: potAwards.length
             });
             
-            // Adjust totalStartingChips to account for lost chips
-            const oldTotalStartingChips = this.totalStartingChips;
-            const actualTotalChips = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
-            // Subtract the lost pot from totalStartingChips
-            this.totalStartingChips = this.totalStartingChips - potBeforeFinalCheck;
-            console.error(`[Table ${this.name}] ⚠️ ADJUSTING totalStartingChips: ${oldTotalStartingChips} → ${this.totalStartingChips} (lost ${potBeforeFinalCheck} chips due to pot not cleared)`);
-            this._logTotalStartingChipsChange('ADJUST_FOR_UNCLAIMED_POT', 'CALCULATE_AND_AWARD_SIDE_POTS', oldTotalStartingChips, this.totalStartingChips, {
-                reason: 'Pot not cleared after awards - adjusting totalStartingChips to account for lost chips',
-                potLost: potBeforeFinalCheck,
-                actualTotalChips,
-                handNumber: this.handsPlayed
+            // CRITICAL FIX: totalStartingChips should NEVER be decreased
+            // If chips are lost, this is a CRITICAL BUG that must be fixed, not masked
+            const chipsLost = potBeforeFinalCheck;
+            console.error(`[Table ${this.name}] ⚠️⚠️⚠️ CRITICAL BUG: ${chipsLost} chips LOST due to pot not cleared! totalStartingChips MUST NOT be decreased!`);
+            gameLogger.error(this.name, '[MONEY] CRITICAL: Chips lost - totalStartingChips NOT adjusted (should never decrease)', {
+                chipsLost,
+                potBeforeFinalCheck,
+                totalStartingChips: this.totalStartingChips,
+                totalAwarded,
+                handNumber: this.handsPlayed,
+                phase: this.phase,
+                reason: 'Pot was not cleared after awards - chips were lost. totalStartingChips should NEVER decrease.'
+            });
+            
+            // CRITICAL: Pause simulation when chips are lost
+            if (this.isSimulation && this.onPauseSimulation) {
+                this.onPauseSimulation(`CRITICAL: ${chipsLost} chips lost - pot not cleared after awards (Hand ${this.handsPlayed})`);
+            }
+            
+            // Record fix attempt for the METHOD of "adjusting totalStartingChips downward" - this method has FAILED
+            // This tracks the METHOD, not the issue - if this method fails 5 times, we must try a different approach
+            this._recordFixAttempt('FIX_1_TOTAL_STARTING_CHIPS_ADJUSTMENT', false, {
+                context: 'CALCULATE_AND_AWARD_SIDE_POTS',
+                method: 'ADJUST_DOWNWARD_FOR_POT_LOSS',
+                chipsLost,
+                potBeforeFinalCheck,
+                totalAwarded,
+                handNumber: this.handsPlayed,
+                phase: this.phase,
+                reason: 'Attempted to decrease totalStartingChips - this method FAILS because totalStartingChips should NEVER decrease'
             });
             
             // Record fix attempt - pot not cleared is a failure
@@ -6155,15 +6189,36 @@ class Table {
                     hadException: error !== null
                 });
                 
-                // Adjust totalStartingChips to account for lost chips
-                const oldTotalStartingChips = this.totalStartingChips;
-                this.totalStartingChips = this.totalStartingChips - potBeforeFinalClear;
-                console.error(`[Table ${this.name}] ⚠️ ADJUSTING totalStartingChips in finally: ${oldTotalStartingChips} → ${this.totalStartingChips} (lost ${potBeforeFinalClear} chips)`);
-                this._logTotalStartingChipsChange('ADJUST_FOR_UNCLAIMED_POT_FINALLY', 'CALCULATE_AND_AWARD_SIDE_POTS_FINALLY', oldTotalStartingChips, this.totalStartingChips, {
-                    reason: 'Pot not cleared after awards - adjusting totalStartingChips in finally block',
-                    potLost: potBeforeFinalClear,
+                // CRITICAL FIX: totalStartingChips should NEVER be decreased
+                // If chips are lost, this is a CRITICAL BUG that must be fixed, not masked
+                const chipsLost = potBeforeFinalClear;
+                console.error(`[Table ${this.name}] ⚠️⚠️⚠️ CRITICAL BUG: ${chipsLost} chips LOST in finally block! totalStartingChips MUST NOT be decreased!`);
+                gameLogger.error(this.name, '[MONEY] CRITICAL: Chips lost in finally - totalStartingChips NOT adjusted (should never decrease)', {
+                    chipsLost,
+                    potBeforeFinalClear,
+                    totalStartingChips: this.totalStartingChips,
                     initialPot,
-                    handNumber: this.handsPlayed
+                    totalAwarded,
+                    handNumber: this.handsPlayed,
+                    phase: this.phase,
+                    reason: 'Pot was not cleared after awards in finally block - chips were lost. totalStartingChips should NEVER decrease.'
+                });
+                
+                // CRITICAL: Pause simulation when chips are lost
+                if (this.isSimulation && this.onPauseSimulation) {
+                    this.onPauseSimulation(`CRITICAL: ${chipsLost} chips lost in finally block - pot not cleared (Hand ${this.handsPlayed})`);
+                }
+                
+                // Record fix attempt for the METHOD of "adjusting totalStartingChips downward" - this method has FAILED
+                this._recordFixAttempt('FIX_1_TOTAL_STARTING_CHIPS_ADJUSTMENT', false, {
+                    context: 'CALCULATE_AND_AWARD_SIDE_POTS_FINALLY',
+                    method: 'ADJUST_DOWNWARD_FOR_POT_LOSS_FINALLY',
+                    chipsLost,
+                    potBeforeFinalClear,
+                    initialPot,
+                    handNumber: this.handsPlayed,
+                    phase: this.phase,
+                    reason: 'Attempted to decrease totalStartingChips in finally - this method FAILS because totalStartingChips should NEVER decrease'
                 });
                 
                 // Record fix attempt - pot not cleared is a failure
@@ -6586,15 +6641,37 @@ class Table {
                     hadException: error !== null
                 });
                 
-                // Adjust totalStartingChips to account for lost chips
-                const oldTotalStartingChips = this.totalStartingChips;
-                this.totalStartingChips = this.totalStartingChips - potBeforeFinalClear;
-                console.error(`[Table ${this.name}] ⚠️ ADJUSTING totalStartingChips in finally (awardPot): ${oldTotalStartingChips} → ${this.totalStartingChips} (lost ${potBeforeFinalClear} chips)`);
-                this._logTotalStartingChipsChange('ADJUST_FOR_UNCLAIMED_POT_FINALLY_AWARDPOT', 'AWARD_POT_FINALLY', oldTotalStartingChips, this.totalStartingChips, {
-                    reason: 'Pot not cleared after awardPot - adjusting totalStartingChips in finally block',
-                    potLost: potBeforeFinalClear,
+                // CRITICAL FIX: totalStartingChips should NEVER be decreased
+                // If chips are lost, this is a CRITICAL BUG that must be fixed, not masked
+                const chipsLost = potBeforeFinalClear;
+                console.error(`[Table ${this.name}] ⚠️⚠️⚠️ CRITICAL BUG: ${chipsLost} chips LOST in finally block (awardPot)! totalStartingChips MUST NOT be decreased!`);
+                gameLogger.error(this.name, '[MONEY] CRITICAL: Chips lost in finally (awardPot) - totalStartingChips NOT adjusted (should never decrease)', {
+                    chipsLost,
+                    potBeforeFinalClear,
+                    totalStartingChips: this.totalStartingChips,
                     initialPot,
-                    handNumber: this.handsPlayed
+                    winner: winner?.name,
+                    handNumber: this.handsPlayed,
+                    phase: this.phase,
+                    reason: 'Pot was not cleared after awardPot in finally block - chips were lost. totalStartingChips should NEVER decrease.'
+                });
+                
+                // CRITICAL: Pause simulation when chips are lost
+                if (this.isSimulation && this.onPauseSimulation) {
+                    this.onPauseSimulation(`CRITICAL: ${chipsLost} chips lost in finally block (awardPot) - pot not cleared (Hand ${this.handsPlayed})`);
+                }
+                
+                // Record fix attempt for the METHOD of "adjusting totalStartingChips downward" - this method has FAILED
+                this._recordFixAttempt('FIX_1_TOTAL_STARTING_CHIPS_ADJUSTMENT', false, {
+                    context: 'AWARD_POT_FINALLY',
+                    method: 'ADJUST_DOWNWARD_FOR_POT_LOSS_FINALLY_AWARDPOT',
+                    chipsLost,
+                    potBeforeFinalClear,
+                    initialPot,
+                    winner: winner?.name,
+                    handNumber: this.handsPlayed,
+                    phase: this.phase,
+                    reason: 'Attempted to decrease totalStartingChips in finally (awardPot) - this method FAILS because totalStartingChips should NEVER decrease'
                 });
             }
             
