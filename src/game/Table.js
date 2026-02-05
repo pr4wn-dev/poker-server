@@ -1260,11 +1260,11 @@ class Table {
         // The loop above resets chips but does NOT increment totalStartingChips to prevent accumulation errors
         // Calculate it here ONCE based on actual active players
         const expectedTotalStartingChips = this.seats.filter(s => s && s.isActive !== false).length * this.buyIn;
-        const oldTotalStartingChips = this.totalStartingChips;
+        const totalStartingChipsBeforeCalc = this.totalStartingChips;
         this.totalStartingChips = expectedTotalStartingChips;
         
-        if (oldTotalStartingChips !== expectedTotalStartingChips) {
-            this._logTotalStartingChipsChange('CALCULATE_FROM_BUYINS', 'HANDLE_GAME_START', oldTotalStartingChips, this.totalStartingChips, {
+        if (totalStartingChipsBeforeCalc !== expectedTotalStartingChips) {
+            this._logTotalStartingChipsChange('CALCULATE_FROM_BUYINS', 'HANDLE_GAME_START', totalStartingChipsBeforeCalc, this.totalStartingChips, {
                 reason: 'Calculating totalStartingChips from buy-ins (not incrementing during loop)',
                 expectedTotalStartingChips,
                 playerCount: this.seats.filter(s => s && s.isActive !== false).length,
