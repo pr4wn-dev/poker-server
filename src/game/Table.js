@@ -1773,7 +1773,7 @@ class Table {
         this.deck.shuffle();
         this.communityCards = [];
         
-        // CRITICAL: Clear pot IMMEDIATELY before PRE-RESET logging (final safeguard)
+        // CRITICAL: Clear pot IMMEDIATELY before capturing potBeforeReset (final safeguard)
         // This catches any pot that was set after the initial clear at function start
         if (this.pot > 0) {
             const potBeforeFinalClear = this.pot;
@@ -1787,6 +1787,8 @@ class Table {
         }
         
         // CRITICAL FIX #1: Pot not cleared at hand start - ULTRA-VERBOSE logging
+        // CRITICAL: Clear pot one more time RIGHT BEFORE capturing to ensure it's 0
+        this.pot = 0;
         const potBeforeReset = this.pot;
         const totalChipsBeforeReset = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
         const totalChipsAndPotBeforeReset = totalChipsBeforeReset + this.pot;
