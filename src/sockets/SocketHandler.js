@@ -1386,7 +1386,8 @@ class SocketHandler {
                     // Broadcast item ante started to all players (keeping old event name for backward compatibility)
                     this.io.to(`table:${player.currentTableId}`).emit('side_pot_started', {
                         creatorId: user.userId,
-                        creatorItem: result.itemAnte.creatorItem,
+                        creatorItem: result.itemAnte.firstItem,  // Changed from creatorItem to firstItem
+                        minimumValue: result.minimumValue,  // New: minimum value required
                         collectionEndTime: result.itemAnte.collectionEndTime
                     });
                 }

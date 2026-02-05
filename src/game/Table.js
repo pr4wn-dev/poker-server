@@ -922,6 +922,7 @@ class Table {
         };
         
         // Item ante - "For Keeps" system where players put items in and winner takes all
+        this.itemAnteEnabled = options.itemAnteEnabled || false;  // Enable item ante in table creation
         this.itemAnte = new ItemAnte(this.id, this.creatorId);
         this.itemAnteCollectionTime = options.itemAnteCollectionTime || 60000; // 60 seconds default
 
@@ -2144,6 +2145,18 @@ class Table {
 
         // Handle late joiner during ready-up phase
         this.handleLateJoinerDuringReadyUp(seat);
+        
+        // Check if item ante is enabled and player needs to submit item
+        if (this.itemAnteEnabled && !this.gameStarted) {
+            const needsFirstItem = this.itemAnte.needsFirstItem();
+            const hasSubmitted = this.itemAnte.hasSubmitted(playerId);
+            
+            if (needsFirstItem || !hasSubmitted) {
+                // Player needs to submit item - this will be indicated in table state
+                // Unity client should prompt player to select item
+                console.log(`[Table ${this.name}] Player ${name} (${playerId}) needs to submit item for item ante`);
+            }
+        }
 
         return { success: true, seatIndex };
     }
@@ -8448,18 +8461,18 @@ class Table {
     // Real poker chip side pots are handled in calculateAndAwardSidePots() method above
 
     /**
-     * Creator starts the item ante with their item
+     * First player starts the item ante with their item (sets minimum value)
      * CRITICAL: This is for ITEMS ONLY - no money/chips allowed!
      */
-    startItemAnte(creatorId, item) {
-        if (creatorId !== this.creatorId) {
-            return { success: false, error: 'Only table creator can start item ante' };
+    startItemAnte(userId, item) {
+        if (!this.itemAnteEnabled) {
+            return { success: false, error: 'Item ante is not enabled for this table' };
         }
         if (this.gameStarted) {
             return { success: false, error: 'Game already started' };
         }
         // CRITICAL: itemAnte only accepts items, never money/chips
-        return this.itemAnte.start(item, this.itemAnteCollectionTime);
+        return this.itemAnte.start(item, userId, this.itemAnteCollectionTime);
     }
 
     /**
@@ -8554,6 +8567,7 @@ class Table {
                 gameStarted: this.gameStarted,
             allowSpectators: this.allowSpectators,
             houseRulesPreset: this.houseRules?.bettingType || 'standard',
+            itemAnteEnabled: this.itemAnteEnabled,
             hasItemAnte: this.itemAnte?.status !== ItemAnte.STATUS.INACTIVE,
             itemAnteCount: this.itemAnte?.approvedItems?.length || 0,
             createdAt: this.createdAt
@@ -8576,6 +8590,7 @@ class Table {
                 gameStarted: false,
                 allowSpectators: this.allowSpectators || false,
                 houseRulesPreset: 'standard',
+                itemAnteEnabled: false,
                 hasItemAnte: false,
                 itemAnteCount: 0,
                 createdAt: this.createdAt || Date.now()
@@ -8626,7 +8641,11 @@ class Table {
             pauseReason: this.pauseReason || null, // Reason for pause
             practiceMode: this.practiceMode,
             houseRules: this.houseRules?.toJSON?.() || null,
+            itemAnteEnabled: this.itemAnteEnabled,
             sidePot: this.getItemAnteState(forPlayerId),  // Keeping field name for Unity backward compatibility
+            // Helper flags for Unity to know when to prompt for item
+            needsItemAnteSubmission: this.itemAnteEnabled && !this.gameStarted && 
+                (this.itemAnte.needsFirstItem() || (forPlayerId && !this.itemAnte.hasSubmitted(forPlayerId))),
             seats: this.seats.map((seat, index) => {
                 if (!seat) return null;
                 
@@ -8697,6 +8716,8 @@ class Table {
                     isSittingOut: seat.isSittingOut || false,
                     isReady: seat.isReady || false,
                     inItemAnte: this.itemAnte.isParticipating(seat.playerId),
+                    needsItemAnteSubmission: this.itemAnteEnabled && !this.gameStarted && 
+                        (this.itemAnte.needsFirstItem() || !this.itemAnte.hasSubmitted(seat.playerId)),
                     cards: cards
                 };
             })

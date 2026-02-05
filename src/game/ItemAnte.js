@@ -6,10 +6,10 @@
  * are for betting when players go all-in with different amounts).
  * 
  * Flow:
- * 1. Table creator starts the item ante with their item
- * 2. Other players submit items for approval
- * 3. Creator approves/declines each submission
- * 4. When game starts (or timer ends), item ante is locked
+ * 1. First player (creator or first non-spectator) adds their item - sets minimum value
+ * 2. Other players submit items - must be equal or greater value than first item
+ * 3. Items are auto-approved if value is valid (no manual approval needed)
+ * 4. When game starts, item ante is locked
  * 5. Winner of the hand/game takes all items from the ante
  */
 
@@ -23,9 +23,9 @@ const ITEM_ANTE_STATUS = {
 };
 
 const SUBMISSION_STATUS = {
-    PENDING: 'pending',         // Waiting for dealer approval
-    APPROVED: 'approved',       // Dealer approved
-    DECLINED: 'declined',       // Dealer declined
+    PENDING: 'pending',         // Waiting for value validation
+    APPROVED: 'approved',       // Auto-approved (value valid)
+    DECLINED: 'declined',       // Declined (value too low)
     OPTED_OUT: 'opted_out'      // Player chose not to participate
 };
 
@@ -33,13 +33,14 @@ class ItemAnte {
     constructor(tableId, creatorId) {
         this.id = uuidv4();
         this.tableId = tableId;
-        this.creatorId = creatorId;  // Table creator who manages approvals
+        this.creatorId = creatorId;
         this.status = ITEM_ANTE_STATUS.INACTIVE;
         
-        // Creator's item (the "anchor" item)
-        this.creatorItem = null;
+        // First item sets the minimum value threshold
+        this.firstItem = null;
+        this.minimumValue = null;  // Minimum baseValue required for subsequent items
         
-        // Other players' submissions: userId -> { userId, item, status, submittedAt }
+        // All players' items: userId -> { userId, item, status, submittedAt }
         this.submissions = new Map();
         
         // Final approved items that go to winner
@@ -55,39 +56,50 @@ class ItemAnte {
     }
     
     /**
-     * Creator starts the item ante with their item
+     * First player starts the item ante with their item (sets minimum value)
      */
-    start(creatorItem, collectionDurationMs = 60000) {
+    start(firstItem, userId, collectionDurationMs = 60000) {
         // CRITICAL: This ante is for ITEMS ONLY - no money/chips allowed!
         if (this.status !== ITEM_ANTE_STATUS.INACTIVE) {
             return { success: false, error: 'Item ante already active' };
         }
         
         // CRITICAL: Must be an item object, not money/chips
-        if (!creatorItem || !creatorItem.isGambleable) {
+        if (!firstItem || !firstItem.isGambleable) {
             return { success: false, error: 'Item cannot be gambled' };
         }
         
-        this.creatorItem = creatorItem;
+        // Set first item and minimum value threshold
+        this.firstItem = firstItem;
+        this.minimumValue = firstItem.baseValue || firstItem.calculateBaseValue?.() || 100;
         this.status = ITEM_ANTE_STATUS.COLLECTING;
         this.collectionEndTime = Date.now() + collectionDurationMs;
         
-        // Add creator's item to approved list
+        // Add first item to approved list
         this.approvedItems.push({
-            userId: this.creatorId,
-            item: creatorItem
+            userId: userId,
+            item: firstItem
         });
         
-        console.log(`[ItemAnte] Started by creator with item: ${creatorItem.name}`);
+        // Track submission
+        this.submissions.set(userId, {
+            userId: userId,
+            item: firstItem,
+            status: SUBMISSION_STATUS.APPROVED,
+            submittedAt: Date.now()
+        });
+        
+        console.log(`[ItemAnte] Started by ${userId} with item: ${firstItem.name} (value: ${this.minimumValue})`);
         
         return { 
             success: true, 
-            itemAnte: this.getState()
+            itemAnte: this.getState(),
+            minimumValue: this.minimumValue
         };
     }
     
     /**
-     * Player submits an item for approval
+     * Player submits an item - auto-validates against minimum value
      */
     submitItem(userId, item) {
         // CRITICAL: This ante is for ITEMS ONLY - no money/chips allowed!
@@ -95,8 +107,9 @@ class ItemAnte {
             return { success: false, error: 'Item ante not accepting submissions' };
         }
         
-        if (userId === this.creatorId) {
-            return { success: false, error: 'Creator already has item in ante' };
+        // Check if first item hasn't been set yet
+        if (!this.firstItem || this.minimumValue === null) {
+            return { success: false, error: 'First item must be submitted before others' };
         }
         
         // CRITICAL: Must be an item object, not money/chips
@@ -104,26 +117,52 @@ class ItemAnte {
             return { success: false, error: 'Item cannot be gambled' };
         }
         
-        // Check if already submitted
+        // Check if already submitted and approved
         if (this.submissions.has(userId)) {
             const existing = this.submissions.get(userId);
             if (existing.status === SUBMISSION_STATUS.APPROVED) {
-                return { success: false, error: 'Your item is already approved' };
+                return { success: false, error: 'Your item is already in the ante' };
             }
         }
         
+        // Validate item value - must be equal or greater than minimum
+        const itemValue = item.baseValue || item.calculateBaseValue?.() || 100;
+        if (itemValue < this.minimumValue) {
+            this.submissions.set(userId, {
+                userId: userId,
+                item: item,
+                status: SUBMISSION_STATUS.DECLINED,
+                submittedAt: Date.now()
+            });
+            
+            console.log(`[ItemAnte] ${userId} submitted item ${item.name} (value: ${itemValue}) - REJECTED (minimum: ${this.minimumValue})`);
+            
+            return { 
+                success: false, 
+                error: `Item value (${itemValue}) is less than minimum required (${this.minimumValue})`
+            };
+        }
+        
+        // Auto-approve if value is valid
         this.submissions.set(userId, {
             userId: userId,
             item: item,
-            status: SUBMISSION_STATUS.PENDING,
+            status: SUBMISSION_STATUS.APPROVED,
             submittedAt: Date.now()
         });
         
-        console.log(`[ItemAnte] ${userId} submitted item: ${item.name}`);
+        // Add to approved items
+        this.approvedItems.push({
+            userId: userId,
+            item: item
+        });
+        
+        console.log(`[ItemAnte] ${userId} submitted item ${item.name} (value: ${itemValue}) - APPROVED`);
         
         return { 
             success: true,
-            message: 'Item submitted for approval'
+            message: 'Item added to ante',
+            approvedItems: this.approvedItems.length
         };
     }
     
@@ -150,54 +189,47 @@ class ItemAnte {
     }
     
     /**
-     * Creator approves a player's item
+     * Approve item (kept for backward compatibility, but items are now auto-approved)
+     * This is a no-op since items are auto-validated in submitItem()
      */
     approveItem(creatorId, userId) {
-        if (creatorId !== this.creatorId) {
-            return { success: false, error: 'Only creator can approve items' };
-        }
-        
-        if (this.status !== ITEM_ANTE_STATUS.COLLECTING) {
-            return { success: false, error: 'Item ante not accepting approvals' };
-        }
-        
         const submission = this.submissions.get(userId);
         if (!submission) {
             return { success: false, error: 'No submission from this player' };
         }
         
-        if (submission.status !== SUBMISSION_STATUS.PENDING) {
-            return { success: false, error: 'Submission already processed' };
+        if (submission.status === SUBMISSION_STATUS.APPROVED) {
+            return { 
+                success: true,
+                approvedItems: this.approvedItems.length
+            };
         }
         
-        submission.status = SUBMISSION_STATUS.APPROVED;
+        // If pending, try to validate it
+        if (submission.status === SUBMISSION_STATUS.PENDING) {
+            const itemValue = submission.item.baseValue || submission.item.calculateBaseValue?.() || 100;
+            if (itemValue >= this.minimumValue) {
+                submission.status = SUBMISSION_STATUS.APPROVED;
+                if (!this.approvedItems.some(e => e.userId === userId)) {
+                    this.approvedItems.push({
+                        userId: userId,
+                        item: submission.item
+                    });
+                }
+                return { 
+                    success: true,
+                    approvedItems: this.approvedItems.length
+                };
+            }
+        }
         
-        // Add to approved items
-        this.approvedItems.push({
-            userId: userId,
-            item: submission.item
-        });
-        
-        console.log(`[ItemAnte] Creator approved ${userId}'s item: ${submission.item.name}`);
-        
-        return { 
-            success: true,
-            approvedItems: this.approvedItems.length
-        };
+        return { success: false, error: 'Item does not meet minimum value requirement' };
     }
     
     /**
-     * Creator declines a player's item
+     * Decline item (kept for backward compatibility)
      */
     declineItem(creatorId, userId) {
-        if (creatorId !== this.creatorId) {
-            return { success: false, error: 'Only creator can decline items' };
-        }
-        
-        if (this.status !== ITEM_ANTE_STATUS.COLLECTING) {
-            return { success: false, error: 'Item ante not active' };
-        }
-        
         const submission = this.submissions.get(userId);
         if (!submission) {
             return { success: false, error: 'No submission from this player' };
@@ -205,7 +237,13 @@ class ItemAnte {
         
         submission.status = SUBMISSION_STATUS.DECLINED;
         
-        console.log(`[ItemAnte] Creator declined ${userId}'s item`);
+        // Remove from approved items if it was there
+        const index = this.approvedItems.findIndex(e => e.userId === userId);
+        if (index >= 0) {
+            this.approvedItems.splice(index, 1);
+        }
+        
+        console.log(`[ItemAnte] ${userId}'s item declined`);
         
         return { success: true };
     }
@@ -218,11 +256,23 @@ class ItemAnte {
             return { success: false, error: 'Item ante not in collection phase' };
         }
         
-        // Clear any pending submissions (not approved in time)
+        // Clear any pending submissions (shouldn't happen with auto-validation, but just in case)
         for (const [userId, submission] of this.submissions) {
             if (submission.status === SUBMISSION_STATUS.PENDING) {
-                submission.status = SUBMISSION_STATUS.DECLINED;
-                console.log(`[ItemAnte] Auto-declined pending submission from ${userId}`);
+                // Try to auto-validate one last time
+                const itemValue = submission.item?.baseValue || submission.item?.calculateBaseValue?.() || 100;
+                if (itemValue >= this.minimumValue) {
+                    submission.status = SUBMISSION_STATUS.APPROVED;
+                    if (!this.approvedItems.some(e => e.userId === userId)) {
+                        this.approvedItems.push({
+                            userId: userId,
+                            item: submission.item
+                        });
+                    }
+                } else {
+                    submission.status = SUBMISSION_STATUS.DECLINED;
+                    console.log(`[ItemAnte] Auto-declined pending submission from ${userId} (value too low)`);
+                }
             }
         }
         
@@ -280,7 +330,8 @@ class ItemAnte {
         const itemsToReturn = [...this.approvedItems];
         
         this.status = ITEM_ANTE_STATUS.INACTIVE;
-        this.creatorItem = null;
+        this.firstItem = null;
+        this.minimumValue = null;
         this.submissions.clear();
         this.approvedItems = [];
         
@@ -296,11 +347,23 @@ class ItemAnte {
      * Check if a player is participating in item ante
      */
     isParticipating(userId) {
-        if (userId === this.creatorId && this.creatorItem) {
-            return true;
-        }
         const submission = this.submissions.get(userId);
         return submission?.status === SUBMISSION_STATUS.APPROVED;
+    }
+    
+    /**
+     * Check if item ante needs first item (no items submitted yet)
+     */
+    needsFirstItem() {
+        return this.status === ITEM_ANTE_STATUS.INACTIVE || 
+               (this.status === ITEM_ANTE_STATUS.COLLECTING && this.approvedItems.length === 0);
+    }
+    
+    /**
+     * Check if player has already submitted an item
+     */
+    hasSubmitted(userId) {
+        return this.submissions.has(userId);
     }
     
     /**
@@ -318,14 +381,15 @@ class ItemAnte {
             id: this.id,
             status: this.status,
             creatorId: this.creatorId,
-            creatorItem: this.creatorItem ? {
-                id: this.creatorItem.id,
-                name: this.creatorItem.name,
-                rarity: this.creatorItem.rarity,
-                type: this.creatorItem.type,
-                icon: this.creatorItem.icon,
-                baseValue: this.creatorItem.baseValue
+            firstItem: this.firstItem ? {
+                id: this.firstItem.id,
+                name: this.firstItem.name,
+                rarity: this.firstItem.rarity,
+                type: this.firstItem.type,
+                icon: this.firstItem.icon,
+                baseValue: this.firstItem.baseValue
             } : null,
+            minimumValue: this.minimumValue,
             collectionEndTime: this.collectionEndTime,
             approvedCount: this.approvedItems.length,
             totalValue: this.approvedItems.reduce((sum, e) => sum + (e.item?.baseValue || 0), 0)
@@ -343,35 +407,32 @@ class ItemAnte {
             }
         }));
         
-        // If creator, show all submissions
-        if (forUserId === this.creatorId) {
-            state.pendingSubmissions = [];
-            for (const [userId, sub] of this.submissions) {
-                if (sub.status === SUBMISSION_STATUS.PENDING) {
-                    state.pendingSubmissions.push({
-                        userId: userId,
-                        item: sub.item ? {
-                            id: sub.item.id,
-                            name: sub.item.name,
-                            rarity: sub.item.rarity,
-                            type: sub.item.type,
-                            icon: sub.item.icon,
-                            baseValue: sub.item.baseValue
-                        } : null,
-                        submittedAt: sub.submittedAt
-                    });
-                }
+        // Show declined submissions (for debugging/transparency)
+        state.declinedSubmissions = [];
+        for (const [userId, sub] of this.submissions) {
+            if (sub.status === SUBMISSION_STATUS.DECLINED) {
+                state.declinedSubmissions.push({
+                    userId: userId,
+                    item: sub.item ? {
+                        id: sub.item.id,
+                        name: sub.item.name,
+                        rarity: sub.item.rarity,
+                        baseValue: sub.item.baseValue
+                    } : null,
+                    reason: `Value ${sub.item?.baseValue || 0} is less than minimum ${this.minimumValue}`
+                });
             }
         }
         
         // Show user's own submission status
-        if (forUserId && forUserId !== this.creatorId) {
+        if (forUserId) {
             const mySub = this.submissions.get(forUserId);
             state.mySubmission = mySub ? {
                 status: mySub.status,
                 item: mySub.item ? {
                     id: mySub.item.id,
-                    name: mySub.item.name
+                    name: mySub.item.name,
+                    baseValue: mySub.item.baseValue
                 } : null
             } : null;
         }
