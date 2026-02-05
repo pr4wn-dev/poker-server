@@ -172,7 +172,9 @@ class Table {
             'FIX_56_CANNOT_DISTRIBUTE_POT_NO_ELIGIBLE_PLAYERS': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
             'FIX_1_POT_NOT_CLEARED_AT_HAND_START': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
             'FIX_66_TIMER_CLEARED_AT_ACTION_START': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
-            'FIX_67_DISABLE_AUTO_FOLD_FOR_SIMULATION_BOTS': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false }
+            'FIX_67_DISABLE_AUTO_FOLD_FOR_SIMULATION_BOTS': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
+            'FIX_68_PREVENT_TOTAL_STARTING_CHIPS_RECALCULATION': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
+            'FIX_69_DETECT_WORSENING_DIFFERENCE_IN_ROOT_CAUSE_TRACER': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false }
         };
         
         // Track which fixes have been tried and failed (to prevent going back to them)
@@ -402,6 +404,21 @@ class Table {
                         timestamp: op.timestamp
                     }))
                 });
+                
+                // Record fix attempt - this method detects worsening difference
+                this._recordFixAttempt('FIX_69_DETECT_WORSENING_DIFFERENCE_IN_ROOT_CAUSE_TRACER', true, {
+                    context: 'CHIPS_LOST_DETECTED',
+                    method: 'DETECT_WORSENING_DIFFERENCE',
+                    operation,
+                    chipChange: trace.chipChange,
+                    differenceWorsened,
+                    differenceChange: trace.afterState.difference - trace.beforeState.difference,
+                    beforeDifference: trace.beforeState.difference,
+                    afterDifference: trace.afterState.difference,
+                    handNumber: this.handsPlayed,
+                    phase: this.phase,
+                    reason: 'Detecting chips lost by monitoring both chipChange and worsening difference'
+                });
             }
             
             // Also log if chips were created (shouldn't happen)
@@ -552,8 +569,8 @@ class Table {
                         difference: Math.abs(difference),
                         operation: movement.operation,
                         handNumber: this.handsPlayed,
-                        details: movement.details
-                    });
+                    details: movement.details
+                });
                 } else {
                     console.error(`[Table ${this.name}] ⚠️ FIX_14_CHIP_TRACKING_VALIDATION_ERROR IS DISABLED - Root cause analysis required!`);
                     gameLogger.error(this.name, '[ROOT CAUSE] Fix disabled - must investigate root cause', {
@@ -1282,6 +1299,17 @@ class Table {
                 playerCount: this.seats.filter(s => s && s.isActive !== false).length,
                 buyIn: this.buyIn
             });
+            // Record fix attempt - this method prevents recalculation on game restarts
+            this._recordFixAttempt('FIX_68_PREVENT_TOTAL_STARTING_CHIPS_RECALCULATION', true, {
+                context: 'FIRST_GAME_START',
+                method: 'ONLY_SET_IF_ZERO',
+                totalStartingChipsBeforeCalc,
+                totalStartingChipsAfterCalc: this.totalStartingChips,
+                expectedTotalStartingChips,
+                playerCount: this.seats.filter(s => s && s.isActive !== false).length,
+                buyIn: this.buyIn,
+                reason: 'Preventing totalStartingChips recalculation on game restarts to avoid masking chip loss'
+            });
         } else {
             // totalStartingChips is already set - this is a game restart
             // Verify that actual chips match expected, but DO NOT recalculate totalStartingChips
@@ -1296,6 +1324,28 @@ class Table {
                     playerCount: this.seats.filter(s => s && s.isActive !== false).length,
                     buyIn: this.buyIn,
                     reason: 'totalStartingChips already set - this is a game restart. Chips missing indicates a bug, not a recalculation need.'
+                });
+                // Record fix attempt - this method detected missing chips without masking
+                this._recordFixAttempt('FIX_68_PREVENT_TOTAL_STARTING_CHIPS_RECALCULATION', true, {
+                    context: 'GAME_RESTART_DETECTED_MISSING',
+                    method: 'DETECT_WITHOUT_RECALCULATING',
+                    totalStartingChips: this.totalStartingChips,
+                    actualTotalChipsAndPot,
+                    missingChips,
+                    playerCount: this.seats.filter(s => s && s.isActive !== false).length,
+                    buyIn: this.buyIn,
+                    reason: 'Detected missing chips at game restart without recalculating totalStartingChips to mask the loss'
+                });
+            } else {
+                // Chips match - fix is working correctly
+                this._recordFixAttempt('FIX_68_PREVENT_TOTAL_STARTING_CHIPS_RECALCULATION', true, {
+                    context: 'GAME_RESTART_CHIPS_MATCH',
+                    method: 'DETECT_WITHOUT_RECALCULATING',
+                    totalStartingChips: this.totalStartingChips,
+                    actualTotalChipsAndPot,
+                    playerCount: this.seats.filter(s => s && s.isActive !== false).length,
+                    buyIn: this.buyIn,
+                    reason: 'Chips match at game restart - fix is working correctly'
                 });
             }
         }
@@ -5827,12 +5877,12 @@ class Table {
                     console.error(`[Table ${this.name}] Pot should be ${sumOfTotalBets} but is ${potBeforeCalculation}`);
                     console.error(`[Table ${this.name}] Root cause MUST be investigated - chips are being created somewhere in the betting logic`);
                     gameLogger.error(this.name, '[CRITICAL] Chips created during betting - DO NOT MASK - investigate root cause', {
-                        chipsCreated,
-                        potBeforeCalculation,
-                        sumOfTotalBets,
+                            chipsCreated,
+                            potBeforeCalculation,
+                            sumOfTotalBets,
                         totalStartingChips: this.totalStartingChips,
-                        handNumber: this.handsPlayed,
-                        phase: this.phase,
+                            handNumber: this.handsPlayed,
+                            phase: this.phase,
                         warning: 'Chips were created during betting. DO NOT adjust pot or totalStartingChips - this masks the problem. Root cause MUST be investigated and fixed.',
                         allContributors: allContributors.map(p => ({
                             name: p.name,
@@ -6903,7 +6953,7 @@ class Table {
                 potAwardsCount: potAwards.length
             });
         }
-        
+            
         } catch (err) {
             // CRITICAL: Log any exceptions that occur during pot calculation
             error = err;
