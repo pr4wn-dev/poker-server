@@ -1243,7 +1243,8 @@ class SimulationManager {
             if (bot) {
                 bot.isPaused = false;
                 bot.setPaused(false);
-            console.log(`[SimulationManager] Bot ${bot.name} unpaused`);
+                console.log(`[SimulationManager] Bot ${bot.name} unpaused`);
+            }
         }
         
         this.log('INFO', 'All bots unpaused', { tableId, botCount: simulation.socketBots.length });
