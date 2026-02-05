@@ -1860,16 +1860,21 @@ class Table {
         
         this.seats[seatIndex] = seat;
         
-        // CRITICAL: If game already started, update totalStartingChips
-        if (this.gameStarted) {
+        // CRITICAL: Update totalStartingChips when player joins
+        // - If game hasn't started yet: totalStartingChips will be calculated in handleGameStart, but we should still track it
+        // - If game already started: Must update totalStartingChips to prevent "chips created" detection
+        // CRITICAL FIX: Always update totalStartingChips when player joins to prevent root cause tracer from flagging chips as "created"
+        // The only exception is if totalStartingChips is 0 (game hasn't started) - in that case, handleGameStart will calculate it
+        if (this.totalStartingChips > 0 || this.gameStarted) {
             const oldTotalStartingChips = this.totalStartingChips;
             this.totalStartingChips += chips;
-            this._logTotalStartingChipsChange('ADD_LATE_JOINER', 'ADD_PLAYER', oldTotalStartingChips, this.totalStartingChips, {
+            this._logTotalStartingChipsChange('ADD_PLAYER', 'ADD_PLAYER', oldTotalStartingChips, this.totalStartingChips, {
                 player: name,
                 playerId,
                 seatIndex,
                 chips,
-                reason: 'Late joiner - adding chips to totalStartingChips'
+                gameStarted: this.gameStarted,
+                reason: this.gameStarted ? 'Late joiner - adding chips to totalStartingChips' : 'Player joined before game start - adding chips to totalStartingChips'
             });
         }
         
@@ -1910,6 +1915,16 @@ class Table {
                 chips,
                 chipsDifference,
                 difference: Math.abs(chipsDifference - chips)
+            });
+        } else {
+            // Record fix attempt - success if chips match
+            this._recordFixAttempt('FIX_13_ADD_PLAYER_CHIPS_MISMATCH', true, {
+                handNumber: this.handsPlayed,
+                player: name,
+                chips,
+                chipsDifference,
+                totalChipsAndPotBefore,
+                totalChipsAndPotAfter
             });
         }
         
