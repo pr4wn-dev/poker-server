@@ -1063,6 +1063,7 @@ class Table {
         // If a hand is already in progress, don't call startNewHand (this would interrupt the current hand)
         // ALLOW COUNTDOWN phase - this is called AFTER countdown completes, so phase will be COUNTDOWN
         const isActiveHand = this.gameStarted || (this.phase !== GAME_PHASES.WAITING && this.phase !== GAME_PHASES.COUNTDOWN && this.phase !== GAME_PHASES.READY_UP);
+        console.log(`[Table ${this.name}] handleGameStart check: phase=${this.phase}, gameStarted=${this.gameStarted}, isActiveHand=${isActiveHand}`);
         if (isActiveHand) {
             console.error(`[Table ${this.name}] ⚠️ CRITICAL: handleGameStart called but game already started! Phase: ${this.phase}, gameStarted: ${this.gameStarted}, handNumber: ${this.handsPlayed}`);
             gameLogger.error(this.name, '[GAME] CRITICAL: handleGameStart called during active hand', {
@@ -1103,6 +1104,7 @@ class Table {
             });
         }
         
+        console.log(`[Table ${this.name}] ✅ Calling startNewHand() - phase: ${this.phase}, gameStarted: ${this.gameStarted}`);
         this.startNewHand();
         this.onStateChange?.();
     }
