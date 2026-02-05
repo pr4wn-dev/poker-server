@@ -884,24 +884,29 @@ class SocketBot {
             }
         } else if (potOdds > 0.5) {
             // Bad pot odds, but in simulation mode be more aggressive
-            // Call more often to keep games interesting
-            if (Math.random() < 0.5) {  // Increased from 0.3 to 0.5
+            // Raise sometimes even with bad pot odds, call more often
+            const roll = Math.random();
+            if (roll < this.aggressiveness * 0.3) {  // 18-27% chance to raise even with bad odds
+                action = 'raise';
+                const raiseAmount = toCall + Math.floor((state.pot + toCall) * (0.3 + Math.random() * 0.4));
+                amount = Math.min(raiseAmount, myChips);
+            } else if (roll < 0.7) {  // 70% total chance, so 43-52% to call
                 action = 'call';
             } else {
                 action = 'fold';
             }
         } else {
-            // Decent situation - be more aggressive, fold less
+            // Decent situation - be very aggressive, raise often
             const roll = Math.random();
-            if (roll < this.aggressiveness * 0.7) {  // Increased from 0.5 to 0.7
+            if (roll < this.aggressiveness * 0.9) {  // 54-81% chance to raise (very aggressive)
                 // Raise
                 action = 'raise';
-                const raiseAmount = toCall + Math.floor((state.pot + toCall) * (0.5 + Math.random()));
+                const raiseAmount = toCall + Math.floor((state.pot + toCall) * (0.5 + Math.random() * 0.5));
                 amount = Math.min(raiseAmount, myChips);
-            } else if (roll < 0.9) {  // Increased from 0.8 to 0.9 (fold less)
+            } else if (roll < 0.95) {  // 95% total chance, so 14-41% to call
                 action = 'call';
             } else {
-                action = 'fold';
+                action = 'fold';  // Only 5% fold chance
             }
         }
         

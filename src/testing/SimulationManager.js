@@ -342,7 +342,7 @@ class SimulationManager {
                     name: `NetPlayer_${i + 1}`,
                     minDelay: simulation.fastMode ? 50 : 800,
                     maxDelay: simulation.fastMode ? 200 : 2500,
-                    aggressiveness: 0.4 + Math.random() * 0.4,  // Increased from 0.2-0.6 to 0.4-0.8 (more aggressive, fold less)
+                    aggressiveness: 0.6 + Math.random() * 0.3,  // Increased to 0.6-0.9 (very aggressive, raise more often)
                     fastMode: simulation.fastMode,
                     // Network simulation (reduced in fast mode)
                     networkLatency: simulation.fastMode ? 10 : profile.latency,
@@ -917,7 +917,7 @@ class SimulationManager {
                     name: `NetPlayer_${currentSocketCount + i + 1}`,
                     minDelay: simulation.fastMode ? 50 : 800,
                     maxDelay: simulation.fastMode ? 200 : 2500,
-                    aggressiveness: 0.4 + Math.random() * 0.4,  // Increased from 0.2-0.6 to 0.4-0.8 (more aggressive, fold less)
+                    aggressiveness: 0.6 + Math.random() * 0.3,  // Increased to 0.6-0.9 (very aggressive, raise more often)
                     fastMode: simulation.fastMode,
                     networkLatency: simulation.fastMode ? 10 : profile.latency,
                     latencyJitter: simulation.fastMode ? 5 : profile.jitter,
