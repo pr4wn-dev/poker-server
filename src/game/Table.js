@@ -8497,9 +8497,20 @@ class Table {
     getSidePotState(forUserId = null) {
         try {
             if (!this.itemSidePot) {
+                console.warn(`[Table ${this.name}] [SIDE_POT_DEBUG] itemSidePot not initialized`);
                 return null; // Side pot not initialized
             }
-            return this.itemSidePot.getState(forUserId);
+            const state = this.itemSidePot.getState(forUserId);
+            // Debug logging for side pot state
+            if (state && state.status !== 'inactive') {
+                console.log(`[Table ${this.name}] [SIDE_POT_DEBUG] Side pot state:`, {
+                    status: state.status,
+                    approvedCount: state.approvedCount,
+                    hasCreatorItem: !!state.creatorItem,
+                    forUserId: forUserId || 'all'
+                });
+            }
+            return state;
         } catch (error) {
             console.error(`[Table ${this.name}] Error getting side pot state:`, error);
             return null; // Return null on error to prevent crashes
