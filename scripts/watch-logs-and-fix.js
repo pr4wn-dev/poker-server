@@ -9,7 +9,8 @@ const { spawn } = require('child_process');
 
 // Import GameManager to access tables and pause/resume
 const GameManager = require('../src/game/GameManager');
-const gameManager = new GameManager();
+// Use let (not const) so we can reassign in initialize()
+let gameManager = null; // Will be set by initialize()
 
 // Get SimulationManager from SocketHandler
 let simulationManager = null;
