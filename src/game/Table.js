@@ -2810,18 +2810,18 @@ class Table {
         const timerWasActive = !!this.turnTimeout;
         this.clearTurnTimer();
         
-        // Record fix attempt for this method
-        if (timerWasActive) {
-            this._recordFixAttempt('FIX_66_TIMER_CLEARED_AT_ACTION_START', true, {
-                context: 'HANDLE_ACTION',
-                playerId,
-                action,
-                method: 'CLEAR_TIMER_AT_START',
-                reason: 'Clearing timer immediately when action received to prevent timeout race condition',
-                handNumber: this.handsPlayed,
-                phase: this.phase
-            });
-        }
+        // Record fix attempt for this method - log EVERY time we apply this fix
+        // This tracks how many times we've tried this fix method
+        this._recordFixAttempt('FIX_66_TIMER_CLEARED_AT_ACTION_START', true, {
+            context: 'HANDLE_ACTION',
+            playerId,
+            action,
+            method: 'CLEAR_TIMER_AT_START',
+            timerWasActive,
+            reason: 'Clearing timer immediately when action received to prevent timeout race condition',
+            handNumber: this.handsPlayed,
+            phase: this.phase
+        });
         
         try {
             // CRITICAL: No betting allowed during showdown - just evaluate hands
