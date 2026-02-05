@@ -44,8 +44,21 @@ const io = new Server(server, {
 // Initialize game manager
 const gameManager = new GameManager();
 
-// Initialize socket handler (will be set up after DB connects)
-let socketHandler = null;
+    // Initialize socket handler (will be set up after DB connects)
+    let socketHandler = null;
+    
+    // Auto-resume any paused simulations on server start
+    // This ensures simulations don't stay paused after server restart
+    function autoResumePausedSimulations() {
+        if (socketHandler && socketHandler.simulationManager) {
+            for (const [tableId, sim] of socketHandler.simulationManager.activeSimulations) {
+                if (sim.isPaused) {
+                    console.log(`[Server] Auto-resuming paused simulation: ${tableId}`);
+                    socketHandler.simulationManager.resumeSimulation(tableId);
+                }
+            }
+        }
+    }
 
 // REST API endpoints
 app.get('/', (req, res) => {
@@ -202,6 +215,19 @@ async function start() {
     // Initialize socket handler with database access
     socketHandler = new SocketHandler(io, gameManager);
     socketHandler.initialize();
+    
+    // Auto-resume any paused simulations on server start
+    // This ensures simulations don't stay paused after server restart
+    setTimeout(() => {
+        if (socketHandler && socketHandler.simulationManager) {
+            for (const [tableId, sim] of socketHandler.simulationManager.activeSimulations) {
+                if (sim.isPaused) {
+                    console.log(`[Server] Auto-resuming paused simulation: ${tableId}`);
+                    socketHandler.simulationManager.resumeSimulation(tableId);
+                }
+            }
+        }
+    }, 2000); // Wait 2 seconds for everything to initialize
 
     // Start listening
     server.listen(PORT, '0.0.0.0', () => {

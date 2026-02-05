@@ -1240,7 +1240,9 @@ class SimulationManager {
         
         // CRITICAL: Notify all socket bots to resume
         for (const bot of simulation.socketBots) {
-            bot.isPaused = false;
+            if (bot) {
+                bot.isPaused = false;
+                bot.setPaused(false);
             console.log(`[SimulationManager] Bot ${bot.name} unpaused`);
         }
         
