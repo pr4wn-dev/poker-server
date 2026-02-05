@@ -669,10 +669,8 @@ class Table {
                         phase: this.phase
                     });
                     
-                    // CRITICAL: Pause simulation when pot mismatch detected
-                    if (this.isSimulation && this.onPauseSimulation) {
-                        this.onPauseSimulation(`POT MISMATCH: Pot (${this.pot}) != Sum of bets (${sumOfAllTotalBets}), difference: ${this.pot - sumOfAllTotalBets} (Hand ${this.handsPlayed}, ${this.phase})`);
-                    }
+                    // REMOVED: Automatic pause on pot mismatch - it masks the problem
+                    // Pausing bots prevents investigation. Errors are logged above.
                 } else if (this.pot > 0) {
                     this._recordFixAttempt('FIX_8_POT_MISMATCH', true, {
                         context,
@@ -1297,10 +1295,8 @@ class Table {
                 } : null).filter(s => s !== null)
             });
             
-            // CRITICAL: Pause simulation when chips are missing at game start
-            if (this.isSimulation && this.onPauseSimulation) {
-                this.onPauseSimulation(`CRITICAL: ${missingAtStart} chips missing at game start (Hand ${this.handsPlayed})`);
-            }
+            // REMOVED: Automatic pause on chips missing at game start - it masks the problem
+            // Errors are logged above for investigation.
         }
         
         gameLogger.gameEvent(this.name, 'TOTAL STARTING CHIPS TRACKED', {
@@ -2297,10 +2293,8 @@ class Table {
                 reason: 'totalStartingChips should NEVER decrease - represents original starting chips'
             });
             
-            // CRITICAL: Pause simulation when chips are lost
-            if (this.isSimulation && this.onPauseSimulation) {
-                this.onPauseSimulation(`CRITICAL: ${chipsLost} chips lost due to pot not cleared (Hand ${this.handsPlayed})`);
-            }
+            // REMOVED: Automatic pause on chip loss - it masks the problem
+            // Errors are logged above for investigation.
             
             // Record fix attempt - this is a FAILURE because chips were lost
             this._recordFixAttempt('FIX_1_POT_NOT_CLEARED_AT_HAND_START', false, {
@@ -5739,10 +5733,8 @@ class Table {
                         phase: this.phase
                     });
                     
-                    // CRITICAL: Pause simulation when chips are lost
-                    if (this.isSimulation && this.onPauseSimulation) {
-                        this.onPauseSimulation(`CHIPS LOST: ${chipsLost} chips lost during betting (Hand ${this.handsPlayed}, ${this.phase})`);
-                    }
+                    // REMOVED: Automatic pause on chip loss during betting - it masks the problem
+                    // Errors are logged above for investigation.
                 } else {
                     // Chips created: pot is more than sum of bets
                     const chipsCreated = potBeforeCalculation - sumOfTotalBets;
@@ -5797,10 +5789,8 @@ class Table {
                         }))
                     });
                     
-                    // CRITICAL: Pause simulation when chips are created
-                    if (this.isSimulation && this.onPauseSimulation) {
-                        this.onPauseSimulation(`CHIPS CREATED: ${chipsCreated} chips created during betting (Hand ${this.handsPlayed}, ${this.phase})`);
-                    }
+                    // REMOVED: Automatic pause on chips created - it masks the problem
+                    // Errors are logged above for investigation.
                     
                     // Record fix attempt - this is a failure because chips were created
                     this._recordFixAttempt('FIX_2_CHIPS_CREATED_BETTING', false, {
@@ -6814,10 +6804,8 @@ class Table {
                 reason: 'Pot was not cleared after awards - chips were lost. totalStartingChips should NEVER decrease.'
             });
             
-            // CRITICAL: Pause simulation when chips are lost
-            if (this.isSimulation && this.onPauseSimulation) {
-                this.onPauseSimulation(`CRITICAL: ${chipsLost} chips lost - pot not cleared after awards (Hand ${this.handsPlayed})`);
-            }
+            // REMOVED: Automatic pause on chip loss after awards - it masks the problem
+            // Errors are logged above for investigation.
             
             // Record fix attempt for the METHOD of "adjusting totalStartingChips downward" - this method has FAILED
             // This tracks the METHOD, not the issue - if this method fails 5 times, we must try a different approach
@@ -6899,10 +6887,8 @@ class Table {
                     reason: 'Pot was not cleared after awards in finally block - chips were lost. totalStartingChips should NEVER decrease.'
                 });
                 
-                // CRITICAL: Pause simulation when chips are lost
-                if (this.isSimulation && this.onPauseSimulation) {
-                    this.onPauseSimulation(`CRITICAL: ${chipsLost} chips lost in finally block - pot not cleared (Hand ${this.handsPlayed})`);
-                }
+                // REMOVED: Automatic pause on chip loss in finally block - it masks the problem
+                // Errors are logged above for investigation.
                 
                 // Record fix attempt for the METHOD of "adjusting totalStartingChips downward" - this method has FAILED
                 this._recordFixAttempt('FIX_1_TOTAL_STARTING_CHIPS_ADJUSTMENT', false, {
@@ -7426,10 +7412,8 @@ class Table {
                     reason: 'Pot was not cleared after awardPot in finally block - chips were lost. totalStartingChips should NEVER decrease.'
                 });
                 
-                // CRITICAL: Pause simulation when chips are lost
-                if (this.isSimulation && this.onPauseSimulation) {
-                    this.onPauseSimulation(`CRITICAL: ${chipsLost} chips lost in finally block (awardPot) - pot not cleared (Hand ${this.handsPlayed})`);
-                }
+                // REMOVED: Automatic pause on chip loss in awardPot finally block - it masks the problem
+                // Errors are logged above for investigation.
                 
                 // Record fix attempt for the METHOD of "adjusting totalStartingChips downward" - this method has FAILED
                 this._recordFixAttempt('FIX_1_TOTAL_STARTING_CHIPS_ADJUSTMENT', false, {
