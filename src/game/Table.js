@@ -30,9 +30,6 @@ const ACTIONS = {
 
 class Table {
     constructor(options) {
-        // UNIVERSAL TRACE: Table creation
-        this._traceUniversal('TABLE_CONSTRUCTOR_START', { options });
-        
         this.id = options.id;
         this.name = options.name;
         this.maxPlayers = options.maxPlayers;
