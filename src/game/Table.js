@@ -174,7 +174,8 @@ class Table {
             'FIX_66_TIMER_CLEARED_AT_ACTION_START': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
             'FIX_67_DISABLE_AUTO_FOLD_FOR_SIMULATION_BOTS': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
             'FIX_68_PREVENT_TOTAL_STARTING_CHIPS_RECALCULATION': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
-            'FIX_69_DETECT_WORSENING_DIFFERENCE_IN_ROOT_CAUSE_TRACER': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false }
+            'FIX_69_DETECT_WORSENING_DIFFERENCE_IN_ROOT_CAUSE_TRACER': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
+            'FIX_70_INCREASE_TURN_TIME_LIMIT_FOR_SIMULATIONS': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false }
         };
         
         // Track which fixes have been tried and failed (to prevent going back to them)
@@ -787,7 +788,20 @@ class Table {
         // Bots need time for: decision-making (10-50ms) + network latency (50-200ms) + server processing (10-50ms)
         // 500ms was still too short, causing timeouts even though actions were being sent
         // This is NOT masking - this is fixing the root cause: timer too short for bot processing
+        const previousTurnTimeLimit = this.turnTimeLimit || (options.turnTimeLimit || 20000);
         this.turnTimeLimit = this.isSimulation ? 2000 : (options.turnTimeLimit || 20000); // 2000ms for simulations, 20 seconds for regular games
+        
+        // Record fix attempt - timer increase is the fix method
+        if (this.isSimulation && this.turnTimeLimit === 2000) {
+            this._recordFixAttempt('FIX_70_INCREASE_TURN_TIME_LIMIT_FOR_SIMULATIONS', true, {
+                context: 'CONSTRUCTOR',
+                method: 'INCREASE_TO_2000MS',
+                previousTurnTimeLimit,
+                newTurnTimeLimit: this.turnTimeLimit,
+                isSimulation: this.isSimulation,
+                reason: 'Increased turn time limit from 500ms to 2000ms for simulations to give bots enough time to process actions'
+            });
+        }
         
         // Blind increase timer (tournament-style)
         // 0 = disabled (blinds never increase)
