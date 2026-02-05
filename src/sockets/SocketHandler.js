@@ -132,11 +132,15 @@ class SocketHandler {
             
             // ============ Inventory ============
             
-            socket.on('get_inventory', async (callback) => {
+            socket.on('get_inventory', async (data, callback) => {
                 const user = this.getAuthenticatedUser(socket);
                 if (!user) {
                     console.error('[SocketHandler] get_inventory: Not authenticated');
-                    return callback({ success: false, error: 'Not authenticated' });
+                    if (callback && typeof callback === 'function') {
+                        callback({ success: false, error: 'Not authenticated' });
+                    }
+                    socket.emit('get_inventory_response', { success: false, error: 'Not authenticated' });
+                    return;
                 }
                 
                 try {
@@ -145,8 +149,11 @@ class SocketHandler {
                     // ROOT TRACING: Log inventory request (commented out - use gameLogger for tracing)
                     // console.log(`[SocketHandler] [INVENTORY] GET_INVENTORY | userId: ${user.userId} | username: ${user.profile?.username} | itemCount: ${inventory?.length || 0}`);
                     
-                    callback({ success: true, inventory });
-                    socket.emit('get_inventory_response', { success: true, inventory });
+                    const response = { success: true, inventory };
+                    if (callback && typeof callback === 'function') {
+                        callback(response);
+                    }
+                    socket.emit('get_inventory_response', response);
                 } catch (error) {
                     // console.error(`[SocketHandler] [INVENTORY] GET_INVENTORY_ERROR | userId: ${user.userId} | error: ${error.message}`, error);
                     gameLogger.gameEvent('SYSTEM', `[INVENTORY] GET_INVENTORY_ERROR`, {
@@ -155,16 +162,25 @@ class SocketHandler {
                         error: error.message,
                         stackTrace: error.stack
                     });
-                    callback({ success: false, error: error.message });
+                    const errorResponse = { success: false, error: error.message };
+                    if (callback && typeof callback === 'function') {
+                        callback(errorResponse);
+                    }
+                    socket.emit('get_inventory_response', errorResponse);
                 }
             });
             
             // Test endpoint: Add test items to inventory (for development/testing)
-            socket.on('get_test_items', async (callback) => {
+            socket.on('get_test_items', async (data, callback) => {
                 const user = this.getAuthenticatedUser(socket);
                 if (!user) {
                     console.error('[SocketHandler] get_test_items: Not authenticated');
-                    return callback({ success: false, error: 'Not authenticated' });
+                    const errorResponse = { success: false, error: 'Not authenticated' };
+                    if (callback && typeof callback === 'function') {
+                        callback(errorResponse);
+                    }
+                    socket.emit('get_test_items_response', errorResponse);
+                    return;
                 }
                 
                 // ROOT TRACING: Log test items request start (commented out - use gameLogger for tracing)
