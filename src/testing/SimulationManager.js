@@ -1109,6 +1109,7 @@ class SimulationManager {
         simulation.pausedAt = Date.now();
         
         // Set pause state on Table so Unity can read it from table_state
+        const table = this.gameManager.tables.get(tableId);
         if (table) {
             table.isPaused = true;
             table.pauseReason = reason;
