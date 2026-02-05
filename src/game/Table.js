@@ -271,6 +271,19 @@ class Table {
             }
         };
         
+        // Record pending turnTimeLimit fix attempt if applicable
+        if (this._pendingTurnTimeLimitFixRecord) {
+            this._recordFixAttempt('FIX_70_INCREASE_TURN_TIME_LIMIT_FOR_SIMULATIONS', true, {
+                context: 'CONSTRUCTOR',
+                method: 'INCREASE_TO_2000MS',
+                previousTurnTimeLimit: this._pendingTurnTimeLimitFixRecord.previousTurnTimeLimit,
+                newTurnTimeLimit: this._pendingTurnTimeLimitFixRecord.newTurnTimeLimit,
+                isSimulation: this._pendingTurnTimeLimitFixRecord.isSimulation,
+                reason: 'Increased turn time limit from 500ms to 2000ms for simulations to give bots enough time to process actions'
+            });
+            this._pendingTurnTimeLimitFixRecord = null; // Clear after recording
+        }
+        
         // CRITICAL: Ultra-verbose logging helper for totalStartingChips modifications
         this._logTotalStartingChipsChange = (operation, context, oldValue, newValue, details = {}) => {
             const stackTrace = new Error().stack;
