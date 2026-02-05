@@ -252,7 +252,7 @@ class Table {
                     });
                 }
             } else {
-                console.log(`[Table ${this.name}] ✓ FIX ATTEMPT SUCCESS: ${fixId} | Attempt #${fix.attempts} | Total Failures: ${fix.failures}/${MAX_FAILURES} | Success Rate: ${((fix.attempts - fix.failures) / fix.attempts * 100).toFixed(1)}%`);
+                // console.log(`[Table ${this.name}] ✓ FIX ATTEMPT SUCCESS: ${fixId} | Attempt #${fix.attempts} | Total Failures: ${fix.failures}/${MAX_FAILURES} | Success Rate: ${((fix.attempts - fix.failures) / fix.attempts * 100).toFixed(1)}%`);
                 gameLogger.gameEvent(this.name, `[FIX ATTEMPT] ${fixId} SUCCESS`, {
                     fixId,
                     attemptNumber: fix.attempts,
@@ -304,7 +304,7 @@ class Table {
                 }
             };
             
-            console.log(`[Table ${this.name}] [TOTAL_STARTING_CHIPS] ${operation} | ${context} | ${oldValue} → ${newValue} (change: ${newValue - oldValue}) | Hand: ${this.handsPlayed} | Phase: ${this.phase}`);
+            // console.log(`[Table ${this.name}] [TOTAL_STARTING_CHIPS] ${operation} | ${context} | ${oldValue} → ${newValue} (change: ${newValue - oldValue}) | Hand: ${this.handsPlayed} | Phase: ${this.phase}`);
             gameLogger.gameEvent(this.name, `[TOTAL_STARTING_CHIPS] ${operation}`, logData);
         };
         
@@ -332,6 +332,67 @@ class Table {
                     } : null)
                     .filter(p => p !== null)
             };
+        };
+        
+        // ROOT CAUSE ANALYSIS: Track chip state at every operation to identify WHERE chips are lost
+        this._rootCauseTracer = {
+            enabled: true,
+            operations: [], // Array of {operation, beforeState, afterState, stackTrace, timestamp}
+            maxOperations: 1000 // Keep last 1000 operations
+        };
+        
+        // Track operation for root cause analysis
+        this._traceOperation = (operation, beforeState, afterState) => {
+            if (!this._rootCauseTracer.enabled) return;
+            
+            const stackTrace = new Error().stack;
+            const stackLines = stackTrace ? stackTrace.split('\n').slice(2, 12).join(' | ') : 'NO_STACK';
+            
+            const trace = {
+                timestamp: Date.now(),
+                operation,
+                handNumber: this.handsPlayed,
+                phase: this.phase,
+                beforeState: {
+                    totalChips: beforeState.totalChipsInSystem,
+                    pot: beforeState.pot,
+                    playerChips: beforeState.playerChips,
+                    difference: beforeState.difference
+                },
+                afterState: {
+                    totalChips: afterState.totalChipsInSystem,
+                    pot: afterState.pot,
+                    playerChips: afterState.playerChips,
+                    difference: afterState.difference
+                },
+                chipChange: afterState.totalChipsInSystem - beforeState.totalChipsInSystem,
+                stackTrace: stackLines
+            };
+            
+            this._rootCauseTracer.operations.push(trace);
+            
+            // Keep only last maxOperations
+            if (this._rootCauseTracer.operations.length > this._rootCauseTracer.maxOperations) {
+                this._rootCauseTracer.operations.shift();
+            }
+            
+            // If chips were lost, log the trace for root cause analysis
+            if (trace.chipChange < -0.01) {
+                gameLogger.error(this.name, '[ROOT CAUSE] CHIPS LOST DETECTED', {
+                    operation,
+                    chipChange: trace.chipChange,
+                    beforeState: trace.beforeState,
+                    afterState: trace.afterState,
+                    stackTrace: trace.stackTrace,
+                    handNumber: this.handsPlayed,
+                    phase: this.phase,
+                    recentOperations: this._rootCauseTracer.operations.slice(-10).map(op => ({
+                        operation: op.operation,
+                        chipChange: op.chipChange,
+                        timestamp: op.timestamp
+                    }))
+                });
+            }
         };
         
         // Track a chip movement with before/after states
@@ -365,6 +426,9 @@ class Table {
             const afterState = this._getChipState();
             movement.afterState = afterState;
             
+            // ROOT CAUSE ANALYSIS: Trace this operation
+            this._traceOperation(movement.operation, movement.beforeState, afterState);
+            
             const difference = afterState.totalChipsInSystem - afterState.totalStartingChips;
             // CRITICAL: Only validate if game has started (totalStartingChips > 0)
             // Before game start, chips can be added/removed without validation
@@ -388,16 +452,37 @@ class Table {
                     operation: movement.operation,
                     beforeState: movement.beforeState,
                     afterState,
+                    // ROOT CAUSE: Include recent operations that led to this loss
+                    rootCauseTrace: this._rootCauseTracer.operations.slice(-20).map(op => ({
+                        operation: op.operation,
+                        chipChange: op.chipChange,
+                        timestamp: op.timestamp,
+                        handNumber: op.handNumber,
+                        phase: op.phase
+                    }))
                 });
                 // Record fix attempt - chip tracking validation error is a failure
-                this._recordFixAttempt('FIX_14_CHIP_TRACKING_VALIDATION_ERROR', false, {
-                    context,
-                    errorType,
-                    difference: Math.abs(difference),
-                    operation: movement.operation,
-                    handNumber: this.handsPlayed,
-                    details: movement.details
-                });
+                // CRITICAL: Check if fix is enabled before attempting
+                if (this._isFixEnabled('FIX_14_CHIP_TRACKING_VALIDATION_ERROR')) {
+                    this._recordFixAttempt('FIX_14_CHIP_TRACKING_VALIDATION_ERROR', false, {
+                        context,
+                        errorType,
+                        difference: Math.abs(difference),
+                        operation: movement.operation,
+                        handNumber: this.handsPlayed,
+                        details: movement.details
+                    });
+                } else {
+                    console.error(`[Table ${this.name}] ⚠️ FIX_14_CHIP_TRACKING_VALIDATION_ERROR IS DISABLED - Root cause analysis required!`);
+                    gameLogger.error(this.name, '[ROOT CAUSE] Fix disabled - must investigate root cause', {
+                        fixId: 'FIX_14_CHIP_TRACKING_VALIDATION_ERROR',
+                        context,
+                        errorType,
+                        difference: Math.abs(difference),
+                        operation: movement.operation,
+                        rootCauseTrace: this._rootCauseTracer.operations.slice(-20)
+                    });
+                }
             }
             
             return { isValid, difference, afterState };
@@ -790,7 +875,7 @@ class Table {
     handleReadyUpTimeout() {
         if (this.phase !== GAME_PHASES.READY_UP) return;
         
-        console.log(`[Table ${this.name}] Ready-up timeout! Forcing game start.`);
+        // console.log(`[Table ${this.name}] Ready-up timeout! Forcing game start.`);
         
         // Get not-ready players
         const notReadyPlayers = this.seats.filter(s => s && !s.isReady);
@@ -852,7 +937,7 @@ class Table {
         }
         
         seat.isReady = true;
-        console.log(`[Table ${this.name}] ${seat.name} is ready!`);
+        // console.log(`[Table ${this.name}] ${seat.name} is ready!`);
         
         this.onStateChange?.();
         this.checkAllReady();
@@ -909,7 +994,7 @@ class Table {
     handleReadyUpTimeout() {
         if (this.phase !== GAME_PHASES.READY_UP) return;
         
-        console.log(`[Table ${this.name}] Ready-up time expired, starting final countdown`);
+        // console.log(`[Table ${this.name}] Ready-up time expired, starting final countdown`);
         this.startFinalCountdown();
     }
     
@@ -931,7 +1016,7 @@ class Table {
         this.phase = GAME_PHASES.COUNTDOWN;
         this.startCountdownTime = Date.now();
         
-        console.log(`[Table ${this.name}] Final ${this.startDelaySeconds}s countdown started`);
+        // console.log(`[Table ${this.name}] Final ${this.startDelaySeconds}s countdown started`);
         
         // Broadcast countdown updates every second
         this.countdownInterval = setInterval(() => {
@@ -969,13 +1054,13 @@ class Table {
      * Handle game start - convert non-ready players to spectators
      */
     handleGameStart() {
-        console.log(`[Table ${this.name}] Countdown complete, processing ready status...`);
+        // console.log(`[Table ${this.name}] Countdown complete, processing ready status...`);
         
         // Convert non-ready players to spectators
         for (let i = 0; i < this.seats.length; i++) {
             const seat = this.seats[i];
             if (seat && !seat.isReady && !seat.isBot) {
-                console.log(`[Table ${this.name}] ${seat.name} was not ready - moving to spectators`);
+                // console.log(`[Table ${this.name}] ${seat.name} was not ready - moving to spectators`);
                 
                 // Add to spectators
                 this.spectators.set(seat.playerId, {
@@ -995,7 +1080,7 @@ class Table {
         // Check if we still have enough players
         const readyPlayers = this.seats.filter(s => s && s.isReady);
         if (readyPlayers.length < 2) {
-            console.log(`[Table ${this.name}] Not enough ready players, returning to waiting`);
+            // console.log(`[Table ${this.name}] Not enough ready players, returning to waiting`);
             this.phase = GAME_PHASES.WAITING;
             this.readyUpActive = false;
             // Capture snapshot before broadcasting
@@ -1083,7 +1168,7 @@ class Table {
                 // CRITICAL: Validate after reset
                 this._validateChipMovement(movement, 'RESET_CHIPS_FOR_NEW_GAME');
                 
-                console.log(`[Table ${this.name}] Reset ${seat.name} chips: ${oldChips} → ${seat.chips}, totalStartingChips now: ${this.totalStartingChips}`);
+                // console.log(`[Table ${this.name}] Reset ${seat.name} chips: ${oldChips} → ${seat.chips}, totalStartingChips now: ${this.totalStartingChips}`);
                 gameLogger.gameEvent(this.name, 'CHIPS RESET for new game', {
                     player: seat.name,
                     oldChips,
@@ -1151,13 +1236,13 @@ class Table {
         }
         
         // Start the game!
-        console.log(`[Table ${this.name}] Starting game with ${readyPlayers.length} players!`);
+        // console.log(`[Table ${this.name}] Starting game with ${readyPlayers.length} players!`);
         
         // CRITICAL: Only start new hand if game hasn't started yet
         // If a hand is already in progress, don't call startNewHand (this would interrupt the current hand)
         // ALLOW COUNTDOWN phase - this is called AFTER countdown completes, so phase will be COUNTDOWN
         const isActiveHand = this.gameStarted || (this.phase !== GAME_PHASES.WAITING && this.phase !== GAME_PHASES.COUNTDOWN && this.phase !== GAME_PHASES.READY_UP);
-        console.log(`[Table ${this.name}] handleGameStart check: phase=${this.phase}, gameStarted=${this.gameStarted}, isActiveHand=${isActiveHand}`);
+        // console.log(`[Table ${this.name}] handleGameStart check: phase=${this.phase}, gameStarted=${this.gameStarted}, isActiveHand=${isActiveHand}`);
         if (isActiveHand) {
             console.error(`[Table ${this.name}] ⚠️ CRITICAL: handleGameStart called but game already started! Phase: ${this.phase}, gameStarted: ${this.gameStarted}, handNumber: ${this.handsPlayed}`);
             gameLogger.error(this.name, '[GAME] CRITICAL: handleGameStart called during active hand', {
@@ -1227,7 +1312,7 @@ class Table {
         if (this.phase === GAME_PHASES.READY_UP || this.phase === GAME_PHASES.COUNTDOWN) {
             // New joiners are not ready by default (unless bot)
             seat.isReady = seat.isBot ? true : false;
-            console.log(`[Table ${this.name}] Late joiner ${seat.name} - needs to ready up`);
+            // console.log(`[Table ${this.name}] Late joiner ${seat.name} - needs to ready up`);
         }
     }
     
@@ -1448,7 +1533,7 @@ class Table {
             newBlinds: `${this.smallBlind}/${this.bigBlind}`,
             minRaise: this.minRaise
         });
-        console.log(`[Table ${this.name}] BLINDS INCREASED to Level ${this.blindLevel}: ${this.smallBlind}/${this.bigBlind}`);
+        // console.log(`[Table ${this.name}] BLINDS INCREASED to Level ${this.blindLevel}: ${this.smallBlind}/${this.bigBlind}`);
         
         // Notify via callback
         this.onBlindsIncrease?.({
@@ -1508,7 +1593,7 @@ class Table {
         const totalChipsBefore = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
         const totalChipsAndPotBefore = totalChipsBefore + this.pot;
         
-        console.log(`[Table ${this.name}] [ADD_PLAYER PRE-OP] Hand: ${this.handsPlayed} | Player: ${name} | Chips: ${chips} | TotalChips: ${totalChipsBefore} | Pot: ${this.pot} | TotalChips+Pot: ${totalChipsAndPotBefore} | totalStartingChips: ${this.totalStartingChips}`);
+        // console.log(`[Table ${this.name}] [ADD_PLAYER PRE-OP] Hand: ${this.handsPlayed} | Player: ${name} | Chips: ${chips} | TotalChips: ${totalChipsBefore} | Pot: ${this.pot} | TotalChips+Pot: ${totalChipsAndPotBefore} | totalStartingChips: ${this.totalStartingChips}`);
         gameLogger.gameEvent(this.name, '[ADD_PLAYER] PRE-OPERATION STATE', {
             handNumber: this.handsPlayed,
             player: name,
@@ -1540,7 +1625,7 @@ class Table {
         const totalChipsAndPotAfter = totalChipsAfter + this.pot;
         const chipsDifference = totalChipsAndPotAfter - totalChipsAndPotBefore;
         
-        console.log(`[Table ${this.name}] [ADD_PLAYER POST-OP] Hand: ${this.handsPlayed} | Player: ${name} | TotalChips: ${totalChipsAfter} | Pot: ${this.pot} | TotalChips+Pot: ${totalChipsAndPotAfter} | Difference: ${chipsDifference} | totalStartingChips: ${this.totalStartingChips}`);
+        // console.log(`[Table ${this.name}] [ADD_PLAYER POST-OP] Hand: ${this.handsPlayed} | Player: ${name} | TotalChips: ${totalChipsAfter} | Pot: ${this.pot} | TotalChips+Pot: ${totalChipsAndPotAfter} | Difference: ${chipsDifference} | totalStartingChips: ${this.totalStartingChips}`);
         gameLogger.gameEvent(this.name, '[ADD_PLAYER] POST-OPERATION STATE', {
             handNumber: this.handsPlayed,
             player: name,
@@ -1578,7 +1663,7 @@ class Table {
         // CRITICAL: Validate after player join
         this._validateChipMovement(movement, 'PLAYER_JOIN');
 
-        console.log(`[Table ${this.name}] ${name} joined at seat ${seatIndex}`);
+        // console.log(`[Table ${this.name}] ${name} joined at seat ${seatIndex}`);
 
         // Handle late joiner during ready-up phase
         this.handleLateJoinerDuringReadyUp(seat);
@@ -1609,7 +1694,7 @@ class Table {
             phase: this.phase
         });
         
-        console.log(`[Table ${this.name}] ${player.name} left`);
+        // console.log(`[Table ${this.name}] ${player.name} left`);
 
         // Handle mid-game removal - fold BEFORE removing from seat
         if (wasInGame && wasCurrentPlayer) {
@@ -1622,7 +1707,7 @@ class Table {
             this.seats[seatIndex] = null;
             
             // Advance the game manually since the player is gone
-            console.log(`[Table ${this.name}] Player left during their turn - advancing game`);
+            // console.log(`[Table ${this.name}] Player left during their turn - advancing game`);
             this.advanceGame();
         } else {
             // Not their turn - just remove
@@ -1772,7 +1857,7 @@ class Table {
                 });
             }
             
-            console.log(`[Table ${this.name}] GAME OVER - ${winner.name} wins with ${winner.chips} chips!`);
+            // console.log(`[Table ${this.name}] GAME OVER - ${winner.name} wins with ${winner.chips} chips!`);
             gameLogger.gameEvent(this.name, 'GAME OVER - Winner announced', {
                 winnerName: winner.name,
                 winnerChips: winner.chips,
@@ -1784,7 +1869,7 @@ class Table {
             
             // CRITICAL: Notify about game winner (this triggers simulation restart and client announcement)
             if (this.onGameOver) {
-                console.log(`[Table ${this.name}] Calling onGameOver callback for winner ${winner.name}`);
+                // console.log(`[Table ${this.name}] Calling onGameOver callback for winner ${winner.name}`);
                 this.onGameOver(winner);
             } else {
                 console.error(`[Table ${this.name}] ⚠️ CRITICAL: onGameOver callback is NOT SET! Game over event will not be sent to clients!`);
@@ -1930,7 +2015,7 @@ class Table {
         // CRITICAL: After pot is calculated and awarded, THEN we can safely remove eliminated bots
         // This cleanup will happen in showdown() after calculateAndAwardSidePots() completes
 
-        console.log(`[Table ${this.name}] Starting new hand`);
+        // console.log(`[Table ${this.name}] Starting new hand`);
         
         // Lock side pot if it was collecting (first hand only)
         if (!this.gameStarted) {
@@ -1976,7 +2061,7 @@ class Table {
         const totalChipsBeforeReset = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
         const totalChipsAndPotBeforeReset = totalChipsBeforeReset + this.pot;
         
-        console.log(`[Table ${this.name}] [FIX #1: HAND_START PRE-RESET] Hand: ${this.handsPlayed} | Pot: ${potBeforeReset} | TotalChips: ${totalChipsBeforeReset} | TotalChips+Pot: ${totalChipsAndPotBeforeReset} | totalStartingChips: ${this.totalStartingChips}`);
+        // console.log(`[Table ${this.name}] [FIX #1: HAND_START PRE-RESET] Hand: ${this.handsPlayed} | Pot: ${potBeforeReset} | TotalChips: ${totalChipsBeforeReset} | TotalChips+Pot: ${totalChipsAndPotBeforeReset} | totalStartingChips: ${this.totalStartingChips}`);
         gameLogger.gameEvent(this.name, '[FIX #1: HAND_START] PRE-RESET STATE', {
             handNumber: this.handsPlayed,
             potBeforeReset,
@@ -2211,7 +2296,7 @@ class Table {
         const totalChipsBeforeBlinds = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
         const totalChipsAndPotBeforeBlinds = totalChipsBeforeBlinds + this.pot;
         
-        console.log(`[Table ${this.name}] [POST_BLINDS PRE-OP] Hand: ${this.handsPlayed} | SB: ${this.smallBlind} | BB: ${this.bigBlind} | Pot: ${this.pot} | TotalChips: ${totalChipsBeforeBlinds} | TotalChips+Pot: ${totalChipsAndPotBeforeBlinds}`);
+        // console.log(`[Table ${this.name}] [POST_BLINDS PRE-OP] Hand: ${this.handsPlayed} | SB: ${this.smallBlind} | BB: ${this.bigBlind} | Pot: ${this.pot} | TotalChips: ${totalChipsBeforeBlinds} | TotalChips+Pot: ${totalChipsAndPotBeforeBlinds}`);
         gameLogger.gameEvent(this.name, '[POST_BLINDS] PRE-OPERATION STATE', {
             handNumber: this.handsPlayed,
             smallBlind: this.smallBlind,
@@ -2236,7 +2321,7 @@ class Table {
         const blindsDifference = totalChipsAndPotAfterBlinds - totalChipsAndPotBeforeBlinds;
         const expectedBlindsTotal = this.smallBlind + this.bigBlind;
         
-        console.log(`[Table ${this.name}] [POST_BLINDS POST-OP] Hand: ${this.handsPlayed} | Pot: ${this.pot} | TotalChips: ${totalChipsAfterBlinds} | TotalChips+Pot: ${totalChipsAndPotAfterBlinds} | Difference: ${blindsDifference} | Expected: ${expectedBlindsTotal}`);
+        // console.log(`[Table ${this.name}] [POST_BLINDS POST-OP] Hand: ${this.handsPlayed} | Pot: ${this.pot} | TotalChips: ${totalChipsAfterBlinds} | TotalChips+Pot: ${totalChipsAndPotAfterBlinds} | Difference: ${blindsDifference} | Expected: ${expectedBlindsTotal}`);
         gameLogger.gameEvent(this.name, '[POST_BLINDS] POST-OPERATION STATE', {
             handNumber: this.handsPlayed,
             pot: this.pot,
@@ -2388,7 +2473,7 @@ class Table {
         
         const totalChipsAndPotBefore = totalChipsBefore + this.pot;
         
-        console.log(`[Table ${this.name}] [BLIND PRE-OP] Hand: ${this.handsPlayed} | Player: ${player.name} | Blind: ${blindAmount} | PlayerChips: ${chipsBeforeSubtract} | Pot: ${potBeforeAdd} | TotalChips: ${totalChipsBefore} | TotalChips+Pot: ${totalChipsAndPotBefore}`);
+        // console.log(`[Table ${this.name}] [BLIND PRE-OP] Hand: ${this.handsPlayed} | Player: ${player.name} | Blind: ${blindAmount} | PlayerChips: ${chipsBeforeSubtract} | Pot: ${potBeforeAdd} | TotalChips: ${totalChipsBefore} | TotalChips+Pot: ${totalChipsAndPotBefore}`);
         gameLogger.gameEvent(this.name, '[BLIND] PRE-OPERATION STATE', {
             handNumber: this.handsPlayed,
             player: player.name,
@@ -2596,7 +2681,7 @@ class Table {
             
             // CRITICAL FIX #4 & #5: Action rejected - Game not in progress / Not your turn
             // ULTRA-VERBOSE: Log all validation checks
-            console.log(`[Table ${this.name}] [FIX #4/#5: ACTION VALIDATION] Player: ${playerId} | Action: ${action} | Phase: ${this.phase} | CurrentPlayerIndex: ${this.currentPlayerIndex}`);
+            // console.log(`[Table ${this.name}] [FIX #4/#5: ACTION VALIDATION] Player: ${playerId} | Action: ${action} | Phase: ${this.phase} | CurrentPlayerIndex: ${this.currentPlayerIndex}`);
             gameLogger.gameEvent(this.name, '[FIX #4/#5: ACTION] VALIDATION START', {
                 playerId,
                 action,
@@ -2717,7 +2802,7 @@ class Table {
                     break;
                 case ACTIONS.CHECK:
                     // CRITICAL FIX #6: Check action failures - improve validation
-                    console.log(`[Table ${this.name}] [FIX #6: CHECK VALIDATION] Player: ${player.name} | ToCall: ${toCall} | CurrentBet: ${this.currentBet} | PlayerBet: ${player.currentBet}`);
+                    // console.log(`[Table ${this.name}] [FIX #6: CHECK VALIDATION] Player: ${player.name} | ToCall: ${toCall} | CurrentBet: ${this.currentBet} | PlayerBet: ${player.currentBet}`);
                     gameLogger.gameEvent(this.name, '[FIX #6: CHECK] VALIDATION START', {
                         player: player.name,
                         seatIndex,
@@ -2754,7 +2839,7 @@ class Table {
                         
                         result = { success: false, error: errorMsg };
                     } else {
-                        console.log(`[Table ${this.name}] [FIX #6: CHECK] Allowing check | Player: ${player.name}`);
+                        // console.log(`[Table ${this.name}] [FIX #6: CHECK] Allowing check | Player: ${player.name}`);
                         result = this.check(seatIndex);
                     }
                     break;
@@ -2771,7 +2856,7 @@ class Table {
                     break;
                 case ACTIONS.BET:
                     // CRITICAL FIX #6: Betting action failures - improve validation
-                    console.log(`[Table ${this.name}] [FIX #6: BET VALIDATION] Player: ${player.name} | Amount: ${amount} | CurrentBet: ${this.currentBet} | Phase: ${this.phase} | PlayerChips: ${player.chips}`);
+                    // console.log(`[Table ${this.name}] [FIX #6: BET VALIDATION] Player: ${player.name} | Amount: ${amount} | CurrentBet: ${this.currentBet} | Phase: ${this.phase} | PlayerChips: ${player.chips}`);
                     gameLogger.gameEvent(this.name, '[FIX #6: BET] VALIDATION START', {
                         player: player.name,
                         seatIndex,
@@ -2892,7 +2977,7 @@ class Table {
                             }
                         } else {
                             // Post-flop with no bets, or pre-flop before blinds - allow bet
-                            console.log(`[Table ${this.name}] [FIX #6: BET] Allowing bet | Player: ${player.name} | Amount: ${amount}`);
+                            // console.log(`[Table ${this.name}] [FIX #6: BET] Allowing bet | Player: ${player.name} | Amount: ${amount}`);
                             result = this.bet(seatIndex, amount);
                         }
                     }
@@ -3079,7 +3164,7 @@ class Table {
         const totalChipsBefore = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
         const totalChipsAndPotBefore = totalChipsBefore + this.pot;
         
-        console.log(`[Table ${this.name}] [CALL PRE-OP] Hand: ${this.handsPlayed} | Player: ${player.name} | ToCall: ${toCall} | PlayerChips: ${chipsBeforeSubtract} | Pot: ${potBeforeAdd} | TotalChips: ${totalChipsBefore} | TotalChips+Pot: ${totalChipsAndPotBefore}`);
+        // console.log(`[Table ${this.name}] [CALL PRE-OP] Hand: ${this.handsPlayed} | Player: ${player.name} | ToCall: ${toCall} | PlayerChips: ${chipsBeforeSubtract} | Pot: ${potBeforeAdd} | TotalChips: ${totalChipsBefore} | TotalChips+Pot: ${totalChipsAndPotBefore}`);
         gameLogger.gameEvent(this.name, '[CALL] PRE-OPERATION STATE', {
             handNumber: this.handsPlayed,
             player: player.name,
@@ -3292,7 +3377,7 @@ class Table {
         const totalChipsBefore = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
         const totalChipsAndPotBefore = totalChipsBefore + this.pot;
         
-        console.log(`[Table ${this.name}] [BET PRE-OP] Hand: ${this.handsPlayed} | Player: ${player.name} | Amount: ${amount} | PlayerChips: ${chipsBeforeSubtract} | Pot: ${potBeforeAdd} | TotalChips: ${totalChipsBefore} | TotalChips+Pot: ${totalChipsAndPotBefore}`);
+        // console.log(`[Table ${this.name}] [BET PRE-OP] Hand: ${this.handsPlayed} | Player: ${player.name} | Amount: ${amount} | PlayerChips: ${chipsBeforeSubtract} | Pot: ${potBeforeAdd} | TotalChips: ${totalChipsBefore} | TotalChips+Pot: ${totalChipsAndPotBefore}`);
         gameLogger.gameEvent(this.name, '[BET] PRE-OPERATION STATE', {
             handNumber: this.handsPlayed,
             player: player.name,
@@ -3560,7 +3645,7 @@ class Table {
         const totalChipsBefore = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
         const totalChipsAndPotBefore = totalChipsBefore + this.pot;
         
-        console.log(`[Table ${this.name}] [RAISE PRE-OP] Hand: ${this.handsPlayed} | Player: ${player.name} | Amount: ${amount} | AdditionalBet: ${additionalBet} | PlayerChips: ${chipsBeforeSubtract} | Pot: ${potBeforeAdd} | TotalChips: ${totalChipsBefore} | TotalChips+Pot: ${totalChipsAndPotBefore}`);
+        // console.log(`[Table ${this.name}] [RAISE PRE-OP] Hand: ${this.handsPlayed} | Player: ${player.name} | Amount: ${amount} | AdditionalBet: ${additionalBet} | PlayerChips: ${chipsBeforeSubtract} | Pot: ${potBeforeAdd} | TotalChips: ${totalChipsBefore} | TotalChips+Pot: ${totalChipsAndPotBefore}`);
         gameLogger.gameEvent(this.name, '[RAISE] PRE-OPERATION STATE', {
             handNumber: this.handsPlayed,
             player: player.name,
@@ -3792,7 +3877,7 @@ class Table {
         const totalChipsBefore = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
         const totalChipsAndPotBefore = totalChipsBefore + this.pot;
         
-        console.log(`[Table ${this.name}] [ALL-IN PRE-OP] Hand: ${this.handsPlayed} | Player: ${player.name} | Amount: ${amount} | PlayerChips: ${chipsBeforeSubtract} | Pot: ${potBeforeAdd} | TotalChips: ${totalChipsBefore} | TotalChips+Pot: ${totalChipsAndPotBefore}`);
+        // console.log(`[Table ${this.name}] [ALL-IN PRE-OP] Hand: ${this.handsPlayed} | Player: ${player.name} | Amount: ${amount} | PlayerChips: ${chipsBeforeSubtract} | Pot: ${potBeforeAdd} | TotalChips: ${totalChipsBefore} | TotalChips+Pot: ${totalChipsAndPotBefore}`);
         gameLogger.gameEvent(this.name, '[ALL-IN] PRE-OPERATION STATE', {
             handNumber: this.handsPlayed,
             player: player.name,
@@ -4115,7 +4200,7 @@ class Table {
             
             // CRITICAL: Notify about game winner (this triggers simulation restart and client announcement)
             if (this.onGameOver) {
-                console.log(`[Table ${this.name}] Calling onGameOver callback for winner ${winner.name}`);
+                // console.log(`[Table ${this.name}] Calling onGameOver callback for winner ${winner.name}`);
                 this.onGameOver(winner);
             } else {
                 console.error(`[Table ${this.name}] ⚠️ CRITICAL: onGameOver callback is NOT SET! Game over event will not be sent to clients!`);
@@ -4427,7 +4512,7 @@ class Table {
                     lastRaiserIndex: this.lastRaiserIndex,
                     hasPassedLastRaiser: this.hasPassedLastRaiser
                 });
-                console.log(`[Table ${this.name}] No raises - checking if round complete. Current: ${this.currentPlayerIndex}, Next: ${nextPlayer}, BB: ${bbIndex}, Dealer: ${this.dealerIndex}, LastRaiser: ${this.lastRaiserIndex}, Complete: ${bettingRoundComplete}`);
+                // console.log(`[Table ${this.name}] No raises - checking if round complete. Current: ${this.currentPlayerIndex}, Next: ${nextPlayer}, BB: ${bbIndex}, Dealer: ${this.dealerIndex}, LastRaiser: ${this.lastRaiserIndex}, Complete: ${bettingRoundComplete}`);
             } else {
                 // Someone raised - must have passed last raiser AND be about to return to them
                 // CRITICAL FIX: Pre-flop is special - big blind ALWAYS gets LAST action
@@ -4457,7 +4542,7 @@ class Table {
                         bbIndex,
                         currentPlayerIndex: this.currentPlayerIndex
                     });
-                    console.log(`[Table ${this.name}] Pre-flop with raises - hasPassedLastRaiser=${this.hasPassedLastRaiser}, nextPlayer=${nextPlayer}, lastRaiser=${this.lastRaiserIndex}, BB=${bbIndex}, complete=${bettingRoundComplete}`);
+                    // console.log(`[Table ${this.name}] Pre-flop with raises - hasPassedLastRaiser=${this.hasPassedLastRaiser}, nextPlayer=${nextPlayer}, lastRaiser=${this.lastRaiserIndex}, BB=${bbIndex}, complete=${bettingRoundComplete}`);
                 } else {
                     // Post-flop: normal betting round rules
                     bettingRoundComplete = this.hasPassedLastRaiser && nextPlayer === this.lastRaiserIndex;
@@ -4490,7 +4575,7 @@ class Table {
                     playersStillInHand: playersStillInHand.length,
                     phase: this.phase
                 });
-                console.log(`[Table ${this.name}] ONLY ONE PLAYER REMAINS: ${winner?.name} wins by default!`);
+                // console.log(`[Table ${this.name}] ONLY ONE PLAYER REMAINS: ${winner?.name} wins by default!`);
                 this.clearTurnTimer();
                 this.awardPot(winner);
                 setTimeout(() => {
@@ -4551,7 +4636,7 @@ class Table {
                 allBetsEqualized,
                 phase: this.phase
             });
-            console.log(`[Table ${this.name}] Betting round complete - advancing phase. Last raiser: ${this.lastRaiserIndex}, Current: ${this.currentPlayerIndex}, Next: ${nextPlayer}, HasPassed: ${this.hasPassedLastRaiser}, All equalized: ${allBetsEqualized}`);
+            // console.log(`[Table ${this.name}] Betting round complete - advancing phase. Last raiser: ${this.lastRaiserIndex}, Current: ${this.currentPlayerIndex}, Next: ${nextPlayer}, HasPassed: ${this.hasPassedLastRaiser}, All equalized: ${allBetsEqualized}`);
             this.hasPassedLastRaiser = false;  // Reset for next betting round
             this.advancePhase();
             return;  // GUARANTEED EXIT - prevents loop
@@ -4572,7 +4657,7 @@ class Table {
                 lastRaiserIndex: this.lastRaiserIndex,
                 allBetsEqualized
             });
-            console.log(`[Table ${this.name}] All bets equalized but round not complete - continuing to next player. Current: ${this.currentPlayerIndex}, Next: ${nextPlayer}, LastRaiser: ${this.lastRaiserIndex}`);
+            // console.log(`[Table ${this.name}] All bets equalized but round not complete - continuing to next player. Current: ${this.currentPlayerIndex}, Next: ${nextPlayer}, LastRaiser: ${this.lastRaiserIndex}`);
         } else {
             // Bets not equalized - continue betting round
             gameLogger.gameEvent(this.name, 'EXIT POINT 3: Continuing - bets not equalized', {
@@ -4580,7 +4665,7 @@ class Table {
                 nextPlayer,
                 allBetsEqualized
             });
-            console.log(`[Table ${this.name}] Bets not equalized - continuing betting round. Current: ${this.currentPlayerIndex}, Next: ${nextPlayer}`);
+            // console.log(`[Table ${this.name}] Bets not equalized - continuing betting round. Current: ${this.currentPlayerIndex}, Next: ${nextPlayer}`);
         }
         
         // GUARANTEED: nextPlayer is valid (checked in EXIT POINT 1)
@@ -4652,7 +4737,7 @@ class Table {
                     phase: this.phase,
                     currentBet: this.currentBet
                 });
-                console.log(`[Table ${this.name}] Auto-advancing - all bets equalized, only one player can act`);
+                // console.log(`[Table ${this.name}] Auto-advancing - all bets equalized, only one player can act`);
                 this.hasPassedLastRaiser = false;
                 this.advancePhase();
                 return;
@@ -4707,7 +4792,7 @@ class Table {
             this.phase === GAME_PHASES.READY_UP || 
             this.phase === GAME_PHASES.COUNTDOWN || 
             this.phase === GAME_PHASES.SHOWDOWN) {
-            console.log(`[Table ${this.name}] Cannot advance from phase ${this.phase} - this is a terminal/non-game phase`);
+            // console.log(`[Table ${this.name}] Cannot advance from phase ${this.phase} - this is a terminal/non-game phase`);
             return;
         }
         
@@ -4780,7 +4865,7 @@ class Table {
                 phase: this.phase,
                 dealerIndex: this.dealerIndex
             });
-            console.log(`[Table ${this.name}] No active players - running out board`);
+            // console.log(`[Table ${this.name}] No active players - running out board`);
             // Capture snapshot before broadcasting
             if (this.stateSnapshot) {
                 const state = this.getState(null);
@@ -4837,7 +4922,7 @@ class Table {
         // CRITICAL FIX: If pot is already 0, it means it was awarded earlier (by fold)
         // Don't try to calculate side pots - just start a new hand
         if (this.pot === 0) {
-            console.log(`[Table ${this.name}] Pot is 0 - already awarded earlier. Skipping showdown calculation and starting new hand.`);
+            // console.log(`[Table ${this.name}] Pot is 0 - already awarded earlier. Skipping showdown calculation and starting new hand.`);
             gameLogger.gameEvent(this.name, 'SHOWDOWN SKIPPED - pot already awarded', {
                 pot: this.pot,
                 reason: 'Pot was awarded earlier (by fold)'
@@ -4904,7 +4989,7 @@ class Table {
                 });
                 
                 player.handResult = HandEvaluator.evaluate(uniqueCards);
-                console.log(`[Table ${this.name}] Evaluated eliminated player ${player.name} hand: ${player.handResult.name}`);
+                // console.log(`[Table ${this.name}] Evaluated eliminated player ${player.name} hand: ${player.handResult.name}`);
             }
         }
 
@@ -5156,7 +5241,7 @@ class Table {
                 const itemWinner = participants[0];
                 sidePotResult = this.itemSidePot.award(itemWinner.playerId);
                 if (sidePotResult?.success) {
-                    console.log(`[Table ${this.name}] ${itemWinner.name} wins ${sidePotResult.items.length} items from side pot!`);
+                    // console.log(`[Table ${this.name}] ${itemWinner.name} wins ${sidePotResult.items.length} items from side pot!`);
                 }
             }
         }
@@ -5256,7 +5341,7 @@ class Table {
                 });
             }
             
-            console.log(`[Table ${this.name}] GAME OVER - ${winner.name} wins with ${winner.chips} chips!`);
+            // console.log(`[Table ${this.name}] GAME OVER - ${winner.name} wins with ${winner.chips} chips!`);
             gameLogger.gameEvent(this.name, 'GAME OVER - Winner announced', {
                 winnerName: winner.name,
                 winnerChips: winner.chips,
@@ -5268,7 +5353,7 @@ class Table {
             
             // CRITICAL: Notify about game winner (this triggers simulation restart and client announcement)
             if (this.onGameOver) {
-                console.log(`[Table ${this.name}] Calling onGameOver callback for winner ${winner.name}`);
+                // console.log(`[Table ${this.name}] Calling onGameOver callback for winner ${winner.name}`);
                 this.onGameOver(winner);
             } else {
                 console.error(`[Table ${this.name}] ⚠️ CRITICAL: onGameOver callback is NOT SET! Game over event will not be sent to clients!`);
@@ -5334,7 +5419,7 @@ class Table {
         const totalChipsBeforeCalc = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
         const totalChipsAndPotBeforeCalc = totalChipsBeforeCalc + this.pot;
         
-        console.log(`[Table ${this.name}] [CALCULATE_SIDE_POTS PRE-OP] Hand: ${this.handsPlayed} | Pot: ${this.pot} | TotalChips: ${totalChipsBeforeCalc} | TotalChips+Pot: ${totalChipsAndPotBeforeCalc} | totalStartingChips: ${this.totalStartingChips}`);
+        // console.log(`[Table ${this.name}] [CALCULATE_SIDE_POTS PRE-OP] Hand: ${this.handsPlayed} | Pot: ${this.pot} | TotalChips: ${totalChipsBeforeCalc} | TotalChips+Pot: ${totalChipsAndPotBeforeCalc} | totalStartingChips: ${this.totalStartingChips}`);
         gameLogger.gameEvent(this.name, '[CALCULATE_SIDE_POTS] PRE-OPERATION STATE', {
             handNumber: this.handsPlayed,
             pot: this.pot,
@@ -5956,7 +6041,7 @@ class Table {
         const totalChipsBeforeAwards = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
         const totalChipsAndPotBeforeAwards = totalChipsBeforeAwards + this.pot;
         
-        console.log(`[Table ${this.name}] [AWARD_POTS PRE-OP] Hand: ${this.handsPlayed} | Pot: ${this.pot} | TotalChips: ${totalChipsBeforeAwards} | TotalChips+Pot: ${totalChipsAndPotBeforeAwards} | Awards: ${potAwards.length}`);
+        // console.log(`[Table ${this.name}] [AWARD_POTS PRE-OP] Hand: ${this.handsPlayed} | Pot: ${this.pot} | TotalChips: ${totalChipsBeforeAwards} | TotalChips+Pot: ${totalChipsAndPotBeforeAwards} | Awards: ${potAwards.length}`);
         gameLogger.gameEvent(this.name, '[AWARD_POTS] PRE-OPERATION STATE', {
             handNumber: this.handsPlayed,
             pot: this.pot,
@@ -6009,7 +6094,7 @@ class Table {
             // NOTE: ALL players will have their totalBet/currentBet cleared after the loop completes
             // This prevents them from persisting to the next hand
             if (seat.totalBet > 0 || seat.currentBet > 0) {
-                console.log(`[Table ${this.name}] [AWARD] Clearing totalBet=${seat.totalBet}, currentBet=${seat.currentBet} for winner ${seat.name}`);
+                // console.log(`[Table ${this.name}] [AWARD] Clearing totalBet=${seat.totalBet}, currentBet=${seat.currentBet} for winner ${seat.name}`);
                 seat.totalBet = 0;
                 seat.currentBet = 0;
             }
@@ -6164,7 +6249,7 @@ class Table {
         const totalChipsAndPotAfterAwards = totalChipsAfterAwards + Math.max(0, this.pot - totalAwarded);
         const chipsDifferenceAfterAwards = totalChipsAndPotAfterAwards - totalChipsAndPotBeforeAwards;
         
-        console.log(`[Table ${this.name}] [AWARD_POTS POST-OP] Hand: ${this.handsPlayed} | Pot: ${this.pot} | TotalChips: ${totalChipsAfterAwards} | TotalChips+Pot: ${totalChipsAndPotAfterAwards} | TotalAwarded: ${totalAwarded} | Difference: ${chipsDifferenceAfterAwards}`);
+        // console.log(`[Table ${this.name}] [AWARD_POTS POST-OP] Hand: ${this.handsPlayed} | Pot: ${this.pot} | TotalChips: ${totalChipsAfterAwards} | TotalChips+Pot: ${totalChipsAndPotAfterAwards} | TotalAwarded: ${totalAwarded} | Difference: ${chipsDifferenceAfterAwards}`);
         gameLogger.gameEvent(this.name, '[AWARD_POTS] POST-OPERATION STATE', {
             handNumber: this.handsPlayed,
             pot: this.pot,
@@ -6304,7 +6389,7 @@ class Table {
         const totalChipsBeforeClear = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
         const totalChipsAndPotBeforeClear = totalChipsBeforeClear + this.pot;
         
-        console.log(`[Table ${this.name}] [FIX #1: CLEAR_POT_AFTER_SIDE_POTS PRE-OP] Hand: ${this.handsPlayed} | Pot: ${potBeforeClear} | TotalAwarded: ${totalAwarded} | TotalChips: ${totalChipsBeforeClear} | TotalChips+Pot: ${totalChipsAndPotBeforeClear}`);
+        // console.log(`[Table ${this.name}] [FIX #1: CLEAR_POT_AFTER_SIDE_POTS PRE-OP] Hand: ${this.handsPlayed} | Pot: ${potBeforeClear} | TotalAwarded: ${totalAwarded} | TotalChips: ${totalChipsBeforeClear} | TotalChips+Pot: ${totalChipsAndPotBeforeClear}`);
         gameLogger.gameEvent(this.name, '[FIX #1: CLEAR_POT_AFTER_SIDE_POTS] PRE-OPERATION STATE', {
             handNumber: this.handsPlayed,
             potBeforeClear,
@@ -6369,7 +6454,7 @@ class Table {
         const totalChipsAndPotAfterClear = totalChipsAfterClear + this.pot;
         const clearDifference = totalChipsAndPotAfterClear - totalChipsAndPotBeforeClear;
         
-        console.log(`[Table ${this.name}] [FIX #1: CLEAR_POT_AFTER_SIDE_POTS POST-OP] Hand: ${this.handsPlayed} | Pot: ${this.pot} | TotalChips: ${totalChipsAfterClear} | TotalChips+Pot: ${totalChipsAndPotAfterClear} | Difference: ${clearDifference}`);
+        // console.log(`[Table ${this.name}] [FIX #1: CLEAR_POT_AFTER_SIDE_POTS POST-OP] Hand: ${this.handsPlayed} | Pot: ${this.pot} | TotalChips: ${totalChipsAfterClear} | TotalChips+Pot: ${totalChipsAndPotAfterClear} | Difference: ${clearDifference}`);
         gameLogger.gameEvent(this.name, '[FIX #1: CLEAR_POT_AFTER_SIDE_POTS] POST-OPERATION STATE', {
             handNumber: this.handsPlayed,
             potAfterClear: this.pot,
@@ -6420,7 +6505,7 @@ class Table {
             if (seat) {
                 if (seat.totalBet > 0) {
                     totalBetClearedCount++;
-                    console.log(`[Table ${this.name}] [FIX] Clearing totalBet=${seat.totalBet} for ${seat.name} after pot awards`);
+                    // console.log(`[Table ${this.name}] [FIX] Clearing totalBet=${seat.totalBet} for ${seat.name} after pot awards`);
                     gameLogger.gameEvent(this.name, '[FIX] Clearing totalBet after pot awards', {
                         player: seat.name,
                         totalBet: seat.totalBet,
@@ -6429,7 +6514,7 @@ class Table {
                 }
                 if (seat.currentBet > 0) {
                     currentBetClearedCount++;
-                    console.log(`[Table ${this.name}] [FIX] Clearing currentBet=${seat.currentBet} for ${seat.name} after pot awards`);
+                    // console.log(`[Table ${this.name}] [FIX] Clearing currentBet=${seat.currentBet} for ${seat.name} after pot awards`);
                     gameLogger.gameEvent(this.name, '[FIX] Clearing currentBet after pot awards', {
                         player: seat.name,
                         currentBet: seat.currentBet,
@@ -6498,7 +6583,7 @@ class Table {
                 
                 // Only remove regular bots (socket bots are managed by SimulationManager)
                 if (seat.isBot) {
-                    console.log(`[Table ${this.name}] Removing eliminated bot ${seat.name} after pot calculation`);
+                    // console.log(`[Table ${this.name}] Removing eliminated bot ${seat.name} after pot calculation`);
                     this.seats[i] = null;
                 }
             }
@@ -6506,7 +6591,7 @@ class Table {
         
         // ULTRA-VERBOSE: Log complete state after side pot awards
         const finalState = this._getChipState();
-        console.log(`[Table ${this.name}] [AFTER_SIDE_POT_AWARDS] Complete state | Hand: ${this.handsPlayed} | Phase: ${this.phase} | totalStartingChips: ${this.totalStartingChips} | totalChipsInSystem: ${finalState.totalChipsInSystem} | difference: ${finalState.difference}`);
+        // console.log(`[Table ${this.name}] [AFTER_SIDE_POT_AWARDS] Complete state | Hand: ${this.handsPlayed} | Phase: ${this.phase} | totalStartingChips: ${this.totalStartingChips} | totalChipsInSystem: ${finalState.totalChipsInSystem} | difference: ${finalState.difference}`);
         gameLogger.gameEvent(this.name, '[AFTER_SIDE_POT_AWARDS] Complete state snapshot', {
             handNumber: this.handsPlayed,
             phase: this.phase,
@@ -6666,7 +6751,7 @@ class Table {
             
             // ALWAYS clear pot, no matter what
             this.pot = 0;
-            console.log(`[Table ${this.name}] [FINALLY] Pot cleared: ${potBeforeFinalClear} → 0`);
+            // console.log(`[Table ${this.name}] [FINALLY] Pot cleared: ${potBeforeFinalClear} → 0`);
         }
         
         return potAwards;
@@ -6835,7 +6920,7 @@ class Table {
         const totalChipsBeforeClear = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
         const totalChipsAndPotBeforeClear = totalChipsBeforeClear + this.pot;
         
-        console.log(`[Table ${this.name}] [FIX #1: CLEAR_POT_AFTER_AWARD PRE-OP] Hand: ${this.handsPlayed} | Pot: ${potBeforeClear} | TotalChips: ${totalChipsBeforeClear} | TotalChips+Pot: ${totalChipsAndPotBeforeClear}`);
+        // console.log(`[Table ${this.name}] [FIX #1: CLEAR_POT_AFTER_AWARD PRE-OP] Hand: ${this.handsPlayed} | Pot: ${potBeforeClear} | TotalChips: ${totalChipsBeforeClear} | TotalChips+Pot: ${totalChipsAndPotBeforeClear}`);
         gameLogger.gameEvent(this.name, '[FIX #1: CLEAR_POT_AFTER_AWARD] PRE-OPERATION STATE', {
             handNumber: this.handsPlayed,
             potBeforeClear,
@@ -6849,7 +6934,7 @@ class Table {
         
         if (potBeforeClear > 0) {
             // ULTRA-VERBOSE: Log pot clearing
-            console.log(`[Table ${this.name}] [FIX #1: POT CLEAR] Clearing pot after awardPot: ${potBeforeClear} chips | Hand: ${this.handsPlayed} | Phase: ${this.phase} | Winner: ${winner.name}`);
+            // console.log(`[Table ${this.name}] [FIX #1: POT CLEAR] Clearing pot after awardPot: ${potBeforeClear} chips | Hand: ${this.handsPlayed} | Phase: ${this.phase} | Winner: ${winner.name}`);
             gameLogger.gameEvent(this.name, '[FIX #1: POT] Clearing pot after awardPot', {
                 potBefore: potBeforeClear,
                 handNumber: this.handsPlayed,
@@ -6877,7 +6962,7 @@ class Table {
         const totalChipsAndPotAfterClear = totalChipsAfterClear + this.pot;
         const clearDifference = totalChipsAndPotAfterClear - totalChipsAndPotBeforeClear;
         
-        console.log(`[Table ${this.name}] [FIX #1: CLEAR_POT_AFTER_AWARD POST-OP] Hand: ${this.handsPlayed} | Pot: ${this.pot} | TotalChips: ${totalChipsAfterClear} | TotalChips+Pot: ${totalChipsAndPotAfterClear} | Difference: ${clearDifference}`);
+        // console.log(`[Table ${this.name}] [FIX #1: CLEAR_POT_AFTER_AWARD POST-OP] Hand: ${this.handsPlayed} | Pot: ${this.pot} | TotalChips: ${totalChipsAfterClear} | TotalChips+Pot: ${totalChipsAndPotAfterClear} | Difference: ${clearDifference}`);
         gameLogger.gameEvent(this.name, '[FIX #1: CLEAR_POT_AFTER_AWARD] POST-OPERATION STATE', {
             handNumber: this.handsPlayed,
             potAfterClear: this.pot,
@@ -6907,7 +6992,7 @@ class Table {
             if (seat) {
                 if (seat.totalBet > 0) {
                     totalBetClearedCount++;
-                    console.log(`[Table ${this.name}] [FIX] Clearing totalBet=${seat.totalBet} for ${seat.name} after awardPot`);
+                    // console.log(`[Table ${this.name}] [FIX] Clearing totalBet=${seat.totalBet} for ${seat.name} after awardPot`);
                     gameLogger.gameEvent(this.name, '[FIX] Clearing totalBet after awardPot', {
                         player: seat.name,
                         totalBet: seat.totalBet,
@@ -6916,7 +7001,7 @@ class Table {
                 }
                 if (seat.currentBet > 0) {
                     currentBetClearedCount++;
-                    console.log(`[Table ${this.name}] [FIX] Clearing currentBet=${seat.currentBet} for ${seat.name} after awardPot`);
+                    // console.log(`[Table ${this.name}] [FIX] Clearing currentBet=${seat.currentBet} for ${seat.name} after awardPot`);
                     gameLogger.gameEvent(this.name, '[FIX] Clearing currentBet after awardPot', {
                         player: seat.name,
                         currentBet: seat.currentBet,
@@ -6973,7 +7058,7 @@ class Table {
                 
                 // Only remove regular bots (socket bots are managed by SimulationManager)
                 if (seat.isBot) {
-                    console.log(`[Table ${this.name}] Removing eliminated bot ${seat.name} after pot award`);
+                    // console.log(`[Table ${this.name}] Removing eliminated bot ${seat.name} after pot award`);
                     this.seats[i] = null;
                 }
             }
@@ -6981,7 +7066,7 @@ class Table {
         
         // ULTRA-VERBOSE: Log complete state after pot award
         const finalState = this._getChipState();
-        console.log(`[Table ${this.name}] [AFTER_AWARD_POT] Complete state | Winner: ${winner.name} | Hand: ${this.handsPlayed} | Phase: ${this.phase} | totalStartingChips: ${this.totalStartingChips} | totalChipsInSystem: ${finalState.totalChipsInSystem} | difference: ${finalState.difference}`);
+        // console.log(`[Table ${this.name}] [AFTER_AWARD_POT] Complete state | Winner: ${winner.name} | Hand: ${this.handsPlayed} | Phase: ${this.phase} | totalStartingChips: ${this.totalStartingChips} | totalChipsInSystem: ${finalState.totalChipsInSystem} | difference: ${finalState.difference}`);
         gameLogger.gameEvent(this.name, '[AFTER_AWARD_POT] Complete state snapshot', {
             winner: winner.name,
             winnerId: winner.playerId,
@@ -7109,7 +7194,7 @@ class Table {
             
             // ALWAYS clear pot, no matter what
             this.pot = 0;
-            console.log(`[Table ${this.name}] [FINALLY awardPot] Pot cleared: ${potBeforeFinalClear} → 0`);
+            // console.log(`[Table ${this.name}] [FINALLY awardPot] Pot cleared: ${potBeforeFinalClear} → 0`);
         }
     }
 
