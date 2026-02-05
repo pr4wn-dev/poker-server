@@ -6248,7 +6248,10 @@ class Table {
             const potBeforeAward = this.pot;
             const chipsBeforeAward = seat.chips;
             
+            // CRITICAL FIX: Decrement pot when awarding chips to prevent double-counting
+            // Chips move from pot to player, so pot must decrease by award amount
             seat.chips += award.amount;
+            this.pot -= award.amount; // FIX: Decrement pot to match chip transfer
             const chipsAfter = seat.chips;
             totalAwarded += award.amount;
             
@@ -6359,7 +6362,9 @@ class Table {
                         // ULTRA-VERBOSE: Log before redistribution
                         const chipsBeforeRedist = bestActive.chips;
                         
+                        // CRITICAL FIX: Decrement pot when redistributing chips to prevent double-counting
                         bestActive.chips += award.amount;
+                        this.pot -= award.amount; // FIX: Decrement pot to match chip transfer
                         totalAwarded += award.amount; // Count it as awarded
                         
                         // ULTRA-VERBOSE: Verify redistribution immediately
