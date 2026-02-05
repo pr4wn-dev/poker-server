@@ -2274,15 +2274,22 @@ class Table {
         // If pot is not 0 when posting small blind, it means it persisted from previous hand - clear it now
         // NOTE: When posting big blind, pot should already contain small blind, so don't clear it
         const isSmallBlind = blindAmount === this.smallBlind;
-        if (isSmallBlind && this.pot > 0) {
-            console.error(`[Table ${this.name}] ⚠️ CRITICAL: Pot (${this.pot}) not cleared before posting small blind! Clearing now to prevent chip loss.`);
-            gameLogger.error(this.name, '[BLIND] CRITICAL: Pot not cleared before posting small blind - clearing now', {
-                potBeforeClear: this.pot,
-                handNumber: this.handsPlayed,
-                player: player.name,
-                blindAmount
-            });
+        if (isSmallBlind) {
+            // ALWAYS clear pot before posting small blind - this is the start of a new hand
+            // If pot > 0, it means it persisted from previous hand (BUG!)
+            if (this.pot > 0) {
+                console.error(`[Table ${this.name}] ⚠️ CRITICAL: Pot (${this.pot}) not cleared before posting small blind! Clearing now to prevent chip loss.`);
+                gameLogger.error(this.name, '[BLIND] CRITICAL: Pot not cleared before posting small blind - clearing now', {
+                    potBeforeClear: this.pot,
+                    handNumber: this.handsPlayed,
+                    player: player.name,
+                    blindAmount,
+                    warning: 'Pot persisted from previous hand - this is a bug that causes incorrect pot sizes'
+                });
+            }
+            // ALWAYS set pot to 0 before small blind (even if already 0) to ensure clean state
             this.pot = 0;
+            console.log(`[Table ${this.name}] [BLIND] Cleared pot before posting small blind (was ${potBeforeAdd}, now 0)`);
         }
         
         const totalChipsAndPotBefore = totalChipsBefore + this.pot;
