@@ -5686,25 +5686,28 @@ class Table {
                             const chipsBefore = seat.chips;
                             
                             // CRITICAL: Track emergency distribution BEFORE operation
+                            const potAmount = this.pot;
                             const movement = this._trackChipMovement('EMERGENCY_POT_DISTRIBUTION', {
                                 winner: winner.name,
-                                pot: this.pot,
-                                chipsBefore
+                                pot: potAmount,
+                                chipsBefore,
+                                potBefore: potAmount
                             });
                             
-                            seat.chips += this.pot;
+                            seat.chips += potAmount;
+                            this.pot -= potAmount; // CRITICAL: Decrement pot as chips are moved
                             
                             // CRITICAL: Validate after emergency distribution
                             this._validateChipMovement(movement, 'EMERGENCY_POT_DISTRIBUTION');
                             
-                            console.log(`[Table ${this.name}] EMERGENCY: ${winner.name} wins entire pot ${this.pot} (chips: ${chipsBefore} → ${seat.chips})`);
+                            console.log(`[Table ${this.name}] EMERGENCY: ${winner.name} wins entire pot ${potAmount} (chips: ${chipsBefore} → ${seat.chips})`);
                             gameLogger.gameEvent(this.name, '[POT] EMERGENCY distribution', {
                                 winner: winner.name,
-                                pot: this.pot,
+                                pot: potAmount,
                                 chipsBefore,
                                 chipsAfter: seat.chips
                             });
-                            // ROOT CAUSE: Trace pot clearing
+                            // ROOT CAUSE: Trace pot clearing (pot should be 0 now)
                             this._clearPotWithTrace('SHOWDOWN_EMERGENCY_DISTRIBUTION', 'Emergency pot distribution');
                         }
                     }
@@ -5740,25 +5743,28 @@ class Table {
                         const chipsBefore = winner.chips;
                         
                         // CRITICAL: Track emergency distribution BEFORE operation
+                        const potAmount = this.pot;
                         const movement = this._trackChipMovement('EMERGENCY_POT_DISTRIBUTION_NO_ACTIVE', {
                             winner: winner.name,
-                            pot: this.pot,
-                            chipsBefore
+                            pot: potAmount,
+                            chipsBefore,
+                            potBefore: potAmount
                         });
                         
-                        winner.chips += this.pot;
+                        winner.chips += potAmount;
+                        this.pot -= potAmount; // CRITICAL: Decrement pot as chips are moved
                         
                         // CRITICAL: Validate after emergency distribution
                         this._validateChipMovement(movement, 'EMERGENCY_POT_DISTRIBUTION_NO_ACTIVE');
-                        console.log(`[Table ${this.name}] EMERGENCY: ${winner.name} wins entire pot ${this.pot} (no active players, chips: ${chipsBefore} → ${winner.chips})`);
+                        console.log(`[Table ${this.name}] EMERGENCY: ${winner.name} wins entire pot ${potAmount} (no active players, chips: ${chipsBefore} → ${winner.chips})`);
                         gameLogger.gameEvent(this.name, '[POT] EMERGENCY distribution (no active players)', {
                             winner: winner.name,
-                            pot: this.pot,
+                            pot: potAmount,
                             chipsBefore,
                             chipsAfter: winner.chips,
                             contributors: contributors.map(c => c.seat.name)
                         });
-                        // CRITICAL: Use _clearPotWithTrace instead of direct assignment
+                        // CRITICAL: Use _clearPotWithTrace instead of direct assignment (pot should be 0 now)
                         this._clearPotWithTrace('AWARD_POT_EMERGENCY_DISTRIBUTION_NO_ACTIVE', 'Emergency pot distribution - no active players');
                     } else {
                         // Last resort: give to player with most chips
@@ -5770,20 +5776,23 @@ class Table {
                             const chipsBefore = bestPlayer.chips;
                             
                             // CRITICAL: Track emergency distribution BEFORE operation
+                            const potAmount = this.pot;
                             const movement = this._trackChipMovement('EMERGENCY_POT_DISTRIBUTION_LAST_RESORT', {
                                 winner: bestPlayer.name,
-                                pot: this.pot,
-                                chipsBefore
+                                pot: potAmount,
+                                chipsBefore,
+                                potBefore: potAmount
                             });
                             
-                            bestPlayer.chips += this.pot;
+                            bestPlayer.chips += potAmount;
+                            this.pot -= potAmount; // CRITICAL: Decrement pot as chips are moved
                             
                             // CRITICAL: Validate after emergency distribution
                             this._validateChipMovement(movement, 'EMERGENCY_POT_DISTRIBUTION_LAST_RESORT');
-                            console.log(`[Table ${this.name}] EMERGENCY: ${bestPlayer.name} wins entire pot ${this.pot} (last resort, chips: ${chipsBefore} → ${bestPlayer.chips})`);
+                            console.log(`[Table ${this.name}] EMERGENCY: ${bestPlayer.name} wins entire pot ${potAmount} (last resort, chips: ${chipsBefore} → ${bestPlayer.chips})`);
                             gameLogger.gameEvent(this.name, '[POT] EMERGENCY distribution (last resort)', {
                                 winner: bestPlayer.name,
-                                pot: this.pot,
+                                pot: potAmount,
                                 chipsBefore,
                                 chipsAfter: bestPlayer.chips
                             });
@@ -6271,11 +6280,27 @@ class Table {
             if (activeSeats.length > 0 && this.pot > 0) {
                 const emergencyRecipient = activeSeats[0];
                 const chipsBefore = emergencyRecipient.chips;
-                emergencyRecipient.chips += this.pot;
-                console.error(`[Table ${this.name}] ⚠️ EMERGENCY: Cannot calculate side pots, awarding ${this.pot} to ${emergencyRecipient.name} to prevent loss`);
+                const potAmount = this.pot;
+                
+                // CRITICAL: Track chip movement BEFORE operation
+                const movement = this._trackChipMovement('EMERGENCY_POT_CALCULATION_FAILURE', {
+                    recipient: emergencyRecipient.name,
+                    amount: potAmount,
+                    chipsBefore,
+                    potBefore: potAmount,
+                    reason: 'Side pot calculation failed - emergency distribution to prevent chip loss'
+                });
+                
+                emergencyRecipient.chips += potAmount;
+                this.pot -= potAmount; // CRITICAL: Decrement pot as chips are moved
+                
+                // CRITICAL: Validate after operation
+                this._validateChipMovement(movement, 'EMERGENCY_POT_CALCULATION_FAILURE');
+                
+                console.error(`[Table ${this.name}] ⚠️ EMERGENCY: Cannot calculate side pots, awarding ${potAmount} to ${emergencyRecipient.name} to prevent loss`);
                 gameLogger.gameEvent(this.name, '[POT] EMERGENCY: Awarding pot due to calculation failure', {
                     recipient: emergencyRecipient.name,
-                    amount: this.pot,
+                    amount: potAmount,
                     chipsBefore,
                     chipsAfter: emergencyRecipient.chips,
                     reason: 'Side pot calculation failed - emergency distribution'
