@@ -2147,7 +2147,7 @@ class Table {
         this.handleLateJoinerDuringReadyUp(seat);
         
         // Check if item ante is enabled and player needs to submit item
-        if (this.itemAnteEnabled && !this.gameStarted) {
+        if (this.itemAnteEnabled && !this.gameStarted && this.itemAnte) {
             const needsFirstItem = this.itemAnte.needsFirstItem();
             const hasSubmitted = this.itemAnte.hasSubmitted(playerId);
             
@@ -8465,14 +8465,46 @@ class Table {
      * CRITICAL: This is for ITEMS ONLY - no money/chips allowed!
      */
     startItemAnte(userId, item) {
+        // ROOT TRACING: Track item ante start operation
+        this._traceUniversal('ITEM_ANTE_START', {
+            userId,
+            itemId: item?.id,
+            itemName: item?.name,
+            itemAnteEnabled: this.itemAnteEnabled,
+            itemAnteExists: !!this.itemAnte,
+            gameStarted: this.gameStarted,
+            phase: this.phase
+        });
+        
         if (!this.itemAnteEnabled) {
+            this._traceUniversalAfter('ITEM_ANTE_START', { success: false, error: 'NOT_ENABLED' });
             return { success: false, error: 'Item ante is not enabled for this table' };
         }
+        if (!this.itemAnte) {
+            this._traceUniversalAfter('ITEM_ANTE_START', { success: false, error: 'ITEM_ANTE_NOT_INITIALIZED' });
+            console.error(`[Table ${this.name}] Item ante not initialized but itemAnteEnabled is true!`);
+            return { success: false, error: 'Item ante system not initialized' };
+        }
         if (this.gameStarted) {
+            this._traceUniversalAfter('ITEM_ANTE_START', { success: false, error: 'GAME_STARTED' });
             return { success: false, error: 'Game already started' };
         }
+        if (!item) {
+            this._traceUniversalAfter('ITEM_ANTE_START', { success: false, error: 'NO_ITEM_PROVIDED' });
+            return { success: false, error: 'No item provided' };
+        }
+        
         // CRITICAL: itemAnte only accepts items, never money/chips
-        return this.itemAnte.start(item, userId, this.itemAnteCollectionTime);
+        const result = this.itemAnte.start(item, userId, this.itemAnteCollectionTime);
+        
+        this._traceUniversalAfter('ITEM_ANTE_START', {
+            success: result.success,
+            error: result.error,
+            minimumValue: result.minimumValue,
+            status: this.itemAnte?.status
+        });
+        
+        return result;
     }
 
     /**
@@ -8480,8 +8512,44 @@ class Table {
      * CRITICAL: This is for ITEMS ONLY - no money/chips allowed!
      */
     submitToItemAnte(userId, item) {
+        // ROOT TRACING: Track item ante submission
+        this._traceUniversal('ITEM_ANTE_SUBMIT', {
+            userId,
+            itemId: item?.id,
+            itemName: item?.name,
+            itemValue: item?.baseValue,
+            itemAnteEnabled: this.itemAnteEnabled,
+            itemAnteExists: !!this.itemAnte,
+            status: this.itemAnte?.status,
+            approvedCount: this.itemAnte?.approvedItems?.length || 0
+        });
+        
+        if (!this.itemAnteEnabled) {
+            this._traceUniversalAfter('ITEM_ANTE_SUBMIT', { success: false, error: 'NOT_ENABLED' });
+            return { success: false, error: 'Item ante is not enabled for this table' };
+        }
+        if (!this.itemAnte) {
+            this._traceUniversalAfter('ITEM_ANTE_SUBMIT', { success: false, error: 'ITEM_ANTE_NOT_INITIALIZED' });
+            console.error(`[Table ${this.name}] Item ante not initialized but itemAnteEnabled is true!`);
+            return { success: false, error: 'Item ante system not initialized' };
+        }
+        if (!item) {
+            this._traceUniversalAfter('ITEM_ANTE_SUBMIT', { success: false, error: 'NO_ITEM_PROVIDED' });
+            return { success: false, error: 'No item provided' };
+        }
+        
         // CRITICAL: itemAnte only accepts items, never money/chips
-        return this.itemAnte.submitItem(userId, item);
+        const result = this.itemAnte.submitItem(userId, item);
+        
+        this._traceUniversalAfter('ITEM_ANTE_SUBMIT', {
+            success: result.success,
+            error: result.error,
+            itemValue: result.itemValue,
+            minimumValue: result.minimumValue,
+            approvedCount: this.itemAnte?.approvedItems?.length || 0
+        });
+        
+        return result;
     }
 
     /**
@@ -8644,7 +8712,7 @@ class Table {
             itemAnteEnabled: this.itemAnteEnabled,
             sidePot: this.getItemAnteState(forPlayerId),  // Keeping field name for Unity backward compatibility
             // Helper flags for Unity to know when to prompt for item
-            needsItemAnteSubmission: this.itemAnteEnabled && !this.gameStarted && 
+            needsItemAnteSubmission: this.itemAnteEnabled && !this.gameStarted && this.itemAnte && 
                 (this.itemAnte.needsFirstItem() || (forPlayerId && !this.itemAnte.hasSubmitted(forPlayerId))),
             seats: this.seats.map((seat, index) => {
                 if (!seat) return null;
@@ -8716,7 +8784,7 @@ class Table {
                     isSittingOut: seat.isSittingOut || false,
                     isReady: seat.isReady || false,
                     inItemAnte: this.itemAnte.isParticipating(seat.playerId),
-                    needsItemAnteSubmission: this.itemAnteEnabled && !this.gameStarted && 
+                    needsItemAnteSubmission: this.itemAnteEnabled && !this.gameStarted && this.itemAnte && 
                         (this.itemAnte.needsFirstItem() || !this.itemAnte.hasSubmitted(seat.playerId)),
                     cards: cards
                 };

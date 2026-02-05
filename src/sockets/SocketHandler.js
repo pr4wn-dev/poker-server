@@ -134,25 +134,40 @@ class SocketHandler {
             socket.on('get_inventory', async (callback) => {
                 const user = this.getAuthenticatedUser(socket);
                 if (!user) {
+                    console.error('[SocketHandler] get_inventory: Not authenticated');
                     return callback({ success: false, error: 'Not authenticated' });
                 }
                 
-                const inventory = await userRepo.getInventory(user.userId);
-                callback({ success: true, inventory });
-                socket.emit('get_inventory_response', { success: true, inventory });
+                try {
+                    const inventory = await userRepo.getInventory(user.userId);
+                    
+                    // ROOT TRACING: Log inventory request
+                    console.log(`[SocketHandler] [INVENTORY] GET_INVENTORY | userId: ${user.userId} | username: ${user.profile?.username} | itemCount: ${inventory?.length || 0}`);
+                    
+                    callback({ success: true, inventory });
+                    socket.emit('get_inventory_response', { success: true, inventory });
+                } catch (error) {
+                    console.error(`[SocketHandler] [INVENTORY] GET_INVENTORY_ERROR | userId: ${user.userId} | error: ${error.message}`, error);
+                    callback({ success: false, error: error.message });
+                }
             });
             
             // Test endpoint: Add test items to inventory (for development/testing)
             socket.on('get_test_items', async (callback) => {
                 const user = this.getAuthenticatedUser(socket);
                 if (!user) {
+                    console.error('[SocketHandler] get_test_items: Not authenticated');
                     return callback({ success: false, error: 'Not authenticated' });
                 }
                 
-                const Item = require('../models/Item');
+                // ROOT TRACING: Log test items request start
+                console.log(`[SocketHandler] [INVENTORY] GET_TEST_ITEMS_START | userId: ${user.userId} | username: ${user.profile?.username}`);
                 
-                // Create a variety of test items across all rarities
-                const testItems = [
+                try {
+                    const Item = require('../models/Item');
+                    
+                    // Create a variety of test items across all rarities
+                    const testItems = [
                     // Common items
                     new Item({ ...Item.TEMPLATES.XP_BOOST_SMALL, obtainedFrom: 'Test Items' }),
                     new Item({ ...Item.TEMPLATES.TROPHY_FIRST_BOSS, obtainedFrom: 'Test Items' }),
@@ -188,24 +203,29 @@ class SocketHandler {
                     new Item({ ...Item.TEMPLATES.VEHICLE_JET, obtainedFrom: 'Test Items' })
                 ];
                 
-                // Add all test items to inventory
-                for (const item of testItems) {
-                    await userRepo.addItem(user.userId, item);
+                    // Add all test items to inventory
+                    for (const item of testItems) {
+                        await userRepo.addItem(user.userId, item);
+                    }
+                    
+                    // Get updated inventory
+                    const inventory = await userRepo.getInventory(user.userId);
+                    
+                    // ROOT TRACING: Log test items completion
+                    console.log(`[SocketHandler] [INVENTORY] GET_TEST_ITEMS_SUCCESS | userId: ${user.userId} | username: ${user.profile?.username} | added: ${testItems.length} | total: ${inventory?.length || 0}`);
+                    
+                    const response = { 
+                        success: true, 
+                        message: `Added ${testItems.length} test items to inventory`,
+                        inventory 
+                    };
+                    
+                    callback(response);
+                    socket.emit('get_test_items_response', response);
+                } catch (error) {
+                    console.error(`[SocketHandler] [INVENTORY] GET_TEST_ITEMS_ERROR | userId: ${user.userId} | error: ${error.message}`, error);
+                    callback({ success: false, error: error.message });
                 }
-                
-                // Get updated inventory
-                const inventory = await userRepo.getInventory(user.userId);
-                
-                console.log(`[SocketHandler] Added ${testItems.length} test items to ${user.username}'s inventory`);
-                
-                const response = { 
-                    success: true, 
-                    message: `Added ${testItems.length} test items to inventory`,
-                    inventory 
-                };
-                
-                callback(response);
-                socket.emit('get_test_items_response', response);
             });
 
             // ============ Lobby ============
@@ -1455,11 +1475,18 @@ class SocketHandler {
                 const profile = await userRepo.getFullProfile(user.userId);
                 const item = profile.inventory.find(i => i.id === data.itemId);
                 
+                // ROOT TRACING: Log item ante start attempt
+                console.log(`[SocketHandler] [ITEM_ANTE] START_ATTEMPT | userId: ${user.userId} | tableId: ${player.currentTableId} | itemId: ${data.itemId} | itemFound: ${!!item}`);
+                
                 if (!item) {
+                    console.error(`[SocketHandler] [ITEM_ANTE] START_FAILED | userId: ${user.userId} | error: ITEM_NOT_FOUND | itemId: ${data.itemId}`);
                     return callback({ success: false, error: 'Item not found in inventory' });
                 }
 
                 const result = table.startItemAnte(user.userId, item);
+                
+                // ROOT TRACING: Log item ante start result
+                console.log(`[SocketHandler] [ITEM_ANTE] START_RESULT | userId: ${user.userId} | tableId: ${player.currentTableId} | success: ${result.success} | error: ${result.error || 'none'} | minimumValue: ${result.minimumValue || 'N/A'}`);
                 
                 if (result.success) {
                     // Broadcast item ante started to all players (keeping old event name for backward compatibility)
@@ -1494,11 +1521,18 @@ class SocketHandler {
                 const profile = await userRepo.getFullProfile(user.userId);
                 const item = profile.inventory.find(i => i.id === data.itemId);
                 
+                // ROOT TRACING: Log item ante submission attempt
+                console.log(`[SocketHandler] [ITEM_ANTE] SUBMIT_ATTEMPT | userId: ${user.userId} | tableId: ${player.currentTableId} | itemId: ${data.itemId} | itemFound: ${!!item}`);
+                
                 if (!item) {
+                    console.error(`[SocketHandler] [ITEM_ANTE] SUBMIT_FAILED | userId: ${user.userId} | error: ITEM_NOT_FOUND | itemId: ${data.itemId}`);
                     return callback({ success: false, error: 'Item not found in inventory' });
                 }
 
                 const result = table.submitToItemAnte(user.userId, item);
+                
+                // ROOT TRACING: Log item ante submission result
+                console.log(`[SocketHandler] [ITEM_ANTE] SUBMIT_RESULT | userId: ${user.userId} | tableId: ${player.currentTableId} | success: ${result.success} | error: ${result.error || 'none'} | itemValue: ${result.itemValue || 'N/A'} | minimumValue: ${result.minimumValue || 'N/A'}`);
                 
                 if (result.success) {
                     // Notify table creator of new submission (keeping old event name for backward compatibility)

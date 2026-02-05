@@ -14,6 +14,7 @@
  */
 
 const { v4: uuidv4 } = require('uuid');
+const gameLogger = require('../utils/GameLogger');
 
 const ITEM_ANTE_STATUS = {
     INACTIVE: 'inactive',       // No item ante
@@ -91,6 +92,20 @@ class ItemAnte {
         
         console.log(`[ItemAnte] Started by ${userId} with item: ${firstItem.name} (value: ${this.minimumValue})`);
         
+        // ROOT TRACING: Log item ante start with full state
+        gameLogger.gameEvent(this.tableId, `[ITEM_ANTE] STARTED`, {
+            userId,
+            itemId: firstItem.id,
+            itemName: firstItem.name,
+            itemTemplateId: firstItem.templateId,
+            itemRarity: firstItem.rarity,
+            minimumValue: this.minimumValue,
+            baseValue: firstItem.baseValue,
+            collectionEndTime: this.collectionEndTime,
+            status: this.status,
+            stackTrace: new Error().stack?.split('\n').slice(2, 10).join(' | ') || 'NO_STACK'
+        });
+        
         return { 
             success: true, 
             itemAnte: this.getState(),
@@ -137,6 +152,20 @@ class ItemAnte {
             
             console.log(`[ItemAnte] ${userId} submitted item ${item.name} (value: ${itemValue}) - REJECTED (minimum: ${this.minimumValue})`);
             
+            // ROOT TRACING: Log rejected submission
+            gameLogger.gameEvent(this.tableId, `[ITEM_ANTE] SUBMISSION_REJECTED`, {
+                userId,
+                itemId: item.id,
+                itemName: item.name,
+                itemValue,
+                minimumValue: this.minimumValue,
+                difference: itemValue - this.minimumValue,
+                reason: 'VALUE_TOO_LOW',
+                status: this.status,
+                approvedCount: this.approvedItems.length,
+                stackTrace: new Error().stack?.split('\n').slice(2, 10).join(' | ') || 'NO_STACK'
+            });
+            
             return { 
                 success: false, 
                 error: `Item value (${itemValue}) is less than minimum required (${this.minimumValue})`
@@ -158,6 +187,21 @@ class ItemAnte {
         });
         
         console.log(`[ItemAnte] ${userId} submitted item ${item.name} (value: ${itemValue}) - APPROVED`);
+        
+        // ROOT TRACING: Log approved submission
+        gameLogger.gameEvent(this.tableId, `[ITEM_ANTE] SUBMISSION_APPROVED`, {
+            userId,
+            itemId: item.id,
+            itemName: item.name,
+            itemTemplateId: item.templateId,
+            itemRarity: item.rarity,
+            itemValue,
+            minimumValue: this.minimumValue,
+            approvedCount: this.approvedItems.length,
+            totalSubmissions: this.submissions.size,
+            status: this.status,
+            stackTrace: new Error().stack?.split('\n').slice(2, 10).join(' | ') || 'NO_STACK'
+        });
         
         return { 
             success: true,
@@ -285,6 +329,16 @@ class ItemAnte {
         
         console.log(`[ItemAnte] Locked with ${this.approvedItems.length} items`);
         
+        // ROOT TRACING: Log item ante lock
+        gameLogger.gameEvent(this.tableId, `[ITEM_ANTE] LOCKED`, {
+            approvedCount: this.approvedItems.length,
+            totalSubmissions: this.submissions.size,
+            participants: this.approvedItems.map(e => e.userId),
+            totalValue: this.approvedItems.reduce((sum, e) => sum + (e.item.baseValue || 0), 0),
+            status: this.status,
+            stackTrace: new Error().stack?.split('\n').slice(2, 10).join(' | ') || 'NO_STACK'
+        });
+        
         return { 
             success: true,
             itemCount: this.approvedItems.length
@@ -311,6 +365,24 @@ class ItemAnte {
         const winnings = this.approvedItems.map(entry => entry.item);
         
         console.log(`[ItemAnte] ${winnerId} won ${winnings.length} items!`);
+        
+        // ROOT TRACING: Log item ante award
+        gameLogger.gameEvent(this.tableId, `[ITEM_ANTE] AWARDED`, {
+            winnerId,
+            itemCount: winnings.length,
+            items: winnings.map(i => ({
+                id: i.id,
+                name: i.name,
+                templateId: i.templateId,
+                rarity: i.rarity,
+                baseValue: i.baseValue
+            })),
+            totalValue: winnings.reduce((sum, i) => sum + (i.baseValue || 0), 0),
+            originalCount: this.approvedItems.length,
+            status: this.status,
+            awardedAt: this.awardedAt,
+            stackTrace: new Error().stack?.split('\n').slice(2, 10).join(' | ') || 'NO_STACK'
+        });
         
         return {
             success: true,
