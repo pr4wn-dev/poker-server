@@ -2026,7 +2026,23 @@ class Table {
             }
         }
 
-        // CRITICAL: Track chip addition when player joins
+        // CRITICAL: Update totalStartingChips BEFORE tracking movement to prevent false positives
+        // - ALWAYS update totalStartingChips to prevent root cause tracer from flagging chips as "created"
+        // - If totalStartingChips is 0, we're setting it for the first time (before game start)
+        // - If totalStartingChips > 0, we're incrementing it (late joiner or before game start)
+        // This prevents false positives in the root cause tracer during player joins
+        const oldTotalStartingChipsAddPlayer = this.totalStartingChips;
+        this.totalStartingChips += chips;
+        this._logTotalStartingChipsChange('ADD_PLAYER', 'ADD_PLAYER', oldTotalStartingChipsAddPlayer, this.totalStartingChips, {
+            player: name,
+            playerId,
+            seatIndex,
+            chips,
+            gameStarted: this.gameStarted,
+            reason: this.gameStarted ? 'Late joiner - adding chips to totalStartingChips' : 'Player joined before game start - adding chips to totalStartingChips'
+        });
+        
+        // CRITICAL: Track chip addition when player joins (AFTER totalStartingChips is updated)
         const movement = this._trackChipMovement('PLAYER_JOIN', {
             player: name,
             playerId,
@@ -2067,24 +2083,6 @@ class Table {
         });
         
         this.seats[seatIndex] = seat;
-        
-        // CRITICAL: Update totalStartingChips when player joins
-        // - If game hasn't started yet: totalStartingChips will be calculated in handleGameStart, but we should still track it
-        // - If game already started: Must update totalStartingChips to prevent "chips created" detection
-        // CRITICAL FIX: Always update totalStartingChips when player joins to prevent root cause tracer from flagging chips as "created"
-        // The only exception is if totalStartingChips is 0 (game hasn't started) - in that case, handleGameStart will calculate it
-        if (this.totalStartingChips > 0 || this.gameStarted) {
-            const oldTotalStartingChips = this.totalStartingChips;
-            this.totalStartingChips += chips;
-            this._logTotalStartingChipsChange('ADD_PLAYER', 'ADD_PLAYER', oldTotalStartingChips, this.totalStartingChips, {
-                player: name,
-                playerId,
-                seatIndex,
-                chips,
-                gameStarted: this.gameStarted,
-                reason: this.gameStarted ? 'Late joiner - adding chips to totalStartingChips' : 'Player joined before game start - adding chips to totalStartingChips'
-            });
-        }
         
         // ULTRA-VERBOSE: Log after adding player
         const totalChipsAfter = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
