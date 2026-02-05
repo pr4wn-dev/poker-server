@@ -6912,6 +6912,21 @@ class Table {
             
             seat.chips += potAmount;
             
+            // CRITICAL DEBUG: Verify chips are actually in the seat object
+            const seatIndex = this.seats.indexOf(seat);
+            const actualSeatChips = this.seats[seatIndex]?.chips || 0;
+            if (actualSeatChips !== seat.chips) {
+                console.error(`[Table ${this.name}] ⚠️⚠️⚠️ CRITICAL: seat.chips (${seat.chips}) != this.seats[${seatIndex}].chips (${actualSeatChips})! Reference issue!`);
+                gameLogger.error(this.name, '[CRITICAL] Seat reference mismatch', {
+                    winner: winner.name,
+                    seatIndex,
+                    seatChips: seat.chips,
+                    actualSeatChips,
+                    potAmount,
+                    handNumber: this.handsPlayed
+                });
+            }
+            
             // ULTRA-VERBOSE: Verify award immediately
             if (seat.chips !== chipsBeforeAward + potAmount) {
                 console.error(`[Table ${this.name}] ⚠️ CRITICAL AWARD_POT ERROR: Chips calculation failed! Player: ${winner.name}, Before: ${chipsBeforeAward}, Amount: ${potAmount}, After: ${seat.chips}, Expected: ${chipsBeforeAward + potAmount}`);
