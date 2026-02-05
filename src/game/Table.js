@@ -380,18 +380,25 @@ class Table {
             }
             
             // If chips were lost, log the trace for root cause analysis
-            if (trace.chipChange < -0.01) {
+            // CRITICAL: Log BOTH when chipChange is negative (chips lost in this operation)
+            // AND when the absolute difference becomes more negative (chips were already missing and are getting worse)
+            const differenceWorsened = trace.afterState.difference < trace.beforeState.difference - 0.01;
+            if (trace.chipChange < -0.01 || differenceWorsened) {
                 gameLogger.error(this.name, '[ROOT CAUSE] CHIPS LOST DETECTED', {
                     operation,
                     chipChange: trace.chipChange,
                     beforeState: trace.beforeState,
                     afterState: trace.afterState,
+                    differenceWorsened,
+                    differenceChange: trace.afterState.difference - trace.beforeState.difference,
                     stackTrace: trace.stackTrace,
                     handNumber: this.handsPlayed,
                     phase: this.phase,
                     recentOperations: this._rootCauseTracer.operations.slice(-10).map(op => ({
                         operation: op.operation,
                         chipChange: op.chipChange,
+                        beforeDifference: op.beforeState.difference,
+                        afterDifference: op.afterState.difference,
                         timestamp: op.timestamp
                     }))
                 });
