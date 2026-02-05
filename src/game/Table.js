@@ -342,6 +342,7 @@ class Table {
         };
         
         // Track operation for root cause analysis
+        // CRITICAL: This is called for EVERY operation that touches chips or game state
         this._traceOperation = (operation, beforeState, afterState) => {
             if (!this._rootCauseTracer.enabled) return;
             
@@ -393,11 +394,68 @@ class Table {
                     }))
                 });
             }
+            
+            // Also log if chips were created (shouldn't happen)
+            if (trace.chipChange > 0.01) {
+                gameLogger.error(this.name, '[ROOT CAUSE] CHIPS CREATED DETECTED', {
+                    operation,
+                    chipChange: trace.chipChange,
+                    beforeState: trace.beforeState,
+                    afterState: trace.afterState,
+                    stackTrace: trace.stackTrace,
+                    handNumber: this.handsPlayed,
+                    phase: this.phase
+                });
+            }
+        };
+        
+        // Helper to trace pot clearing operations
+        // CRITICAL: Every time we clear the pot, we need to trace it for root cause analysis
+        // Use this instead of directly setting this.pot = 0
+        this._clearPotWithTrace = (operation, context = '') => {
+            const beforeState = this._getChipState();
+            const potBefore = this.pot;
+            this.pot = 0;
+            const afterState = this._getChipState();
+            this._traceOperation(`${operation}_POT_CLEAR`, beforeState, afterState);
+            
+            // If pot had chips when cleared, log it
+            if (potBefore > 0) {
+                gameLogger.gameEvent(this.name, `[ROOT CAUSE] Pot cleared in ${operation}`, {
+                    operation,
+                    context,
+                    potBefore,
+                    potAfter: 0,
+                    beforeState,
+                    afterState,
+                    chipChange: afterState.totalChipsInSystem - beforeState.totalChipsInSystem,
+                    handNumber: this.handsPlayed,
+                    phase: this.phase
+                });
+            }
+        };
+        
+        // Helper to trace chip award operations
+        // CRITICAL: Every time we award chips, we need to trace it
+        this._traceChipAward = (operation, playerName, amount, beforeState) => {
+            const afterState = this._getChipState();
+            this._traceOperation(`${operation}_AWARD`, beforeState, afterState);
+        };
+        
+        // Helper to trace any chip modification
+        // CRITICAL: Call this before and after ANY operation that modifies chips
+        this._traceChipModification = (operation, beforeState, afterState) => {
+            this._traceOperation(operation, beforeState, afterState);
         };
         
         // Track a chip movement with before/after states
+        // CRITICAL: This automatically enables root cause tracing for ALL operations
         this._trackChipMovement = (operation, details) => {
-            if (!this._chipTracking.enabled) return null;
+            if (!this._chipTracking.enabled) {
+                // Even if chip tracking is disabled, still do root cause tracing
+                const beforeState = this._getChipState();
+                return { beforeState, operation, details, rootCauseOnly: true };
+            }
             
             const beforeState = this._getChipState();
             const movement = {
@@ -420,14 +478,29 @@ class Table {
         };
         
         // Validate chip state after an operation
+        // CRITICAL: This ALWAYS traces operations for root cause analysis, even if chip tracking is disabled
         this._validateChipMovement = (movement, context = '') => {
-            if (!movement || !this._chipTracking.enabled) return { isValid: true };
+            if (!movement) {
+                // Even without movement, try to trace if we can get state
+                const afterState = this._getChipState();
+                const beforeState = this._getChipState(); // Approximate
+                this._traceOperation(context || 'UNKNOWN_OPERATION', beforeState, afterState);
+                return { isValid: true };
+            }
             
             const afterState = this._getChipState();
-            movement.afterState = afterState;
             
-            // ROOT CAUSE ANALYSIS: Trace this operation
+            // ROOT CAUSE ANALYSIS: ALWAYS trace this operation (even if chip tracking disabled)
             this._traceOperation(movement.operation, movement.beforeState, afterState);
+            
+            if (!this._chipTracking.enabled && movement.rootCauseOnly) {
+                // Only root cause tracing, no full validation
+                return { isValid: true, afterState };
+            }
+            
+            if (!this._chipTracking.enabled) return { isValid: true, afterState };
+            
+            movement.afterState = afterState;
             
             const difference = afterState.totalChipsInSystem - afterState.totalStartingChips;
             // CRITICAL: Only validate if game has started (totalStartingChips > 0)
@@ -1751,6 +1824,9 @@ class Table {
     // ============ Game Flow ============
 
     startNewHand() {
+        // ROOT CAUSE: Trace startNewHand operation
+        const startNewHandBeforeState = this._getChipState();
+        
         // CRITICAL: Clear pot IMMEDIATELY at the very start, before any other logic
         // This is the final safeguard - even if pot was set after awardPot cleared it
         if (this.pot > 0) {
@@ -1761,7 +1837,8 @@ class Table {
                 handNumber: this.handsPlayed,
                 phase: this.phase
             });
-            this.pot = 0;
+            // ROOT CAUSE: Trace pot clearing
+            this._clearPotWithTrace('START_NEW_HAND_IMMEDIATE_CLEAR', 'Pot not cleared at start');
             // Record fix attempt - pot not cleared is a failure, but clearing it is a mitigation
             this._recordFixAttempt('FIX_11_POT_NOT_CLEARED_AT_START_NEW_HAND_START', false, {
                 potBeforeImmediateClear,
@@ -2039,7 +2116,8 @@ class Table {
                 handNumber: this.handsPlayed,
                 phase: this.phase
             });
-            this.pot = 0;
+            // ROOT CAUSE: Trace pot clearing
+            this._clearPotWithTrace('START_NEW_HAND_BEFORE_PRE_RESET', 'Pot not cleared before PRE-RESET');
             // Record fix attempt - pot not cleared is a failure, but clearing it is a mitigation
             this._recordFixAttempt('FIX_12_POT_NOT_CLEARED_BEFORE_PRE_RESET', false, {
                 potBeforeFinalClear,
@@ -2056,7 +2134,8 @@ class Table {
         
         // CRITICAL FIX #1: Pot not cleared at hand start - ULTRA-VERBOSE logging
         // CRITICAL: Clear pot one more time RIGHT BEFORE capturing to ensure it's 0
-        this.pot = 0;
+        // ROOT CAUSE: Trace pot clearing
+        this._clearPotWithTrace('START_NEW_HAND_FINAL_CLEAR', 'Final pot clear before capture');
         const potBeforeReset = this.pot;
         const totalChipsBeforeReset = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
         const totalChipsAndPotBeforeReset = totalChipsBeforeReset + this.pot;
@@ -2123,7 +2202,8 @@ class Table {
         
         // CRITICAL: ALWAYS clear pot, even if it should already be 0
         const potBeforeForceClear = this.pot;
-        this.pot = 0;
+        // ROOT CAUSE: Trace pot clearing
+        this._clearPotWithTrace('START_NEW_HAND_FORCE_CLEAR', 'Force clear pot at hand start');
         
         // ULTRA-VERBOSE: Log after pot reset
         const totalChipsAfterReset = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
@@ -2467,8 +2547,12 @@ class Table {
                 });
             }
             // ALWAYS set pot to 0 before small blind (even if already 0) to ensure clean state
+            // ROOT CAUSE: Trace pot clearing
+            const beforeClearState = this._getChipState();
             this.pot = 0;
-            console.log(`[Table ${this.name}] [BLIND] Cleared pot before posting small blind (was ${potBeforeAdd}, now 0)`);
+            const afterClearState = this._getChipState();
+            this._traceOperation('CLEAR_POT_BEFORE_SMALL_BLIND', beforeClearState, afterClearState);
+            // console.log(`[Table ${this.name}] [BLIND] Cleared pot before posting small blind (was ${potBeforeAdd}, now 0)`);
         }
         
         const totalChipsAndPotBefore = totalChipsBefore + this.pot;
@@ -4916,6 +5000,9 @@ class Table {
     }
 
     showdown() {
+        // ROOT CAUSE: Trace showdown operation
+        const beforeState = this._getChipState();
+        
         this.clearTurnTimer();
         this.phase = GAME_PHASES.SHOWDOWN;
         
@@ -5124,7 +5211,8 @@ class Table {
                                 chipsBefore,
                                 chipsAfter: seat.chips
                             });
-                            this.pot = 0;
+                            // ROOT CAUSE: Trace pot clearing
+                            this._clearPotWithTrace('SHOWDOWN_EMERGENCY_DISTRIBUTION', 'Emergency pot distribution');
                         }
                     }
                 } else {
@@ -5205,7 +5293,8 @@ class Table {
                                 chipsBefore,
                                 chipsAfter: bestPlayer.chips
                             });
-                            this.pot = 0;
+                            // ROOT CAUSE: Trace pot clearing
+                            this._clearPotWithTrace('SHOWDOWN_EMERGENCY_NO_ACTIVE', 'Emergency pot distribution - no active players');
                         } else {
                             console.error(`[Table ${this.name}] ⚠️ CRITICAL: Cannot distribute pot ${this.pot} - no eligible players found!`);
                             gameLogger.error(this.name, 'Cannot distribute pot - no eligible players', {
@@ -5396,11 +5485,16 @@ class Table {
                         pot: this.pot,
                         handNumber: this.handsPlayed
                     });
-                    this.pot = 0;
+                    // ROOT CAUSE: Trace pot clearing
+                    this._clearPotWithTrace('GAME_OVER_BEFORE_START_NEW_HAND', 'Pot cleared before starting new hand after game over');
                 }
                 this.startNewHand();
             }, 500);
         }, 4000); // 4 seconds to show winner, then 0.5s transition
+        
+        // ROOT CAUSE: Trace end of gameOver
+        const afterState = this._getChipState();
+        this._traceOperation('GAME_OVER_COMPLETE', beforeState, afterState);
     }
 
     /**
@@ -5408,6 +5502,9 @@ class Table {
      * Side pots occur when players are all-in for different amounts
      */
     calculateAndAwardSidePots(activePlayers) {
+        // ROOT CAUSE: Trace calculateAndAwardSidePots operation
+        const beforeState = this._getChipState();
+        
         // CRITICAL: Store initial pot value to ensure it's always cleared, even on exceptions
         const initialPot = this.pot;
         let potAwards = [];
@@ -6439,14 +6536,16 @@ class Table {
                 totalAwarded,
                 reason: 'Side pots calculated and awarded, clearing main pot'
             });
-            this.pot = 0;
+            // ROOT CAUSE: Trace pot clearing
+            this._clearPotWithTrace('CLEAR_POT_AFTER_SIDE_POTS', 'Clearing pot after side pots');
             this._validateChipMovement(movement, 'CLEAR_POT_AFTER_SIDE_POTS');
         } else {
             // ULTRA-VERBOSE: Log even when pot is 0
             if (potBeforeClear !== 0) {
                 console.error(`[Table ${this.name}] ⚠️ FIX #1 POT CLEAR WARNING: Pot was ${potBeforeClear} but should be 0!`);
             }
-            this.pot = 0; // CRITICAL: Always set to 0, even if already 0
+            // ROOT CAUSE: Trace pot clearing even when already 0
+            this._clearPotWithTrace('CLEAR_POT_AFTER_SIDE_POTS_ZERO', 'Pot already 0, ensuring it stays 0');
         }
         
         // ULTRA-VERBOSE: Log after pot clear
@@ -6750,14 +6849,22 @@ class Table {
             }
             
             // ALWAYS clear pot, no matter what
-            this.pot = 0;
+            // ROOT CAUSE: Trace pot clearing in finally
+            this._clearPotWithTrace('CALCULATE_AND_AWARD_SIDE_POTS_FINALLY', 'Finally block pot clear');
             // console.log(`[Table ${this.name}] [FINALLY] Pot cleared: ${potBeforeFinalClear} → 0`);
         }
+        
+        // ROOT CAUSE: Trace end of calculateAndAwardSidePots
+        const afterState = this._getChipState();
+        this._traceOperation('CALCULATE_AND_AWARD_SIDE_POTS_COMPLETE', beforeState, afterState);
         
         return potAwards;
     }
 
     awardPot(winner) {
+        // ROOT CAUSE: Trace awardPot operation
+        const beforeState = this._getChipState();
+        
         // CRITICAL: Store initial pot value to ensure it's always cleared, even on exceptions
         const initialPot = this.pot;
         let error = null;
@@ -6896,7 +7003,8 @@ class Table {
                 });
             }
             // Always clear pot, even if we couldn't award it
-            this.pot = 0;
+            // ROOT CAUSE: Trace pot clearing
+            this._clearPotWithTrace('AWARD_POT_EMERGENCY_CLEAR', 'Emergency pot clear in awardPot');
             
             // Record fix attempt - pot not cleared is a failure, but emergency clear is a mitigation
             this._recordFixAttempt('FIX_1_POT_NOT_CLEARED_IN_AWARDPOT', emergencyAwardSuccess, {
@@ -6947,14 +7055,16 @@ class Table {
                 potBefore: potBeforeClear,
                 reason: 'Pot awarded in awardPot(), clearing'
             });
-            this.pot = 0;
+            // ROOT CAUSE: Trace pot clearing
+            this._clearPotWithTrace('CLEAR_POT_AFTER_AWARD', 'Pot cleared after awardPot');
             this._validateChipMovement(movement, 'CLEAR_POT_AFTER_AWARD');
         } else {
             // ULTRA-VERBOSE: Log even when pot is 0
             if (potBeforeClear !== 0) {
                 console.error(`[Table ${this.name}] ⚠️ FIX #1 POT CLEAR WARNING: Pot was ${potBeforeClear} but should be 0!`);
             }
-            this.pot = 0; // CRITICAL: Always set to 0, even if already 0
+            // ROOT CAUSE: Trace pot clearing even when already 0
+            this._clearPotWithTrace('CLEAR_POT_AFTER_AWARD_ZERO', 'Pot already 0, ensuring it stays 0');
         }
         
         // ULTRA-VERBOSE: Log after pot clear
@@ -7028,6 +7138,10 @@ class Table {
                 handNumber: this.handsPlayed
             });
         }
+        
+        // ROOT CAUSE: Trace end of awardPot
+        const afterState = this._getChipState();
+        this._traceOperation('AWARD_POT_COMPLETE', beforeState, afterState);
         
         // CRITICAL: NOW that pot is awarded, we can safely remove eliminated players
         // CRITICAL FIX: DO NOT subtract buy-in from totalStartingChips when players are eliminated!
