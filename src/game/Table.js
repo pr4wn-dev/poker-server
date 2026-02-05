@@ -788,20 +788,18 @@ class Table {
         // Bots need time for: decision-making (10-50ms) + network latency (50-200ms) + server processing (10-50ms)
         // 500ms was still too short, causing timeouts even though actions were being sent
         // This is NOT masking - this is fixing the root cause: timer too short for bot processing
-        const previousTurnTimeLimit = this.turnTimeLimit || (options.turnTimeLimit || 20000);
-        this.turnTimeLimit = this.isSimulation ? 2000 : (options.turnTimeLimit || 20000); // 2000ms for simulations, 20 seconds for regular games
+        const defaultTurnTimeLimit = options.turnTimeLimit || 20000;
+        const previousTurnTimeLimit = this.isSimulation ? 500 : defaultTurnTimeLimit; // Previous value was 500ms for simulations
+        this.turnTimeLimit = this.isSimulation ? 2000 : defaultTurnTimeLimit; // 2000ms for simulations, 20 seconds for regular games
         
         // Record fix attempt - timer increase is the fix method
-        if (this.isSimulation && this.turnTimeLimit === 2000) {
-            this._recordFixAttempt('FIX_70_INCREASE_TURN_TIME_LIMIT_FOR_SIMULATIONS', true, {
-                context: 'CONSTRUCTOR',
-                method: 'INCREASE_TO_2000MS',
-                previousTurnTimeLimit,
-                newTurnTimeLimit: this.turnTimeLimit,
-                isSimulation: this.isSimulation,
-                reason: 'Increased turn time limit from 500ms to 2000ms for simulations to give bots enough time to process actions'
-            });
-        }
+        // Note: _recordFixAttempt is defined later in constructor, but we'll call it after all initialization
+        // Store this for later recording
+        this._pendingTurnTimeLimitFixRecord = this.isSimulation && this.turnTimeLimit === 2000 ? {
+            previousTurnTimeLimit,
+            newTurnTimeLimit: this.turnTimeLimit,
+            isSimulation: this.isSimulation
+        } : null;
         
         // Blind increase timer (tournament-style)
         // 0 = disabled (blinds never increase)
