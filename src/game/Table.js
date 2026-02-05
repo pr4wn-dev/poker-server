@@ -1259,17 +1259,38 @@ class Table {
         // CRITICAL FIX: Calculate totalStartingChips ONCE from buy-ins (NOT increment during loop)
         // The loop above resets chips but does NOT increment totalStartingChips to prevent accumulation errors
         // Calculate it here ONCE based on actual active players
+        // CRITICAL: Only set totalStartingChips if it's 0 (first game start), otherwise it's already set and should NOT be recalculated
+        // Recalculating masks chip loss - if chips are missing, we need to detect it, not hide it
         const expectedTotalStartingChips = this.seats.filter(s => s && s.isActive !== false).length * this.buyIn;
         const totalStartingChipsBeforeCalc = this.totalStartingChips;
-        this.totalStartingChips = expectedTotalStartingChips;
         
-        if (totalStartingChipsBeforeCalc !== expectedTotalStartingChips) {
+        // Only set totalStartingChips if it's 0 (first game start)
+        // If it's already set, it means this is a game restart, and we should NOT recalculate it
+        // This prevents masking chip loss by recalculating totalStartingChips
+        if (this.totalStartingChips === 0) {
+            this.totalStartingChips = expectedTotalStartingChips;
             this._logTotalStartingChipsChange('CALCULATE_FROM_BUYINS', 'HANDLE_GAME_START', totalStartingChipsBeforeCalc, this.totalStartingChips, {
-                reason: 'Calculating totalStartingChips from buy-ins (not incrementing during loop)',
+                reason: 'Calculating totalStartingChips from buy-ins (not incrementing during loop) - FIRST GAME START ONLY',
                 expectedTotalStartingChips,
                 playerCount: this.seats.filter(s => s && s.isActive !== false).length,
                 buyIn: this.buyIn
             });
+        } else {
+            // totalStartingChips is already set - this is a game restart
+            // Verify that actual chips match expected, but DO NOT recalculate totalStartingChips
+            // If chips are missing, we need to detect it, not mask it
+            if (Math.abs(actualTotalChipsAndPot - this.totalStartingChips) > 0.01) {
+                const missingChips = this.totalStartingChips - actualTotalChipsAndPot;
+                console.error(`[Table ${this.name}] ⚠️⚠️⚠️ CRITICAL: ${missingChips} chips MISSING at game restart! totalStartingChips NOT recalculated to mask loss.`);
+                gameLogger.error(this.name, '[CRITICAL] Chips missing at game restart - totalStartingChips NOT recalculated', {
+                    expectedChips: this.totalStartingChips,
+                    actualTotalChipsAndPot,
+                    missingChips,
+                    playerCount: this.seats.filter(s => s && s.isActive !== false).length,
+                    buyIn: this.buyIn,
+                    reason: 'totalStartingChips already set - this is a game restart. Chips missing indicates a bug, not a recalculation need.'
+                });
+            }
         }
         
         // CRITICAL: Verify actual chips match expected (after fixing totalStartingChips)
