@@ -1510,7 +1510,9 @@ class Table {
         // The 100ms timer is too short for bot actions to be processed
         // Bots send actions but timer fires before server receives them
         // Just advance game and let bot's action come through
-        if (this.isSimulation && player.isBot) {
+        // Check if it's a simulation AND if player name matches bot pattern (NetPlayer_, SimBot_, etc)
+        const isBot = player.isBot || player.name?.startsWith('NetPlayer_') || player.name?.startsWith('SimBot_') || player.name?.startsWith('TestUser_') || player.name?.startsWith('Socket');
+        if (this.isSimulation && isBot) {
             const waitTime = this.playerWaitStartTime ? Date.now() - this.playerWaitStartTime : this.turnTimeLimit;
             gameLogger.gameEvent(this.name, '[TIMER] SIMULATION BOT TIMEOUT - NOT AUTO-FOLDING', {
                 player: player.name,
