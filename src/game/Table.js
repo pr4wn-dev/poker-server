@@ -1511,7 +1511,18 @@ class Table {
         // Bots send actions but timer fires before server receives them
         // Just advance game and let bot's action come through
         // Check if it's a simulation AND if player name matches bot pattern (NetPlayer_, SimBot_, etc)
-        const isBot = player.isBot || player.name?.startsWith('NetPlayer_') || player.name?.startsWith('SimBot_') || player.name?.startsWith('TestUser_') || player.name?.startsWith('Socket');
+        const isBot = player.isBot || player.name?.startsWith('NetPlayer_') || player.name?.startsWith('SimBot_') || player.name?.startsWith('TestUser_') || player.name?.startsWith('Socket') || player.name === 'Tex' || player.name === 'Lazy Larry' || player.name === 'Pickles';
+        
+        // DEBUG: Log why condition might be failing
+        gameLogger.gameEvent(this.name, '[DEBUG] TIMER TIMEOUT CHECK', {
+            player: player.name,
+            isSimulation: this.isSimulation,
+            playerIsBot: player.isBot,
+            isBot: isBot,
+            conditionMet: this.isSimulation && isBot,
+            handNumber: this.handsPlayed
+        });
+        
         if (this.isSimulation && isBot) {
             const waitTime = this.playerWaitStartTime ? Date.now() - this.playerWaitStartTime : this.turnTimeLimit;
             gameLogger.gameEvent(this.name, '[TIMER] SIMULATION BOT TIMEOUT - NOT AUTO-FOLDING', {
