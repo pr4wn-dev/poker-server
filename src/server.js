@@ -15,6 +15,8 @@ const cors = require('cors');
 const db = require('./database/Database');
 const GameManager = require('./game/GameManager');
 const SocketHandler = require('./sockets/SocketHandler');
+const path = require('path');
+const logWatcher = require(path.join(__dirname, '..', 'scripts', 'watch-logs-and-fix'));
 
 // Configuration
 const PORT = process.env.PORT || 3000;
@@ -215,6 +217,9 @@ async function start() {
     // Initialize socket handler with database access
     socketHandler = new SocketHandler(io, gameManager);
     socketHandler.initialize();
+    
+    // Initialize log watcher for automatic issue detection and fixing
+    logWatcher.initialize(gameManager, socketHandler.simulationManager, socketHandler);
     
     // Auto-resume any paused simulations on server start
     // This ensures simulations don't stay paused after server restart
