@@ -852,6 +852,16 @@ class SocketBot {
         
         let action, amount = 0;
         
+        // CRITICAL: Add debug logging to understand decision
+        this.log('DEBUG', 'Making decision', {
+            toCall,
+            myChips,
+            potOdds,
+            currentBet: state.currentBet,
+            pot: state.pot,
+            aggressiveness: this.aggressiveness
+        });
+        
         // Simple decision logic
         // CRITICAL FIX: toCall === 0 means we've matched, but we can only BET if currentBet === 0
         // If currentBet > 0 and toCall === 0, we must CHECK or RAISE (not bet)
@@ -909,6 +919,19 @@ class SocketBot {
             }
         }
         
+        // CRITICAL: Ensure action is always set
+        if (!action) {
+            this.log('ERROR', 'Action is undefined! Defaulting to check', {
+                toCall,
+                myChips,
+                potOdds,
+                currentBet: state.currentBet,
+                pot: state.pot
+            });
+            action = 'check';
+        }
+        
+        this.log('DEBUG', `Decision made: ${action}`, { action, amount, toCall, potOdds });
         this._sendAction(action, amount);
     }
     
