@@ -438,7 +438,9 @@ class SocketHandler {
                         buyIn = 20000000,
                         turnTimeLimit = 5000,
                         blindIncreaseInterval = 0,
-                        socketBotRatio = 0.5
+                        socketBotRatio = 0.5,
+                        itemAnteEnabled = false, // Allow item ante in simulations
+                        itemAnteCollectionTime = 60000 // Time to collect items (60 sec default)
                     } = data;
                     
                     console.log('[SocketHandler] Calling simulationManager.startSimulation...');
@@ -451,7 +453,9 @@ class SocketHandler {
                         buyIn,
                         turnTimeLimit,
                         blindIncreaseInterval,
-                        socketBotRatio: Math.min(Math.max(socketBotRatio, 0), 1)
+                        socketBotRatio: Math.min(Math.max(socketBotRatio, 0), 1),
+                        itemAnteEnabled: !!itemAnteEnabled, // Convert to boolean
+                        itemAnteCollectionTime: itemAnteCollectionTime || 60000
                     });
                     
                     console.log('[SocketHandler] start_simulation result:', JSON.stringify(result));
