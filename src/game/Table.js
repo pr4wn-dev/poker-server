@@ -444,7 +444,24 @@ class Table {
                     
                     // CRITICAL: Pause simulation when validation fails
                     if (this.isSimulation && this.onPauseSimulation) {
+                        console.error(`[Table ${this.name}] ⚠️ CALLING onPauseSimulation: Missing ${missing} chips (Hand ${this.handsPlayed}, ${this.phase})`);
+                        gameLogger.gameEvent(this.name, '[PAUSE] Calling onPauseSimulation due to validation failure', {
+                            missing,
+                            handNumber: this.handsPlayed,
+                            phase: this.phase,
+                            context,
+                            isSimulation: this.isSimulation,
+                            hasCallback: !!this.onPauseSimulation
+                        });
                         this.onPauseSimulation(`VALIDATION FAILED: Missing ${missing} chips (Hand ${this.handsPlayed}, ${this.phase})`);
+                    } else {
+                        console.error(`[Table ${this.name}] ⚠️ CANNOT PAUSE: isSimulation=${this.isSimulation}, hasCallback=${!!this.onPauseSimulation}`);
+                        gameLogger.error(this.name, '[PAUSE] Cannot pause - callback not set', {
+                            isSimulation: this.isSimulation,
+                            hasCallback: !!this.onPauseSimulation,
+                            missing,
+                            handNumber: this.handsPlayed
+                        });
                     }
                 } else {
                     // Record successful validation
