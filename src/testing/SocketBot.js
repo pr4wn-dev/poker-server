@@ -866,24 +866,19 @@ class SocketBot {
         // CRITICAL FIX: toCall === 0 means we've matched, but we can only BET if currentBet === 0
         // If currentBet > 0 and toCall === 0, we must CHECK or RAISE (not bet)
         if (toCall === 0) {
-            // Can check for free - be VERY aggressive, bet/raise most of the time
-            if (Math.random() < this.aggressiveness * 1.2) {  // 72-108% (capped at 100%), so bet/raise most of the time
-                // Want to be aggressive - check if we can bet or need to raise
-                if (state.currentBet === 0) {
-                    // No bets yet - we can open with a bet
-                    action = 'bet';
-                    amount = Math.floor(state.pot * (0.5 + Math.random() * 0.5));
-                    amount = Math.min(amount, myChips);
-                    amount = Math.max(amount, state.minBet || state.bigBlind || 50);
-                } else {
-                    // There's already a bet - we must RAISE, not bet
-                    action = 'raise';
-                    const minRaise = state.minRaise || state.bigBlind || 50;
-                    amount = state.currentBet + minRaise + Math.floor(Math.random() * state.pot * 0.5);
-                    amount = Math.min(amount, myChips);
-                }
+            // Can check for free - ALWAYS bet/raise when we can (no free checks in aggressive simulation)
+            if (state.currentBet === 0) {
+                // No bets yet - we can open with a bet - ALWAYS bet, never check
+                action = 'bet';
+                amount = Math.floor(state.pot * (0.5 + Math.random() * 0.5));
+                amount = Math.min(amount, myChips);
+                amount = Math.max(amount, state.minBet || state.bigBlind || 50);
             } else {
-                action = 'check';  // Only check if we're not being aggressive
+                // There's already a bet - we must RAISE, not bet - ALWAYS raise, never check
+                action = 'raise';
+                const minRaise = state.minRaise || state.bigBlind || 50;
+                amount = state.currentBet + minRaise + Math.floor(Math.random() * state.pot * 0.5);
+                amount = Math.min(amount, myChips);
             }
         } else if (toCall >= myChips) {
             // All-in or fold situation - be aggressive, go all-in most of the time
