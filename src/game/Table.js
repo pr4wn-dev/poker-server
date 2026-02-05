@@ -2788,6 +2788,11 @@ class Table {
         // This ensures only ONE action can be processed at a time, even if multiple requests arrive simultaneously
         this._processingAction = true;
         
+        // CRITICAL FIX: Clear turn timer IMMEDIATELY when action is received
+        // This prevents timeout from firing while action is being processed
+        // The timer should be cleared as soon as we know an action is being attempted
+        this.clearTurnTimer();
+        
         try {
             // CRITICAL: No betting allowed during showdown - just evaluate hands
             if (this.phase === GAME_PHASES.SHOWDOWN) {
