@@ -5641,9 +5641,11 @@ class Table {
             const chipsAfter = seat.chips;
             totalAwarded += award.amount;
             
-            // CRITICAL: Clear totalBet and currentBet immediately after award
+                // CRITICAL: Clear totalBet and currentBet immediately after award for winners
+            // NOTE: ALL players will have their totalBet/currentBet cleared after the loop completes
             // This prevents them from persisting to the next hand
             if (seat.totalBet > 0 || seat.currentBet > 0) {
+                console.log(`[Table ${this.name}] [AWARD] Clearing totalBet=${seat.totalBet}, currentBet=${seat.currentBet} for winner ${seat.name}`);
                 seat.totalBet = 0;
                 seat.currentBet = 0;
             }
