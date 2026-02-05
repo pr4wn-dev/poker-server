@@ -6830,27 +6830,38 @@ class Table {
             
             // CRITICAL FIX: If pot isn't fully awarded, award remaining to best active player to prevent chip loss
             // This prevents the "pot not cleared at hand start" error from losing chips
-            if (missing > 0.01) {
+            // CRITICAL: Check BOTH missing (calculation mismatch) AND this.pot (actual leftover pot)
+            const leftoverPot = Math.max(missing, this.pot);
+            if (leftoverPot > 0.01) {
                 const activeSeats = this.seats.filter(s => s && s.isActive !== false && s.chips > 0);
                 if (activeSeats.length > 0) {
                     // Award to first active player (or could award to best hand, but simpler to just pick first)
                     const recipient = activeSeats[0];
                     const chipsBefore = recipient.chips;
-                    recipient.chips += missing;
-                    totalAwarded += missing;
-                    console.error(`[Table ${this.name}] ⚠️ EMERGENCY: Awarding ${missing} unaccounted pot chips to ${recipient.name} to prevent loss`);
-                    gameLogger.gameEvent(this.name, '[POT] EMERGENCY: Awarding unaccounted pot chips', {
+                    
+                    // CRITICAL: Award the actual leftover pot, not just the calculated missing
+                    // This ensures we don't lose chips if this.pot > missing
+                    recipient.chips += leftoverPot;
+                    totalAwarded += leftoverPot;
+                    this.pot = 0; // Clear pot after emergency award
+                    
+                    console.error(`[Table ${this.name}] ⚠️ EMERGENCY: Awarding ${leftoverPot} leftover pot chips to ${recipient.name} to prevent loss (missing=${missing}, pot=${this.pot + leftoverPot})`);
+                    gameLogger.gameEvent(this.name, '[POT] EMERGENCY: Awarding leftover pot chips', {
                         recipient: recipient.name,
-                        amount: missing,
+                        amount: leftoverPot,
+                        missing,
+                        potBeforeEmergency: this.pot + leftoverPot,
+                        potAfterEmergency: 0,
                         chipsBefore,
                         chipsAfter: recipient.chips,
                         reason: 'Pot not fully awarded - emergency distribution to prevent chip loss'
                     });
                 } else {
-                    console.error(`[Table ${this.name}] ⚠️ CRITICAL: ${missing} chips will be LOST - no active players to award to!`);
+                    console.error(`[Table ${this.name}] ⚠️ CRITICAL: ${leftoverPot} chips will be LOST - no active players to award to!`);
                     // Record fix attempt - chips will be lost is a failure
                     this._recordFixAttempt('FIX_45_CHIPS_LOST_NO_ACTIVE_PLAYERS', false, {
                         context: 'AWARD_POTS',
+                        leftoverPot,
                         missing,
                         potBeforeCalculation,
                         totalAwarded,
