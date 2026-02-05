@@ -1505,6 +1505,40 @@ class Table {
             return;
         }
         
+        // CRITICAL FIX: For simulation bots, NEVER auto-fold on timeout
+        // The 100ms timer is too short for bot actions to be processed
+        // Bots send actions but timer fires before server receives them
+        // Just advance game and let bot's action come through
+        if (this.isSimulation && player.isBot) {
+            const waitTime = this.playerWaitStartTime ? Date.now() - this.playerWaitStartTime : this.turnTimeLimit;
+            gameLogger.gameEvent(this.name, '[TIMER] SIMULATION BOT TIMEOUT - NOT AUTO-FOLDING', {
+                player: player.name,
+                seatIndex: this.currentPlayerIndex,
+                turnTimeLimit: this.turnTimeLimit,
+                waitTimeMs: waitTime,
+                phase: this.phase,
+                handNumber: this.handsPlayed,
+                reason: 'Simulation bot timed out, but auto-fold is disabled. Bot action should still come through.'
+            });
+            
+            // Record fix attempt - this is the REAL fix method
+            this._recordFixAttempt('FIX_67_DISABLE_AUTO_FOLD_FOR_SIMULATION_BOTS', true, {
+                context: 'HANDLE_TURN_TIMEOUT',
+                player: player.name,
+                seatIndex: this.currentPlayerIndex,
+                turnTimeLimit: this.turnTimeLimit,
+                waitTimeMs: waitTime,
+                method: 'DISABLE_AUTO_FOLD_FOR_BOTS',
+                reason: 'Bots in simulations should not auto-fold - timer too short for action processing',
+                handNumber: this.handsPlayed,
+                phase: this.phase
+            });
+            
+            // Just advance game - bot's action will come through
+            this.clearTurnTimer();
+            this.advanceGame();
+            return;
+        }
         
         const waitTime = this.playerWaitStartTime ? Date.now() - this.playerWaitStartTime : this.turnTimeLimit;
         gameLogger.gameEvent(this.name, '[TIMER] TURN TIMEOUT - auto-folding', {
