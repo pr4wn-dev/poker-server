@@ -352,9 +352,7 @@ class Table {
                     errorType,
                     difference: Math.abs(difference),
                     operation: movement.operation,
-                    handNumber: this.handsPlayed
-                });
-                    difference,
+                    handNumber: this.handsPlayed,
                     details: movement.details
                 });
             }
@@ -1266,8 +1264,6 @@ class Table {
                 seatIndex: this.currentPlayerIndex,
                 error: foldResult.error,
                 handNumber: this.handsPlayed
-            });
-                error: foldResult.error
             });
             // Still try to advance to prevent stuck state
             this.advanceGame();
