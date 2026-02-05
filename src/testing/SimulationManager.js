@@ -192,13 +192,22 @@ class SimulationManager {
             readyUpDuration: this.fastMode ? 5000 : 60000, // 5 sec ready-up in fast mode
             countdownDuration: this.fastMode ? 3000 : 10000, // 3 sec countdown in fast mode
             creatorId,
-            isSimulation: true
+            isSimulation: true,
+            onPauseSimulation: null // Will be set after table is created
         });
         
         if (!table || !table.id) {
             this.log('ERROR', 'Failed to create simulation table', { error: 'createTable returned null or invalid table' });
             return { success: false, error: 'Failed to create table' };
         }
+        
+        const tableId = table.id;
+        
+        // Set the pause callback now that we have the tableId
+        table.onPauseSimulation = (reason) => {
+            // Pause simulation when issues are detected
+            this.pauseSimulation(tableId, reason);
+        };
         
         // Verify table settings were set correctly
         this.log('INFO', 'Table created with settings', { 
@@ -208,8 +217,6 @@ class SimulationManager {
             requestedBuyIn: buyIn,
             match: table.buyIn === buyIn
         });
-        
-        const tableId = table.id;
         
         this.log('INFO', 'Simulation table created', { tableId, tableName: table.name });
         
