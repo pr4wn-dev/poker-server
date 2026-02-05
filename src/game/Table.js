@@ -52,6 +52,7 @@ class Table {
         // New: Creator/Host
         this.creatorId = options.creatorId || null;
         this.isSimulation = options.isSimulation || false;
+        this.onPauseSimulation = options.onPauseSimulation || null; // Callback to pause simulation when issues are found
         this.createdAt = Date.now();
         
         // Simulation game counter (for display on client)
@@ -438,6 +439,11 @@ class Table {
                         phase: this.phase,
                         handNumber: this.handsPlayed
                     });
+                    
+                    // CRITICAL: Pause simulation when validation fails
+                    if (this.isSimulation && this.onPauseSimulation) {
+                        this.onPauseSimulation(`VALIDATION FAILED: Missing ${missing} chips (Hand ${this.handsPlayed}, ${this.phase})`);
+                    }
                 } else {
                     // Record successful validation
                     this._recordFixAttempt('FIX_7_VALIDATION_FAILURES', true, {
@@ -5119,6 +5125,11 @@ class Table {
                         handNumber: this.handsPlayed,
                         phase: this.phase
                     });
+                    
+                    // CRITICAL: Pause simulation when chips are lost
+                    if (this.isSimulation && this.onPauseSimulation) {
+                        this.onPauseSimulation(`CHIPS LOST: ${chipsLost} chips lost during betting (Hand ${this.handsPlayed}, ${this.phase})`);
+                    }
                 } else {
                     // Chips created: pot is more than sum of bets
                     const chipsCreated = potBeforeCalculation - sumOfTotalBets;
