@@ -171,7 +171,8 @@ class Table {
             'FIX_55_CARD_DUPLICATES_DETECTED': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
             'FIX_56_CANNOT_DISTRIBUTE_POT_NO_ELIGIBLE_PLAYERS': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
             'FIX_1_POT_NOT_CLEARED_AT_HAND_START': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
-            'FIX_66_TIMER_CLEARED_AT_ACTION_START': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false }
+            'FIX_66_TIMER_CLEARED_AT_ACTION_START': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
+            'FIX_67_DISABLE_AUTO_FOLD_FOR_SIMULATION_BOTS': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false }
         };
         
         // Track which fixes have been tried and failed (to prevent going back to them)
