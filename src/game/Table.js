@@ -97,9 +97,12 @@ class Table {
             enabled: true
         };
         
-        // CRITICAL: Fix attempt tracking system - tracks how many times each fix has been attempted and failed
-        // This helps identify which fixes aren't working and need a different approach
-        // MAX_FAILURES: After 5 failures, the fix is disabled PERMANENTLY and a different approach should be tried
+        // CRITICAL: Fix attempt tracking system - tracks how many times each FIX METHOD has been attempted and failed
+        // IMPORTANT: This tracks the METHOD/APPROACH, not the issue itself
+        // - If a fix method fails 5 times, that METHOD is disabled (not the issue)
+        // - The issue can still be fixed, but we MUST use a DIFFERENT method/approach
+        // - This prevents repeatedly trying the same broken approach
+        // MAX_FAILURES: After 5 failures, the fix METHOD is disabled PERMANENTLY and a completely different approach must be tried
         // ONCE DISABLED, A FIX CAN NEVER BE RE-ENABLED - prevents going back and forth between failing fixes
         const MAX_FAILURES = 5;
         
@@ -130,8 +133,9 @@ class Table {
         // Track which fixes have been tried and failed (to prevent going back to them)
         this._failedFixes = new Set(); // Set of fix IDs that have been permanently disabled
         
-        // Helper to check if a fix is enabled (not disabled due to too many failures)
-        // CRITICAL: Once a fix is disabled, it can NEVER be re-enabled to prevent going back and forth
+        // Helper to check if a fix METHOD is enabled (not disabled due to too many failures)
+        // CRITICAL: Once a fix METHOD is disabled, it can NEVER be re-enabled to prevent going back and forth
+        // This forces us to find a DIFFERENT approach to fix the same issue
         this._isFixEnabled = (fixId) => {
             if (!this._fixAttempts[fixId]) {
                 return true; // Unknown fix, allow it
@@ -187,10 +191,10 @@ class Table {
                     fix.disabled = true;
                     fix.permanentlyDisabled = true;
                     this._failedFixes.add(fixId); // Add to failed set - prevents any future attempts
-                    console.error(`[Table ${this.name}] 🚫🚫🚫 FIX ${fixId} PERMANENTLY DISABLED - ${fix.failures} FAILURES (limit: ${MAX_FAILURES}) - TRY A DIFFERENT APPROACH! 🚫🚫🚫`);
-                    console.error(`[Table ${this.name}] ⚠️ WARNING: ${fixId} will NEVER be tried again - must use a completely different fix approach!`);
-                    console.error(`[Table ${this.name}] ⚠️ CRITICAL: When a fix is permanently disabled, you MUST investigate the root cause!`);
-                    console.error(`[Table ${this.name}] ⚠️ The fix failing ${fix.failures} times indicates a deeper problem that needs to be addressed!`);
+                    console.error(`[Table ${this.name}] 🚫🚫🚫 FIX METHOD ${fixId} PERMANENTLY DISABLED - ${fix.failures} FAILURES (limit: ${MAX_FAILURES}) - TRY A DIFFERENT APPROACH! 🚫🚫🚫`);
+                    console.error(`[Table ${this.name}] ⚠️ WARNING: Fix METHOD ${fixId} will NEVER be tried again - must use a completely different method to fix the same issue!`);
+                    console.error(`[Table ${this.name}] ⚠️ CRITICAL: When a fix METHOD is permanently disabled, you MUST try a DIFFERENT approach to fix the issue!`);
+                    console.error(`[Table ${this.name}] ⚠️ The fix METHOD failing ${fix.failures} times means this approach doesn't work - try a different solution!`);
                     gameLogger.gameEvent(this.name, `[FIX ATTEMPT] ${fixId} PERMANENTLY DISABLED - TOO MANY FAILURES`, {
                         fixId,
                         totalFailures: fix.failures,
