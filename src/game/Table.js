@@ -30,6 +30,9 @@ const ACTIONS = {
 
 class Table {
     constructor(options) {
+        // UNIVERSAL TRACE: Table creation
+        this._traceUniversal('TABLE_CONSTRUCTOR_START', { options });
+        
         this.id = options.id;
         this.name = options.name;
         this.maxPlayers = options.maxPlayers;
@@ -352,6 +355,150 @@ class Table {
             };
         };
         
+        // UNIVERSAL TRACING SYSTEM: Track EVERY operation from table creation to sim end
+        // This captures ALL operations: chip movements, phase changes, timers, function calls, state changes, etc.
+        this._universalTracer = {
+            enabled: true,
+            operations: [], // Array of {operation, beforeState, afterState, stackTrace, timestamp, details}
+            maxOperations: 5000 // Keep last 5000 operations (increased for comprehensive tracing)
+        };
+        
+        // Get comprehensive state snapshot for tracing
+        this._getFullState = () => {
+            const chipState = this._getChipState();
+            return {
+                ...chipState,
+                phase: this.phase,
+                gameStarted: this.gameStarted,
+                handsPlayed: this.handsPlayed,
+                currentPlayerIndex: this.currentPlayerIndex,
+                dealerIndex: this.dealerIndex,
+                currentBet: this.currentBet,
+                minRaise: this.minRaise,
+                turnTimeout: !!this.turnTimeout,
+                readyUpTimeout: !!this.readyUpTimeout,
+                readyUpInterval: !!this.readyUpInterval,
+                countdownInterval: !!this.countdownInterval,
+                startCountdown: !!this.startCountdown,
+                blindIncreaseTimer: !!this.blindIncreaseTimer,
+                isPaused: this.isPaused,
+                pauseReason: this.pauseReason,
+                activePlayers: this.seats.filter(s => s && s.isActive !== false).length,
+                readyPlayers: this.seats.filter(s => s && s.isReady).length,
+                communityCards: this.communityCards.length,
+                sidePots: this.sidePots.length
+            };
+        };
+        
+        // UNIVERSAL TRACE: Track ANY operation (not just chip movements)
+        // This is called for EVERY operation: function calls, phase changes, timers, state changes, etc.
+        this._traceUniversal = (operation, details = {}) => {
+            if (!this._universalTracer.enabled) return;
+            
+            const stackTrace = new Error().stack;
+            const stackLines = stackTrace ? stackTrace.split('\n').slice(2, 15).join(' | ') : 'NO_STACK';
+            
+            const beforeState = this._getFullState();
+            
+            const trace = {
+                timestamp: Date.now(),
+                operation,
+                handNumber: this.handsPlayed,
+                phase: this.phase,
+                beforeState,
+                details,
+                stackTrace: stackLines
+            };
+            
+            this._universalTracer.operations.push(trace);
+            
+            // Keep only last maxOperations
+            if (this._universalTracer.operations.length > this._universalTracer.maxOperations) {
+                this._universalTracer.operations.shift();
+            }
+            
+            // Log to gameLogger for debugging (this helps ME, not the user)
+            gameLogger.gameEvent(this.name, `[TRACE] ${operation}`, {
+                operation,
+                handNumber: this.handsPlayed,
+                phase: this.phase,
+                beforeState,
+                details,
+                stackTrace: stackLines
+            });
+        };
+        
+        // Helper to trace phase changes
+        this._tracePhaseChange = (to, reason = '') => {
+            const from = this.phase;
+            this._traceUniversal('PHASE_CHANGE', { 
+                from, 
+                to, 
+                reason,
+                handNumber: this.handsPlayed,
+                gameStarted: this.gameStarted
+            });
+            this.phase = to;
+            this._traceUniversalAfter('PHASE_CHANGE', { 
+                from, 
+                to: this.phase, 
+                reason 
+            });
+        };
+        
+        // Helper to trace timer operations
+        this._traceTimer = (operation, timerName, delay = null) => {
+            this._traceUniversal(`TIMER_${operation}`, { 
+                timerName, 
+                delay,
+                phase: this.phase,
+                handNumber: this.handsPlayed
+            });
+        };
+        
+        // Track operation AFTER it completes (captures afterState)
+        this._traceUniversalAfter = (operation, details = {}) => {
+            if (!this._universalTracer.enabled) return;
+            
+            const afterState = this._getFullState();
+            
+            // Find the most recent trace for this operation
+            const lastTrace = this._universalTracer.operations
+                .slice()
+                .reverse()
+                .find(t => t.operation === operation);
+            
+            if (lastTrace) {
+                lastTrace.afterState = afterState;
+                lastTrace.details = { ...lastTrace.details, ...details };
+                
+                // Detect state changes
+                const stateChanges = {};
+                Object.keys(afterState).forEach(key => {
+                    if (lastTrace.beforeState[key] !== afterState[key]) {
+                        stateChanges[key] = {
+                            before: lastTrace.beforeState[key],
+                            after: afterState[key]
+                        };
+                    }
+                });
+                
+                if (Object.keys(stateChanges).length > 0) {
+                    lastTrace.stateChanges = stateChanges;
+                    
+                    // Log state changes
+                    gameLogger.gameEvent(this.name, `[TRACE] ${operation} STATE_CHANGED`, {
+                        operation,
+                        handNumber: this.handsPlayed,
+                        phase: this.phase,
+                        stateChanges,
+                        beforeState: lastTrace.beforeState,
+                        afterState
+                    });
+                }
+            }
+        };
+        
         // ROOT CAUSE ANALYSIS: Track chip state at every operation to identify WHERE chips are lost
         this._rootCauseTracer = {
             enabled: true,
@@ -359,7 +506,7 @@ class Table {
             maxOperations: 1000 // Keep last 1000 operations
         };
         
-        // Track operation for root cause analysis
+        // Track operation for root cause analysis (chip-focused)
         // CRITICAL: This is called for EVERY operation that touches chips or game state
         this._traceOperation = (operation, beforeState, afterState) => {
             if (!this._rootCauseTracer.enabled) return;
@@ -873,7 +1020,7 @@ class Table {
         if (this.isSimulation || process.env.ENABLE_STATE_SNAPSHOTS === 'true') {
             this.stateSnapshot = new StateSnapshot(this.id, this.name, this.isSimulation);
             if (this.isSimulation) {
-                console.log(`[Table ${this.name}] State snapshots ENABLED (simulation table)`);
+                gameLogger.gameEvent(this.name, 'State snapshots ENABLED', { reason: 'simulation table' });
             }
         }
     }
@@ -893,7 +1040,7 @@ class Table {
         if (activePlayers < 2) {
             // Cancel any active countdown or ready-up phase
             if (this.startCountdown) {
-                console.log(`[Table ${this.name}] Countdown cancelled - only ${activePlayers} player(s)`);
+                gameLogger.gameEvent(this.name, 'Countdown cancelled', { activePlayers, reason: 'Only one player' });
                 clearTimeout(this.startCountdown);
                 if (this.countdownInterval) {
                     clearInterval(this.countdownInterval);
@@ -906,9 +1053,9 @@ class Table {
             
             // Also cancel ready-up phase if active
             if (this.phase === GAME_PHASES.READY_UP || this.phase === GAME_PHASES.COUNTDOWN) {
-                console.log(`[Table ${this.name}] Ready-up cancelled - only ${activePlayers} player(s)`);
+                gameLogger.gameEvent(this.name, 'Ready-up cancelled', { activePlayers, reason: 'Only one player' });
                 this.clearReadyUpTimer();
-                this.phase = GAME_PHASES.WAITING;
+                this._tracePhaseChange(GAME_PHASES.WAITING, 'READY_UP_CANCELLED');
                 this.readyPlayers.clear();
             }
             
@@ -939,7 +1086,10 @@ class Table {
      * Initiates the ready-up phase where all players must confirm
      */
     startReadyUp(creatorId) {
+        this._traceUniversal('START_READY_UP', { creatorId, currentPhase: this.phase });
+        
         if (this.phase !== GAME_PHASES.WAITING) {
+            this._traceUniversalAfter('START_READY_UP', { success: false, error: 'Game already in progress' });
             return { success: false, error: 'Game already in progress' };
         }
         
@@ -954,9 +1104,12 @@ class Table {
             return { success: false, error: 'Need at least 2 players to start' };
         }
         
-        console.log(`[Table ${this.name}] Ready-up phase started${this.isSimulation ? ' (simulation - auto-starting)' : ' by creator'}`);
+        gameLogger.gameEvent(this.name, 'Ready-up phase started', { 
+            isSimulation: this.isSimulation,
+            startedBy: this.isSimulation ? 'simulation' : 'creator'
+        });
         
-        this.phase = GAME_PHASES.READY_UP;
+        this._tracePhaseChange(GAME_PHASES.READY_UP, 'START_READY_UP');
         this.readyUpActive = true;
         this.readyUpStartTime = Date.now();
         
@@ -975,11 +1128,14 @@ class Table {
         }
         
         // Start 1-minute ready-up timer
+        this._traceTimer('SET', 'readyUpTimeout', this.readyUpDuration);
         this.readyUpTimeout = setTimeout(() => {
+            this._traceTimer('CALLBACK', 'readyUpTimeout');
             this.handleReadyUpTimeout();
         }, this.readyUpDuration);
         
         // Broadcast updates every second
+        this._traceTimer('SET', 'readyUpInterval', 1000);
         this.readyUpInterval = setInterval(() => {
             // Capture snapshot before broadcasting
             if (this.stateSnapshot) {
@@ -1018,7 +1174,10 @@ class Table {
         const notReadyPlayers = this.seats.filter(s => s && !s.isReady);
         
         if (notReadyPlayers.length > 0) {
-            console.log(`[Table ${this.name}] Moving ${notReadyPlayers.length} not-ready players to spectators: ${notReadyPlayers.map(s => s.name).join(', ')}`);
+            gameLogger.gameEvent(this.name, 'Moving not-ready players to spectators', { 
+                count: notReadyPlayers.length, 
+                players: notReadyPlayers.map(s => s.name) 
+            });
             
             // Move not-ready players to spectators
             for (const seat of notReadyPlayers) {
@@ -1040,8 +1199,8 @@ class Table {
             // Start final countdown with remaining ready players
             this.startFinalCountdown();
         } else {
-            console.log(`[Table ${this.name}] Not enough ready players (${remainingPlayers}). Cancelling game.`);
-            this.phase = GAME_PHASES.WAITING;
+            gameLogger.gameEvent(this.name, 'Not enough ready players', { remainingPlayers, reason: 'Cancelling game' });
+            this._tracePhaseChange(GAME_PHASES.WAITING, 'NOT_ENOUGH_READY_PLAYERS');
             this.readyUpActive = false;
             // Capture snapshot before broadcasting
             if (this.stateSnapshot) {
@@ -1140,22 +1299,31 @@ class Table {
      * Players who haven't readied will become spectators when game starts
      */
     startFinalCountdown() {
+        this._traceUniversal('START_FINAL_COUNTDOWN', { 
+            currentPhase: this.phase,
+            hasReadyUpTimeout: !!this.readyUpTimeout,
+            hasReadyUpInterval: !!this.readyUpInterval
+        });
+        
         // Clear ready-up timers
         if (this.readyUpTimeout) {
+            this._traceUniversal('CLEAR_TIMEOUT', { timer: 'readyUpTimeout' });
             clearTimeout(this.readyUpTimeout);
             this.readyUpTimeout = null;
         }
         if (this.readyUpInterval) {
+            this._traceUniversal('CLEAR_INTERVAL', { timer: 'readyUpInterval' });
             clearInterval(this.readyUpInterval);
             this.readyUpInterval = null;
         }
         
-        this.phase = GAME_PHASES.COUNTDOWN;
+        this._tracePhaseChange(GAME_PHASES.COUNTDOWN, 'START_FINAL_COUNTDOWN');
         this.startCountdownTime = Date.now();
         
         // console.log(`[Table ${this.name}] Final ${this.startDelaySeconds}s countdown started`);
         
         // Broadcast countdown updates every second
+        this._traceTimer('SET', 'countdownInterval', 1000);
         this.countdownInterval = setInterval(() => {
             const remaining = this.getStartCountdownRemaining();
             if (remaining > 0) {
@@ -1173,8 +1341,11 @@ class Table {
         }, 1000);
         
         // Start final countdown
+        this._traceTimer('SET', 'startCountdown', this.startDelaySeconds * 1000);
         this.startCountdown = setTimeout(() => {
+            this._traceTimer('CALLBACK', 'startCountdown');
             if (this.countdownInterval) {
+                this._traceTimer('CLEAR', 'countdownInterval');
                 clearInterval(this.countdownInterval);
                 this.countdownInterval = null;
             }
@@ -1191,7 +1362,11 @@ class Table {
      * Handle game start - convert non-ready players to spectators
      */
     handleGameStart() {
-        // console.log(`[Table ${this.name}] Countdown complete, processing ready status...`);
+        this._traceUniversal('HANDLE_GAME_START', { 
+            currentPhase: this.phase,
+            gameStarted: this.gameStarted,
+            handsPlayed: this.handsPlayed
+        });
         
         // Convert non-ready players to spectators
         for (let i = 0; i < this.seats.length; i++) {
@@ -1217,8 +1392,8 @@ class Table {
         // Check if we still have enough players
         const readyPlayers = this.seats.filter(s => s && s.isReady);
         if (readyPlayers.length < 2) {
-            // console.log(`[Table ${this.name}] Not enough ready players, returning to waiting`);
-            this.phase = GAME_PHASES.WAITING;
+            gameLogger.gameEvent(this.name, 'Not enough ready players', { readyPlayersCount: readyPlayers.length, reason: 'Returning to waiting' });
+            this._tracePhaseChange(GAME_PHASES.WAITING, 'NOT_ENOUGH_READY_PLAYERS_TIMEOUT');
             this.readyUpActive = false;
             // Capture snapshot before broadcasting
             if (this.stateSnapshot) {
@@ -1513,6 +1688,12 @@ class Table {
     // ============ Turn Timer ============
     
     startTurnTimer() {
+        this._traceUniversal('START_TURN_TIMER', { 
+            currentPlayerIndex: this.currentPlayerIndex,
+            phase: this.phase,
+            turnTimeLimit: this.turnTimeLimit
+        });
+        
         this.clearTurnTimer();
         
         if (this.currentPlayerIndex < 0) {
@@ -1554,18 +1735,26 @@ class Table {
             handNumber: this.handsPlayed
         });
         
+        this._traceTimer('SET', 'turnTimeout', this.turnTimeLimit);
         this.turnTimeout = setTimeout(() => {
+            this._traceTimer('CALLBACK', 'turnTimeout');
             this.handleTurnTimeout();
         }, this.turnTimeLimit);
     }
     
     clearTurnTimer() {
+        this._traceUniversal('CLEAR_TURN_TIMER', { 
+            hadTimeout: !!this.turnTimeout,
+            elapsed: this.turnStartTime ? Date.now() - this.turnStartTime : 0
+        });
+        
         const wasActive = !!this.turnTimeout;
         const elapsed = this.turnStartTime ? Date.now() - this.turnStartTime : 0;
         
         if (this.turnTimeout) {
             clearTimeout(this.turnTimeout);
             this.turnTimeout = null;
+            this._traceUniversalAfter('CLEAR_TURN_TIMER', { cleared: true });
         }
         
         // Timer clear logging removed - too verbose
@@ -1581,6 +1770,11 @@ class Table {
     }
     
     handleTurnTimeout() {
+        this._traceUniversal('HANDLE_TURN_TIMEOUT', { 
+            currentPlayerIndex: this.currentPlayerIndex,
+            phase: this.phase
+        });
+        
         const player = this.seats[this.currentPlayerIndex];
         if (!player) {
             // Timer debug logging removed - only log errors
@@ -1747,6 +1941,13 @@ class Table {
     }
     
     increaseBlinds() {
+        this._traceUniversal('INCREASE_BLINDS', { 
+            currentPhase: this.phase,
+            currentSmallBlind: this.smallBlind,
+            currentBigBlind: this.bigBlind,
+            blindLevel: this.blindLevel
+        });
+        
         // CRITICAL: Don't increase blinds if game is not in progress
         // This prevents blinds from increasing during waiting/ready_up phases
         if (this.phase === GAME_PHASES.WAITING || 
@@ -1806,6 +2007,15 @@ class Table {
     // ============ Player Management ============
 
     addPlayer(playerId, name, chips, preferredSeat = null) {
+        this._traceUniversal('ADD_PLAYER_START', { 
+            playerId, 
+            name, 
+            chips, 
+            preferredSeat,
+            currentPhase: this.phase,
+            currentPlayers: this.seats.filter(s => s !== null).length
+        });
+        
         let seatIndex = preferredSeat;
 
         if (seatIndex !== null) {
@@ -1941,8 +2151,17 @@ class Table {
     }
 
     removePlayer(playerId) {
+        this._traceUniversal('REMOVE_PLAYER_START', { 
+            playerId,
+            currentPhase: this.phase,
+            currentPlayerIndex: this.currentPlayerIndex
+        });
+        
         const seatIndex = this.seats.findIndex(s => s?.playerId === playerId);
-        if (seatIndex === -1) return null;
+        if (seatIndex === -1) {
+            this._traceUniversalAfter('REMOVE_PLAYER', { success: false, reason: 'Player not found' });
+            return null;
+        }
 
         const player = this.seats[seatIndex];
         const chips = player.chips;
@@ -2093,6 +2312,12 @@ class Table {
     // ============ Game Flow ============
 
     startNewHand() {
+        this._traceUniversal('START_NEW_HAND', { 
+            currentPhase: this.phase,
+            handsPlayed: this.handsPlayed,
+            pot: this.pot
+        });
+        
         // ROOT CAUSE: Trace startNewHand operation
         const startNewHandBeforeState = this._getChipState();
         
@@ -2126,7 +2351,7 @@ class Table {
         this.clearTurnTimer();
         
         if (this.getSeatedPlayerCount() < 2) {
-            this.phase = GAME_PHASES.WAITING;
+            this._tracePhaseChange(GAME_PHASES.WAITING, 'NOT_ENOUGH_PLAYERS');
             // Capture snapshot before broadcasting
             if (this.stateSnapshot) {
                 const state = this.getState(null);
@@ -2210,7 +2435,7 @@ class Table {
                 winnerId: winner.playerId,
                 isBot: winner.isBot || false
             });
-            this.phase = GAME_PHASES.WAITING;
+            this._tracePhaseChange(GAME_PHASES.WAITING, 'GAME_OVER_WINNER');
             this.gameStarted = false;
             
             // CRITICAL: Notify about game winner (this triggers simulation restart and client announcement)
@@ -2600,7 +2825,7 @@ class Table {
                 handNumber: this.handsPlayed,
                 phase: this.phase
             });
-            this.phase = GAME_PHASES.WAITING;
+            this._tracePhaseChange(GAME_PHASES.WAITING, 'NOT_ENOUGH_PLAYERS_FOR_HAND');
             this._onStateChangeCallback?.();
             return;
         }
@@ -2634,7 +2859,7 @@ class Table {
                 handNumber: this.handsPlayed,
                 phase: this.phase
             });
-            this.phase = GAME_PHASES.WAITING;
+            this._tracePhaseChange(GAME_PHASES.WAITING, 'NOT_ENOUGH_PLAYERS_FOR_HAND');
             this._onStateChangeCallback?.();
             return;
         }
@@ -2725,7 +2950,7 @@ class Table {
         // Set first player (after big blind)
         this.currentPlayerIndex = this.getNextActivePlayer(bbIndex);
         this.lastRaiserIndex = bbIndex;
-        this.phase = GAME_PHASES.PRE_FLOP;
+        this._tracePhaseChange(GAME_PHASES.PRE_FLOP, 'START_NEW_HAND');
         this.handsPlayed++;
         
         // CRITICAL: Ensure hasPassedLastRaiser is reset for new hand
@@ -2775,8 +3000,18 @@ class Table {
     }
 
     postBlind(seatIndex, amount) {
+        this._traceUniversal('POST_BLIND', { 
+            seatIndex, 
+            amount,
+            playerName: this.seats[seatIndex]?.name,
+            phase: this.phase
+        });
+        
         const player = this.seats[seatIndex];
-        if (!player) return;
+        if (!player) {
+            this._traceUniversalAfter('POST_BLIND', { success: false, reason: 'Player not found' });
+            return;
+        }
 
         const blindAmount = Math.min(amount, player.chips);
         const chipsBefore = player.chips;
@@ -3044,6 +3279,15 @@ class Table {
     // ============ Actions ============
 
     handleAction(playerId, action, amount = 0) {
+        this._traceUniversal('HANDLE_ACTION', { 
+            playerId, 
+            action, 
+            amount,
+            currentPhase: this.phase,
+            currentPlayerIndex: this.currentPlayerIndex,
+            currentBet: this.currentBet
+        });
+        
         // CRITICAL FIX: Action lock to prevent race conditions from rapid clicks
         // MUST be checked FIRST before any validation to prevent multiple clicks from passing validation
         if (this._processingAction) {
@@ -3484,6 +3728,12 @@ class Table {
     }
 
     fold(seatIndex) {
+        this._traceUniversal('FOLD', { 
+            seatIndex,
+            playerName: this.seats[seatIndex]?.name,
+            phase: this.phase
+        });
+        
         const player = this.seats[seatIndex];
         if (!player) {
             gameLogger.bettingAction(this.name, `Seat ${seatIndex}`, 'FOLD REJECTED', {
@@ -3572,6 +3822,15 @@ class Table {
     }
 
     call(seatIndex) {
+        this._traceUniversal('CALL', { 
+            seatIndex,
+            playerName: this.seats[seatIndex]?.name,
+            currentBet: this.currentBet,
+            playerCurrentBet: this.seats[seatIndex]?.currentBet,
+            playerChips: this.seats[seatIndex]?.chips,
+            phase: this.phase
+        });
+        
         const player = this.seats[seatIndex];
         const toCall = Math.min(this.currentBet - player.currentBet, player.chips);
         
@@ -3812,6 +4071,15 @@ class Table {
     }
 
     bet(seatIndex, amount) {
+        this._traceUniversal('BET', { 
+            seatIndex,
+            amount,
+            playerName: this.seats[seatIndex]?.name,
+            playerChips: this.seats[seatIndex]?.chips,
+            currentBet: this.currentBet,
+            phase: this.phase
+        });
+        
         const player = this.seats[seatIndex];
         
         if (amount < this.bigBlind || amount > player.chips) {
@@ -4064,6 +4332,16 @@ class Table {
     }
 
     raise(seatIndex, amount) {
+        this._traceUniversal('RAISE', { 
+            seatIndex,
+            amount,
+            playerName: this.seats[seatIndex]?.name,
+            playerChips: this.seats[seatIndex]?.chips,
+            currentBet: this.currentBet,
+            playerCurrentBet: this.seats[seatIndex]?.currentBet,
+            phase: this.phase
+        });
+        
         const player = this.seats[seatIndex];
         const toCall = this.currentBet - player.currentBet;
         const totalNeeded = toCall + (this.minRaise || this.bigBlind);
@@ -4377,6 +4655,14 @@ class Table {
     }
 
     allIn(seatIndex) {
+        this._traceUniversal('ALL_IN', { 
+            seatIndex,
+            playerName: this.seats[seatIndex]?.name,
+            playerChips: this.seats[seatIndex]?.chips,
+            currentBet: this.currentBet,
+            phase: this.phase
+        });
+        
         const player = this.seats[seatIndex];
         const amount = player.chips;
         const chipsBefore = player.chips;
@@ -4657,6 +4943,13 @@ class Table {
     // ============ Game Advancement ============
 
     advanceGame() {
+        this._traceUniversal('ADVANCE_GAME', { 
+            currentPhase: this.phase,
+            currentPlayerIndex: this.currentPlayerIndex,
+            handsPlayed: this.handsPlayed,
+            pot: this.pot
+        });
+        
         // CRITICAL: Check for game over - but ONLY when not in an active betting phase
         // Don't end game during a hand - wait until hand is complete (WAITING, SHOWDOWN, or after hand ends)
         // This prevents premature game ending when players go all-in during a hand
@@ -4769,7 +5062,7 @@ class Table {
                 isBot: winner.isBot || false,
                 handsPlayed: this.handsPlayed
             });
-            this.phase = GAME_PHASES.WAITING;
+            this._tracePhaseChange(GAME_PHASES.WAITING, 'GAME_OVER_WINNER');
             this.gameStarted = false;
             
             // CRITICAL: Notify about game winner (this triggers simulation restart and client announcement)
@@ -5399,7 +5692,7 @@ class Table {
         switch (this.phase) {
             case GAME_PHASES.PRE_FLOP:
                 this.communityCards = [this.deck.draw(), this.deck.draw(), this.deck.draw()];
-                this.phase = GAME_PHASES.FLOP;
+                this._tracePhaseChange(GAME_PHASES.FLOP, 'ADVANCE_GAME');
                 this.raisesThisRound = 0;  // Reset raise count for new betting round
                 gameLogger.phaseChange(this.name, 'PRE_FLOP', 'FLOP', {
                     communityCards: this.communityCards.map(c => `${c.rank}${c.suit}`)
@@ -5409,7 +5702,7 @@ class Table {
                 break;
             case GAME_PHASES.FLOP:
                 this.communityCards.push(this.deck.draw());
-                this.phase = GAME_PHASES.TURN;
+                this._tracePhaseChange(GAME_PHASES.TURN, 'ADVANCE_GAME');
                 this.raisesThisRound = 0;  // Reset raise count for new betting round
                 gameLogger.phaseChange(this.name, 'FLOP', 'TURN', {
                     turnCard: `${this.communityCards[this.communityCards.length - 1].rank}${this.communityCards[this.communityCards.length - 1].suit}`
@@ -5419,7 +5712,7 @@ class Table {
                 break;
             case GAME_PHASES.TURN:
                 this.communityCards.push(this.deck.draw());
-                this.phase = GAME_PHASES.RIVER;
+                this._tracePhaseChange(GAME_PHASES.RIVER, 'ADVANCE_GAME');
                 this.raisesThisRound = 0;  // Reset raise count for new betting round
                 gameLogger.phaseChange(this.name, 'TURN', 'RIVER', {
                     riverCard: `${this.communityCards[this.communityCards.length - 1].rank}${this.communityCards[this.communityCards.length - 1].suit}`
@@ -5496,7 +5789,7 @@ class Table {
         const beforeState = this._getChipState();
         
         this.clearTurnTimer();
-        this.phase = GAME_PHASES.SHOWDOWN;
+        this._tracePhaseChange(GAME_PHASES.SHOWDOWN, 'ALL_ACTIONS_COMPLETE');
         
         // CRITICAL FIX: If pot is already 0, it means it was awarded earlier (by fold)
         // Don't try to calculate side pots - just start a new hand
@@ -5940,7 +6233,7 @@ class Table {
                 winnerId: winner.playerId,
                 isBot: winner.isBot || false
             });
-            this.phase = GAME_PHASES.WAITING;
+            this._tracePhaseChange(GAME_PHASES.WAITING, 'GAME_OVER_WINNER');
             this.gameStarted = false;
             
             // CRITICAL: Notify about game winner (this triggers simulation restart and client announcement)
@@ -6005,6 +6298,13 @@ class Table {
      * Side pots occur when players are all-in for different amounts
      */
     calculateAndAwardSidePots(activePlayers) {
+        this._traceUniversal('CALCULATE_AND_AWARD_SIDE_POTS', { 
+            activePlayersCount: activePlayers.length,
+            activePlayers: activePlayers.map(p => ({ name: p.name, chips: p.chips, totalBet: p.totalBet })),
+            pot: this.pot,
+            phase: this.phase
+        });
+        
         // ROOT CAUSE: Trace calculateAndAwardSidePots operation
         const beforeState = this._getChipState();
         
@@ -7426,6 +7726,13 @@ class Table {
     }
 
     awardPot(winner) {
+        this._traceUniversal('AWARD_POT', { 
+            winnerName: winner?.name,
+            winnerId: winner?.playerId,
+            pot: this.pot,
+            phase: this.phase
+        });
+        
         // ROOT CAUSE: Trace awardPot operation
         const beforeState = this._getChipState();
         
