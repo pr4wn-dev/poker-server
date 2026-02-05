@@ -143,6 +143,33 @@ class Table {
             'FIX_27_CALL_CHIPS_CALCULATION_ERROR': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
             'FIX_28_CALL_POT_CALCULATION_ERROR': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
             'FIX_29_CALL_TOTAL_CHIPS_CHANGED': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
+            'FIX_30_BET_CHIPS_CALCULATION_ERROR': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
+            'FIX_31_BET_POT_CALCULATION_ERROR': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
+            'FIX_32_BET_TOTAL_CHIPS_CHANGED': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
+            'FIX_33_RAISE_CHIPS_CALCULATION_ERROR': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
+            'FIX_34_RAISE_POT_CALCULATION_ERROR': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
+            'FIX_35_RAISE_TOTAL_CHIPS_CHANGED': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
+            'FIX_36_ALLIN_CHIPS_NOT_ZERO': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
+            'FIX_37_ALLIN_POT_CALCULATION_ERROR': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
+            'FIX_38_ALLIN_AMOUNT_MISMATCH': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
+            'FIX_39_ALLIN_TOTAL_CHIPS_CHANGED': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
+            'FIX_40_AWARD_CALCULATION_ERROR': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
+            'FIX_41_ELIMINATED_PLAYER_WON_POT': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
+            'FIX_42_NO_ACTIVE_PLAYERS_FOR_REDISTRIBUTION': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
+            'FIX_43_AWARD_POTS_TOTAL_CHIPS_CHANGED': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
+            'FIX_44_POT_NOT_FULLY_AWARDED': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
+            'FIX_45_CHIPS_LOST_NO_ACTIVE_PLAYERS': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
+            'FIX_46_POT_NOT_FULLY_AWARDED_BEFORE_CLEARING': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
+            'FIX_47_CLEAR_DIFFERENCE_MISMATCH_SIDE_POTS': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
+            'FIX_48_POT_NOT_DISTRIBUTED': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
+            'FIX_49_ALL_ELIGIBLE_PLAYERS_FOLDED': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
+            'FIX_50_NO_ELIGIBLE_WINNER_FOUND': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
+            'FIX_51_NO_CONTRIBUTORS_TO_POT': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
+            'FIX_52_POT_CALCULATION_FAILED_BUT_POT_EXISTS': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
+            'FIX_53_MONEY_LOST_AT_GAME_OVER': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
+            'FIX_54_INVALID_CARDS_FOR_PLAYER': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
+            'FIX_55_CARD_DUPLICATES_DETECTED': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
+            'FIX_56_CANNOT_DISTRIBUTE_POT_NO_ELIGIBLE_PLAYERS': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
             'FIX_1_POT_NOT_CLEARED_AT_HAND_START': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false }
         };
         
@@ -3333,6 +3360,17 @@ class Table {
                 chipsAfter: player.chips,
                 expected: chipsBeforeSubtract - amount
             });
+            // Record fix attempt - bet chips calculation error is a failure
+            this._recordFixAttempt('FIX_30_BET_CHIPS_CALCULATION_ERROR', false, {
+                context: 'BET',
+                player: player.name,
+                chipsBefore: chipsBeforeSubtract,
+                amount,
+                chipsAfter: player.chips,
+                expected: chipsBeforeSubtract - amount,
+                handNumber: this.handsPlayed,
+                phase: this.phase
+            });
         }
         if (this.pot !== potBeforeAdd + amount) {
             console.error(`[Table ${this.name}] ⚠️ CRITICAL BET ERROR: Pot calculation failed! Before: ${potBeforeAdd}, Amount: ${amount}, After: ${this.pot}, Expected: ${potBeforeAdd + amount}`);
@@ -3344,6 +3382,17 @@ class Table {
                 potAfter: this.pot,
                 expected: potBeforeAdd + amount
             });
+            // Record fix attempt - bet pot calculation error is a failure
+            this._recordFixAttempt('FIX_31_BET_POT_CALCULATION_ERROR', false, {
+                context: 'BET',
+                player: player.name,
+                potBefore: potBeforeAdd,
+                amount,
+                potAfter: this.pot,
+                expected: potBeforeAdd + amount,
+                handNumber: this.handsPlayed,
+                phase: this.phase
+            });
         }
         if (Math.abs(chipsDifference) > 0.01) {
             console.error(`[Table ${this.name}] ⚠️ CRITICAL BET ERROR: Total chips changed! Before: ${totalChipsAndPotBefore}, After: ${totalChipsAndPotAfter}, Difference: ${chipsDifference}`);
@@ -3353,6 +3402,16 @@ class Table {
                 totalChipsAndPotBefore,
                 totalChipsAndPotAfter,
                 chipsDifference
+            });
+            // Record fix attempt - total chips changed during bet is a failure
+            this._recordFixAttempt('FIX_32_BET_TOTAL_CHIPS_CHANGED', false, {
+                context: 'BET',
+                player: player.name,
+                totalChipsAndPotBefore,
+                totalChipsAndPotAfter,
+                chipsDifference,
+                handNumber: this.handsPlayed,
+                phase: this.phase
             });
         }
         
@@ -3571,6 +3630,17 @@ class Table {
                 chipsAfter: player.chips,
                 expected: chipsBeforeSubtract - additionalBet
             });
+            // Record fix attempt - raise chips calculation error is a failure
+            this._recordFixAttempt('FIX_33_RAISE_CHIPS_CALCULATION_ERROR', false, {
+                context: 'RAISE',
+                player: player.name,
+                chipsBefore: chipsBeforeSubtract,
+                additionalBet,
+                chipsAfter: player.chips,
+                expected: chipsBeforeSubtract - additionalBet,
+                handNumber: this.handsPlayed,
+                phase: this.phase
+            });
         }
         if (this.pot !== potBeforeAdd + additionalBet) {
             console.error(`[Table ${this.name}] ⚠️ CRITICAL RAISE ERROR: Pot calculation failed! Before: ${potBeforeAdd}, AdditionalBet: ${additionalBet}, After: ${this.pot}, Expected: ${potBeforeAdd + additionalBet}`);
@@ -3582,6 +3652,17 @@ class Table {
                 potAfter: this.pot,
                 expected: potBeforeAdd + additionalBet
             });
+            // Record fix attempt - raise pot calculation error is a failure
+            this._recordFixAttempt('FIX_34_RAISE_POT_CALCULATION_ERROR', false, {
+                context: 'RAISE',
+                player: player.name,
+                potBefore: potBeforeAdd,
+                additionalBet,
+                potAfter: this.pot,
+                expected: potBeforeAdd + additionalBet,
+                handNumber: this.handsPlayed,
+                phase: this.phase
+            });
         }
         if (Math.abs(chipsDifference) > 0.01) {
             console.error(`[Table ${this.name}] ⚠️ CRITICAL RAISE ERROR: Total chips changed! Before: ${totalChipsAndPotBefore}, After: ${totalChipsAndPotAfter}, Difference: ${chipsDifference}`);
@@ -3591,6 +3672,16 @@ class Table {
                 totalChipsAndPotBefore,
                 totalChipsAndPotAfter,
                 chipsDifference
+            });
+            // Record fix attempt - total chips changed during raise is a failure
+            this._recordFixAttempt('FIX_35_RAISE_TOTAL_CHIPS_CHANGED', false, {
+                context: 'RAISE',
+                player: player.name,
+                totalChipsAndPotBefore,
+                totalChipsAndPotAfter,
+                chipsDifference,
+                handNumber: this.handsPlayed,
+                phase: this.phase
             });
         }
         this.currentBet = player.currentBet;
@@ -3767,6 +3858,15 @@ class Table {
                 chipsAfter: player.chips,
                 amount
             });
+            // Record fix attempt - all-in chips not zero is a failure
+            this._recordFixAttempt('FIX_36_ALLIN_CHIPS_NOT_ZERO', false, {
+                context: 'ALL_IN',
+                player: player.name,
+                chipsAfter: player.chips,
+                amount,
+                handNumber: this.handsPlayed,
+                phase: this.phase
+            });
         }
         if (this.pot !== potBeforeAdd + amount) {
             console.error(`[Table ${this.name}] ⚠️ CRITICAL ALL-IN ERROR: Pot calculation failed! Before: ${potBeforeAdd}, Amount: ${amount}, After: ${this.pot}, Expected: ${potBeforeAdd + amount}`);
@@ -3778,6 +3878,17 @@ class Table {
                 potAfter: this.pot,
                 expected: potBeforeAdd + amount
             });
+            // Record fix attempt - all-in pot calculation error is a failure
+            this._recordFixAttempt('FIX_37_ALLIN_POT_CALCULATION_ERROR', false, {
+                context: 'ALL_IN',
+                player: player.name,
+                potBefore: potBeforeAdd,
+                amount,
+                potAfter: this.pot,
+                expected: potBeforeAdd + amount,
+                handNumber: this.handsPlayed,
+                phase: this.phase
+            });
         }
         if (chipsBeforeSubtract !== amount) {
             console.error(`[Table ${this.name}] ⚠️ CRITICAL ALL-IN ERROR: Amount mismatch! Player chips before: ${chipsBeforeSubtract}, Amount being bet: ${amount}`);
@@ -3786,6 +3897,15 @@ class Table {
                 player: player.name,
                 chipsBefore: chipsBeforeSubtract,
                 amount
+            });
+            // Record fix attempt - all-in amount mismatch is a failure
+            this._recordFixAttempt('FIX_38_ALLIN_AMOUNT_MISMATCH', false, {
+                context: 'ALL_IN',
+                player: player.name,
+                chipsBefore: chipsBeforeSubtract,
+                amount,
+                handNumber: this.handsPlayed,
+                phase: this.phase
             });
         }
         if (Math.abs(chipsDifference) > 0.01) {
@@ -3796,6 +3916,16 @@ class Table {
                 totalChipsAndPotBefore,
                 totalChipsAndPotAfter,
                 chipsDifference
+            });
+            // Record fix attempt - total chips changed during all-in is a failure
+            this._recordFixAttempt('FIX_39_ALLIN_TOTAL_CHIPS_CHANGED', false, {
+                context: 'ALL_IN',
+                player: player.name,
+                totalChipsAndPotBefore,
+                totalChipsAndPotAfter,
+                chipsDifference,
+                handNumber: this.handsPlayed,
+                phase: this.phase
             });
         }
         player.isAllIn = true;
@@ -4787,6 +4917,22 @@ class Table {
             
             if (playerCards.length < 2 || communityCards.length < 3) {
                 console.error(`[Table ${this.name}] Invalid cards for ${player.name}: player=${playerCards.length}, community=${communityCards.length}`);
+                gameLogger.error(this.name, '[SHOWDOWN] Invalid cards for player', {
+                    player: player.name,
+                    playerCardsCount: playerCards.length,
+                    communityCardsCount: communityCards.length,
+                    handNumber: this.handsPlayed,
+                    phase: this.phase
+                });
+                // Record fix attempt - invalid cards is a failure
+                this._recordFixAttempt('FIX_54_INVALID_CARDS_FOR_PLAYER', false, {
+                    context: 'SHOWDOWN',
+                    player: player.name,
+                    playerCardsCount: playerCards.length,
+                    communityCardsCount: communityCards.length,
+                    handNumber: this.handsPlayed,
+                    phase: this.phase
+                });
                 player.handResult = { rank: 0, name: 'Invalid', values: [] };
                 continue;
             }
@@ -4806,6 +4952,22 @@ class Table {
             
             if (uniqueCards.length !== allCards.length) {
                 console.error(`[Table ${this.name}] CARD DUPLICATES DETECTED for ${player.name}: had ${allCards.length}, now ${uniqueCards.length}`);
+                gameLogger.error(this.name, '[SHOWDOWN] Card duplicates detected', {
+                    player: player.name,
+                    allCardsCount: allCards.length,
+                    uniqueCardsCount: uniqueCards.length,
+                    handNumber: this.handsPlayed,
+                    phase: this.phase
+                });
+                // Record fix attempt - card duplicates detected is a failure
+                this._recordFixAttempt('FIX_55_CARD_DUPLICATES_DETECTED', false, {
+                    context: 'SHOWDOWN',
+                    player: player.name,
+                    allCardsCount: allCards.length,
+                    uniqueCardsCount: uniqueCards.length,
+                    handNumber: this.handsPlayed,
+                    phase: this.phase
+                });
             }
             
             console.log(`[Table ${this.name}] Evaluating hand for ${player.name}: ${uniqueCards.map(c => `${c.rank}${c.suit}`).join(' ')}`);
@@ -4835,6 +4997,14 @@ class Table {
                         totalBet: p.totalBet,
                         hasHandResult: !!p.handResult
                     }))
+                });
+                // Record fix attempt - pot calculation failed but pot still exists is a failure
+                this._recordFixAttempt('FIX_52_POT_CALCULATION_FAILED_BUT_POT_EXISTS', false, {
+                    context: 'SHOWDOWN',
+                    pot: this.pot,
+                    activePlayersCount: activePlayers.length,
+                    handNumber: this.handsPlayed,
+                    phase: this.phase
                 });
                 
                 // Emergency: If all players went all-in with same bet, give pot to best hand
@@ -4956,6 +5126,13 @@ class Table {
                             gameLogger.error(this.name, 'Cannot distribute pot - no eligible players', {
                                 pot: this.pot,
                                 allSeats: this.seats.map((s, i) => s ? { seatIndex: i, name: s.name, chips: s.chips, isActive: s.isActive, totalBet: s.totalBet } : null)
+                            });
+                            // Record fix attempt - cannot distribute pot is a failure
+                            this._recordFixAttempt('FIX_56_CANNOT_DISTRIBUTE_POT_NO_ELIGIBLE_PLAYERS', false, {
+                                context: 'SHOWDOWN',
+                                pot: this.pot,
+                                handNumber: this.handsPlayed,
+                                phase: this.phase
                             });
                         }
                     }
@@ -5417,6 +5594,14 @@ class Table {
                     isAllIn: s.isAllIn
                 }))
             });
+            // Record fix attempt - no contributors to pot is a failure
+            this._recordFixAttempt('FIX_51_NO_CONTRIBUTORS_TO_POT', false, {
+                context: 'CALCULATE_AND_AWARD_SIDE_POTS',
+                potBeforeCalculation,
+                activePlayersCount: activePlayers.length,
+                handNumber: this.handsPlayed,
+                phase: this.phase
+            });
             // CRITICAL FIX: Even if we can't calculate, we MUST clear the pot to prevent chip loss
             // Award pot to first active player as emergency measure
             const activeSeats = this.seats.filter(s => s && s.isActive !== false && s.chips > 0);
@@ -5576,6 +5761,16 @@ class Table {
                             hasHandResult: !!p.handResult
                         }))
                     });
+                    // Record fix attempt - all eligible players folded is a failure
+                    this._recordFixAttempt('FIX_49_ALL_ELIGIBLE_PLAYERS_FOLDED', false, {
+                        context: 'CALCULATE_AND_AWARD_SIDE_POTS',
+                        potAmount,
+                        betLevel: player.totalBet,
+                        eligiblePlayersCount: eligiblePlayers.length,
+                        eligibleHandsCount: eligibleHands.length,
+                        handNumber: this.handsPlayed,
+                        phase: this.phase
+                    });
                     
                     // FIX: Find best non-folded player who contributed to this level OR HIGHER
                     // CRITICAL: Check ALL contributors, not just those at this exact level
@@ -5689,6 +5884,16 @@ class Table {
                                 })),
                                 activePlayersCount: activePlayers.length
                             });
+                            // Record fix attempt - no eligible winner found is a failure
+                            this._recordFixAttempt('FIX_50_NO_ELIGIBLE_WINNER_FOUND', false, {
+                                context: 'CALCULATE_AND_AWARD_SIDE_POTS',
+                                potAmount,
+                                betLevel: player.totalBet,
+                                allContributorsCount: allContributors.length,
+                                activePlayersCount: activePlayers.length,
+                                handNumber: this.handsPlayed,
+                                phase: this.phase
+                            });
                         }
                     }
                 }
@@ -5715,6 +5920,16 @@ class Table {
                     isFolded: p.isFolded,
                     hasHandResult: !!p.handResult
                 }))
+            });
+            // Record fix attempt - pot not distributed is a failure
+            this._recordFixAttempt('FIX_48_POT_NOT_DISTRIBUTED', false, {
+                context: 'CALCULATE_AND_AWARD_SIDE_POTS',
+                potBeforeCalculation,
+                potAwardsCount: 0,
+                allContributorsCount: allContributors.length,
+                activePlayersCount: activePlayers.length,
+                handNumber: this.handsPlayed,
+                phase: this.phase
             });
             // CRITICAL FIX: Even if we can't distribute, we MUST clear the pot to prevent chip loss
             // Award pot to first active player as emergency measure
@@ -5811,6 +6026,17 @@ class Table {
                     handNumber: this.handsPlayed,
                     phase: this.phase
                 });
+                // Record fix attempt - award calculation error is a failure
+                this._recordFixAttempt('FIX_40_AWARD_CALCULATION_ERROR', false, {
+                    context: 'AWARD_POT',
+                    player: award.name,
+                    chipsBefore: chipsBeforeAward,
+                    amount: award.amount,
+                    chipsAfter: seat.chips,
+                    expected: chipsBeforeAward + award.amount,
+                    handNumber: this.handsPlayed,
+                    phase: this.phase
+                });
             }
             
             // CRITICAL: Validate after award
@@ -5847,6 +6073,14 @@ class Table {
                     eliminatedPlayer: award.name,
                     amount: award.amount,
                     reason: 'Player was eliminated but won pot - redistributing'
+                });
+                // Record fix attempt - eliminated player won pot is a failure
+                this._recordFixAttempt('FIX_41_ELIMINATED_PLAYER_WON_POT', false, {
+                    context: 'AWARD_POT',
+                    eliminatedPlayer: award.name,
+                    amount: award.amount,
+                    handNumber: this.handsPlayed,
+                    phase: this.phase
                 });
                 
                 // Find best active player who has chips and is still in the game
@@ -5903,6 +6137,14 @@ class Table {
                         amount: award.amount,
                         eliminatedPlayer: award.name
                     });
+                    // Record fix attempt - no active players for redistribution is a failure
+                    this._recordFixAttempt('FIX_42_NO_ACTIVE_PLAYERS_FOR_REDISTRIBUTION', false, {
+                        context: 'AWARD_POT',
+                        amount: award.amount,
+                        eliminatedPlayer: award.name,
+                        handNumber: this.handsPlayed,
+                        phase: this.phase
+                    });
                     // Don't count forfeited chips in totalAwarded - they're lost
                 }
             }
@@ -5940,6 +6182,18 @@ class Table {
             console.error(`[Table ${this.name}] ⚠️ CRITICAL AWARD_POTS ERROR: Total chips changed! Before: ${totalChipsAndPotBeforeAwards}, After: ${totalChipsAndPotAfterAwards}, Difference: ${chipsDifferenceAfterAwards}`);
             gameLogger.gameEvent(this.name, '[AWARD_POTS] CRITICAL: Total chips changed', {
                 handNumber: this.handsPlayed,
+            // Record fix attempt - total chips changed during award is a failure
+            this._recordFixAttempt('FIX_43_AWARD_POTS_TOTAL_CHIPS_CHANGED', false, {
+                context: 'AWARD_POTS',
+                totalChipsAndPotBeforeAwards,
+                totalChipsAndPotAfterAwards,
+                chipsDifferenceAfterAwards,
+                totalAwarded,
+                handNumber: this.handsPlayed,
+                phase: this.phase
+            });
+            gameLogger.gameEvent(this.name, '[AWARD_POTS] CRITICAL: Total chips changed', {
+                handNumber: this.handsPlayed,
                 totalChipsAndPotBeforeAwards,
                 totalChipsAndPotAfterAwards,
                 chipsDifferenceAfterAwards,
@@ -5975,6 +6229,16 @@ class Table {
         if (Math.abs(potBeforeCalculation - totalAwarded) > 0.01) {
             const missing = potBeforeCalculation - totalAwarded;
             console.error(`[Table ${this.name}] ⚠️ CRITICAL: POT NOT FULLY AWARDED! Pot was ${potBeforeCalculation}, but only ${totalAwarded} was awarded. Missing: ${missing}`);
+            // Record fix attempt - pot not fully awarded is a failure
+            this._recordFixAttempt('FIX_44_POT_NOT_FULLY_AWARDED', false, {
+                context: 'AWARD_POTS',
+                potBeforeCalculation,
+                totalAwarded,
+                missing,
+                potAwardsCount: potAwards.length,
+                handNumber: this.handsPlayed,
+                phase: this.phase
+            });
             gameLogger.error(this.name, '[POT] ERROR: Pot not fully awarded', {
                 potBeforeCalculation,
                 totalAwarded,
@@ -6020,6 +6284,15 @@ class Table {
                     });
                 } else {
                     console.error(`[Table ${this.name}] ⚠️ CRITICAL: ${missing} chips will be LOST - no active players to award to!`);
+                    // Record fix attempt - chips will be lost is a failure
+                    this._recordFixAttempt('FIX_45_CHIPS_LOST_NO_ACTIVE_PLAYERS', false, {
+                        context: 'AWARD_POTS',
+                        missing,
+                        potBeforeCalculation,
+                        totalAwarded,
+                        handNumber: this.handsPlayed,
+                        phase: this.phase
+                    });
                 }
             }
             // Continue to clear pot even if there was an issue - better to clear than leave it
@@ -6059,6 +6332,15 @@ class Table {
             if (Math.abs(potBeforeClear - totalAwarded) > 0.01) {
                 console.error(`[Table ${this.name}] ⚠️ CRITICAL FIX #1: Clearing pot but pot (${potBeforeClear}) != totalAwarded (${totalAwarded})! Difference: ${potBeforeClear - totalAwarded}`);
                 gameLogger.error(this.name, '[FIX #1: POT] ERROR: Pot not fully awarded before clearing', {
+                    potBeforeClear,
+                    totalAwarded,
+                    missing: potBeforeClear - totalAwarded,
+                    handNumber: this.handsPlayed,
+                    phase: this.phase
+                });
+                // Record fix attempt - pot not fully awarded before clearing is a failure
+                this._recordFixAttempt('FIX_46_POT_NOT_FULLY_AWARDED_BEFORE_CLEARING', false, {
+                    context: 'CLEAR_POT_AFTER_SIDE_POTS',
                     potBeforeClear,
                     totalAwarded,
                     missing: potBeforeClear - totalAwarded,
@@ -6105,6 +6387,16 @@ class Table {
                 clearDifference,
                 totalChipsAndPotBeforeClear,
                 totalChipsAndPotAfterClear
+            });
+            // Record fix attempt - clear difference mismatch is a failure
+            this._recordFixAttempt('FIX_47_CLEAR_DIFFERENCE_MISMATCH_SIDE_POTS', false, {
+                context: 'CLEAR_POT_AFTER_SIDE_POTS',
+                potBeforeClear,
+                clearDifference,
+                totalChipsAndPotBeforeClear,
+                totalChipsAndPotAfterClear,
+                handNumber: this.handsPlayed,
+                phase: this.phase
             });
         }
         
