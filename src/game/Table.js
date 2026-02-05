@@ -446,6 +446,18 @@ class Table {
                     handNumber: this.handsPlayed,
                     phase: this.phase
                 });
+                
+                // Record fix attempt - chips created is a failure
+                this._recordFixAttempt('FIX_2_CHIPS_CREATED_BETTING', false, {
+                    context: 'ROOT_CAUSE_TRACER',
+                    operation,
+                    chipChange: trace.chipChange,
+                    beforeState: trace.beforeState,
+                    afterState: trace.afterState,
+                    handNumber: this.handsPlayed,
+                    phase: this.phase,
+                    reason: 'Chips were created during operation - this should never happen'
+                });
             }
         };
         
@@ -1517,6 +1529,15 @@ class Table {
                 phase: this.phase
             });
             return;
+        } else {
+            // Record fix attempt - success if player exists
+            this._recordFixAttempt('FIX_17_START_TURN_TIMER_NO_PLAYER', true, {
+                currentPlayerIndex: this.currentPlayerIndex,
+                player: player.name,
+                handNumber: this.handsPlayed,
+                phase: this.phase,
+                reason: 'Player exists at seat - timer can start'
+            });
         }
         
         this.turnStartTime = Date.now();
@@ -2832,6 +2853,17 @@ class Table {
                 handNumber: this.handsPlayed,
                 phase: this.phase
             });
+        } else {
+            // Record fix attempt - success if chips calculation is correct
+            this._recordFixAttempt('FIX_23_BLIND_CHIPS_CALCULATION_ERROR', true, {
+                context: 'POST_BLIND',
+                player: player.name,
+                chipsBefore: chipsBeforeSubtract,
+                blindAmount,
+                chipsAfter: player.chips,
+                handNumber: this.handsPlayed,
+                phase: this.phase
+            });
         }
         if (this.pot !== potBeforeAdd + blindAmount) {
             console.error(`[Table ${this.name}] ⚠️ CRITICAL BLIND ERROR: Pot calculation failed! Before: ${potBeforeAdd}, Amount: ${blindAmount}, After: ${this.pot}, Expected: ${potBeforeAdd + blindAmount}`);
@@ -2854,6 +2886,17 @@ class Table {
                 handNumber: this.handsPlayed,
                 phase: this.phase
             });
+        } else {
+            // Record fix attempt - success if pot calculation is correct
+            this._recordFixAttempt('FIX_24_BLIND_POT_CALCULATION_ERROR', true, {
+                context: 'POST_BLIND',
+                player: player.name,
+                potBefore: potBeforeAdd,
+                blindAmount,
+                potAfter: this.pot,
+                handNumber: this.handsPlayed,
+                phase: this.phase
+            });
         }
         if (Math.abs(chipsDifference) > 0.01) {
             console.error(`[Table ${this.name}] ⚠️ CRITICAL BLIND ERROR: Total chips changed! Before: ${totalChipsAndPotBefore}, After: ${totalChipsAndPotAfter}, Difference: ${chipsDifference}`);
@@ -2866,6 +2909,17 @@ class Table {
             });
             // Record fix attempt - total chips changed during blind is a failure
             this._recordFixAttempt('FIX_25_BLIND_TOTAL_CHIPS_CHANGED', false, {
+                context: 'POST_BLIND',
+                player: player.name,
+                totalChipsAndPotBefore,
+                totalChipsAndPotAfter,
+                chipsDifference,
+                handNumber: this.handsPlayed,
+                phase: this.phase
+            });
+        } else {
+            // Record fix attempt - success if total chips didn't change
+            this._recordFixAttempt('FIX_25_BLIND_TOTAL_CHIPS_CHANGED', true, {
                 context: 'POST_BLIND',
                 player: player.name,
                 totalChipsAndPotBefore,
