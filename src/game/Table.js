@@ -1504,6 +1504,24 @@ class Table {
             return;
         }
         
+        // CRITICAL FIX: Bots in simulations should NEVER auto-fold on timeout
+        // The 100ms timer is too short for bot actions to be processed
+        // Instead, just advance the game and let the bot's action come through
+        if (this.isSimulation && player.isBot) {
+            gameLogger.gameEvent(this.name, '[TIMER] TURN TIMEOUT - bot in simulation, advancing without fold', {
+                player: player.name,
+                seatIndex: this.currentPlayerIndex,
+                turnTimeLimit: this.turnTimeLimit,
+                phase: this.phase,
+                handNumber: this.handsPlayed,
+                reason: 'Bots in simulations should not auto-fold - timer too short for action processing'
+            });
+            // Just advance game - bot's action will come through
+            this.clearTurnTimer();
+            this.advanceGame();
+            return;
+        }
+        
         const waitTime = this.playerWaitStartTime ? Date.now() - this.playerWaitStartTime : this.turnTimeLimit;
         gameLogger.gameEvent(this.name, '[TIMER] TURN TIMEOUT - auto-folding', {
             player: player.name,
