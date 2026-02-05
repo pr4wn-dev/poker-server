@@ -105,13 +105,26 @@ class Table {
         
         this._fixAttempts = {
             'FIX_1_POT_NOT_CLEARED': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
+            'FIX_1_TOTAL_BET_NOT_CLEARED': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
+            'FIX_1_TOTAL_STARTING_CHIPS_ADJUSTMENT': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
+            'FIX_1_POT_NOT_CLEARED_IN_AWARDPOT': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
             'FIX_2_CHIPS_LOST_BETTING': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
+            'FIX_2_CHIPS_CREATED_BETTING': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
             'FIX_3_CUMULATIVE_CHIP_LOSS': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
             'FIX_4_ACTION_NOT_YOUR_TURN': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
             'FIX_5_ACTION_GAME_NOT_IN_PROGRESS': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
             'FIX_6_BETTING_ACTION_FAILURES': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
             'FIX_7_VALIDATION_FAILURES': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
-            'FIX_8_POT_MISMATCH': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false }
+            'FIX_8_POT_MISMATCH': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
+            'FIX_9_HANDLE_GAME_START_DURING_ACTIVE_HAND': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
+            'FIX_10_POT_NOT_CLEARED_IN_HANDLE_GAME_START': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
+            'FIX_11_POT_NOT_CLEARED_AT_START_NEW_HAND_START': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
+            'FIX_12_POT_NOT_CLEARED_BEFORE_PRE_RESET': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
+            'FIX_13_ADD_PLAYER_CHIPS_MISMATCH': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
+            'FIX_14_CHIP_TRACKING_VALIDATION_ERROR': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
+            'FIX_15_GAME_OVER_CALLBACK_NOT_SET': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
+            'FIX_16_AUTO_FOLD_FAILED': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
+            'FIX_17_START_TURN_TIMER_NO_PLAYER': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false }
         };
         
         // Track which fixes have been tried and failed (to prevent going back to them)
@@ -328,6 +341,15 @@ class Table {
                     operation: movement.operation,
                     beforeState: movement.beforeState,
                     afterState,
+                });
+                // Record fix attempt - chip tracking validation error is a failure
+                this._recordFixAttempt('FIX_14_CHIP_TRACKING_VALIDATION_ERROR', false, {
+                    context,
+                    errorType,
+                    difference: Math.abs(difference),
+                    operation: movement.operation,
+                    handNumber: this.handsPlayed
+                });
                     difference,
                     details: movement.details
                 });
@@ -1045,6 +1067,12 @@ class Table {
                 handNumber: this.handsPlayed,
                 pot: this.pot
             });
+            // Record fix attempt - preventing startNewHand during active hand is a success
+            this._recordFixAttempt('FIX_9_HANDLE_GAME_START_DURING_ACTIVE_HAND', true, {
+                phase: this.phase,
+                gameStarted: this.gameStarted,
+                handNumber: this.handsPlayed
+            });
             // Don't call startNewHand if game is already in progress
             this.onStateChange?.();
             return;
@@ -1052,12 +1080,23 @@ class Table {
         
         // CRITICAL: Clear pot before starting new hand (safeguard)
         if (this.pot > 0) {
-            console.error(`[Table ${this.name}] ⚠️ CRITICAL: Pot still has ${this.pot} chips before startNewHand in handleGameStart! Clearing now.`);
+            const potBeforeClear = this.pot;
+            console.error(`[Table ${this.name}] ⚠️ CRITICAL: Pot still has ${potBeforeClear} chips before startNewHand in handleGameStart! Clearing now.`);
             gameLogger.error(this.name, '[POT] CRITICAL: Pot not cleared before startNewHand in handleGameStart - forcing clear', {
-                pot: this.pot,
+                pot: potBeforeClear,
                 handNumber: this.handsPlayed
             });
             this.pot = 0;
+            // Record fix attempt - pot not cleared is a failure, but clearing it is a mitigation
+            this._recordFixAttempt('FIX_10_POT_NOT_CLEARED_IN_HANDLE_GAME_START', false, {
+                potBeforeClear,
+                handNumber: this.handsPlayed
+            });
+        } else {
+            // Record success - pot was already cleared
+            this._recordFixAttempt('FIX_10_POT_NOT_CLEARED_IN_HANDLE_GAME_START', true, {
+                handNumber: this.handsPlayed
+            });
         }
         
         this.startNewHand();
@@ -1105,6 +1144,12 @@ class Table {
         const player = this.seats[this.currentPlayerIndex];
         if (!player) {
             console.error(`[Table ${this.name}] ERROR: startTurnTimer called but no player at seat ${this.currentPlayerIndex}`);
+            // Record fix attempt - no player at seat is a failure
+            this._recordFixAttempt('FIX_17_START_TURN_TIMER_NO_PLAYER', false, {
+                currentPlayerIndex: this.currentPlayerIndex,
+                handNumber: this.handsPlayed,
+                phase: this.phase
+            });
             return;
         }
         
@@ -1210,6 +1255,14 @@ class Table {
             gameLogger.gameEvent(this.name, '[TIMER] Auto-fold failed', {
                 player: player.name,
                 seatIndex: this.currentPlayerIndex,
+            });
+            // Record fix attempt - auto-fold failure is a failure
+            this._recordFixAttempt('FIX_16_AUTO_FOLD_FAILED', false, {
+                player: player.name,
+                seatIndex: this.currentPlayerIndex,
+                error: foldResult.error,
+                handNumber: this.handsPlayed
+            });
                 error: foldResult.error
             });
             // Still try to advance to prevent stuck state
@@ -1414,6 +1467,14 @@ class Table {
                 totalChipsAndPotBefore,
                 totalChipsAndPotAfter
             });
+            // Record fix attempt - chips mismatch is a failure
+            this._recordFixAttempt('FIX_13_ADD_PLAYER_CHIPS_MISMATCH', false, {
+                handNumber: this.handsPlayed,
+                player: name,
+                chips,
+                chipsDifference,
+                difference: Math.abs(chipsDifference - chips)
+            });
         }
         
         // CRITICAL: Validate after player join
@@ -1518,6 +1579,18 @@ class Table {
                 phase: this.phase
             });
             this.pot = 0;
+            // Record fix attempt - pot not cleared is a failure, but clearing it is a mitigation
+            this._recordFixAttempt('FIX_11_POT_NOT_CLEARED_AT_START_NEW_HAND_START', false, {
+                potBeforeImmediateClear,
+                handNumber: this.handsPlayed,
+                phase: this.phase
+            });
+        } else {
+            // Record success - pot was already cleared
+            this._recordFixAttempt('FIX_11_POT_NOT_CLEARED_AT_START_NEW_HAND_START', true, {
+                handNumber: this.handsPlayed,
+                phase: this.phase
+            });
         }
         
         // CRITICAL: Clear any pending turn timers first
@@ -1784,6 +1857,18 @@ class Table {
                 phase: this.phase
             });
             this.pot = 0;
+            // Record fix attempt - pot not cleared is a failure, but clearing it is a mitigation
+            this._recordFixAttempt('FIX_12_POT_NOT_CLEARED_BEFORE_PRE_RESET', false, {
+                potBeforeFinalClear,
+                handNumber: this.handsPlayed,
+                phase: this.phase
+            });
+        } else {
+            // Record success - pot was already cleared
+            this._recordFixAttempt('FIX_12_POT_NOT_CLEARED_BEFORE_PRE_RESET', true, {
+                handNumber: this.handsPlayed,
+                phase: this.phase
+            });
         }
         
         // CRITICAL FIX #1: Pot not cleared at hand start - ULTRA-VERBOSE logging
