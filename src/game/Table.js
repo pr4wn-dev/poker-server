@@ -170,7 +170,8 @@ class Table {
             'FIX_54_INVALID_CARDS_FOR_PLAYER': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
             'FIX_55_CARD_DUPLICATES_DETECTED': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
             'FIX_56_CANNOT_DISTRIBUTE_POT_NO_ELIGIBLE_PLAYERS': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
-            'FIX_1_POT_NOT_CLEARED_AT_HAND_START': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false }
+            'FIX_1_POT_NOT_CLEARED_AT_HAND_START': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false },
+            'FIX_66_TIMER_CLEARED_AT_ACTION_START': { attempts: 0, failures: 0, lastFailure: null, disabled: false, permanentlyDisabled: false }
         };
         
         // Track which fixes have been tried and failed (to prevent going back to them)
@@ -2791,7 +2792,22 @@ class Table {
         // CRITICAL FIX: Clear turn timer IMMEDIATELY when action is received
         // This prevents timeout from firing while action is being processed
         // The timer should be cleared as soon as we know an action is being attempted
+        // METHOD: Clear timer at start of handleAction instead of after processing
+        const timerWasActive = !!this.turnTimeout;
         this.clearTurnTimer();
+        
+        // Record fix attempt for this method
+        if (timerWasActive) {
+            this._recordFixAttempt('FIX_66_TIMER_CLEARED_AT_ACTION_START', true, {
+                context: 'HANDLE_ACTION',
+                playerId,
+                action,
+                method: 'CLEAR_TIMER_AT_START',
+                reason: 'Clearing timer immediately when action received to prevent timeout race condition',
+                handNumber: this.handsPlayed,
+                phase: this.phase
+            });
+        }
         
         try {
             // CRITICAL: No betting allowed during showdown - just evaluate hands
