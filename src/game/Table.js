@@ -465,6 +465,11 @@ class Table {
                         handNumber: this.handsPlayed,
                         phase: this.phase
                     });
+                    
+                    // CRITICAL: Pause simulation when pot mismatch detected
+                    if (this.isSimulation && this.onPauseSimulation) {
+                        this.onPauseSimulation(`POT MISMATCH: Pot (${this.pot}) != Sum of bets (${sumOfAllTotalBets}), difference: ${this.pot - sumOfAllTotalBets} (Hand ${this.handsPlayed}, ${this.phase})`);
+                    }
                 } else if (this.pot > 0) {
                     this._recordFixAttempt('FIX_8_POT_MISMATCH', true, {
                         context,
