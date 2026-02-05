@@ -249,7 +249,9 @@ class SocketHandler {
                         inventory 
                     };
                     
-                    callback(response);
+                    if (callback && typeof callback === 'function') {
+                        callback(response);
+                    }
                     socket.emit('get_test_items_response', response);
                 } catch (error) {
                     // console.error(`[SocketHandler] [INVENTORY] GET_TEST_ITEMS_ERROR | userId: ${user.userId} | error: ${error.message}`, error);
