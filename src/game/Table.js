@@ -8620,15 +8620,15 @@ class Table {
                 return null; // Item ante not initialized
             }
             const state = this.itemAnte.getState(forUserId);
-            // Debug logging for item ante state
-            if (state && state.status !== 'inactive') {
-                // console.log(`[Table ${this.name}] [ITEM_ANTE_DEBUG] Item ante state:`, {
-                //     status: state.status,
-                    approvedCount: state.approvedCount,
-                    hasCreatorItem: !!state.creatorItem,
-                    forUserId: forUserId || 'all'
-                });
-            }
+            // Debug logging for item ante state (commented out - use gameLogger for tracing)
+            // if (state && state.status !== 'inactive') {
+            //     console.log(`[Table ${this.name}] [ITEM_ANTE_DEBUG] Item ante state:`, {
+            //         status: state.status,
+            //         approvedCount: state.approvedCount,
+            //         hasCreatorItem: !!state.creatorItem,
+            //         forUserId: forUserId || 'all'
+            //     });
+            // }
             return state;
         } catch (error) {
             // console.error(`[Table ${this.name}] Error getting item ante state:`, error);
