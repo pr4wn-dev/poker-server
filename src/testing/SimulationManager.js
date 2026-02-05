@@ -25,6 +25,7 @@ class SimulationManager {
         this.fastMode = true;       // Fast forward mode (10x speed) - ON by default for simulations
         this.autoRestart = true;    // Auto-start new game when one ends
         this.maxGames = 10;         // Max games per simulation before auto-stop (10 for testing)
+        this.isPaused = false;      // Pause flag - when true, bots won't take actions
         
         this._ensureLogDir();
     }
@@ -240,7 +241,10 @@ class SimulationManager {
             fastMode: this.fastMode,
             originalSmallBlind: smallBlind,  // Store original blinds for reference
             originalBigBlind: bigBlind,
-            isRestarting: false  // Guard to prevent multiple simultaneous restarts
+            isRestarting: false,  // Guard to prevent multiple simultaneous restarts
+            isPaused: false,      // Pause flag
+            pauseReason: null,    // Reason for pause
+            pausedAt: null        // When paused
         };
         this.activeSimulations.set(tableId, simulation);
         
@@ -1081,6 +1085,93 @@ class SimulationManager {
             simulations.push(this.getSimulationStatus(tableId));
         }
         return simulations;
+    }
+    
+    /**
+     * Pause a simulation - bots will stop taking actions
+     */
+    pauseSimulation(tableId, reason = 'manual_pause') {
+        const simulation = this.activeSimulations.get(tableId);
+        if (!simulation) {
+            this.log('WARN', 'Cannot pause simulation - not found', { tableId });
+            return { success: false, error: 'Simulation not found' };
+        }
+        
+        simulation.isPaused = true;
+        simulation.pauseReason = reason;
+        simulation.pausedAt = Date.now();
+        
+        // Notify all socket bots to pause
+        for (const bot of simulation.socketBots) {
+            bot.isPaused = true;
+        }
+        
+        this.log('INFO', 'Simulation paused', { tableId, reason });
+        
+        // Notify spectators
+        if (this.io) {
+            const table = this.gameManager.tables.get(tableId);
+            if (table) {
+                const spectatorRoom = `spectator:${tableId}`;
+                this.io.to(spectatorRoom).emit('simulation_paused', {
+                    tableId,
+                    reason,
+                    pausedAt: simulation.pausedAt
+                });
+            }
+        }
+        
+        return { success: true, reason };
+    }
+    
+    /**
+     * Resume a paused simulation
+     */
+    resumeSimulation(tableId) {
+        const simulation = this.activeSimulations.get(tableId);
+        if (!simulation) {
+            this.log('WARN', 'Cannot resume simulation - not found', { tableId });
+            return { success: false, error: 'Simulation not found' };
+        }
+        
+        if (!simulation.isPaused) {
+            this.log('WARN', 'Cannot resume simulation - not paused', { tableId });
+            return { success: false, error: 'Simulation is not paused' };
+        }
+        
+        const pauseDuration = Date.now() - simulation.pausedAt;
+        simulation.isPaused = false;
+        simulation.pauseReason = null;
+        simulation.pausedAt = null;
+        
+        // Notify all socket bots to resume
+        for (const bot of simulation.socketBots) {
+            bot.isPaused = false;
+        }
+        
+        this.log('INFO', 'Simulation resumed', { tableId, pauseDuration: `${Math.floor(pauseDuration / 1000)}s` });
+        
+        // Notify spectators
+        if (this.io) {
+            const table = this.gameManager.tables.get(tableId);
+            if (table) {
+                const spectatorRoom = `spectator:${tableId}`;
+                this.io.to(spectatorRoom).emit('simulation_resumed', {
+                    tableId,
+                    pauseDuration
+                });
+            }
+        }
+        
+        return { success: true, pauseDuration };
+    }
+    
+    /**
+     * Check if a simulation is paused
+     */
+    isSimulationPaused(tableId) {
+        const simulation = this.activeSimulations.get(tableId);
+        return simulation ? simulation.isPaused : false;
     }
     
     /**

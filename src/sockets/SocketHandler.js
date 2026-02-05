@@ -377,6 +377,52 @@ class SocketHandler {
                 }
             });
             
+            socket.on('pause_simulation', (data, callback) => {
+                console.log('[SocketHandler] pause_simulation received:', JSON.stringify(data));
+                const user = this.getAuthenticatedUser(socket);
+                if (!user) {
+                    const error = { success: false, error: 'Not authenticated' };
+                    if (callback) callback(error);
+                    socket.emit('pause_simulation_response', error);
+                    return;
+                }
+                
+                const { tableId, reason = 'manual_pause' } = data || {};
+                if (!tableId) {
+                    const error = { success: false, error: 'tableId required' };
+                    if (callback) callback(error);
+                    socket.emit('pause_simulation_response', error);
+                    return;
+                }
+                
+                const result = this.simulationManager.pauseSimulation(tableId, reason);
+                if (callback) callback(result);
+                socket.emit('pause_simulation_response', result);
+            });
+            
+            socket.on('resume_simulation', (data, callback) => {
+                console.log('[SocketHandler] resume_simulation received:', JSON.stringify(data));
+                const user = this.getAuthenticatedUser(socket);
+                if (!user) {
+                    const error = { success: false, error: 'Not authenticated' };
+                    if (callback) callback(error);
+                    socket.emit('resume_simulation_response', error);
+                    return;
+                }
+                
+                const { tableId } = data || {};
+                if (!tableId) {
+                    const error = { success: false, error: 'tableId required' };
+                    if (callback) callback(error);
+                    socket.emit('resume_simulation_response', error);
+                    return;
+                }
+                
+                const result = this.simulationManager.resumeSimulation(tableId);
+                if (callback) callback(result);
+                socket.emit('resume_simulation_response', result);
+            });
+            
             socket.on('stop_simulation', (data, callback) => {
                 console.log('[SocketHandler] stop_simulation received:', JSON.stringify(data));
                 const user = this.getAuthenticatedUser(socket);

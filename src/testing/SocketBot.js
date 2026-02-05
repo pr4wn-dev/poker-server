@@ -59,6 +59,7 @@ class SocketBot {
         this.actionTimeout = null; // Timeout handle for stuck turn detection
         this.isReady = false; // Track if we've already signaled ready
         this.readyScheduled = false; // Track if we've scheduled a ready signal
+        this.isPaused = false; // Pause flag - when true, bot won't take actions
         
         // Chaos tracking
         this.disconnectCount = 0;
@@ -625,6 +626,15 @@ class SocketBot {
                 return; // Don't process this state, we're disconnecting
             }
             
+            // CRITICAL: If simulation is paused, don't take any actions
+            if (this.isPaused) {
+                this.log('PAUSE', 'Simulation paused - skipping action', { 
+                    isMyTurn: state.currentPlayerId === this.userId,
+                    phase: state.phase 
+                });
+                return; // Don't process state or take actions while paused
+            }
+            
             // Check if it's our turn
             const wasMyTurn = this.isMyTurn;
             this.isMyTurn = state.currentPlayerId === this.userId;
@@ -718,6 +728,12 @@ class SocketBot {
      * Schedule an action with random delay (simulates thinking + network)
      */
     _scheduleAction() {
+        // CRITICAL: If simulation is paused, don't schedule actions
+        if (this.isPaused) {
+            this.log('PAUSE', 'Simulation paused - not scheduling action');
+            return;
+        }
+        
         // Clear any existing timeout
         this._clearTurnTimeout();
         
@@ -728,6 +744,13 @@ class SocketBot {
         // Removed verbose THINK log - only log when action is actually taken
         
         setTimeout(() => {
+            // Check pause state again before taking action
+            if (this.isPaused) {
+                this.log('PAUSE', 'Simulation paused - canceling scheduled action');
+                this.actionScheduled = false;
+                return;
+            }
+            
             if (this.isMyTurn) {
                 this._makeDecision();
                 // Reset flag after making decision
