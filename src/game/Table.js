@@ -611,6 +611,28 @@ class Table {
                 if (!isValid) {
                     const missing = this.totalStartingChips - totalChipsAndPot;
                     console.error(`[Table ${this.name}] ⚠️ MONEY VALIDATION FAILED at ${context}: Expected ${this.totalStartingChips}, Got ${totalChipsAndPot}, Missing: ${missing}`);
+                    
+                    // CRITICAL: Include full root cause trace when validation fails
+                    const recentOperations = this._rootCauseTracer.operations.slice(-50).map(op => ({
+                        operation: op.operation,
+                        chipChange: op.chipChange,
+                        timestamp: op.timestamp,
+                        handNumber: op.handNumber,
+                        phase: op.phase,
+                        beforeTotalChips: op.beforeState.totalChips,
+                        afterTotalChips: op.afterState.totalChips,
+                        beforePot: op.beforeState.pot,
+                        afterPot: op.afterState.pot,
+                        beforePlayerChips: op.beforeState.playerChips,
+                        afterPlayerChips: op.afterState.playerChips,
+                        beforeDifference: op.beforeState.difference,
+                        afterDifference: op.afterState.difference,
+                        stackTrace: op.stackTrace
+                    }));
+                    
+                    // Find operations that lost chips
+                    const chipLossOperations = recentOperations.filter(op => op.chipChange < -0.01);
+                    
                     gameLogger.gameEvent(this.name, '[MONEY] VALIDATION FAILED', {
                         context,
                         expected: this.totalStartingChips,
@@ -627,7 +649,13 @@ class Table {
                             currentBet: s.currentBet || 0,
                             isActive: s.isActive,
                             isFolded: s.isFolded
-                        }))
+                        })),
+                        rootCauseTrace: {
+                            recentOperationsCount: recentOperations.length,
+                            chipLossOperationsCount: chipLossOperations.length,
+                            chipLossOperations: chipLossOperations.slice(-10), // Last 10 operations that lost chips
+                            allRecentOperations: recentOperations // Full trace for analysis
+                        }
                     });
                     
                     // Record fix attempt for validation failures
