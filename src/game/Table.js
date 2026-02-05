@@ -6099,7 +6099,7 @@ class Table {
         
         // Award item ante if active
         let itemAnteResult = null;
-        if (this.itemAnte.status === ItemAnte.STATUS.LOCKED) {
+        if (this.itemAnte && this.itemAnte.status === ItemAnte.STATUS.LOCKED) {
             // Find overall winner (player with most chips gained? or best hand among all?)
             // Use the best hand among participants
             const participants = activePlayers.filter(p => 
@@ -6108,9 +6108,27 @@ class Table {
             if (participants.length > 0) {
                 participants.sort((a, b) => HandEvaluator.compare(b.handResult, a.handResult));
                 const itemWinner = participants[0];
+                
+                // ROOT TRACING: Track item ante award
+                this._traceUniversal('ITEM_ANTE_AWARD', {
+                    winnerId: itemWinner.playerId,
+                    winnerName: itemWinner.name,
+                    participantCount: participants.length,
+                    itemCount: this.itemAnte.approvedItems?.length || 0
+                });
+                
                 itemAnteResult = this.itemAnte.award(itemWinner.playerId);
+                
+                this._traceUniversalAfter('ITEM_ANTE_AWARD', {
+                    success: itemAnteResult?.success,
+                    error: itemAnteResult?.error,
+                    itemCount: itemAnteResult?.items?.length || 0
+                });
+                
                 if (itemAnteResult?.success) {
-                    // console.log(`[Table ${this.name}] ${itemWinner.name} wins ${itemAnteResult.items.length} items from item ante!`);
+                    console.log(`[Table ${this.name}] ${itemWinner.name} wins ${itemAnteResult.items.length} items from item ante!`);
+                } else {
+                    console.error(`[Table ${this.name}] Failed to award item ante: ${itemAnteResult?.error}`);
                 }
             }
         }
@@ -8603,9 +8621,29 @@ class Table {
      * Lock item ante when game starts
      */
     lockItemAnte() {
-        if (this.itemAnte.status === ItemAnte.STATUS.COLLECTING) {
-            return this.itemAnte.lock();
+        // ROOT TRACING: Track item ante lock
+        this._traceUniversal('ITEM_ANTE_LOCK', {
+            itemAnteEnabled: this.itemAnteEnabled,
+            itemAnteExists: !!this.itemAnte,
+            status: this.itemAnte?.status,
+            approvedCount: this.itemAnte?.approvedItems?.length || 0
+        });
+        
+        if (!this.itemAnte) {
+            this._traceUniversalAfter('ITEM_ANTE_LOCK', { success: false, error: 'ITEM_ANTE_NOT_INITIALIZED' });
+            return { success: true }; // Not an error if not initialized
         }
+        
+        if (this.itemAnte.status === ItemAnte.STATUS.COLLECTING) {
+            const result = this.itemAnte.lock();
+            this._traceUniversalAfter('ITEM_ANTE_LOCK', {
+                success: result.success,
+                itemCount: result.itemCount
+            });
+            return result;
+        }
+        
+        this._traceUniversalAfter('ITEM_ANTE_LOCK', { success: true, reason: 'ALREADY_LOCKED_OR_INACTIVE' });
         return { success: true };
     }
 
