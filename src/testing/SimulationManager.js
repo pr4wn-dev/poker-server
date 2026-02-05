@@ -1199,15 +1199,52 @@ class SimulationManager {
         simulation.pausedAt = null;
         
         // Clear pause state on Table so Unity can resume
+        const table = this.gameManager.tables.get(tableId);
         if (table) {
             table.isPaused = false;
             table.pauseReason = null;
+            
+            // CRITICAL: Broadcast table state immediately so Unity sees isPaused=false
+            if (this.io) {
+                const tableRoom = `table:${tableId}`;
+                const spectatorRoom = `spectator:${tableId}`;
+                
+                // Get state and broadcast to all connected sockets
+                const tableSockets = this.io.sockets.adapter.rooms.get(tableRoom);
+                if (tableSockets) {
+                    for (const socketId of tableSockets) {
+                        const socket = this.io.sockets.sockets.get(socketId);
+                        if (socket) {
+                            const userId = socket.data?.userId || null;
+                            const state = table.getState(userId);
+                            socket.emit('table_state', state);
+                        }
+                    }
+                }
+                
+                const spectatorSockets = this.io.sockets.adapter.rooms.get(spectatorRoom);
+                if (spectatorSockets) {
+                    for (const socketId of spectatorSockets) {
+                        const socket = this.io.sockets.sockets.get(socketId);
+                        if (socket) {
+                            const userId = socket.data?.userId || null;
+                            const state = table.getState(userId);
+                            socket.emit('table_state', state);
+                        }
+                    }
+                }
+                
+                console.log(`[SimulationManager] Table state broadcasted with isPaused=false to Unity clients`);
+            }
         }
         
-        // Notify all socket bots to resume
+        // CRITICAL: Notify all socket bots to resume
         for (const bot of simulation.socketBots) {
             bot.isPaused = false;
+            console.log(`[SimulationManager] Bot ${bot.name} unpaused`);
         }
+        
+        this.log('INFO', 'All bots unpaused', { tableId, botCount: simulation.socketBots.length });
         
         this.log('INFO', 'Simulation resumed', { tableId, pauseDuration: `${Math.floor(pauseDuration / 1000)}s` });
         

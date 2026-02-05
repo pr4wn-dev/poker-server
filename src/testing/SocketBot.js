@@ -480,6 +480,21 @@ class SocketBot {
             this.socket.on('game_over', (data) => this._handleGameOver(data));
             this.socket.on('player_eliminated', (data) => this._handlePlayerEliminated(data));
             
+            // Simulation control events
+            this.socket.on('simulation_paused', (data) => {
+                this.isPaused = true;
+                this.log('PAUSE', 'Simulation paused', data);
+            });
+            
+            this.socket.on('simulation_resumed', (data) => {
+                this.isPaused = false;
+                this.log('RESUME', 'Simulation resumed', data);
+                // CRITICAL: Re-process current state to resume playing
+                if (this.gameState) {
+                    this._handleTableState(this.gameState);
+                }
+            });
+            
             // Player presence events (for verification)
             this.socket.on('player_joined', (data) => {
                 this.eventsReceived.playerJoined.push(data);
