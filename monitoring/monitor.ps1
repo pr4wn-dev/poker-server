@@ -119,6 +119,12 @@ function Get-PendingIssuesInfo {
                 $rootIssue = $content.focusedGroup.rootIssue
                 $relatedCount = if ($content.focusedGroup.relatedIssues) { $content.focusedGroup.relatedIssues.Count } else { 0 }
                 $queuedCount = if ($content.queuedIssues) { $content.queuedIssues.Count } else { 0 }
+                $contextLines = if ($content.focusedGroup.contextLines) { $content.focusedGroup.contextLines } else { 0 }
+                
+                # Add contextLines to rootIssue for display
+                if ($rootIssue) {
+                    $rootIssue.contextLines = $contextLines
+                }
                 
                 return @{
                     InFocusMode = $true
@@ -127,6 +133,7 @@ function Get-PendingIssuesInfo {
                     QueuedIssuesCount = $queuedCount
                     GroupId = $content.focusedGroup.id
                     TotalIssues = 1 + $relatedCount  # Root + related
+                    ContextLines = $contextLines
                 }
             } else {
                 # Not in focus mode
@@ -550,6 +557,15 @@ function Show-Statistics {
         Write-Host (" " * 40) -NoNewline
         Write-Host "|" -ForegroundColor Cyan
         
+        # Show context information if available
+        if ($pendingInfo.RootIssue -and $pendingInfo.RootIssue.contextLines) {
+            Write-Host "| " -NoNewline -ForegroundColor Cyan
+            Write-Host "  Context Lines: " -NoNewline -ForegroundColor White
+            Write-Host ("{0:N0}" -f $pendingInfo.RootIssue.contextLines) -NoNewline -ForegroundColor Cyan
+            Write-Host (" " * 40) -NoNewline
+            Write-Host "|" -ForegroundColor Cyan
+        }
+        
         if ($pendingInfo.QueuedIssuesCount -gt 0) {
             Write-Host "| " -NoNewline -ForegroundColor Cyan
             Write-Host "  Queued Issues: " -NoNewline -ForegroundColor White
@@ -557,6 +573,11 @@ function Show-Statistics {
             Write-Host (" " * 40) -NoNewline
             Write-Host "|" -ForegroundColor Cyan
         }
+        
+        Write-Host "| " -NoNewline -ForegroundColor Cyan
+        Write-Host "  Controls: Ctrl+X = Exit Focus Mode" -ForegroundColor DarkGray
+        Write-Host (" " * 30) -NoNewline
+        Write-Host "|" -ForegroundColor Cyan
     } else {
         Write-Host "| " -NoNewline -ForegroundColor Cyan
         Write-Host "  Mode: " -NoNewline -ForegroundColor White
@@ -1037,6 +1058,36 @@ while ($monitoringActive) {
                 }
             }
             $lastServerCheck = $now
+        }
+        
+        # Check for keyboard input (manual exit from focus mode)
+        if ([Console]::KeyAvailable) {
+            $key = [Console]::ReadKey($true)  # $true = don't display the key
+            if ($key.Key -eq 'X' -and $key.Modifiers -eq 'Control') {
+                # Ctrl+X to exit focus mode
+                $pendingInfo = Get-PendingIssuesInfo
+                if ($pendingInfo.InFocusMode) {
+                    $result = node $nodeScript --exit-focus 2>&1
+                    if ($LASTEXITCODE -eq 0) {
+                        $exitResult = $result | ConvertFrom-Json -ErrorAction SilentlyContinue
+                        if ($exitResult -and $exitResult.success) {
+                            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] FOCUS MODE EXITED (Ctrl+X)" -ForegroundColor "Yellow"
+                            if ($exitResult.reason -eq 'exited_and_promoted_next') {
+                                Write-ConsoleOutput -Message "  Next queued issue promoted to focus mode" -ForegroundColor "Cyan"
+                            } else {
+                                Write-ConsoleOutput -Message "  Returning to normal monitoring" -ForegroundColor "Green"
+                            }
+                            $isPaused = $false
+                            $currentIssue = $null
+                        }
+                    }
+                } else {
+                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] Not in focus mode - nothing to exit" -ForegroundColor "Gray"
+                }
+            } elseif ($key.Key -eq 'Escape') {
+                # Escape key to show help
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] Monitor Controls: Ctrl+X = Exit Focus Mode" -ForegroundColor "Cyan"
+            }
         }
         
         # Enforce minimum window size aggressively (every 0.5 seconds)

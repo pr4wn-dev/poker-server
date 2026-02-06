@@ -256,6 +256,106 @@ class IssueDetector {
     }
     
     /**
+     * Extract keywords from an issue message for context matching
+     */
+    extractKeywordsFromIssue(issue) {
+        const keywords = ['pot', 'chips', 'timer', 'timeout', 'validation', 'mismatch', 'lost', 'bet', 'player', 'table', 'hand', 
+                         'error', 'failed', 'exception', 'invalid', 'missing', 'cleared', 'created', 'award', 'calculation'];
+        const msg = issue.message.toLowerCase();
+        return keywords.filter(keyword => msg.includes(keyword));
+    }
+    
+    /**
+     * Check if a log line is relevant context for an issue (keyword matching)
+     */
+    isRelevantContext(logLine, issueKeywords) {
+        const lineLower = logLine.toLowerCase();
+        
+        // Always include ROOT_TRACE errors
+        if (logLine.includes('[ROOT_TRACE]')) {
+            return true;
+        }
+        
+        // Always include LOG_WATCHER actions (pause/resume)
+        if (logLine.includes('[LOG_WATCHER]') && (logLine.includes('PAUSE') || logLine.includes('RESUME'))) {
+            return true;
+        }
+        
+        // Check if log line contains any of the issue keywords
+        return issueKeywords.some(keyword => lineLower.includes(keyword));
+    }
+    
+    /**
+     * Gather context from recent log entries (30 seconds or 200 lines, whichever is smaller)
+     */
+    gatherContext(issue, maxLines = 200, maxSeconds = 30) {
+        try {
+            if (!fs.existsSync(this.logFile)) {
+                return [];
+            }
+            
+            const issueKeywords = this.extractKeywordsFromIssue(issue);
+            const issueTime = new Date(issue.detectedAt || issue.timestamp).getTime();
+            const context = [];
+            
+            // Read log file and get recent lines
+            const logContent = fs.readFileSync(this.logFile, 'utf8');
+            const lines = logContent.split('\n');
+            
+            // Start from the end and work backwards
+            let linesChecked = 0;
+            let contextLines = [];
+            
+            for (let i = lines.length - 1; i >= 0 && linesChecked < maxLines; i--) {
+                const line = lines[i].trim();
+                if (!line) continue;
+                
+                linesChecked++;
+                
+                // Extract timestamp from log line
+                const timestampMatch = line.match(/\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?)\]/);
+                if (timestampMatch) {
+                    const lineTime = new Date(timestampMatch[1]).getTime();
+                    const timeDiff = issueTime - lineTime;
+                    
+                    // Check if within time window (convert to milliseconds)
+                    if (timeDiff > 0 && timeDiff <= (maxSeconds * 1000)) {
+                        // Check if this line is relevant context
+                        if (this.isRelevantContext(line, issueKeywords)) {
+                            contextLines.unshift({
+                                line: line,
+                                timestamp: timestampMatch[1],
+                                timeBeforeIssue: Math.round(timeDiff / 1000) + 's'
+                            });
+                        }
+                    } else if (timeDiff > (maxSeconds * 1000)) {
+                        // Past the time window, stop looking
+                        break;
+                    }
+                } else {
+                    // No timestamp, but still check if relevant (might be continuation line)
+                    if (this.isRelevantContext(line, issueKeywords)) {
+                        contextLines.unshift({
+                            line: line,
+                            timestamp: null,
+                            timeBeforeIssue: null
+                        });
+                    }
+                }
+            }
+            
+            // Limit to most recent/relevant context (max 50 entries)
+            return contextLines.slice(-50);
+        } catch (error) {
+            gameLogger.error('MONITORING', '[CONTEXT_GATHER_ERROR]', {
+                error: error.message,
+                issueId: issue.id
+            });
+            return [];
+        }
+    }
+    
+    /**
      * Check if two issues are related (grouping logic)
      * Returns true if issues should be grouped together
      */
@@ -551,12 +651,17 @@ class IssueDetector {
             });
             
             if (!similarIssue) {
+                // Gather context for this issue
+                const context = this.gatherContext(issue, 200, 30);
+                
                 // Start new focus group with this issue as root
                 const groupId = `group_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
                 const focusedGroup = {
                     id: groupId,
                     rootIssue: issue,
                     relatedIssues: [],
+                    context: context, // Include gathered context
+                    contextLines: context.length,
                     startedAt: new Date().toISOString(),
                     lastUpdated: new Date().toISOString()
                 };
@@ -576,10 +681,11 @@ class IssueDetector {
                     source: issue.source,
                     message: issue.message.substring(0, 200),
                     action: 'New issue detected - entering FOCUS MODE',
-                    groupId: groupId
+                    groupId: groupId,
+                    contextLines: context.length
                 });
                 
-                return { success: true, reason: 'new_focus_group', groupId: groupId };
+                return { success: true, reason: 'new_focus_group', groupId: groupId, contextLines: context.length };
             }
             
             return { success: false, reason: 'duplicate' };
@@ -615,6 +721,75 @@ class IssueDetector {
             };
         } catch (error) {
             return { issues: [], inFocusMode: false };
+        }
+    }
+    
+    /**
+     * Manually exit focus mode (user-initiated)
+     */
+    exitFocusMode() {
+        try {
+            const data = JSON.parse(fs.readFileSync(this.pendingIssuesFile, 'utf8'));
+            
+            if (!data.focusedGroup) {
+                return { success: false, reason: 'not_in_focus_mode' };
+            }
+            
+            // If there are queued issues, promote the first one to focus mode
+            if (data.queuedIssues && data.queuedIssues.length > 0) {
+                const nextIssue = data.queuedIssues.shift();
+                const context = this.gatherContext(nextIssue, 200, 30);
+                const groupId = `group_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                const focusedGroup = {
+                    id: groupId,
+                    rootIssue: nextIssue,
+                    relatedIssues: [],
+                    context: context,
+                    contextLines: context.length,
+                    startedAt: new Date().toISOString(),
+                    lastUpdated: new Date().toISOString()
+                };
+                
+                fs.writeFileSync(this.pendingIssuesFile, JSON.stringify({ 
+                    issues: [],
+                    lastUpdated: new Date().toISOString(),
+                    focusedGroup: focusedGroup,
+                    queuedIssues: data.queuedIssues,
+                    fixCriteria: null
+                }, null, 2));
+                
+                this.focusedIssueGroup = focusedGroup;
+                
+                gameLogger.gameEvent('MONITORING', '[FOCUS_MODE] MANUAL_EXIT_NEXT_ISSUE', {
+                    action: 'Focus mode manually exited - focusing on next queued issue',
+                    groupId: groupId,
+                    queuedRemaining: data.queuedIssues.length
+                });
+                
+                return { success: true, reason: 'exited_and_promoted_next', groupId: groupId };
+            } else {
+                // No queued issues - clear everything and exit focus mode
+                fs.writeFileSync(this.pendingIssuesFile, JSON.stringify({ 
+                    issues: [], 
+                    lastUpdated: new Date().toISOString(),
+                    focusedGroup: null,
+                    queuedIssues: [],
+                    fixCriteria: null
+                }, null, 2));
+                
+                this.focusedIssueGroup = null;
+                
+                gameLogger.gameEvent('MONITORING', '[FOCUS_MODE] MANUAL_EXIT', {
+                    action: 'Focus mode manually exited - returning to normal monitoring'
+                });
+                
+                return { success: true, reason: 'exited_to_normal_mode' };
+            }
+        } catch (error) {
+            gameLogger.error('MONITORING', '[FOCUS_MODE] EXIT_ERROR', {
+                error: error.message
+            });
+            return { success: false, reason: 'error', error: error.message };
         }
     }
     
@@ -798,8 +973,13 @@ if (require.main === module) {
         } else {
             process.exit(1);
         }
+    } else if (args[0] === '--exit-focus') {
+        // Manually exit focus mode
+        const result = detector.exitFocusMode();
+        console.log(JSON.stringify(result));
+        process.exit(result.success ? 0 : 1);
     } else {
-        console.error('Usage: node issue-detector.js --check <logLine> | --add-issue <json> | --get-pending | --clear');
+        console.error('Usage: node issue-detector.js --check <logLine> | --add-issue <json> | --get-pending | --clear | --exit-focus');
         process.exit(1);
     }
 }
