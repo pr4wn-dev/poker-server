@@ -537,6 +537,119 @@ function extractTableId(logLine) {
 /**
  * Fix detected issue - actually fixes the code
  */
+/**
+ * NEW WORKFLOW: Handle issue with log clearing
+ * 1. Pause Unity
+ * 2. Report to user what we're doing
+ * 3. Fix the issue
+ * 4. Clear log file
+ * 5. Resume Unity
+ */
+async function handleIssueWithLogClearing(issue, tableId, tableDetails) {
+    const gameLogger = require('../src/utils/GameLogger');
+    const fullMessage = issue.message.length > 500 ? issue.message.substring(0, 500) + '...' : issue.message;
+    
+    // STEP 1: PAUSE UNITY
+    gameLogger.gameEvent('LOG_WATCHER', `[WORKFLOW] STEP_1_PAUSING_UNITY`, {
+        tableId,
+        issueType: issue.type,
+        issueSeverity: issue.severity,
+        reason: `Issue detected: ${issue.type} - ${issue.message.substring(0, 100)}`
+    });
+    pauseSimulation(tableId, `Auto-paused: ${issue.type} - ${issue.message.substring(0, 100)}`);
+    
+    // Wait a moment for pause to take effect
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // STEP 2: REPORT TO USER
+    gameLogger.error('LOG_WATCHER', `[WORKFLOW] STEP_2_REPORTING_TO_USER`, {
+        action: 'ISSUE_DETECTED_AND_PAUSED',
+        tableId,
+        tableName: tableDetails?.name || 'unknown',
+        issueType: issue.type.toUpperCase(),
+        issueSeverity: issue.severity.toUpperCase(),
+        issueMessage: fullMessage,
+        whatImDoing: `I detected a ${issue.type} issue. I've paused Unity. Now I will fix the issue, clear the log file, and resume Unity.`,
+        nextSteps: [
+            '1. Pause Unity ✓',
+            '2. Report to you (this message) ✓',
+            '3. Fix the issue (next)',
+            '4. Clear log file (after fix)',
+            '5. Resume Unity (after clearing)'
+        ],
+        tableState: tableDetails,
+        timestamp: new Date().toISOString()
+    });
+    
+    // STEP 3: FIX THE ISSUE
+    gameLogger.gameEvent('LOG_WATCHER', `[WORKFLOW] STEP_3_FIXING_ISSUE`, {
+        tableId,
+        issueType: issue.type,
+        whatImDoing: 'Now fixing the issue...'
+    });
+    
+    const fixResult = await fixIssue(issue, tableId);
+    
+    // Wait a moment for fix to complete
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // STEP 4: CLEAR LOG FILE
+    gameLogger.gameEvent('LOG_WATCHER', `[WORKFLOW] STEP_4_CLEARING_LOG`, {
+        tableId,
+        issueType: issue.type,
+        logFile,
+        whatImDoing: 'Clearing log file to prevent it from getting too large...'
+    });
+    
+    try {
+        // Clear the log file
+        fs.writeFileSync(logFile, '', 'utf8');
+        lastPosition = 0; // Reset position tracking
+        
+        gameLogger.gameEvent('LOG_WATCHER', `[WORKFLOW] LOG_CLEARED`, {
+            tableId,
+            logFile,
+            newSize: 0,
+            positionReset: true
+        });
+    } catch (error) {
+        gameLogger.error('LOG_WATCHER', `[WORKFLOW] LOG_CLEAR_ERROR`, {
+            tableId,
+            logFile,
+            error: error.message,
+            action: 'Log file could not be cleared - continuing anyway'
+        });
+    }
+    
+    // STEP 5: RESUME UNITY
+    gameLogger.gameEvent('LOG_WATCHER', `[WORKFLOW] STEP_5_RESUMING_UNITY`, {
+        tableId,
+        issueType: issue.type,
+        fixResult: fixResult ? 'success' : 'failed',
+        whatImDoing: 'Resuming Unity simulation...'
+    });
+    
+    // Mark as fixed so resume will work
+    if (pausedTables.has(tableId)) {
+        pausedTables.get(tableId).fixed = true;
+        pausedTables.get(tableId).fixing = false;
+    }
+    
+    // Resume simulation
+    setTimeout(() => {
+        resumeSimulation(tableId);
+        
+        // Report completion
+        gameLogger.gameEvent('LOG_WATCHER', `[WORKFLOW] COMPLETE`, {
+            tableId,
+            issueType: issue.type,
+            whatHappened: 'Issue handled: Paused → Reported → Fixed → Log Cleared → Resumed',
+            simulationResumed: true,
+            readyForNextIssue: true
+        });
+    }, 500);
+}
+
 async function fixIssue(issue, tableId) {
     const gameLogger = require('../src/utils/GameLogger');
     
@@ -619,8 +732,8 @@ async function fixIssue(issue, tableId) {
         timestamp: new Date().toISOString()
     });
     
+    // Return fix result - resume will be handled by handleIssueWithLogClearing
     if (fixApplied) {
-        // Mark as fixed and resume
         if (pausedTables.has(tableId)) {
             pausedTables.get(tableId).fixed = true;
             pausedTables.get(tableId).fixing = false;
@@ -629,31 +742,10 @@ async function fixIssue(issue, tableId) {
             gameLogger.gameEvent('LOG_WATCHER', `[FIX] MARKED_AS_FIXED`, {
                 tableId,
                 issueType: issue.type,
-                willResume: true,
                 fixedAt: Date.now()
             });
-            
-            gameLogger.gameEvent('LOG_WATCHER', `[FIX] WILL_RESUME_IN_1_SEC`, {
-                tableId,
-                issueType: issue.type
-            });
-            
-            // Brief delay to ensure fix is applied
-            setTimeout(() => {
-                resumeSimulation(tableId);
-            }, 1000);
-        } else {
-            gameLogger.gameEvent('LOG_WATCHER', `[FIX] ERROR_NO_PAUSE_INFO`, {
-                tableId,
-                issueType: issue.type,
-                pausedTablesCount: pausedTables.size
-            });
-            gameLogger.gameEvent('LOG_WATCHER', `[FIX] ERROR_NO_PAUSE_INFO`, {
-                tableId,
-                issueType: issue.type,
-                pausedTablesCount: pausedTables.size
-            });
         }
+        return true; // Return success - caller will handle resume
     } else {
         gameLogger.gameEvent('LOG_WATCHER', `[FIX] FAILED`, {
             tableId,
@@ -676,6 +768,7 @@ async function fixIssue(issue, tableId) {
         if (pausedTables.has(tableId)) {
             pausedTables.get(tableId).fixing = false;
         }
+        return false; // Return failure - caller will handle resume anyway
     }
 }
 
