@@ -38,13 +38,21 @@ fix-attempts.txt             # Fix attempt statistics (root level)
 
 ## 🚀 Quick Start
 
-### 1. Start the Server
+### 1. Kill Any Existing Node Processes
+```powershell
+# Kill all Node.js processes (servers might still be running)
+taskkill /F /IM node.exe 2>$null
+```
+
+### 2. Start the Server
 ```powershell
 cd C:\Projects\poker-server
 npm start
 ```
 
-### 2. Start Monitoring
+**Wait for:** `Server listening on port 3000` message
+
+### 3. Start Monitoring
 ```powershell
 .\monitoring\monitor.ps1
 ```
@@ -57,6 +65,8 @@ The monitor will:
 - Log issues to `logs/pending-issues.json`
 - Track fix attempts and success rates
 - Show comprehensive stats: issues by severity, source, patterns, fix attempts
+
+**Note:** The server also runs `scripts/watch-logs-and-fix.js` automatically, which handles Unity pause/resume and log clearing.
 
 ### 3. When Issue is Found
 
@@ -75,8 +85,9 @@ The monitor will:
    - Reads `pending-issues.json`
    - Fixes all issues
    - Clears `pending-issues.json`
-   - Restarts server
-   - Resumes Unity
+   - **Kills all Node processes** (`taskkill /F /IM node.exe`)
+   - **Restarts server** (`npm start`)
+   - Unity resumes automatically (via server's log watcher)
    
 5. **Monitor continues automatically**:
    - Dashboard status returns to "MONITORING ACTIVE"
@@ -439,12 +450,19 @@ If you're starting a fresh session and need to understand this system:
 - `fix-attempts.txt` - Fix attempt statistics
 
 ### How It Works
-1. Monitor watches `logs/game.log` continuously
-2. Detects issues using patterns + root tracing
-3. Pauses Unity, logs to `pending-issues.json`
-4. You message assistant: "issue found"
-5. Assistant fixes, clears file, restarts server, resumes Unity
-6. Monitor continues
+1. **Server starts** → Automatically runs `scripts/watch-logs-and-fix.js` (handles Unity pause/resume)
+2. **Monitor watches** `logs/game.log` continuously
+3. **Detects issues** using patterns + root tracing
+4. **Pauses Unity** automatically (via server's log watcher), logs to `pending-issues.json`
+5. **You message assistant**: "issue found"
+6. **Assistant fixes**:
+   - Reads `pending-issues.json`
+   - Fixes all issues
+   - Clears `pending-issues.json`
+   - Kills Node processes (`taskkill /F /IM node.exe`)
+   - Restarts server (`npm start`)
+   - Unity resumes automatically
+7. **Monitor continues** automatically
 
 ### Integration Points
 - **Server**: All code uses `gameLogger` (no console.log)
@@ -467,9 +485,11 @@ If you're starting a fresh session and need to understand this system:
 2. **NO Debug.Log in Unity** - Send all logs to server via socket
 3. **Single log file** - Everything goes to `logs/game.log`
 4. **Auto-rotation** - Log file rotates at 10MB, keeps 5 backups
-5. **Fix attempts tracked** - Prevents infinite retry loops
-6. **Unity auto-pauses** - When critical issues detected
-7. **Assistant fixes** - You just message "issue found", assistant does the rest
+5. **Log clearing strategy** - Logs are archived (not deleted) when >5MB, preserving history
+6. **Fix attempts tracked** - Prevents infinite retry loops
+7. **Unity auto-pauses** - When critical issues detected (via `scripts/watch-logs-and-fix.js`)
+8. **Assistant fixes** - You just message "issue found", assistant does the rest
+9. **Server restart process** - Always kill Node processes first (`taskkill /F /IM node.exe`) before restarting
 
 ---
 
@@ -499,10 +519,56 @@ If you're starting a fresh session and need to understand this system:
 
 ## 📚 Related Systems
 
-- **`scripts/watch-logs-and-fix.js`** - Existing log watcher (integrates with this)
+- **`scripts/watch-logs-and-fix.js`** - Server-side log watcher (runs automatically with server)
+  - Handles Unity pause/resume
+  - Clears logs when >5MB (archives first)
+  - Active monitoring for simulation detection
+  - Integrates with this monitoring system
 - **`src/game/Table.js`** - Root tracing system (`_traceUniversal`)
 - **`src/utils/GameLogger.js`** - Centralized logging system
 - **`fix-attempts.txt`** - Fix attempt statistics
+- **`logs/archived/`** - Archived logs (created when log >5MB)
+
+## 📋 Quick Reference for Assistant (Fresh Session)
+
+**When user says "issue found" or starts a new session:**
+
+1. **Read pending issues:**
+   ```powershell
+   Get-Content logs/pending-issues.json
+   ```
+
+2. **Check fix attempts:**
+   ```powershell
+   Get-Content fix-attempts.txt
+   ```
+
+3. **Review recent logs:**
+   ```powershell
+   Get-Content logs/game.log -Tail 100
+   ```
+
+4. **After fixing, restart server:**
+   ```powershell
+   taskkill /F /IM node.exe 2>$null
+   npm start
+   ```
+
+5. **Clear pending issues (after fix):**
+   ```powershell
+   node monitoring/issue-detector.js --clear
+   ```
+
+**Key Files to Check:**
+- `logs/pending-issues.json` - Current issues waiting for fix
+- `logs/game.log` - All logs (check for `[ISSUE_DETECTED]`, `[FIX_ATTEMPT]`, `[WORKFLOW]`)
+- `fix-attempts.txt` - Fix attempt statistics
+- `logs/archived/` - Archived logs (if log was cleared)
+
+**Important Workflows:**
+- **Log Clearing:** Logs are archived (not deleted) when >5MB. Check `logs/archived/` for history.
+- **Unity Pause/Resume:** Handled automatically by `scripts/watch-logs-and-fix.js` (runs with server)
+- **Active Monitoring:** Server automatically detects new simulations and reports status every 10 seconds
 
 ---
 
@@ -719,6 +785,13 @@ Edit `monitoring/monitor.ps1`:
 
 ---
 
+## 📄 Additional Documentation
+
+- **`monitoring/GPU_ACCELERATION.md`** - GPU acceleration guide (optional enhancement)
+- **`monitoring/LOG_CLEARING_STRATEGY.md`** - Log clearing strategy and archiving details
+
+---
+
 **Last Updated**: 2026-02-06
 **Version**: 1.1.0
-**Status**: Complete with Enhanced Statistics, Severity Mapping, Real-Time Dashboard, and GPU Acceleration Guide
+**Status**: Complete with Enhanced Statistics, Severity Mapping, Real-Time Dashboard, GPU Acceleration Guide, and Log Clearing Strategy
