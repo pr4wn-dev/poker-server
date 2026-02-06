@@ -1260,7 +1260,7 @@ while ($monitoringActive) {
                         
                         # Extract table ID if available
                         $tableId = $null
-                        if ($line -match 'tableId["\s:]+([a-f0-9-]+)') {
+                        if ($line -match 'tableId["\s:]+([a-f0-9\-]+)') {
                             $tableId = $matches[1]
                         }
                         
