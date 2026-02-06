@@ -366,6 +366,78 @@ This system is working correctly when:
 
 ---
 
+## 📚 Known Issues Reference
+
+This section documents historical issues and their solutions from `CHANGELOG.md` and other project documentation. These patterns are automatically detected by the monitoring system.
+
+### Critical Issues (Auto-Detected)
+
+1. **Socket.IO Response Format Issues**
+   - **Pattern**: Unity receives default values instead of actual data
+   - **Solution**: Use `JsonUtility.FromJson<T>()` instead of `GetValue<T>()`
+   - **Detection**: Unity deserialization errors
+
+2. **Pot Not Cleared at Hand Start**
+   - **Pattern**: `Pot not cleared at hand start`
+   - **Impact**: Pot carries over between hands, validation fails
+   - **Detection**: `[ERROR] [POT] ERROR: Pot not cleared at hand start`
+
+3. **Chip Loss During Gameplay**
+   - **Pattern**: `CHIPS.*LOST`, `Money.*lost`, `missing.*chips`
+   - **Impact**: Chips disappear from system
+   - **Detection**: Validation failures, chip accounting errors
+
+4. **Pot Mismatch**
+   - **Pattern**: `POT.*MISMATCH`, `pot.*mismatch.*before.*calculation`
+   - **Impact**: Pot < sum of totalBets, chips lost during betting
+   - **Detection**: Pot calculation validation errors
+
+### High Priority Issues (Auto-Detected)
+
+1. **Action Rejected - Not Your Turn**
+   - **Pattern**: `Action.*rejected.*Not.*your.*turn`
+   - **Impact**: Bots trying to act out of turn
+   - **Detection**: Action validation errors
+
+2. **Action Rejected - Game Not in Progress**
+   - **Pattern**: `Action.*rejected.*Game.*not.*in.*progress`
+   - **Impact**: Actions attempted during waiting phase
+   - **Detection**: Game state validation errors
+
+3. **Betting Action Failures**
+   - **Pattern**: `Cannot.*bet.*current.*bet`, `Cannot.*check.*need.*to.*call`
+   - **Impact**: Invalid betting actions attempted
+   - **Detection**: Betting validation errors
+
+4. **Timer/Timeout Issues**
+   - **Pattern**: `SIMULATION BOT TIMEOUT`, `timer.*expired`
+   - **Impact**: Bots timing out, auto-folding
+   - **Detection**: Timer expiration logs
+
+### Medium Priority Issues (Logged but Continue)
+
+1. **Validation Warnings**
+   - **Pattern**: `[WARNING].*[VALIDATION]`, `[WARNING].*[POT]`
+   - **Impact**: Non-critical validation issues
+   - **Detection**: Warning-level logs
+
+2. **Memory/Performance Issues**
+   - **Pattern**: `memory.*leak`, `heap.*overflow`
+   - **Impact**: Performance degradation
+   - **Detection**: Performance monitoring
+
+### Historical Fixes (Reference Only)
+
+- **Issue #1**: SocketIOUnity GetValue<T>() Returns Default Values → Use JsonUtility
+- **Issue #21**: SOCKET_IO_AVAILABLE Only Defined for Android → Add to Standalone platform
+- **Issue #26**: Response Classes ONLY in NetworkModels.cs → Centralize response classes
+- **Card Visibility**: Cards disappearing → Atomic card replacement, position locking
+- **Pot Distribution**: Players winning more than contributed → Validation added
+
+**See `CHANGELOG.md` for complete historical issue list and solutions.**
+
+---
+
 **Last Updated**: 2026-02-06
-**Version**: 1.0.0
-**Status**: Complete and Ready for Use
+**Version**: 1.1.0
+**Status**: Complete with Enhanced Statistics and Pattern Detection
