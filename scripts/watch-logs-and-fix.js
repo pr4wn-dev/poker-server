@@ -428,6 +428,12 @@ function detectIssue(logLine) {
         return null;
     }
     
+    // Skip TRACE logs - they're informational, not errors
+    // Even if they contain "[ERROR]" in JSON data, they're not actual errors
+    if (logLine.includes('[TRACE]')) {
+        return null;
+    }
+    
     // Check for error patterns
     for (const pattern of ERROR_PATTERNS) {
         if (pattern.test(logLine)) {
