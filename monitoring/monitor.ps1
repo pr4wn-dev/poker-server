@@ -1702,7 +1702,26 @@ while ($monitoringActive) {
             $stats.SimulationRunning = $false
             $logWatcherStatus.ActiveSimulations = 0
         } else {
-            $stats.SimulationRunning = $logWatcherStatus.ActiveSimulations -gt 0
+            # Only consider simulation "ACTIVE" if:
+            # 1. Server reports active simulations, AND
+            # 2. Unity is actually connected and in a game scene (receiving game updates)
+            # If there's a simulation on the server but Unity isn't connected to it, treat it as inactive
+            $serverHasSimulation = $logWatcherStatus.ActiveSimulations -gt 0
+            $unityActualStatus = Get-UnityActualStatus
+            $unityIsInGame = $unityActualStatus.InGameScene -and $unityActualStatus.ReceivingGameUpdates
+            
+            if ($serverHasSimulation -and $unityIsInGame) {
+                # Both server and Unity agree: simulation is active
+                $stats.SimulationRunning = $true
+            } elseif ($serverHasSimulation -and -not $unityIsInGame) {
+                # Server has simulation but Unity isn't connected to it - treat as inactive
+                # This means there's an orphaned simulation (bots playing without Unity)
+                $stats.SimulationRunning = $false
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  SIMULATION: Server has active simulation but Unity is NOT connected to it (orphaned simulation)" -ForegroundColor "Yellow"
+            } else {
+                # No simulation on server
+                $stats.SimulationRunning = $false
+            }
         }
         
         # Log simulation start/stop
@@ -1730,19 +1749,27 @@ while ($monitoringActive) {
             }
         }
         
-        # In simulation mode, check if Unity is idle (running but no simulation for >30 seconds)
+        # In simulation mode, check if Unity is idle (running but no active simulation Unity is connected to)
+        # This includes:
+        # 1. No simulation on server at all
+        # 2. Server has simulation but Unity isn't connected to it (orphaned simulation)
         if ($config.simulation.enabled -and $stats.UnityRunning -and -not $stats.SimulationRunning) {
             if (-not $script:simulationEndTime) {
                 $script:simulationEndTime = Get-Date
             }
             $timeSinceSimEnd = (Get-Date) - $script:simulationEndTime
             if ($timeSinceSimEnd.TotalSeconds -gt 30) {
-                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  UNITY: Idle for $([math]::Round($timeSinceSimEnd.TotalSeconds))s after simulation ended - restarting..." -ForegroundColor "Yellow"
+                $reason = if ($logWatcherStatus.ActiveSimulations -gt 0) {
+                    "orphaned simulation (server has simulation but Unity not connected)"
+                } else {
+                    "no active simulation"
+                }
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  UNITY: Idle for $([math]::Round($timeSinceSimEnd.TotalSeconds))s - $reason - restarting..." -ForegroundColor "Yellow"
                 $script:simulationEndTime = $null  # Reset timer
                 Restart-UnityIfNeeded | Out-Null
             }
         } else {
-            # Reset timer if simulation is running or Unity is not running
+            # Reset timer if simulation is running (Unity is connected) or Unity is not running
             $script:simulationEndTime = $null
         }
         
