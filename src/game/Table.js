@@ -963,8 +963,7 @@ class Table {
         // This is NOT masking - this is fixing the root cause: timer too short for bot processing
         const defaultTurnTimeLimit = options.turnTimeLimit || 20000;
         const previousTurnTimeLimit = this.isSimulation ? 500 : defaultTurnTimeLimit; // Previous value was 500ms for simulations
-        // Use provided turnTimeLimit if set (respects fast mode), otherwise default to 2000ms for simulations
-        this.turnTimeLimit = this.isSimulation ? (options.turnTimeLimit || 2000) : defaultTurnTimeLimit;
+        this.turnTimeLimit = this.isSimulation ? 2000 : defaultTurnTimeLimit; // 2000ms for simulations, 20 seconds for regular games
         
         // Record fix attempt - timer increase is the fix method
         // Note: _recordFixAttempt is defined later in constructor, but we'll call it after all initialization
@@ -8661,28 +8660,92 @@ class Table {
      * Get item ante state for a user
      */
     getItemAnteState(forUserId = null) {
+        // ROOT TRACING: Track item ante state request
+        this._traceUniversal('ITEM_ANTE_GET_STATE', {
+            forUserId: forUserId || 'all',
+            itemAnteEnabled: this.itemAnteEnabled,
+            itemAnteExists: !!this.itemAnte,
+            status: this.itemAnte?.status,
+            approvedCount: this.itemAnte?.approvedItems?.length || 0
+        });
+        
         try {
             if (!this.itemAnte) {
-                // console.warn(`[Table ${this.name}] [ITEM_ANTE_DEBUG] itemAnte not initialized`);
+                this._traceUniversalAfter('ITEM_ANTE_GET_STATE', { 
+                    success: false, 
+                    error: 'ITEM_ANTE_NOT_INITIALIZED',
+                    returned: null
+                });
+                gameLogger.gameEvent(this.name, `[ITEM_ANTE] GET_STATE_NOT_INITIALIZED`, {
+                    forUserId: forUserId || 'all',
+                    itemAnteEnabled: this.itemAnteEnabled
+                });
                 return null; // Item ante not initialized
             }
+            
             const state = this.itemAnte.getState(forUserId);
-            // Debug logging for item ante state (commented out - use gameLogger for tracing)
-            // if (state && state.status !== 'inactive') {
-            //     console.log(`[Table ${this.name}] [ITEM_ANTE_DEBUG] Item ante state:`, {
-            //         status: state.status,
-            //         approvedCount: state.approvedCount,
-            //         hasCreatorItem: !!state.creatorItem,
-            //         forUserId: forUserId || 'all'
-            //     });
-            // }
+            
+            // ROOT TRACING: Log state retrieval with icon check
+            if (state && state.status !== 'inactive') {
+                const itemsWithoutIcons = (state.approvedItems || []).filter(entry => 
+                    !entry?.item?.icon || entry.item.icon === 'default_item'
+                );
+                const itemsWithIcons = (state.approvedItems || []).filter(entry => 
+                    entry?.item?.icon && entry.item.icon !== 'default_item'
+                );
+                
+                gameLogger.gameEvent(this.name, `[ITEM_ANTE] GET_STATE_SUCCESS`, {
+                    forUserId: forUserId || 'all',
+                    status: state.status,
+                    approvedCount: state.approvedCount || 0,
+                    totalValue: state.totalValue || 0,
+                    itemsWithIcons: itemsWithIcons.length,
+                    itemsWithoutIcons: itemsWithoutIcons.length,
+                    missingIconItems: itemsWithoutIcons.map(entry => ({
+                        userId: entry.userId,
+                        itemName: entry.item?.name,
+                        itemIcon: entry.item?.icon || 'MISSING',
+                        templateId: entry.item?.templateId
+                    })),
+                    hasCreatorItem: !!state.creatorItem,
+                    creatorItemIcon: state.creatorItem?.icon || 'MISSING'
+                });
+                
+                // ROOT TRACING: Warn if items in ante missing icons (sprite loading will fail)
+                if (itemsWithoutIcons.length > 0) {
+                    gameLogger.gameEvent(this.name, `[ITEM_ANTE] MISSING_ICONS_WARNING`, {
+                        forUserId: forUserId || 'all',
+                        count: itemsWithoutIcons.length,
+                        items: itemsWithoutIcons.map(entry => ({
+                            userId: entry.userId,
+                            itemName: entry.item?.name,
+                            icon: entry.item?.icon || 'MISSING'
+                        }))
+                    });
+                }
+            }
+            
+            this._traceUniversalAfter('ITEM_ANTE_GET_STATE', {
+                success: !!state,
+                status: state?.status,
+                approvedCount: state?.approvedCount || 0
+            });
+            
             return state;
         } catch (error) {
-            // console.error(`[Table ${this.name}] Error getting item ante state:`, error);
+            // ROOT TRACING: Log error with full context
+            this._traceUniversalAfter('ITEM_ANTE_GET_STATE', { 
+                success: false, 
+                error: error.message,
+                returned: null
+            });
             gameLogger.gameEvent(this.name, `[ITEM_ANTE] GET_STATE_ERROR`, {
                 error: error.message,
+                errorType: error.constructor.name,
                 stackTrace: error.stack,
-                forUserId: forUserId || 'all'
+                forUserId: forUserId || 'all',
+                itemAnteEnabled: this.itemAnteEnabled,
+                itemAnteExists: !!this.itemAnte
             });
             return null; // Return null on error to prevent crashes
         }

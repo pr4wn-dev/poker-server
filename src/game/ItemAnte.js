@@ -329,15 +329,48 @@ class ItemAnte {
         
         // console.log(`[ItemAnte] Locked with ${this.approvedItems.length} items`);
         
-        // ROOT TRACING: Log item ante lock
+        // ROOT TRACING: Log item ante lock with icon check
+        const itemsWithoutIcons = this.approvedItems.filter(entry => 
+            !entry?.item?.icon || entry.item.icon === 'default_item'
+        );
+        const itemsWithIcons = this.approvedItems.filter(entry => 
+            entry?.item?.icon && entry.item.icon !== 'default_item'
+        );
+        
         gameLogger.gameEvent(this.tableId, `[ITEM_ANTE] LOCKED`, {
             approvedCount: this.approvedItems.length,
             totalSubmissions: this.submissions.size,
             participants: this.approvedItems.map(e => e.userId),
             totalValue: this.approvedItems.reduce((sum, e) => sum + (e.item.baseValue || 0), 0),
+            itemsWithIcons: itemsWithIcons.length,
+            itemsWithoutIcons: itemsWithoutIcons.length,
+            missingIconItems: itemsWithoutIcons.map(entry => ({
+                userId: entry.userId,
+                itemName: entry.item?.name,
+                itemIcon: entry.item?.icon || 'MISSING',
+                templateId: entry.item?.templateId
+            })),
+            allItems: this.approvedItems.map(entry => ({
+                userId: entry.userId,
+                itemName: entry.item?.name,
+                itemIcon: entry.item?.icon || 'MISSING',
+                itemValue: entry.item?.baseValue || 0
+            })),
             status: this.status,
             stackTrace: new Error().stack?.split('\n').slice(2, 10).join(' | ') || 'NO_STACK'
         });
+        
+        // ROOT TRACING: Warn if items missing icons
+        if (itemsWithoutIcons.length > 0) {
+            gameLogger.gameEvent(this.tableId, `[ITEM_ANTE] LOCKED_MISSING_ICONS`, {
+                count: itemsWithoutIcons.length,
+                items: itemsWithoutIcons.map(entry => ({
+                    userId: entry.userId,
+                    itemName: entry.item?.name,
+                    icon: entry.item?.icon || 'MISSING'
+                }))
+            });
+        }
         
         return { 
             success: true,

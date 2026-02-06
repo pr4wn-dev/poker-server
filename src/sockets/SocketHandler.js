@@ -143,11 +143,56 @@ class SocketHandler {
                     return;
                 }
                 
+                // ROOT TRACING: Track inventory request start
+                gameLogger.gameEvent('SYSTEM', `[INVENTORY] GET_INVENTORY_START`, {
+                    userId: user.userId,
+                    username: user.profile?.username,
+                    socketId: socket.id,
+                    stackTrace: new Error().stack?.split('\n').slice(2, 8).join(' | ') || 'NO_STACK'
+                });
+                
                 try {
                     const inventory = await userRepo.getInventory(user.userId);
                     
-                    // ROOT TRACING: Log inventory request (commented out - use gameLogger for tracing)
-                    // console.log(`[SocketHandler] [INVENTORY] GET_INVENTORY | userId: ${user.userId} | username: ${user.profile?.username} | itemCount: ${inventory?.length || 0}`);
+                    // ROOT TRACING: Check for missing icons and log full inventory details
+                    const itemsWithoutIcons = (inventory || []).filter(item => !item.icon || item.icon === 'default_item');
+                    const itemsWithIcons = (inventory || []).filter(item => item.icon && item.icon !== 'default_item');
+                    
+                    gameLogger.gameEvent('SYSTEM', `[INVENTORY] GET_INVENTORY_SUCCESS`, {
+                        userId: user.userId,
+                        username: user.profile?.username,
+                        totalItems: inventory?.length || 0,
+                        itemsWithIcons: itemsWithIcons.length,
+                        itemsWithoutIcons: itemsWithoutIcons.length,
+                        missingIconItems: itemsWithoutIcons.map(item => ({
+                            id: item.id,
+                            name: item.name,
+                            templateId: item.templateId,
+                            type: item.type,
+                            icon: item.icon || 'MISSING'
+                        })),
+                        itemTypes: (inventory || []).reduce((acc, item) => {
+                            acc[item.type] = (acc[item.type] || 0) + 1;
+                            return acc;
+                        }, {}),
+                        rarities: (inventory || []).reduce((acc, item) => {
+                            acc[item.rarity] = (acc[item.rarity] || 0) + 1;
+                            return acc;
+                        }, {})
+                    });
+                    
+                    // ROOT TRACING: Warn if items missing icons (sprite loading will fail)
+                    if (itemsWithoutIcons.length > 0) {
+                        gameLogger.gameEvent('SYSTEM', `[INVENTORY] MISSING_ICONS_WARNING`, {
+                            userId: user.userId,
+                            count: itemsWithoutIcons.length,
+                            items: itemsWithoutIcons.map(item => ({
+                                name: item.name,
+                                templateId: item.templateId,
+                                icon: item.icon || 'MISSING'
+                            }))
+                        });
+                    }
                     
                     const response = { success: true, inventory };
                     if (callback && typeof callback === 'function') {
@@ -155,11 +200,12 @@ class SocketHandler {
                     }
                     socket.emit('get_inventory_response', response);
                 } catch (error) {
-                    // console.error(`[SocketHandler] [INVENTORY] GET_INVENTORY_ERROR | userId: ${user.userId} | error: ${error.message}`, error);
+                    // ROOT TRACING: Log inventory error with full context
                     gameLogger.gameEvent('SYSTEM', `[INVENTORY] GET_INVENTORY_ERROR`, {
                         userId: user.userId,
                         username: user.profile?.username,
                         error: error.message,
+                        errorType: error.constructor.name,
                         stackTrace: error.stack
                     });
                     const errorResponse = { success: false, error: error.message };
@@ -183,8 +229,13 @@ class SocketHandler {
                     return;
                 }
                 
-                // ROOT TRACING: Log test items request start (commented out - use gameLogger for tracing)
-                // console.log(`[SocketHandler] [INVENTORY] GET_TEST_ITEMS_START | userId: ${user.userId} | username: ${user.profile?.username}`);
+                // ROOT TRACING: Track test items request start
+                gameLogger.gameEvent('SYSTEM', `[INVENTORY] GET_TEST_ITEMS_START`, {
+                    userId: user.userId,
+                    username: user.profile?.username,
+                    socketId: socket.id,
+                    stackTrace: new Error().stack?.split('\n').slice(2, 8).join(' | ') || 'NO_STACK'
+                });
                 
                 try {
                     const Item = require('../models/Item');
@@ -234,14 +285,36 @@ class SocketHandler {
                     // Get updated inventory
                     const inventory = await userRepo.getInventory(user.userId);
                     
-                    // ROOT TRACING: Log test items completion (commented out - use gameLogger for tracing)
-                    // console.log(`[SocketHandler] [INVENTORY] GET_TEST_ITEMS_SUCCESS | userId: ${user.userId} | username: ${user.profile?.username} | added: ${testItems.length} | total: ${inventory?.length || 0}`);
+                    // ROOT TRACING: Log test items completion with icon check
+                    const itemsWithoutIcons = (inventory || []).filter(item => !item.icon || item.icon === 'default_item');
+                    const itemsWithIcons = (inventory || []).filter(item => item.icon && item.icon !== 'default_item');
+                    
                     gameLogger.gameEvent('SYSTEM', `[INVENTORY] GET_TEST_ITEMS_SUCCESS`, {
                         userId: user.userId,
                         username: user.profile?.username,
                         added: testItems.length,
-                        total: inventory?.length || 0
+                        total: inventory?.length || 0,
+                        itemsWithIcons: itemsWithIcons.length,
+                        itemsWithoutIcons: itemsWithoutIcons.length,
+                        testItemIcons: testItems.map(item => ({
+                            name: item.name,
+                            icon: item.icon || 'MISSING',
+                            templateId: item.templateId
+                        }))
                     });
+                    
+                    // ROOT TRACING: Warn if test items missing icons
+                    if (itemsWithoutIcons.length > 0) {
+                        gameLogger.gameEvent('SYSTEM', `[INVENTORY] TEST_ITEMS_MISSING_ICONS`, {
+                            userId: user.userId,
+                            count: itemsWithoutIcons.length,
+                            items: itemsWithoutIcons.map(item => ({
+                                name: item.name,
+                                templateId: item.templateId,
+                                icon: item.icon || 'MISSING'
+                            }))
+                        });
+                    }
                     
                     const response = { 
                         success: true, 
