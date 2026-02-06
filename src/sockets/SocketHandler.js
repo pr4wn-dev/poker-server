@@ -399,6 +399,32 @@ class SocketHandler {
                 socket.emit('get_item_ante_response', { success: true, itemAnte: itemAnteState });
             });
             
+            // Report icon loading issues from Unity client
+            socket.on('report_icon_issue', (data) => {
+                const user = this.getAuthenticatedUser(socket);
+                const userId = user?.userId || 'unknown';
+                const username = user?.profile?.username || 'unknown';
+                
+                // ROOT TRACING: Log icon loading issues for monitoring
+                gameLogger.gameEvent('UNITY_CLIENT', `[ICON_LOADING] ISSUE_REPORTED`, {
+                    userId,
+                    username,
+                    operation: data.operation || 'unknown',
+                    itemName: data.itemName || null,
+                    iconName: data.iconName || null,
+                    attemptedPath1: data.attemptedPath1 || null,
+                    attemptedPath2: data.attemptedPath2 || null,
+                    error: data.error || null,
+                    totalItems: data.totalItems || null,
+                    itemsWithIcons: data.itemsWithIcons || null,
+                    itemsWithoutIcons: data.itemsWithoutIcons || null,
+                    missingIconItems: data.missingIconItems || null,
+                    rarity: data.rarity || null,
+                    value: data.value || null,
+                    fullData: data
+                });
+            });
+            
             // ============ Lobby ============
             
             socket.on('get_tables', (data, callback) => {
