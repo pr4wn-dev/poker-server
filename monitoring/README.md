@@ -539,6 +539,81 @@ If you're starting a fresh session and need to understand this system:
 7. **Unity auto-pauses** - When critical issues detected (via `scripts/watch-logs-and-fix.js`)
 8. **Assistant fixes** - You just message "issue found", assistant does the rest
 9. **Server restart process** - Always kill Node processes first (`taskkill /F /IM node.exe`) before restarting
+10. **Restart handling** - See "Restart Scenarios" section below for different restart requirements
+
+---
+
+## 🔄 Restart Scenarios
+
+When fixes require restarts, here's what happens:
+
+### Current Behavior
+
+**Server Restart (Node.js code changes):**
+- ✅ **Handled automatically** by Assistant:
+  1. Assistant kills Node processes: `taskkill /F /IM node.exe`
+  2. Assistant restarts server: `npm start`
+  3. Server auto-resumes paused simulations on startup (see `src/server.js` line 52-63)
+  4. Unity reconnects automatically (Socket.IO handles reconnection)
+  5. Monitor detects resume marker → Unity resumes
+
+**Unity Restart (Unity code changes):**
+- ⚠️ **NOT automatically handled** - Manual intervention required:
+  1. Unity is paused (via Log Watcher)
+  2. You must manually restart Unity in debug mode
+  3. Unity reconnects to server automatically
+  4. Server state is preserved (tables, players, chips)
+  5. Simulation resumes from where it paused
+
+**Database Restart (MySQL/WAMP/XAMPP):**
+- ⚠️ **NOT automatically handled** - Manual intervention required:
+  1. You must manually restart MySQL service
+  2. Server will reconnect automatically when database is back
+  3. Unity remains paused until you tell Assistant to resume
+
+### What Happens During Restart
+
+**Server Restart:**
+- ✅ Paused simulations are **auto-resumed** on server startup
+- ✅ Unity **reconnects automatically** (Socket.IO reconnection)
+- ✅ Game state is **preserved** (tables, players, chips in memory)
+- ⚠️ Active WebSocket connections are **dropped** (Unity reconnects)
+
+**Unity Restart:**
+- ✅ Server state is **preserved** (tables, players, chips)
+- ✅ Unity **reconnects automatically** when restarted
+- ⚠️ Simulation remains **paused** until resume marker is written
+- ⚠️ You must manually restart Unity in debug mode
+
+**Database Restart:**
+- ✅ Server detects database offline and logs errors
+- ✅ Server **auto-reconnects** when database is back
+- ⚠️ Unity remains **paused** during database downtime
+- ⚠️ You must manually restart MySQL service
+
+### Future Improvements (TODO)
+
+To fully automate restart scenarios:
+
+1. **Unity Restart Detection:**
+   - Monitor could detect when Unity needs restart (e.g., C# code changes)
+   - Assistant could write a marker to `pending-issues.json` indicating Unity restart needed
+   - Monitor could display: "Unity restart required - please restart Unity in debug mode"
+
+2. **Database Restart Detection:**
+   - Monitor could detect database connection failures
+   - Assistant could check if MySQL service is running
+   - Assistant could attempt to restart MySQL service (if permissions allow)
+
+3. **Restart Coordination:**
+   - Assistant could track which services need restart
+   - Assistant could coordinate restart order (Database → Server → Unity)
+   - Monitor could wait for all services to be ready before resuming
+
+4. **State Preservation:**
+   - Server could save table state to database before restart
+   - Server could restore table state after restart
+   - Unity could save local state before restart
 
 ---
 
