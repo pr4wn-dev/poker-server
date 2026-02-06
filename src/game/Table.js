@@ -102,11 +102,11 @@ class Table {
         
         // CRITICAL: Fix attempt tracking system - tracks how many times each FIX METHOD has been attempted and failed
         // IMPORTANT: This tracks the METHOD/APPROACH, not the issue itself
-        // - If a fix method fails 5 times, that METHOD is disabled (not the issue)
+        // - If a fix method fails 5 times, that SPECIFIC METHOD is disabled (not the issue)
         // - The issue can still be fixed, but we MUST use a DIFFERENT method/approach
         // - This prevents repeatedly trying the same broken approach
-        // MAX_FAILURES: After 5 failures, the fix METHOD is disabled PERMANENTLY and a completely different approach must be tried
-        // ONCE DISABLED, A FIX CAN NEVER BE RE-ENABLED - prevents going back and forth between failing fixes
+        // MAX_FAILURES: After 5 failures, the fix METHOD is disabled and a completely different approach must be tried
+        // When a method is disabled, the issue still exists and needs to be fixed with an alternative method
         const MAX_FAILURES = 5;
         
         this._fixAttempts = {
@@ -182,7 +182,7 @@ class Table {
         };
         
         // Track which fixes have been tried and failed (to prevent going back to them)
-        this._failedFixes = new Set(); // Set of fix IDs that have been permanently disabled
+        // Note: We no longer use _failedFixes - when a fix method fails, it's disabled but alternative methods can still be tried
         
         // Helper to check if a fix METHOD is enabled (not disabled due to too many failures)
         // CRITICAL: Once a fix METHOD is disabled, it can NEVER be re-enabled to prevent going back and forth
