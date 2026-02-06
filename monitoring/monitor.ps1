@@ -365,6 +365,43 @@ function Show-Statistics {
     Write-Host "`nPress Ctrl+C to stop monitoring`n" -ForegroundColor DarkGray
 }
 
+# Function to start server if not running
+function Start-ServerIfNeeded {
+    if (-not (Test-ServerRunning)) {
+        Write-Warning "Server is not running. Starting server..."
+        try {
+            # Kill any existing node processes first
+            Get-Process node -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+            Start-Sleep -Seconds 1
+            
+            # Start server in background
+            $serverProcess = Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$PWD'; npm start" -WindowStyle Minimized -PassThru
+            Write-Info "Server starting (PID: $($serverProcess.Id)). Waiting for server to be ready..."
+            
+            # Wait up to 30 seconds for server to start
+            $maxWait = 30
+            $waited = 0
+            while ($waited -lt $maxWait) {
+                Start-Sleep -Seconds 2
+                $waited += 2
+                if (Test-ServerRunning) {
+                    Write-Success "Server is now online!"
+                    return $true
+                }
+            }
+            Write-Error "Server failed to start within $maxWait seconds"
+            return $false
+        } catch {
+            Write-Error "Failed to start server: $_"
+            return $false
+        }
+    }
+    return $true
+}
+
+# Start server if needed before showing statistics
+Start-ServerIfNeeded
+
 # Initial display
 Show-Statistics
 
