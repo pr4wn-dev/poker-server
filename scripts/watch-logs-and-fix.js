@@ -22,6 +22,19 @@ let socketHandler = null;
 // NOTE: Fix attempt tracking logs (FIX ATTEMPT SUCCESS/FAILED) are informational and should NOT trigger pauses
 // Only detect when fixes are DISABLED (method failed) or actual errors occur
 const ERROR_PATTERNS = [
+    // SERVER CONNECTION ISSUES - CRITICAL
+    /server.*cannot.*connect/i,
+    /ECONNREFUSED/i,
+    /EADDRINUSE/i,
+    /Port.*already.*in use/i,
+    /listen.*EADDRINUSE/i,
+    /Error.*listen/i,
+    /SERVER.*OFFLINE/i,
+    /SERVER.*FAILED/i,
+    /Database.*OFFLINE/i,
+    /DATABASE.*CONNECTION.*FAILED/i,
+    /\[DATABASE\].*\[CONNECTION\].*FAILED/i,
+    // GAME ERRORS
     /\[ROOT CAUSE\]/i,  // Root cause analysis - indicates serious issue
     /\[ROOT_TRACE\].*TOTAL_BET_NOT_CLEARED/i,  // Bet not cleared - indicates bug
     /\[ROOT_TRACE\].*PLAYER_WON_MORE_THAN_CONTRIBUTED/i,  // Player won more than contributed (not side pot)
@@ -31,8 +44,6 @@ const ERROR_PATTERNS = [
     /\[FIX\] METHOD_DISABLED/i,  // Fix method disabled - needs different approach (CRITICAL)
     /\[FIX\] DISABLED/i,  // Fix disabled - critical
     /METHOD_DISABLED.*TRY_DIFFERENT_APPROACH/i,  // Method failed - needs new approach
-    // Exclude simulation manager resume logs - these are informational, not errors
-    /SIMULATION_MANAGER.*RESUME.*BEFORE_STATE/i  // This is informational, not an error
     /SIMULATION BOT TIMEOUT/i,
     /\[TIMER\].*TIMEOUT.*auto-folding/i,
     /\[ICON_LOADING\].*ISSUE_REPORTED/i,

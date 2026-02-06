@@ -234,9 +234,17 @@ async function start() {
         }
     }, 2000); // Wait 2 seconds for everything to initialize
 
-    // Start listening
+    // Start listening with error handling
     server.listen(PORT, '0.0.0.0', () => {
+        const gameLogger = require('./utils/GameLogger');
         const localIP = getLocalIP();
+        gameLogger.error('SERVER', '[STARTUP] SERVER_STARTED', {
+            port: PORT,
+            localIP: localIP,
+            message: `SERVER STARTED SUCCESSFULLY on port ${PORT}`,
+            timestamp: new Date().toISOString(),
+            reportToUser: true
+        });
         console.log(`
 ╔══════════════════════════════════════════════════════════════╗
 ║                    POKER SERVER ONLINE                       ║
