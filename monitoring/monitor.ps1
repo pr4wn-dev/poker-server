@@ -507,6 +507,11 @@ while ($monitoringActive) {
                 $issue = Invoke-IssueDetector $line
                 
                 if ($issue) {
+                    # REPORT TO CONSOLE: Issue detected (but not yet paused)
+                    Write-Host "[$(Get-Date -Format 'HH:mm:ss')] " -NoNewline -ForegroundColor Yellow
+                    Write-Host "ISSUE DETECTED: " -NoNewline -ForegroundColor Red
+                    Write-Host "$($issue.type) ($($issue.severity))" -ForegroundColor White
+                    
                     # Update statistics
                     $stats.IssuesDetected++
                     $stats.IssuesBySeverity[$issue.severity]++
@@ -548,6 +553,15 @@ while ($monitoringActive) {
                             # Update stats to show issue was logged
                             $stats.LastIssueLogged = Get-Date
                             
+                            # REPORT TO CONSOLE: Issue detected
+                            Write-Host "`n[$(Get-Date -Format 'HH:mm:ss')] " -NoNewline -ForegroundColor Yellow
+                            Write-Host "ISSUE DETECTED: " -NoNewline -ForegroundColor Red
+                            Write-Host "$($issue.type) ($($issue.severity))" -ForegroundColor White
+                            Write-Host "  Message: $($line.Substring(0, [Math]::Min(100, $line.Length)))" -ForegroundColor Gray
+                            if ($tableId) {
+                                Write-Host "  Table ID: $tableId" -ForegroundColor Cyan
+                            }
+                            
                             # CRITICAL: Write a special log entry that the log watcher will detect to pause Unity
                             # This ensures Unity pauses immediately when monitor detects an issue
                             $logFile = Join-Path $PSScriptRoot "..\logs\game.log"
@@ -559,9 +573,12 @@ while ($monitoringActive) {
                             try {
                                 Add-Content -Path $logFile -Value $pauseMarker -ErrorAction Stop
                                 $stats.PauseMarkersWritten++
+                                Write-Host "  Pause marker written to game.log" -ForegroundColor Green
+                                Write-Host "  Waiting for log watcher to pause Unity..." -ForegroundColor Yellow
                             } catch {
                                 # If writing fails, log it but continue
                                 $stats.PauseMarkerErrors++
+                                Write-Host "  ERROR: Failed to write pause marker: $_" -ForegroundColor Red
                             }
                             
                             $isPaused = $true
