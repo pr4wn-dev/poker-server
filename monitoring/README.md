@@ -737,29 +737,56 @@ The monitoring system tracks comprehensive statistics:
 
 ## 🔧 System Adjustability
 
-The logging system is **highly adjustable and easy to modify**:
+The logging system is **highly adjustable and easy to modify**.
+
+**IMPORTANT**: Both the monitor and log watcher use error patterns. When adding/updating patterns, you should update **both systems** to keep them in sync:
+
+1. **Monitor patterns** (`monitoring/issue-detector.js`):
+   - Edit `errorPatterns` object (organized by severity: critical, high, medium, low)
+   - More comprehensive with severity mapping
+   - Used by `monitor.ps1` for detection
+
+2. **Log watcher patterns** (`scripts/watch-logs-and-fix.js`):
+   - Edit `ERROR_PATTERNS` array (flat array)
+   - Simpler format, used for Unity pause/resume
+   - Must include monitor marker pattern: `/\[MONITOR\].*\[CRITICAL_ISSUE_DETECTED\]/i`
 
 ### Adding New Error Patterns
-Simply edit `monitoring/issue-detector.js`:
+
+**For Monitor** - Edit `monitoring/issue-detector.js`:
 ```javascript
 this.errorPatterns = {
     critical: [
-        /YOUR_NEW_PATTERN/i,  // Just add here
+        /YOUR_NEW_PATTERN/i,  // Add here
         // ... existing patterns
     ]
 };
 ```
 
+**For Log Watcher** - Edit `scripts/watch-logs-and-fix.js`:
+```javascript
+const ERROR_PATTERNS = [
+    /YOUR_NEW_PATTERN/i,  // Add here
+    // ... existing patterns
+];
+```
+
+**Best Practice**: Add the pattern to both files with the same regex to ensure consistent detection.
+
 ### Changing Pattern Severity
-Move patterns between severity levels:
+
+**For Monitor** - Move patterns between severity levels in `monitoring/issue-detector.js`:
 ```javascript
 // Move from 'high' to 'critical':
 // Cut from high: []
 // Paste to critical: []
 ```
 
+**For Log Watcher** - Patterns are in a flat array, so severity is determined by when they're detected (critical patterns checked first).
+
 ### Modifying Detection Logic
-Edit the `detectIssue()` method to add custom checks:
+
+**For Monitor** - Edit `monitoring/issue-detector.js` → `detectIssue()` method:
 ```javascript
 detectIssue(logLine) {
     // Add your custom detection here
@@ -769,6 +796,10 @@ detectIssue(logLine) {
     // ... existing detection
 }
 ```
+
+**For Log Watcher** - Edit `scripts/watch-logs-and-fix.js` → `detectIssue()` function:
+
+Both systems have similar detection logic but are independent. Changes to one don't automatically affect the other.
 
 ### Adjusting Statistics Display
 Edit `monitoring/monitor.ps1`:
