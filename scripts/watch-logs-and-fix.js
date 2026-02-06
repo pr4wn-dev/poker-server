@@ -1143,23 +1143,49 @@ function processLogLine(line) {
     // Check if already paused
     if (pausedTables.has(tableId)) {
         const pauseInfo = pausedTables.get(tableId);
-        gameLogger.gameEvent('LOG_WATCHER', `[PROCESS_LINE] ALREADY_PAUSED`, {
-            tableId,
-            issueType: issue.type,
-            existingReason: pauseInfo.reason,
-            pausedAt: pauseInfo.pausedAt,
-            fixing: pauseInfo.fixing,
-            fixed: pauseInfo.fixed
-        });
-        gameLogger.gameEvent('LOG_WATCHER', `[PROCESS_LINE] ALREADY_PAUSED_FULL`, {
-            tableId,
-            existingReason: pauseInfo.reason,
-            pausedAt: new Date(pauseInfo.pausedAt).toISOString(),
-            currentlyFixing: pauseInfo.fixing || false,
-            newIssueType: issue.type,
-            newIssueMessage: issue.message.substring(0, 200)
-        });
-        return; // Already paused for this table
+        
+        // If paused but NOT fixing, we need to handle the stuck state
+        if (!pauseInfo.fixing && !pauseInfo.fixed) {
+            gameLogger.error('LOG_WATCHER', `[PROCESS_LINE] STUCK_PAUSED_STATE`, {
+                tableId,
+                issueType: issue.type,
+                existingReason: pauseInfo.reason,
+                pausedAt: new Date(pauseInfo.pausedAt).toISOString(),
+                timeSincePause: Date.now() - pauseInfo.pausedAt,
+                whatImDoing: 'Table is paused but not being fixed. Running workflow to fix and resume.',
+                newIssueType: issue.type,
+                newIssueMessage: issue.message.substring(0, 200)
+            });
+            
+            // Run workflow to fix and resume
+            handleIssueWithLogClearing(issue, tableId, tableDetails);
+            return;
+        }
+        
+        // If currently fixing, skip
+        if (pauseInfo.fixing) {
+            gameLogger.gameEvent('LOG_WATCHER', `[PROCESS_LINE] ALREADY_FIXING`, {
+                tableId,
+                issueType: issue.type,
+                existingReason: pauseInfo.reason,
+                pausedAt: pauseInfo.pausedAt,
+                fixing: true
+            });
+            return; // Already fixing this table
+        }
+        
+        // If already fixed, skip
+        if (pauseInfo.fixed) {
+            gameLogger.gameEvent('LOG_WATCHER', `[PROCESS_LINE] ALREADY_FIXED`, {
+                tableId,
+                issueType: issue.type,
+                existingReason: pauseInfo.reason,
+                fixed: true
+            });
+            return; // Already fixed
+        }
+        
+        return; // Shouldn't reach here, but just in case
     }
     
     // ROOT TRACING: About to pause with FULL STATE
