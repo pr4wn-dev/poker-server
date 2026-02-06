@@ -1310,8 +1310,11 @@ function processLogLine(line) {
         // Pause Unity immediately - this stops all game activity and logging
         pauseSimulation(tableId, `Auto-paused: ${issue.type} - ${issue.message.substring(0, 100)}`);
         
-        // Wait a moment for pause to take effect
-        await new Promise(resolve => setTimeout(resolve, 500));
+        // Wait a moment for pause to take effect (synchronous wait)
+        const startWait = Date.now();
+        while (Date.now() - startWait < 500) {
+            // Busy wait for 500ms
+        }
     }
     
     // Check if already paused
