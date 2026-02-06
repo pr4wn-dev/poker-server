@@ -567,10 +567,14 @@ If you're starting a fresh session and need to understand this system:
 ## 📚 Related Systems
 
 - **`scripts/watch-logs-and-fix.js`** - Server-side log watcher (runs automatically with server)
+  - **Built into server**: Initialized in `src/server.js` line 19 & 222
+  - **Runs automatically**: No manual start required
   - Handles Unity pause/resume
   - Clears logs when >5MB (archives first)
   - Active monitoring for simulation detection
-  - Integrates with this monitoring system
+  - **Integrates with monitor**: Detects markers written by `monitor.ps1`
+  - **Pattern sharing**: Uses `ERROR_PATTERNS` array (similar to monitor's patterns)
+  - **To update patterns**: Edit `scripts/watch-logs-and-fix.js` → `ERROR_PATTERNS` array
 - **`src/game/Table.js`** - Root tracing system (`_traceUniversal`)
 - **`src/utils/GameLogger.js`** - Centralized logging system
 - **`fix-attempts.txt`** - Fix attempt statistics
