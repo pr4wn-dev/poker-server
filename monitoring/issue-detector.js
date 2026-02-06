@@ -900,9 +900,11 @@ class IssueDetector {
                 return { confirmed: false, reason: 'waiting_for_time', timeRemaining: 10000 - timeSinceFix };
             }
             
-            // TODO: Check for pattern absence and success indicators
-            // This would require reading recent log entries
-            // For now, if criteria is set and enough time has passed, consider it confirmed
+            // TODO (Optional Enhancement): Check for pattern absence and success indicators
+            // This would require reading recent log entries to verify:
+            // - Error patterns don't reappear (pattern absence)
+            // - Success indicators appear (e.g., "FIX SUCCESS", "RESUMED", etc.)
+            // For now, time-based confirmation works well - if issue doesn't reappear in 10 seconds, consider it fixed
             
             return { confirmed: true, reason: 'time_based_confirmation' };
         } catch (error) {

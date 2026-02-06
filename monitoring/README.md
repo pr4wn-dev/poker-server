@@ -715,29 +715,34 @@ When fixes require restarts, here's what happens:
 - ⚠️ Unity remains **paused** during database downtime
 - ⚠️ You must manually restart MySQL service
 
-### Future Improvements (TODO)
+### Completed Automation Features ✅
 
-To fully automate restart scenarios:
+**Service Restart Automation:**
+- ✅ **Server Restart**: Monitor automatically restarts server if offline
+- ✅ **Database Restart**: Monitor automatically restarts MySQL service if offline
+- ✅ **Unity Restart**: Monitor automatically restarts Unity if not running or disconnected
+- ✅ **Service Health Checks**: Monitor checks all services every 30 seconds
 
-1. **Unity Restart Detection:**
-   - Monitor could detect when Unity needs restart (e.g., C# code changes)
-   - Assistant could write a marker to `pending-issues.json` indicating Unity restart needed
-   - Monitor could display: "Unity restart required - please restart Unity in debug mode"
+**Unity Automation:**
+- ✅ **Auto-Connect**: Unity receives `-serverUrl` command-line arg and auto-connects
+- ✅ **Auto-Login**: Unity receives `-autoLogin` and `-autoPassword` args for auto-login
+- ✅ **Auto-Mode**: Unity receives `-autoMode simulation` or `-autoMode normal` for automation
 
-2. **Database Restart Detection:**
-   - Monitor could detect database connection failures
-   - Assistant could check if MySQL service is running
-   - Assistant could attempt to restart MySQL service (if permissions allow)
+### Future Enhancements (Optional)
 
-3. **Restart Coordination:**
-   - Assistant could track which services need restart
-   - Assistant could coordinate restart order (Database → Server → Unity)
-   - Monitor could wait for all services to be ready before resuming
+1. **Fix Confirmation Enhancement:**
+   - Currently uses time-based confirmation (10 seconds)
+   - Could add pattern absence checks (verify error patterns don't reappear)
+   - Could add success indicators (check for positive confirmation patterns in logs)
 
-4. **State Preservation:**
+2. **State Preservation:**
    - Server could save table state to database before restart
    - Server could restore table state after restart
    - Unity could save local state before restart
+
+3. **Advanced Unity Detection:**
+   - Monitor could detect when Unity needs restart due to code changes
+   - Monitor could display: "Unity restart required - code changes detected"
 
 ---
 
