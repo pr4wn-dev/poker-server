@@ -511,8 +511,16 @@ while ($monitoringActive) {
             }
         }
         
-        # Update statistics display periodically
+        # Check server status and restart if needed (every 10 seconds)
         $now = Get-Date
+        if (($now - $lastStatsUpdate).TotalSeconds -ge 10) {
+            if (-not (Test-ServerRunning)) {
+                Write-Warning "Server went offline. Attempting to restart..."
+                Start-ServerIfNeeded | Out-Null
+            }
+        }
+        
+        # Update statistics display periodically
         if (($now - $lastStatsUpdate).TotalSeconds -ge $statsUpdateInterval) {
             Show-Statistics
             $lastStatsUpdate = $now
