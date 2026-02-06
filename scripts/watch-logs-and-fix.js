@@ -1295,6 +1295,25 @@ function processLogLine(line) {
         pauseReason: table.pauseReason
     } : null;
     
+    // CRITICAL: If table exists but isn't paused, pause it IMMEDIATELY
+    // This ensures Unity stops completely when an issue is detected
+    // This stops logging and gives user time to report the issue
+    if (table && !table.isPaused && !pausedTables.has(tableId)) {
+        gameLogger.error('LOG_WATCHER', `[PROCESS_LINE] PAUSING_UNITY_IMMEDIATELY`, {
+            tableId,
+            issueType: issue.type,
+            severity: issue.severity,
+            message: issue.message.substring(0, 200),
+            whatImDoing: 'Issue detected - pausing Unity completely to stop logging and give user time to report'
+        });
+        
+        // Pause Unity immediately - this stops all game activity and logging
+        pauseSimulation(tableId, `Auto-paused: ${issue.type} - ${issue.message.substring(0, 100)}`);
+        
+        // Wait a moment for pause to take effect
+        await new Promise(resolve => setTimeout(resolve, 500));
+    }
+    
     // Check if already paused
     if (pausedTables.has(tableId)) {
         const pauseInfo = pausedTables.get(tableId);
