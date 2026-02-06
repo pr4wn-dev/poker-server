@@ -4282,7 +4282,6 @@ class Table {
             } : null).filter(Boolean)
         });
         
-        const totalBetBefore = player.totalBet || 0;
         player.chips -= amount;
         player.currentBet = amount;
         const totalBetAfter = totalBetBefore + amount;
