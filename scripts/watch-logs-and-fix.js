@@ -22,6 +22,10 @@ let socketHandler = null;
 // NOTE: Fix attempt tracking logs (FIX ATTEMPT SUCCESS/FAILED) are informational and should NOT trigger pauses
 // Only detect when fixes are DISABLED (method failed) or actual errors occur
 const ERROR_PATTERNS = [
+    // MONITOR DETECTED ISSUES - CRITICAL (written by monitor.ps1 to trigger pause)
+    /\[MONITOR\].*\[CRITICAL_ISSUE_DETECTED\]/i,
+    /CRITICAL_ISSUE_DETECTED.*pausing Unity/i,
+    
     // SERVER CONNECTION ISSUES - CRITICAL
     /server.*cannot.*connect/i,
     /ECONNREFUSED/i,

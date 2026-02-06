@@ -499,7 +499,15 @@ while ($monitoringActive) {
                         
                         if ($addResult -and $addResult.success) {
                             Write-Warning "Issue logged to pending-issues.json (ID: $($addResult.issueId))"
-                            Write-Info "Unity will be paused automatically by server's log watcher"
+                            
+                            # CRITICAL: Write a special log entry that the log watcher will detect to pause Unity
+                            # This ensures Unity pauses immediately when monitor detects an issue
+                            $logFile = Join-Path $PSScriptRoot "..\logs\game.log"
+                            $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
+                            $pauseMarker = "[$timestamp] [GAME] [MONITOR] [CRITICAL_ISSUE_DETECTED] Issue detected by monitor - pausing Unity | Data: {`"issueId`":`"$($addResult.issueId)`",`"severity`":`"$($issue.severity)`",`"type`":`"$($issue.type)`",`"source`":`"$($issue.source)`",`"tableId`":$(if($tableId){`"$tableId`"}else{'null'}),`"message`":`"$($line.Replace('"','\"').Substring(0,[Math]::Min(200,$line.Length)))`"}"
+                            Add-Content -Path $logFile -Value $pauseMarker -ErrorAction SilentlyContinue
+                            
+                            Write-Info "Pause trigger written to game.log - Unity will pause automatically"
                             Write-Info "Waiting for assistant to fix issue..."
                             Write-Info "Message assistant: 'issue found'"
                             
