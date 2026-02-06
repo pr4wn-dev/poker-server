@@ -2399,7 +2399,11 @@ class Table {
         // This is the final safeguard - even if pot was set after awardPot cleared it
         if (this.pot > 0) {
             const potBeforeImmediateClear = this.pot;
-            console.error(`[Table ${this.name}] ⚠️ CRITICAL: Pot has ${potBeforeImmediateClear} chips at START of startNewHand()! Clearing immediately.`);
+            gameLogger.error(this.name, '[POT] CRITICAL: Pot has chips at START of startNewHand - clearing immediately', {
+                pot: potBeforeImmediateClear,
+                handNumber: this.handsPlayed,
+                phase: this.phase
+            });
             gameLogger.error(this.name, '[POT] CRITICAL: Pot not cleared at start of startNewHand - immediate clear', {
                 pot: potBeforeImmediateClear,
                 handNumber: this.handsPlayed,
