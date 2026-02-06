@@ -480,8 +480,17 @@ function extractTableId(logLine) {
  * Fix detected issue - actually fixes the code
  */
 async function fixIssue(issue, tableId) {
+    const gameLogger = require('../src/utils/GameLogger');
+    
     console.log(`\n[LogWatcher] 🔧 ANALYZING ISSUE: ${issue.type}`);
     console.log(`[LogWatcher] Message: ${issue.message.substring(0, 150)}...`);
+    
+    // ROOT TRACING: Track fix attempt
+    gameLogger.gameEvent('LOG_WATCHER', `[FIX] ATTEMPT_START`, {
+        tableId,
+        issueType: issue.type,
+        messagePreview: issue.message.substring(0, 150)
+    });
     
     // Mark as being fixed
     if (pausedTables.has(tableId)) {
@@ -501,11 +510,26 @@ async function fixIssue(issue, tableId) {
             break;
     }
     
+    // ROOT TRACING: Track fix result
+    gameLogger.gameEvent('LOG_WATCHER', `[FIX] ATTEMPT_RESULT`, {
+        tableId,
+        issueType: issue.type,
+        fixApplied,
+        messagePreview: issue.message.substring(0, 150)
+    });
+    
     if (fixApplied) {
         // Mark as fixed and resume
         if (pausedTables.has(tableId)) {
             pausedTables.get(tableId).fixed = true;
             pausedTables.get(tableId).fixing = false;
+            
+            gameLogger.gameEvent('LOG_WATCHER', `[FIX] MARKED_AS_FIXED`, {
+                tableId,
+                issueType: issue.type,
+                willResume: true
+            });
+            
             console.log(`[LogWatcher] ✓ Fix applied successfully`);
             console.log(`[LogWatcher] ▶️  RESUMING SIMULATION: ${tableId}`);
             
@@ -513,12 +537,30 @@ async function fixIssue(issue, tableId) {
             setTimeout(() => {
                 resumeSimulation(tableId);
             }, 1000);
+        } else {
+            gameLogger.gameEvent('LOG_WATCHER', `[FIX] ERROR_NO_PAUSE_INFO`, {
+                tableId,
+                issueType: issue.type,
+                pausedTablesCount: pausedTables.size
+            });
+            console.log(`[LogWatcher] ⚠️  Fix applied but table not in pausedTables`);
         }
     } else {
+        gameLogger.gameEvent('LOG_WATCHER', `[FIX] FAILED`, {
+            tableId,
+            issueType: issue.type,
+            messagePreview: issue.message.substring(0, 150),
+            action: 'Manual intervention required'
+        });
         console.log(`[LogWatcher] ⚠️  Could not auto-fix issue. Manual intervention required.`);
         console.log(`[LogWatcher] Issue details logged. Game remains paused.`);
         console.log(`[LogWatcher] Issue type: ${issue.type}`);
         console.log(`[LogWatcher] Issue message: ${issue.message.substring(0, 200)}`);
+        
+        // Clear fixing flag so we can try again later
+        if (pausedTables.has(tableId)) {
+            pausedTables.get(tableId).fixing = false;
+        }
     }
 }
 
