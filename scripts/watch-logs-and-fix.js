@@ -487,56 +487,98 @@ function extractTableId(logLine) {
 async function fixIssue(issue, tableId) {
     const gameLogger = require('../src/utils/GameLogger');
     
-    console.log(`\n[LogWatcher] 🔧 ANALYZING ISSUE: ${issue.type}`);
-    console.log(`[LogWatcher] Message: ${issue.message.substring(0, 150)}...`);
+    const fullMessage = issue.message.length > 500 ? issue.message.substring(0, 500) + '...' : issue.message;
     
-    // ROOT TRACING: Track fix attempt
+    // REPORT TO USER: Starting fix attempt with FULL DETAILS
+    console.log(`\n[LogWatcher] 🔧🔧🔧 ATTEMPTING TO FIX ISSUE 🔧🔧🔧`);
+    console.log(`[LogWatcher] Table ID: ${tableId}`);
+    console.log(`[LogWatcher] Issue Type: ${issue.type}`);
+    console.log(`[LogWatcher] Issue Severity: ${issue.severity}`);
+    console.log(`[LogWatcher] Full Issue Message: ${fullMessage}`);
+    console.log(`[LogWatcher] Fix Attempt Started: ${new Date().toISOString()}`);
+    
+    // ROOT TRACING: Track fix attempt with FULL DETAILS
     gameLogger.gameEvent('LOG_WATCHER', `[FIX] ATTEMPT_START`, {
         tableId,
         issueType: issue.type,
-        messagePreview: issue.message.substring(0, 150)
+        severity: issue.severity,
+        fullMessage: fullMessage,
+        messagePreview: issue.message.substring(0, 150),
+        pausedTablesCount: pausedTables.size,
+        tableState: gameManager ? (() => {
+            const t = gameManager.getTable(tableId);
+            return t ? {
+                name: t.name,
+                phase: t.phase,
+                handsPlayed: t.handsPlayed,
+                pot: t.pot,
+                isPaused: t.isPaused
+            } : null;
+        })() : null
     });
     
     // Mark as being fixed
     if (pausedTables.has(tableId)) {
         pausedTables.get(tableId).fixing = true;
+        pausedTables.get(tableId).fixAttemptedAt = Date.now();
     }
     
     let fixApplied = false;
+    let fixDetails = null;
     
     // Different fixes based on issue type
     switch (issue.type) {
         case 'item_ante':
             fixApplied = await fixItemAnteIssue(issue, tableId);
+            fixDetails = { method: 'fixItemAnteIssue', success: fixApplied };
             break;
             
         case 'general':
             fixApplied = await fixGeneralIssue(issue, tableId);
+            fixDetails = { method: 'fixGeneralIssue', success: fixApplied };
             break;
     }
     
-    // ROOT TRACING: Track fix result
+    // ROOT TRACING: Track fix result with FULL DETAILS
     gameLogger.gameEvent('LOG_WATCHER', `[FIX] ATTEMPT_RESULT`, {
         tableId,
         issueType: issue.type,
+        severity: issue.severity,
         fixApplied,
-        messagePreview: issue.message.substring(0, 150)
+        fixDetails,
+        messagePreview: issue.message.substring(0, 150),
+        fixDuration: pausedTables.has(tableId) && pausedTables.get(tableId).fixAttemptedAt 
+            ? Date.now() - pausedTables.get(tableId).fixAttemptedAt 
+            : null
     });
+    
+    // REPORT TO USER: Fix result with FULL DETAILS
+    console.log(`\n[LogWatcher] ${fixApplied ? '✅✅✅ FIX SUCCESSFUL ✅✅✅' : '❌❌❌ FIX FAILED ❌❌❌'}`);
+    console.log(`[LogWatcher] Table ID: ${tableId}`);
+    console.log(`[LogWatcher] Issue Type: ${issue.type}`);
+    console.log(`[LogWatcher] Fix Method: ${fixDetails ? fixDetails.method : 'unknown'}`);
+    console.log(`[LogWatcher] Fix Success: ${fixApplied}`);
+    if (pausedTables.has(tableId) && pausedTables.get(tableId).fixAttemptedAt) {
+        const duration = Date.now() - pausedTables.get(tableId).fixAttemptedAt;
+        console.log(`[LogWatcher] Fix Duration: ${duration}ms`);
+    }
+    console.log(`[LogWatcher] Timestamp: ${new Date().toISOString()}`);
     
     if (fixApplied) {
         // Mark as fixed and resume
         if (pausedTables.has(tableId)) {
             pausedTables.get(tableId).fixed = true;
             pausedTables.get(tableId).fixing = false;
+            pausedTables.get(tableId).fixedAt = Date.now();
             
             gameLogger.gameEvent('LOG_WATCHER', `[FIX] MARKED_AS_FIXED`, {
                 tableId,
                 issueType: issue.type,
-                willResume: true
+                willResume: true,
+                fixedAt: Date.now()
             });
             
-            console.log(`[LogWatcher] ✓ Fix applied successfully`);
-            console.log(`[LogWatcher] ▶️  RESUMING SIMULATION: ${tableId}`);
+            console.log(`[LogWatcher] ⏯️  Will resume simulation in 1 second...`);
             
             // Brief delay to ensure fix is applied
             setTimeout(() => {
@@ -554,13 +596,19 @@ async function fixIssue(issue, tableId) {
         gameLogger.gameEvent('LOG_WATCHER', `[FIX] FAILED`, {
             tableId,
             issueType: issue.type,
+            severity: issue.severity,
+            fullMessage: fullMessage,
             messagePreview: issue.message.substring(0, 150),
             action: 'Manual intervention required'
         });
-        console.log(`[LogWatcher] ⚠️  Could not auto-fix issue. Manual intervention required.`);
-        console.log(`[LogWatcher] Issue details logged. Game remains paused.`);
-        console.log(`[LogWatcher] Issue type: ${issue.type}`);
-        console.log(`[LogWatcher] Issue message: ${issue.message.substring(0, 200)}`);
+        
+        console.log(`[LogWatcher] ⚠️⚠️⚠️  ISSUE NOT AUTO-FIXED ⚠️⚠️⚠️`);
+        console.log(`[LogWatcher] Table ID: ${tableId}`);
+        console.log(`[LogWatcher] Issue Type: ${issue.type}`);
+        console.log(`[LogWatcher] Issue Message: ${issue.message.substring(0, 300)}`);
+        console.log(`[LogWatcher] Manual intervention may be required.`);
+        console.log(`[LogWatcher] Simulation will remain paused until manually resumed.`);
+        console.log(`[LogWatcher] Timestamp: ${new Date().toISOString()}`);
         
         // Clear fixing flag so we can try again later
         if (pausedTables.has(tableId)) {
