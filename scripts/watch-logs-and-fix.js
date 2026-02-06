@@ -1297,12 +1297,113 @@ function initialize(gameMgr, simMgr, sockHandler) {
 }
 
 // Export for use
+// Track last reported simulation state
+let lastReportedSimulations = new Set();
+let lastStatusReport = 0;
+const STATUS_REPORT_INTERVAL = 10000; // Report every 10 seconds
+
+/**
+ * Active monitoring: Check for new simulations and report status regularly
+ */
+function activeMonitoring() {
+    const gameLogger = require('../src/utils/GameLogger');
+    
+    if (!gameManager) {
+        return;
+    }
+    
+    // Get all simulation tables
+    const simulationTables = [];
+    for (const [tableId, table] of gameManager.tables) {
+        if (table.isSimulation) {
+            simulationTables.push({
+                id: tableId,
+                name: table.name,
+                handsPlayed: table.handsPlayed,
+                phase: table.phase,
+                isPaused: table.isPaused,
+                pauseReason: table.pauseReason,
+                gameStarted: table.gameStarted
+            });
+        }
+    }
+    
+    // Detect new simulations
+    const currentSimIds = new Set(simulationTables.map(t => t.id));
+    const newSimulations = simulationTables.filter(t => !lastReportedSimulations.has(t.id));
+    
+    if (newSimulations.length > 0) {
+        // NEW SIMULATION DETECTED - REPORT TO USER
+        for (const sim of newSimulations) {
+            gameLogger.error('LOG_WATCHER', `[ACTIVE_MONITORING] NEW_SIMULATION_DETECTED`, {
+                action: 'SIMULATION_STARTED',
+                tableId: sim.id,
+                tableName: sim.name,
+                whatImDoing: `I detected a new simulation started: "${sim.name}". I'm now actively monitoring it and will report any issues immediately.`,
+                handsPlayed: sim.handsPlayed,
+                phase: sim.phase,
+                gameStarted: sim.gameStarted,
+                isPaused: sim.isPaused,
+                timestamp: new Date().toISOString()
+            });
+        }
+        lastReportedSimulations = currentSimIds;
+    }
+    
+    // Regular status report every 10 seconds
+    const now = Date.now();
+    if (now - lastStatusReport >= STATUS_REPORT_INTERVAL) {
+        if (simulationTables.length > 0) {
+            gameLogger.error('LOG_WATCHER', `[ACTIVE_MONITORING] STATUS_REPORT`, {
+                action: 'STATUS_UPDATE',
+                activeSimulations: simulationTables.length,
+                simulations: simulationTables.map(s => ({
+                    name: s.name,
+                    handsPlayed: s.handsPlayed,
+                    phase: s.phase,
+                    isPaused: s.isPaused,
+                    pauseReason: s.pauseReason
+                })),
+                whatImDoing: `I'm actively monitoring ${simulationTables.length} simulation(s). All systems operational. Will report immediately if any issues are detected.`,
+                timestamp: new Date().toISOString()
+            });
+        }
+        lastStatusReport = now;
+    }
+    
+    // Clean up removed simulations
+    lastReportedSimulations = new Set(Array.from(lastReportedSimulations).filter(id => currentSimIds.has(id)));
+}
+
+// Start active monitoring
+let activeMonitoringInterval = null;
+
+function startActiveMonitoring() {
+    const gameLogger = require('../src/utils/GameLogger');
+    
+    if (activeMonitoringInterval) {
+        clearInterval(activeMonitoringInterval);
+    }
+    
+    // Check every 2 seconds for new simulations and report every 10 seconds
+    activeMonitoringInterval = setInterval(() => {
+        activeMonitoring();
+    }, 2000);
+    
+    gameLogger.gameEvent('LOG_WATCHER', `[ACTIVE_MONITORING] STARTED`, {
+        checkInterval: '2 seconds',
+        statusReportInterval: '10 seconds',
+        whatImDoing: 'I will now actively monitor for new simulations and report status regularly'
+    });
+}
+
 module.exports = {
     initialize,
     watchLogs,
     pauseSimulation,
     resumeSimulation,
-    getActiveSimulationTables
+    getActiveSimulationTables,
+    startActiveMonitoring
 };
 
 // If run directly, try to watch (but won't have full access to managers)
