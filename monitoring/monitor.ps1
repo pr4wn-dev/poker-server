@@ -1140,10 +1140,20 @@ while ($monitoringActive) {
         
         # Check if issues have been fixed (pending-issues.json is empty)
         if ($isPaused) {
-            $pendingIssues = Get-PendingIssuesCount
-            if ($pendingIssues -eq 0) {
-                # Don't write to console - update stats display instead
-                # Write-Success "All issues fixed! Resuming monitoring..."
+            $pendingInfo = Get-PendingIssuesInfo
+            if ($pendingInfo.TotalIssues -eq 0 -and -not $pendingInfo.InFocusMode) {
+                # Issues have been fixed - write resume marker to game.log
+                $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
+                $resumeMarker = "[$timestamp] [GAME] [MONITOR] [ISSUES_FIXED] All issues fixed - resuming Unity | Data: {`"action`":`"resume`",`"reason`":`"pending-issues.json cleared`"}"
+                
+                try {
+                    Add-Content -Path $logFile -Value $resumeMarker -ErrorAction Stop
+                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ISSUES FIXED: Resume marker written to game.log" -ForegroundColor "Green"
+                    Write-ConsoleOutput -Message "  Waiting for log watcher to resume Unity..." -ForegroundColor "Yellow"
+                } catch {
+                    Write-ConsoleOutput -Message "  ERROR: Failed to write resume marker: $_" -ForegroundColor "Red"
+                }
+                
                 $isPaused = $false
                 $currentIssue = $null
             }

@@ -1211,6 +1211,37 @@ function processLogLine(line) {
         return; // Skip TRACE logs entirely
     }
     
+    // Check for resume marker from monitor (when pending-issues.json is cleared)
+    if (line.includes('[MONITOR]') && line.includes('[ISSUES_FIXED]')) {
+        gameLogger.gameEvent('LOG_WATCHER', `[PROCESS_LINE] RESUME_MARKER_DETECTED`, {
+            linePreview: line.substring(0, 200),
+            action: 'Monitor cleared pending-issues.json - resuming all paused tables'
+        });
+        
+        // Resume all paused tables
+        const tablesToResume = Array.from(pausedTables.keys());
+        for (const tableId of tablesToResume) {
+            const pauseInfo = pausedTables.get(tableId);
+            if (pauseInfo && !pauseInfo.fixing) {
+                gameLogger.gameEvent('LOG_WATCHER', `[PROCESS_LINE] RESUMING_TABLE_FROM_MONITOR`, {
+                    tableId,
+                    reason: pauseInfo.reason,
+                    pausedAt: new Date(pauseInfo.pausedAt).toISOString(),
+                    pauseDuration: `${Math.floor((Date.now() - pauseInfo.pausedAt) / 1000)}s`
+                });
+                
+                // Mark as fixed so resume will work
+                pauseInfo.fixed = true;
+                pauseInfo.fixing = false;
+                
+                // Resume the simulation
+                resumeSimulation(tableId);
+            }
+        }
+        
+        return; // Don't process as an error
+    }
+    
     // ROOT TRACING: Track log line processing
     // Only trace if line contains error patterns (to avoid spam)
     const hasErrorPattern = ERROR_PATTERNS.some(pattern => pattern.test(line)) || 
@@ -1320,6 +1351,26 @@ function processLogLine(line) {
     // Check if already paused
     if (pausedTables.has(tableId)) {
         const pauseInfo = pausedTables.get(tableId);
+        
+        // Check if paused by monitor (waiting for manual fix)
+        const pausedByMonitor = pauseInfo.reason && (
+            pauseInfo.reason.includes('[MONITOR]') || 
+            pauseInfo.reason.includes('CRITICAL_ISSUE_DETECTED')
+        );
+        
+        // If paused by monitor, DON'T auto-fix - wait for user to tell assistant to fix
+        if (pausedByMonitor && !pauseInfo.fixing && !pauseInfo.fixed) {
+            gameLogger.gameEvent('LOG_WATCHER', `[PROCESS_LINE] PAUSED_BY_MONITOR_WAITING`, {
+                tableId,
+                issueType: issue.type,
+                existingReason: pauseInfo.reason,
+                pausedAt: new Date(pauseInfo.pausedAt).toISOString(),
+                timeSincePause: Date.now() - pauseInfo.pausedAt,
+                whatImDoing: 'Table paused by monitor - waiting for user to tell assistant to fix. NOT auto-fixing.',
+                action: 'Monitor will write resume marker when pending-issues.json is cleared'
+            });
+            return; // Don't auto-fix - wait for manual fix
+        }
         
         // If paused but NOT fixing, we need to handle the stuck state
         if (!pauseInfo.fixing && !pauseInfo.fixed) {
