@@ -77,8 +77,10 @@ class IssueDetector {
             // HIGH - Log and may pause
             high: [
                 // HIGH PRIORITY GAME LOGIC ERRORS
-                /CHIPS.*CREATED/i,
-                /pot.*mismatch/i,
+                // Chip creation - but exclude FIX_ATTEMPT SUCCESS
+                /CHIPS.*CREATED(?!.*\[FIX_ATTEMPT\].*SUCCESS)(?!.*SUCCESS)/i,
+                // Pot mismatches - but exclude FIX_ATTEMPT SUCCESS
+                /pot.*mismatch(?!.*\[FIX_ATTEMPT\].*SUCCESS)(?!.*SUCCESS)/i,
                 /Pot.*calculation.*error/i,
                 /Betting.*calculation.*error/i,
                 /Award.*calculation.*error/i,
@@ -192,6 +194,17 @@ class IssueDetector {
         
         // Skip TRACE logs (they're informational, not errors)
         if (logLine.includes('[TRACE]')) {
+            return null;
+        }
+        
+        // Skip FIX_ATTEMPT SUCCESS logs (these are good, not errors)
+        if (logLine.includes('[FIX_ATTEMPT]') && (logLine.includes('SUCCESS') || logLine.includes('SUCCEEDED'))) {
+            return null;
+        }
+        
+        // Skip FIX_ATTEMPT logs that are just informational (not actual errors)
+        // Only detect FIX_ATTEMPT FAILED or METHOD_DISABLED
+        if (logLine.includes('[FIX_ATTEMPT]') && !logLine.includes('FAILED') && !logLine.includes('METHOD_DISABLED') && !logLine.includes('DISABLED')) {
             return null;
         }
         

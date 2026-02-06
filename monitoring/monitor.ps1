@@ -509,7 +509,9 @@ while ($monitoringActive) {
                             if ($addResult -and $addResult.reason -eq 'duplicate') {
                                 Write-Info "Duplicate issue detected (already logged)"
                             } else {
-                                Write-Error "Failed to log issue: $($addResult.error)"
+                                $errorMsg = if ($addResult -and $addResult.error) { $addResult.error } else { "Unknown error - check Node.js script output" }
+                                Write-Error "Failed to log issue: $errorMsg"
+                                Write-Warning "Issue detected but not logged. Check issue-detector.js for errors."
                             }
                         }
                     }
