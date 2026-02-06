@@ -405,6 +405,10 @@ function Show-Statistics {
     
     Write-Host "+==============================================================================+" -ForegroundColor Cyan
     
+    # Calculate where console output should start (below stats)
+    $statsHeight = [Console]::CursorTop + 1
+    $script:consoleOutputStartLine = $statsHeight
+    
     # Fill remaining screen to prevent scrolling and keep stats at top
     $currentLine = [Console]::CursorTop
     $windowHeight = [Console]::WindowHeight
@@ -508,9 +512,15 @@ while ($monitoringActive) {
                 
                 if ($issue) {
                     # REPORT TO CONSOLE: Issue detected (but not yet paused)
+                    # Write below stats dashboard, not overlapping
+                    $currentCursorTop = [Console]::CursorTop
+                    [Console]::SetCursorPosition(0, $script:consoleOutputStartLine)
                     Write-Host "[$(Get-Date -Format 'HH:mm:ss')] " -NoNewline -ForegroundColor Yellow
                     Write-Host "ISSUE DETECTED: " -NoNewline -ForegroundColor Red
                     Write-Host "$($issue.type) ($($issue.severity))" -ForegroundColor White
+                    # Move cursor to next line for future output
+                    $script:consoleOutputStartLine++
+                    [Console]::SetCursorPosition(0, 0)  # Return to top for stats update
                     
                     # Update statistics
                     $stats.IssuesDetected++
@@ -553,13 +563,20 @@ while ($monitoringActive) {
                             # Update stats to show issue was logged
                             $stats.LastIssueLogged = Get-Date
                             
-                            # REPORT TO CONSOLE: Issue detected
-                            Write-Host "`n[$(Get-Date -Format 'HH:mm:ss')] " -NoNewline -ForegroundColor Yellow
+                            # REPORT TO CONSOLE: Issue detected (write below stats, not overlapping)
+                            $currentCursorTop = [Console]::CursorTop
+                            [Console]::SetCursorPosition(0, $script:consoleOutputStartLine)
+                            Write-Host "[$(Get-Date -Format 'HH:mm:ss')] " -NoNewline -ForegroundColor Yellow
                             Write-Host "ISSUE DETECTED: " -NoNewline -ForegroundColor Red
                             Write-Host "$($issue.type) ($($issue.severity))" -ForegroundColor White
+                            $script:consoleOutputStartLine++
+                            [Console]::SetCursorPosition(0, $script:consoleOutputStartLine)
                             Write-Host "  Message: $($line.Substring(0, [Math]::Min(100, $line.Length)))" -ForegroundColor Gray
+                            $script:consoleOutputStartLine++
                             if ($tableId) {
+                                [Console]::SetCursorPosition(0, $script:consoleOutputStartLine)
                                 Write-Host "  Table ID: $tableId" -ForegroundColor Cyan
+                                $script:consoleOutputStartLine++
                             }
                             
                             # CRITICAL: Write a special log entry that the log watcher will detect to pause Unity
@@ -573,13 +590,22 @@ while ($monitoringActive) {
                             try {
                                 Add-Content -Path $logFile -Value $pauseMarker -ErrorAction Stop
                                 $stats.PauseMarkersWritten++
+                                [Console]::SetCursorPosition(0, $script:consoleOutputStartLine)
                                 Write-Host "  Pause marker written to game.log" -ForegroundColor Green
+                                $script:consoleOutputStartLine++
+                                [Console]::SetCursorPosition(0, $script:consoleOutputStartLine)
                                 Write-Host "  Waiting for log watcher to pause Unity..." -ForegroundColor Yellow
+                                $script:consoleOutputStartLine++
                             } catch {
                                 # If writing fails, log it but continue
                                 $stats.PauseMarkerErrors++
+                                [Console]::SetCursorPosition(0, $script:consoleOutputStartLine)
                                 Write-Host "  ERROR: Failed to write pause marker: $_" -ForegroundColor Red
+                                $script:consoleOutputStartLine++
                             }
+                            
+                            # Return cursor to top for stats update
+                            [Console]::SetCursorPosition(0, 0)
                             
                             $isPaused = $true
                             $currentIssue = $line
