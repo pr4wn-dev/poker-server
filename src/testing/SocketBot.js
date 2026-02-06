@@ -1276,7 +1276,7 @@ async function runSimulation(options = {}) {
     
     // Keep running until interrupted
     process.on('SIGINT', () => {
-        console.log('\nStopping simulation...');
+        gameLogger.gameEvent('SOCKET_BOT', '[SIMULATION] STOPPING', { message: 'Stopping simulation...' });
         bots.forEach(bot => bot.disconnect());
         process.exit(0);
     });
