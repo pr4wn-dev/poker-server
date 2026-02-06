@@ -345,6 +345,11 @@ function resumeSimulation(tableId) {
     }
     
     // ROOT TRACING: Log resume success with full state
+    // REPORT TO USER: Resume successful
+    console.log(`[LogWatcher] ✓ SIMULATION RESUMED: ${tableId}`);
+    console.log(`[LogWatcher] Pause duration: ${Math.floor(pauseDuration / 1000)}s`);
+    console.log(`[LogWatcher] Table state: ${table.isPaused ? 'STILL PAUSED' : 'RESUMED'}`);
+    
     gameLogger.gameEvent('LOG_WATCHER', `[RESUME] SUCCESS`, {
         tableId,
         reason: pauseInfo.reason,
