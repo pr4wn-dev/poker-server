@@ -579,10 +579,19 @@ async function fixGeneralIssue(issue, tableId) {
     }
     
     // Chip calculation issues - these are logged but may not need pause
-    if (message.includes('chip') && (message.includes('lost') || message.includes('created'))) {
+    // Check for "chip" (singular) or "chips" (plural) and "created" or "lost"
+    if ((message.includes('chip') || message.includes('chips')) && (message.includes('lost') || message.includes('created'))) {
+        const gameLogger = require('../src/utils/GameLogger');
+        gameLogger.gameEvent('LOG_WATCHER', `[FIX] CHIP_ISSUE_DETECTED`, {
+            tableId,
+            message: issue.message.substring(0, 200),
+            action: 'Marking as logged for analysis - will resume'
+        });
         console.log(`[LogWatcher] Fix: Chip issue detected - checking root cause tracer`);
+        console.log(`[LogWatcher] Message: ${issue.message.substring(0, 150)}`);
         // These are logged for analysis, but may not require immediate pause
-        return true; // Logged for analysis
+        // Chip created/lost issues are validation warnings that are logged for analysis
+        return true; // Logged for analysis, can resume
     }
     
     // Pot-related issues - these are validation warnings, not critical errors
