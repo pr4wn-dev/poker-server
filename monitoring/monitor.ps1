@@ -186,8 +186,14 @@ function Show-Statistics {
         }
     }
     
-    # Clear screen and show header
-    Clear-Host
+    # Only clear screen on first display, then update in place
+    if ($script:firstDisplay -eq $null) {
+        Clear-Host
+        $script:firstDisplay = $true
+    } else {
+        # Move cursor to top (line 0) to overwrite stats in place
+        [Console]::SetCursorPosition(0, 0)
+    }
     Write-Host "`n" -NoNewline
     Write-Host "+==============================================================================+" -ForegroundColor Cyan
     Write-Host "|" -NoNewline -ForegroundColor Cyan
