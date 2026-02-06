@@ -35,6 +35,9 @@ $currentIssue = $null
 $monitoringActive = $true
 $lastServerCheck = Get-Date  # Track last server health check
 $previousStats = @{}  # Track previous stats values to only update when changed
+$script:consoleOutputStartLine = 0  # Will be set by Show-Statistics
+$script:maxConsoleLines = 15  # Maximum number of console output lines to keep visible
+$script:consoleLineCount = 0  # Track how many console lines we've written
 
 # Statistics tracking
 $stats = @{
@@ -115,6 +118,78 @@ function Get-PendingIssuesCount {
         }
     }
     return 0
+}
+
+# Function to write console output without causing scrolling
+function Write-ConsoleOutput {
+    param(
+        [string]$Message,
+        [string]$ForegroundColor = "White"
+    )
+    
+    # If console output area hasn't been initialized, skip
+    if ($script:consoleOutputStartLine -eq 0) {
+        return
+    }
+    
+    # Check if we've exceeded max console lines - if so, clear and reset
+    if ($script:consoleLineCount -ge $script:maxConsoleLines) {
+        # Clear the console output area
+        $windowHeight = [Console]::WindowHeight
+        $startClearLine = $script:consoleOutputStartLine
+        $endClearLine = [Math]::Min($windowHeight - 1, $script:consoleOutputStartLine + $script:maxConsoleLines)
+        
+        for ($line = $startClearLine; $line -le $endClearLine; $line++) {
+            [Console]::SetCursorPosition(0, $line)
+            Write-Host (" " * [Console]::WindowWidth) -NoNewline
+        }
+        
+        # Reset console line count
+        $script:consoleLineCount = 0
+    }
+    
+    # Calculate current console output line
+    $currentConsoleLine = $script:consoleOutputStartLine + $script:consoleLineCount
+    
+    # Make sure we don't go past window height
+    $windowHeight = [Console]::WindowHeight
+    if ($currentConsoleLine -ge $windowHeight - 1) {
+        # Reset - clear and start over
+        $startClearLine = $script:consoleOutputStartLine
+        $endClearLine = [Math]::Min($windowHeight - 1, $script:consoleOutputStartLine + $script:maxConsoleLines)
+        
+        for ($line = $startClearLine; $line -le $endClearLine; $line++) {
+            [Console]::SetCursorPosition(0, $line)
+            Write-Host (" " * [Console]::WindowWidth) -NoNewline
+        }
+        
+        $script:consoleLineCount = 0
+        $currentConsoleLine = $script:consoleOutputStartLine
+    }
+    
+    # Truncate message to window width to prevent wrapping (leave 2 chars margin)
+    $maxMessageLength = [Console]::WindowWidth - 2
+    $truncatedMessage = if ($Message.Length -gt $maxMessageLength) {
+        $Message.Substring(0, $maxMessageLength - 3) + "..."
+    } else {
+        $Message
+    }
+    
+    # Write the message (hide cursor during write to prevent flicker)
+    [Console]::CursorVisible = $false
+    [Console]::SetCursorPosition(0, $currentConsoleLine)
+    Write-Host $truncatedMessage -ForegroundColor $ForegroundColor
+    
+    # Increment line count
+    $script:consoleLineCount++
+    
+    # Track when we wrote console output
+    $script:lastConsoleOutputTime = Get-Date
+    
+    # Return cursor to top for stats (but don't update stats immediately)
+    # Restore cursor visibility
+    [Console]::SetCursorPosition(0, 0)
+    [Console]::CursorVisible = $true
 }
 
 # Function to get fix attempts stats
@@ -449,14 +524,17 @@ function Show-Statistics {
     $statsHeight = [Console]::CursorTop + 1
     $script:consoleOutputStartLine = $statsHeight
     
-    # Fill remaining screen to prevent scrolling and keep stats at top
-    $currentLine = [Console]::CursorTop
+    # Reset console line count when stats are redrawn (keeps console output fresh)
+    $script:consoleLineCount = 0
+    
+    # Clear the console output area to prevent old text from showing
     $windowHeight = [Console]::WindowHeight
-    $remainingLines = $windowHeight - $currentLine - 1
-    if ($remainingLines -gt 0) {
-        for ($i = 0; $i -lt $remainingLines; $i++) {
-            Write-Host ""
-        }
+    $consoleAreaStart = $script:consoleOutputStartLine
+    $consoleAreaEnd = [Math]::Min($windowHeight - 1, $consoleAreaStart + $script:maxConsoleLines)
+    
+    for ($line = $consoleAreaStart; $line -le $consoleAreaEnd; $line++) {
+        [Console]::SetCursorPosition(0, $line)
+        Write-Host (" " * [Console]::WindowWidth) -NoNewline
     }
     
     # Move cursor back to top (line 0) for next update - this keeps stats visible
@@ -555,17 +633,9 @@ while ($monitoringActive) {
                 
                 if ($issue) {
                     # REPORT TO CONSOLE: Issue detected (but not yet paused)
-                    # Write below stats dashboard, not overlapping
-                    # Don't update stats while writing console output (prevents flashing)
-                    $currentCursorTop = [Console]::CursorTop
-                    [Console]::SetCursorPosition(0, $script:consoleOutputStartLine)
-                    Write-Host "[$(Get-Date -Format 'HH:mm:ss')] " -NoNewline -ForegroundColor Yellow
-                    Write-Host "ISSUE DETECTED: " -NoNewline -ForegroundColor Red
-                    Write-Host "$($issue.type) ($($issue.severity))" -ForegroundColor White
-                    # Move cursor to next line for future output
-                    $script:consoleOutputStartLine++
-                    $script:lastConsoleOutputTime = Get-Date  # Track when we wrote console output
-                    [Console]::SetCursorPosition(0, 0)  # Return to top for stats update
+                    # Use Write-ConsoleOutput to prevent scrolling and flickering
+                    $issueMessage = "[$(Get-Date -Format 'HH:mm:ss')] ISSUE DETECTED: $($issue.type) ($($issue.severity))"
+                    Write-ConsoleOutput -Message $issueMessage -ForegroundColor "Yellow"
                     
                     # Update statistics
                     $stats.IssuesDetected++
@@ -609,24 +679,18 @@ while ($monitoringActive) {
                             $stats.LastIssueLogged = Get-Date
                             
                             # REPORT TO CONSOLE: Issue detected (write below stats, not overlapping)
-                            $currentCursorTop = [Console]::CursorTop
-                            [Console]::SetCursorPosition(0, $script:consoleOutputStartLine)
-                            Write-Host "[$(Get-Date -Format 'HH:mm:ss')] " -NoNewline -ForegroundColor Yellow
-                            Write-Host "ISSUE DETECTED: " -NoNewline -ForegroundColor Red
-                            Write-Host "$($issue.type) ($($issue.severity))" -ForegroundColor White
-                            $script:consoleOutputStartLine++
-                            [Console]::SetCursorPosition(0, $script:consoleOutputStartLine)
-                            Write-Host "  Message: $($line.Substring(0, [Math]::Min(100, $line.Length)))" -ForegroundColor Gray
-                            $script:consoleOutputStartLine++
+                            $issueMessage = "[$(Get-Date -Format 'HH:mm:ss')] ISSUE DETECTED: $($issue.type) ($($issue.severity))"
+                            Write-ConsoleOutput -Message $issueMessage -ForegroundColor "Yellow"
+                            
+                            $messagePreview = "  Message: $($line.Substring(0, [Math]::Min(100, $line.Length)))"
+                            Write-ConsoleOutput -Message $messagePreview -ForegroundColor "Gray"
+                            
                             if ($tableId) {
-                                [Console]::SetCursorPosition(0, $script:consoleOutputStartLine)
-                                Write-Host "  Table ID: $tableId" -ForegroundColor Cyan
-                                $script:consoleOutputStartLine++
+                                Write-ConsoleOutput -Message "  Table ID: $tableId" -ForegroundColor "Cyan"
                             }
                             
                             # CRITICAL: Write a special log entry that the log watcher will detect to pause Unity
                             # This ensures Unity pauses immediately when monitor detects an issue
-                            $logFile = Join-Path $PSScriptRoot "..\logs\game.log"
                             $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
                             $escapedMessage = $line.Replace('"','\"').Replace("`n"," ").Replace("`r"," ").Substring(0,[Math]::Min(200,$line.Length))
                             $pauseMarker = "[$timestamp] [GAME] [MONITOR] [CRITICAL_ISSUE_DETECTED] Issue detected by monitor - pausing Unity | Data: {`"issueId`":`"$($addResult.issueId)`",`"severity`":`"$($issue.severity)`",`"type`":`"$($issue.type)`",`"source`":`"$($issue.source)`",`"tableId`":$(if($tableId){`"$tableId`"}else{'null'}),`"message`":`"$escapedMessage`"}"
@@ -635,23 +699,13 @@ while ($monitoringActive) {
                             try {
                                 Add-Content -Path $logFile -Value $pauseMarker -ErrorAction Stop
                                 $stats.PauseMarkersWritten++
-                                [Console]::SetCursorPosition(0, $script:consoleOutputStartLine)
-                                Write-Host "  Pause marker written to game.log" -ForegroundColor Green
-                                $script:consoleOutputStartLine++
-                                [Console]::SetCursorPosition(0, $script:consoleOutputStartLine)
-                                Write-Host "  Waiting for log watcher to pause Unity..." -ForegroundColor Yellow
-                                $script:consoleOutputStartLine++
+                                Write-ConsoleOutput -Message "  Pause marker written to game.log" -ForegroundColor "Green"
+                                Write-ConsoleOutput -Message "  Waiting for log watcher to pause Unity..." -ForegroundColor "Yellow"
                             } catch {
                                 # If writing fails, log it but continue
                                 $stats.PauseMarkerErrors++
-                                [Console]::SetCursorPosition(0, $script:consoleOutputStartLine)
-                                Write-Host "  ERROR: Failed to write pause marker: $_" -ForegroundColor Red
-                                $script:consoleOutputStartLine++
+                                Write-ConsoleOutput -Message "  ERROR: Failed to write pause marker: $_" -ForegroundColor "Red"
                             }
-                            
-                            # Return cursor to top for stats update
-                            $script:lastConsoleOutputTime = Get-Date  # Track when we wrote console output
-                            [Console]::SetCursorPosition(0, 0)
                             
                             $isPaused = $true
                             $currentIssue = $line
