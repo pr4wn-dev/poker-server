@@ -16,59 +16,28 @@ let gameManager = null; // Will be set by initialize()
 let simulationManager = null;
 let socketHandler = null;
 
-// Patterns that indicate issues requiring pause
-// NOTE: Exclude LOG_WATCHER errors to prevent infinite loops
-// REAL ERRORS: These indicate actual game-breaking issues that need intervention
-// NOTE: Fix attempt tracking logs (FIX ATTEMPT SUCCESS/FAILED) are informational and should NOT trigger pauses
-// Only detect when fixes are DISABLED (method failed) or actual errors occur
-const ERROR_PATTERNS = [
+// Log Watcher is now a pause/resume service only - Monitor handles all issue detection
+// Only detect Monitor's pause/resume markers - no independent issue detection
+const MONITOR_PAUSE_PATTERNS = [
     // MONITOR DETECTED ISSUES - CRITICAL (written by monitor.ps1 to trigger pause)
     /\[MONITOR\].*\[CRITICAL_ISSUE_DETECTED\]/i,
-    /CRITICAL_ISSUE_DETECTED.*pausing Unity/i,
-    
-    // SERVER CONNECTION ISSUES - CRITICAL
-    /server.*cannot.*connect/i,
-    /ECONNREFUSED/i,
-    /EADDRINUSE/i,
-    /Port.*already.*in use/i,
-    /listen.*EADDRINUSE/i,
-    /Error.*listen/i,
-    /SERVER.*OFFLINE/i,
-    /SERVER.*FAILED/i,
-    /Database.*OFFLINE/i,
-    /DATABASE.*CONNECTION.*FAILED/i,
-    /\[DATABASE\].*\[CONNECTION\].*FAILED/i,
-    // GAME ERRORS
-    /\[ROOT CAUSE\]/i,  // Root cause analysis - indicates serious issue
-    /\[ROOT_TRACE\].*TOTAL_BET_NOT_CLEARED/i,  // Bet not cleared - indicates bug
-    /\[ROOT_TRACE\].*PLAYER_WON_MORE_THAN_CONTRIBUTED/i,  // Player won more than contributed (not side pot)
-    /SyntaxError/i,
-    /TypeError/i,
-    /ReferenceError/i,
-    /\[FIX\] METHOD_DISABLED/i,  // Fix method disabled - needs different approach (CRITICAL)
-    /\[FIX\] DISABLED/i,  // Fix disabled - critical
-    /METHOD_DISABLED.*TRY_DIFFERENT_APPROACH/i,  // Method failed - needs new approach
-    /SIMULATION BOT TIMEOUT/i,
-    /\[TIMER\].*TIMEOUT.*auto-folding/i,
-    /\[ICON_LOADING\].*ISSUE_REPORTED/i,
-    /LoadItemIcon.*FAILED/i,
-    /CreateItemAnteSlot.*FAILED/i,
-    /Sprite not found/i,
-    // Chip/Pot errors: Only detect if NOT part of fix attempt tracking
-    /(?:Chip|Chips).*(?:lost|created)(?!.*\[FIX ATTEMPT\])(?!.*FIX_2_)(?!.*SUCCESS)/i,  // Chip lost/created but NOT fix attempt tracking or success
-    /Pot.*mismatch(?!.*\[FIX ATTEMPT\].*SUCCESS)(?!.*FIX.*SUCCESS)(?!.*SUCCESS)/i,  // Pot mismatch but NOT fix success or any success
-    // General errors: Exclude fix attempt tracking, LOG_WATCHER, TRACE logs, and SUCCESS logs
-    /\[ERROR\](?!.*\[LOG_WATCHER\])(?!.*\[TRACE\])(?!.*\[FIX ATTEMPT\])(?!.*FIX_)(?!.*SUCCESS)/i
+    /CRITICAL_ISSUE_DETECTED.*pausing Unity/i
 ];
 
-// Patterns for item ante specific issues
-const ITEM_ANTE_ERROR_PATTERNS = [
-    /\[ITEM_ANTE\].*ERROR/i,
-    /\[ITEM_ANTE\].*FAILED/i,
-    /Item ante.*not found/i,
-    /Item.*not found in inventory/i,
-    /Item value.*less than minimum/i
+const MONITOR_RESUME_PATTERNS = [
+    // MONITOR ISSUES FIXED - Resume marker (written by monitor.ps1 when pending-issues.json cleared)
+    /\[MONITOR\].*\[ISSUES_FIXED\]/i
 ];
+
+// Legacy patterns kept for reference but not used (Monitor handles all detection)
+// These are here for documentation purposes only
+const ERROR_PATTERNS = [
+    // Only Monitor markers - all other detection moved to Monitor
+    ...MONITOR_PAUSE_PATTERNS
+];
+
+// Legacy - not used anymore
+const ITEM_ANTE_ERROR_PATTERNS = [];
 
 // Track paused tables
 const pausedTables = new Map(); // tableId -> { reason, pausedAt, fixed }
@@ -443,43 +412,48 @@ function resumeSimulation(tableId) {
  * Analyze log line and determine if it indicates an issue
  */
 function detectIssue(logLine) {
+    const gameLogger = require('../src/utils/GameLogger');
+    
     // CRITICAL: Skip LOG_WATCHER's own logs to prevent infinite loops
     if (logLine.includes('[LOG_WATCHER]')) {
         return null;
     }
     
     // Skip TRACE logs - they're informational, not errors
-    // Even if they contain "[ERROR]" in JSON data, they're not actual errors
     if (logLine.includes('[TRACE]')) {
         return null;
     }
     
-    // Check for error patterns
-    for (const pattern of ERROR_PATTERNS) {
+    // ONLY detect Monitor's pause markers - Monitor handles all issue detection
+    for (const pattern of MONITOR_PAUSE_PATTERNS) {
         if (pattern.test(logLine)) {
-            const gameLogger = require('../src/utils/GameLogger');
-            gameLogger.gameEvent('LOG_WATCHER', `[DETECT_ISSUE] PATTERN_MATCHED`, {
-                pattern: pattern.toString(),
-                matchedText: logLine.match(pattern)?.[0] || 'NO_MATCH',
-                linePreview: logLine.substring(0, 150)
+            // Check for monitor marker with explicit tableId in JSON
+            // Format: [MONITOR] [CRITICAL_ISSUE_DETECTED] ... | Data: {"tableId":"...",...}
+            const monitorMatch = logLine.match(/"tableId"\s*:\s*"([a-f0-9-]+)"/i);
+            if (monitorMatch) {
+                const tableId = monitorMatch[1];
+                const table = gameManager ? gameManager.getTable(tableId) : null;
+                if (table) {
+                    gameLogger.gameEvent('LOG_WATCHER', `[DETECT_ISSUE] MONITOR_PAUSE_MARKER_FOUND`, {
+                        tableId,
+                        tableName: table.name,
+                        linePreview: logLine.substring(0, 150),
+                        action: 'Monitor detected issue - pausing Unity'
+                    });
+                    return { severity: 'critical', type: 'monitor_detected', message: logLine };
+                }
+            }
+            
+            // Monitor marker found but no tableId - still pause if we can extract it
+            gameLogger.gameEvent('LOG_WATCHER', `[DETECT_ISSUE] MONITOR_PAUSE_MARKER_NO_TABLEID`, {
+                linePreview: logLine.substring(0, 150),
+                action: 'Monitor pause marker found but no tableId - will try to extract from table name'
             });
-            return { severity: 'error', type: 'general', message: logLine };
+            return { severity: 'critical', type: 'monitor_detected', message: logLine };
         }
     }
     
-    // Check for item ante specific issues
-    for (const pattern of ITEM_ANTE_ERROR_PATTERNS) {
-        if (pattern.test(logLine)) {
-            const gameLogger = require('../src/utils/GameLogger');
-            gameLogger.gameEvent('LOG_WATCHER', `[DETECT_ISSUE] ITEM_ANTE_PATTERN_MATCHED`, {
-                pattern: pattern.toString(),
-                matchedText: logLine.match(pattern)?.[0] || 'NO_MATCH',
-                linePreview: logLine.substring(0, 150)
-            });
-            return { severity: 'error', type: 'item_ante', message: logLine };
-        }
-    }
-    
+    // No Monitor pause marker - return null (Monitor handles all detection)
     return null;
 }
 
@@ -579,14 +553,22 @@ function extractTableId(logLine) {
  * Fix detected issue - actually fixes the code
  */
 /**
- * NEW WORKFLOW: Handle issue with log clearing
- * 1. Pause Unity
- * 2. Report to user what we're doing
- * 3. Fix the issue
- * 4. Clear log file
- * 5. Resume Unity
+ * DEPRECATED: Auto-fix workflow removed
+ * Log Watcher is now a pause/resume service only
+ * Monitor coordinates all fixes via Assistant workflow
+ * 
+ * This function is kept for reference but should not be called
+ * All fixes now go through: Monitor → pending-issues.json → Assistant → Resume marker
  */
 async function handleIssueWithLogClearing(issue, tableId, tableDetails) {
+    const gameLogger = require('../src/utils/GameLogger');
+    gameLogger.gameEvent('LOG_WATCHER', `[DEPRECATED] AUTO_FIX_DISABLED`, {
+        tableId,
+        issueType: issue.type,
+        message: 'Auto-fix workflow disabled. Monitor coordinates fixes via Assistant.',
+        action: 'This function should not be called - Monitor handles all fixes'
+    });
+    return; // Do nothing - Monitor handles fixes
     const gameLogger = require('../src/utils/GameLogger');
     const fullMessage = issue.message.length > 500 ? issue.message.substring(0, 500) + '...' : issue.message;
     
@@ -622,17 +604,16 @@ async function handleIssueWithLogClearing(issue, tableId, tableDetails) {
         timestamp: new Date().toISOString()
     });
     
-    // STEP 3: FIX THE ISSUE
-    gameLogger.gameEvent('LOG_WATCHER', `[WORKFLOW] STEP_3_FIXING_ISSUE`, {
+    // STEP 3: FIX THE ISSUE - DISABLED (Monitor handles fixes)
+    gameLogger.gameEvent('LOG_WATCHER', `[WORKFLOW] STEP_3_FIXING_DISABLED`, {
         tableId,
         issueType: issue.type,
-        whatImDoing: 'Now fixing the issue...'
+        whatImDoing: 'Auto-fix disabled. Monitor coordinates fixes via Assistant workflow.',
+        action: 'Monitor will handle fix coordination - Log Watcher only pauses/resumes'
     });
     
-    const fixResult = await fixIssue(issue, tableId);
-    
-    // Wait a moment for fix to complete
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    // No auto-fix - Monitor handles all fixes
+    const fixResult = false; // Always false since we don't auto-fix
     
     // STEP 4: ARCHIVE AND CLEAR LOG FILE (if needed)
     const MAX_LOG_SIZE = 5 * 1024 * 1024; // 5MB - only clear if log is getting large
@@ -1243,14 +1224,14 @@ function processLogLine(line) {
     }
     
     // ROOT TRACING: Track log line processing
-    // Only trace if line contains error patterns (to avoid spam)
-    const hasErrorPattern = ERROR_PATTERNS.some(pattern => pattern.test(line)) || 
-                          ITEM_ANTE_ERROR_PATTERNS.some(pattern => pattern.test(line));
+    // Only trace if line contains Monitor markers (to avoid spam)
+    const hasMonitorMarker = MONITOR_PAUSE_PATTERNS.some(pattern => pattern.test(line)) ||
+                             MONITOR_RESUME_PATTERNS.some(pattern => pattern.test(line));
     
-    if (hasErrorPattern) {
-        gameLogger.gameEvent('LOG_WATCHER', `[PROCESS_LINE] DETECTED_PATTERN`, {
+    if (hasMonitorMarker) {
+        gameLogger.gameEvent('LOG_WATCHER', `[PROCESS_LINE] DETECTED_MONITOR_MARKER`, {
             linePreview: line.substring(0, 150),
-            hasErrorPattern: true,
+            hasMonitorMarker: true,
             pausedTablesCount: pausedTables.size
         });
     }
@@ -1372,22 +1353,20 @@ function processLogLine(line) {
             return; // Don't auto-fix - wait for manual fix
         }
         
-        // If paused but NOT fixing, we need to handle the stuck state
+        // If paused but NOT fixing, wait for Monitor to handle it
         if (!pauseInfo.fixing && !pauseInfo.fixed) {
-            gameLogger.error('LOG_WATCHER', `[PROCESS_LINE] STUCK_PAUSED_STATE`, {
+            gameLogger.gameEvent('LOG_WATCHER', `[PROCESS_LINE] PAUSED_WAITING_FOR_MONITOR`, {
                 tableId,
                 issueType: issue.type,
                 existingReason: pauseInfo.reason,
                 pausedAt: new Date(pauseInfo.pausedAt).toISOString(),
                 timeSincePause: Date.now() - pauseInfo.pausedAt,
-                whatImDoing: 'Table is paused but not being fixed. Running workflow to fix and resume.',
+                whatImDoing: 'Table is paused - waiting for Monitor to coordinate fix via assistant. NOT auto-fixing.',
                 newIssueType: issue.type,
-                newIssueMessage: issue.message.substring(0, 200)
+                newIssueMessage: issue.message.substring(0, 200),
+                action: 'Monitor will write resume marker when pending-issues.json is cleared'
             });
-            
-            // Run workflow to fix and resume
-            handleIssueWithLogClearing(issue, tableId, tableDetails);
-            return;
+            return; // Don't auto-fix - wait for Monitor/Assistant workflow
         }
         
         // If currently fixing, skip
@@ -1416,40 +1395,91 @@ function processLogLine(line) {
         return; // Shouldn't reach here, but just in case
     }
     
-    // ROOT TRACING: About to pause with FULL STATE
-    gameLogger.gameEvent('LOG_WATCHER', `[PROCESS_LINE] PAUSING_NOW`, {
+    // ROOT TRACING: Issue detected but NOT pausing (Monitor handles pause/resume)
+    // Log Watcher is now a pause/resume service only - Monitor coordinates fixes
+    gameLogger.gameEvent('LOG_WATCHER', `[PROCESS_LINE] ISSUE_DETECTED_BUT_NOT_PAUSING`, {
         tableId,
         issueType: issue.type,
         severity: issue.severity,
         fullMessage: fullMessage,
         messagePreview: issue.message.substring(0, 150),
         tableDetails,
-        pausedTablesCount: pausedTables.size,
-        allPausedTables: Array.from(pausedTables.entries()).map(([id, info]) => ({
-            id,
-            reason: info.reason,
-            pausedAt: info.pausedAt
-        }))
+        whatImDoing: 'Issue detected but Log Watcher no longer auto-fixes. Monitor will detect and coordinate pause/resume.',
+        action: 'Monitor will write pause marker if needed, then coordinate fix via assistant'
     });
     
-    // REPORT TO USER: About to pause with FULL DETAILS - ALL LOGGING VIA GAMELOGGER
-    gameLogger.error('LOG_WATCHER', `[PROCESS_LINE] PAUSING_SIMULATION_FULL`, {
-        tableId,
-        tableDetails,
-        issueType: issue.type,
-        issueSeverity: issue.severity,
-        pauseReason: `${issue.type} - ${issue.message.substring(0, 100)}`,
-        fullIssueMessage: fullMessage,
-        timestamp: new Date().toISOString()
-    });
-    
-    // NEW WORKFLOW: Pause → Report → Fix → Clear Log → Resume
-    handleIssueWithLogClearing(issue, tableId, tableDetails);
+    // NOTE: Log Watcher is now a pause/resume service only
+    // Monitor detects issues and writes pause markers
+    // Log Watcher responds to Monitor's pause/resume markers only
+    // No auto-fix workflow - all fixes go through Monitor → Assistant workflow
 }
 
 /**
  * Initialize watcher with GameManager and SocketHandler references
  */
+/**
+ * Log maintenance: Archive and clear log file if it exceeds 5MB
+ * This runs independently of issue detection/fixing
+ */
+function performLogMaintenance() {
+    const gameLogger = require('../src/utils/GameLogger');
+    const MAX_LOG_SIZE = 5 * 1024 * 1024; // 5MB
+    
+    try {
+        if (!fs.existsSync(logFile)) {
+            return;
+        }
+        
+        const stats = fs.statSync(logFile);
+        const logSize = stats.size;
+        
+        if (logSize > MAX_LOG_SIZE) {
+            gameLogger.gameEvent('LOG_WATCHER', `[LOG_MAINTENANCE] ARCHIVING_AND_CLEARING`, {
+                logFile,
+                logSize,
+                maxSize: MAX_LOG_SIZE,
+                whatImDoing: 'Log file exceeded 5MB, archiving before clearing to preserve history...'
+            });
+            
+            // Archive current log before clearing
+            const archiveDir = path.join(__dirname, '../logs/archived');
+            if (!fs.existsSync(archiveDir)) {
+                fs.mkdirSync(archiveDir, { recursive: true });
+            }
+            
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19);
+            const archiveFile = path.join(archiveDir, `game_${timestamp}_maintenance.log`);
+            
+            // Copy log to archive
+            fs.copyFileSync(logFile, archiveFile);
+            
+            gameLogger.gameEvent('LOG_WATCHER', `[LOG_MAINTENANCE] LOG_ARCHIVED`, {
+                archiveFile,
+                originalSize: logSize,
+                reason: 'Log file exceeded 5MB, archived to preserve full history'
+            });
+            
+            // Clear the log file
+            fs.writeFileSync(logFile, '', 'utf8');
+            lastPosition = 0; // Reset position tracking
+            
+            gameLogger.gameEvent('LOG_WATCHER', `[LOG_MAINTENANCE] LOG_CLEARED`, {
+                logFile,
+                archiveFile,
+                originalSize: logSize,
+                newSize: 0,
+                positionReset: true
+            });
+        }
+    } catch (error) {
+        gameLogger.error('LOG_WATCHER', `[LOG_MAINTENANCE] ERROR`, {
+            logFile,
+            error: error.message,
+            action: 'Log maintenance failed - continuing anyway'
+        });
+    }
+}
+
 function initialize(gameMgr, simMgr, sockHandler) {
     gameManager = gameMgr;
     simulationManager = simMgr;
@@ -1459,10 +1489,20 @@ function initialize(gameMgr, simMgr, sockHandler) {
     gameLogger.gameEvent('LOG_WATCHER', `[INIT] INITIALIZED`, {
         gameManagerExists: !!gameMgr,
         simulationManagerExists: !!simMgr,
-        socketHandlerExists: !!sockHandler
+        socketHandlerExists: !!sockHandler,
+        mode: 'PAUSE_RESUME_SERVICE_ONLY',
+        note: 'Log Watcher is now a pause/resume service only - Monitor handles all issue detection and fixes'
     });
     watchLogs();
     startActiveMonitoring(); // Start active monitoring for simulation detection and status reports
+    
+    // Start log maintenance (check every 5 minutes)
+    setInterval(() => {
+        performLogMaintenance();
+    }, 5 * 60 * 1000); // 5 minutes
+    
+    // Perform initial log maintenance check
+    performLogMaintenance();
 }
 
 // Export for use

@@ -21,17 +21,17 @@ This is the **ONLY** logging system used across the entire game. It replaces all
 
 This monitoring system consists of **two integrated but separate components**:
 
-### 1. **Log Watcher** (Built into Server)
+### 1. **Log Watcher** (Built into Server) - **PAUSE/RESUME SERVICE ONLY**
 - **Location**: `scripts/watch-logs-and-fix.js`
 - **Status**: Runs automatically when server starts
 - **Initialized**: `src/server.js` line 19 & 222
 - **Purpose**:
   - Reads `game.log` continuously
-  - Detects issues using error patterns
-  - Pauses Unity when issues are found
-  - Fixes issues (or attempts to)
-  - Resumes Unity after fixes
-  - Clears logs when needed (>5MB, archives first)
+  - **ONLY detects Monitor's pause/resume markers** (no independent issue detection)
+  - Pauses Unity when Monitor writes pause marker
+  - Resumes Unity when Monitor writes resume marker
+  - Performs log maintenance (archives/clears when >5MB)
+- **Important**: Log Watcher **does NOT** auto-fix issues. All fixes go through Monitor → Assistant workflow.
 
 ### 2. **Monitor** (Separate PowerShell Script)
 - **Location**: `monitoring/monitor.ps1`
@@ -45,19 +45,21 @@ This monitoring system consists of **two integrated but separate components**:
 
 ### How They Work Together
 
-1. **Monitor detects issue** → Writes marker to `game.log` with `tableId`
-2. **Log watcher reads `game.log`** → Detects marker → Pauses Unity
-3. **Both use same log file** (`game.log`) for communication
+1. **Monitor detects issue** → Writes pause marker to `game.log` with `tableId`
+2. **Log Watcher reads `game.log`** → Detects Monitor's pause marker → Pauses Unity
+3. **You tell Assistant**: "issue found"
+4. **Assistant fixes issues** → Clears `pending-issues.json`
+5. **Monitor detects `pending-issues.json` cleared** → Writes resume marker to `game.log`
+6. **Log Watcher reads `game.log`** → Detects Monitor's resume marker → Resumes Unity
+
+**Key Point**: Log Watcher is now a **pause/resume service only**. It does NOT detect issues independently or attempt auto-fixes. All issue detection and fixing is coordinated by Monitor → Assistant workflow.
 
 ### Pattern Sharing
 
-Both systems use similar error patterns. To update patterns in both systems:
+**Note**: Log Watcher no longer uses error patterns for independent detection. It only responds to Monitor's pause/resume markers. All issue detection patterns are in Monitor:
 
 1. **Monitor patterns**: Edit `monitoring/issue-detector.js` → `errorPatterns` object
-2. **Log watcher patterns**: Edit `scripts/watch-logs-and-fix.js` → `ERROR_PATTERNS` array
-3. **Shared patterns file** (optional): Create `monitoring/shared-patterns.js` for both to import
-
-**Note**: When adding new patterns, update both files to keep them in sync. The monitor's patterns are more comprehensive (with severity mapping), while the log watcher's patterns are simpler (flat array).
+2. **Log Watcher**: Only detects Monitor markers (`[MONITOR] [CRITICAL_ISSUE_DETECTED]` and `[MONITOR] [ISSUES_FIXED]`)
 
 ---
 
@@ -113,7 +115,7 @@ The monitor will:
 - Track fix attempts and success rates
 - Show comprehensive stats: issues by severity, source, patterns, fix attempts
 
-**Note:** The server also runs `scripts/watch-logs-and-fix.js` automatically, which handles Unity pause/resume and log clearing.
+**Note:** The server also runs `scripts/watch-logs-and-fix.js` automatically, which is now a **pause/resume service only**. It responds to Monitor's pause/resume markers and handles log maintenance (archiving/clearing when >5MB). It does NOT auto-fix issues.
 
 ### 3. When Issue is Found
 
