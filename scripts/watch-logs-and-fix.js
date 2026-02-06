@@ -18,27 +18,30 @@ let socketHandler = null;
 
 // Patterns that indicate issues requiring pause
 // NOTE: Exclude LOG_WATCHER errors to prevent infinite loops
+// REAL ERRORS: These indicate actual game-breaking issues that need intervention
+// NOTE: Fix attempt tracking logs (FIX ATTEMPT SUCCESS/FAILED) are informational and should NOT trigger pauses
+// Only detect when fixes are DISABLED (method failed) or actual errors occur
 const ERROR_PATTERNS = [
-    /\[ROOT CAUSE\]/i,
-    /\[ROOT_TRACE\].*TOTAL_BET_NOT_CLEARED/i,
-    /\[ROOT_TRACE\].*PLAYER_WON_MORE_THAN_CONTRIBUTED/i,
+    /\[ROOT CAUSE\]/i,  // Root cause analysis - indicates serious issue
+    /\[ROOT_TRACE\].*TOTAL_BET_NOT_CLEARED/i,  // Bet not cleared - indicates bug
+    /\[ROOT_TRACE\].*PLAYER_WON_MORE_THAN_CONTRIBUTED/i,  // Player won more than contributed (not side pot)
     /SyntaxError/i,
     /TypeError/i,
     /ReferenceError/i,
-    /Validation failed/i,
-    /Chip.*lost/i,
-    /Chip.*created/i,
-    /Pot.*mismatch(?!.*SUCCESS)(?!.*FIX.*SUCCESS)/i,  // Pot mismatch but NOT success/fix success logs
-    /FIX.*FAILED(?!.*SUCCESS)/i,  // Fix failed but NOT fix success
-    /PERMANENTLY DISABLED/i,
-    /\[FIX\] DISABLED/i,
+    /\[FIX\] METHOD_DISABLED/i,  // Fix method disabled - needs different approach (CRITICAL)
+    /\[FIX\] DISABLED/i,  // Fix disabled - critical
+    /METHOD_DISABLED.*TRY_DIFFERENT_APPROACH/i,  // Method failed - needs new approach
     /SIMULATION BOT TIMEOUT/i,
     /\[TIMER\].*TIMEOUT.*auto-folding/i,
     /\[ICON_LOADING\].*ISSUE_REPORTED/i,
     /LoadItemIcon.*FAILED/i,
     /CreateItemAnteSlot.*FAILED/i,
     /Sprite not found/i,
-    /\[ERROR\](?!.*\[LOG_WATCHER\])(?!.*\[TRACE\])/i  // ERROR but NOT from LOG_WATCHER or TRACE logs
+    // Chip/Pot errors: Only detect if NOT part of fix attempt tracking
+    /(?:Chip|Chips).*(?:lost|created)(?!.*\[FIX ATTEMPT\])(?!.*FIX_2_)/i,  // Chip lost/created but NOT fix attempt tracking
+    /Pot.*mismatch(?!.*\[FIX ATTEMPT\].*SUCCESS)(?!.*FIX.*SUCCESS)/i,  // Pot mismatch but NOT fix success
+    // General errors: Exclude fix attempt tracking, LOG_WATCHER, and TRACE logs
+    /\[ERROR\](?!.*\[LOG_WATCHER\])(?!.*\[TRACE\])(?!.*\[FIX ATTEMPT\])(?!.*FIX_)/i
 ];
 
 // Patterns for item ante specific issues
