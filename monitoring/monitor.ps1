@@ -420,9 +420,11 @@ function Get-UnityActualStatus {
                     $timeDiff = ($now - $lineTime).TotalSeconds
                     
                     # Check for game activity (within last 2 minutes)
-                    if ($timeDiff -le 120) {
-                        # Unity is in game if we see game events
-                        if ($line -match '\[GAME\]|\[TABLE\]|table_state|player_action|game.*start|hand.*start|bet|call|fold|check|raise') {
+                    # EXCLUDE [LOG_WATCHER] entries - those are server-side, not Unity-side
+                    if ($timeDiff -le 120 -and $line -notmatch '\[LOG_WATCHER\]|\[MONITOR\]|\[STATUS_REPORT\]') {
+                        # Unity is in game if we see actual game events (not log watcher events)
+                        # Look for table_state broadcasts, player actions, game phases, etc.
+                        if ($line -match 'table_state|player_action|game.*start|hand.*start|bet|call|fold|check|raise|preflop|flop|turn|river|showdown|phase.*preflop|phase.*flop|phase.*turn|phase.*river|phase.*showdown|\[TABLE\].*phase|currentPlayer|dealerIndex|pot.*\d+|chips.*\d+') {
                             $gameActivityFound = $true
                             if (-not $status.LastGameActivity -or $lineTime -gt $status.LastGameActivity) {
                                 $status.LastGameActivity = $lineTime
@@ -430,7 +432,8 @@ function Get-UnityActualStatus {
                         }
                         
                         # Check for Unity connection events (within last 2 minutes)
-                        if ($line -match 'connected|login|join.*table|Unity.*connect') {
+                        # Look for actual Unity client events, not server-side monitoring
+                        if ($line -match 'Unity.*connected|client.*connected|socket.*connected|login.*success|join.*table.*success|\[UNITY\]') {
                             $connectionActivityFound = $true
                             if (-not $status.LastConnectionActivity -or $lineTime -gt $status.LastConnectionActivity) {
                                 $status.LastConnectionActivity = $lineTime
@@ -677,16 +680,20 @@ function Show-Statistics {
     # Save current stats for next comparison
     $script:previousStats = $currentStatsSnapshot
     
-    # Get Unity and Simulation status
-    $unityStatus = "STOPPED"; $unityColor = "Red"
-    if ($stats.UnityRunning) {
-        try {
-            $healthCheck = Invoke-WebRequest -Uri "$serverUrl/health" -TimeoutSec 1 -ErrorAction Stop
-            $health = $healthCheck.Content | ConvertFrom-Json
-            if ($health.onlinePlayers -gt 0) { $unityStatus = "CONNECTED"; $unityColor = "Green" }
-            else { $unityStatus = "IDLE"; $unityColor = "Yellow" }
-        } catch { $unityStatus = "RUNNING"; $unityColor = "Yellow" }
+    # Get Unity actual status (verify it's really connected and playing, not just that a simulation table exists)
+    $unityActualStatus = Get-UnityActualStatus
+    $unityStatus = $unityActualStatus.Status
+    $unityColor = switch ($unityStatus) {
+        "ACTIVE" { "Green" }
+        "CONNECTED" { "Cyan" }
+        "IDLE" { "Yellow" }
+        "STOPPED" { "Red" }
+        default { "Gray" }
     }
+    
+    # Update stats from actual status (so main loop sees the same state)
+    $stats.UnityRunning = $unityActualStatus.ProcessRunning
+    $stats.UnityConnected = $unityActualStatus.ConnectedToServer
     $simStatus = if ($stats.SimulationRunning) { "ACTIVE" } else { "STOPPED" }
     $simColor = if ($stats.SimulationRunning) { "Green" } else { "Red" }
     $logWatcherStatus = Get-LogWatcherStatus
