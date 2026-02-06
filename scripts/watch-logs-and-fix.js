@@ -123,7 +123,11 @@ function pauseSimulation(tableId, reason) {
             error: 'TABLE_NOT_FOUND',
             availableTables: Array.from(gameManager.tables.keys())
         });
-        console.error(`[LogWatcher] Table ${tableId} not found!`);
+        gameLogger.error('LOG_WATCHER', `[PAUSE] TABLE_NOT_FOUND_ERROR`, {
+            tableId,
+            reason,
+            availableTables: Array.from(gameManager.tables.keys())
+        });
         return;
     }
     
@@ -311,7 +315,11 @@ function resumeSimulation(tableId) {
             error: 'TABLE_NOT_FOUND',
             availableTables: Array.from(gameManager.tables.keys())
         });
-        console.error(`[LogWatcher] Table ${tableId} not found!`);
+        gameLogger.error('LOG_WATCHER', `[PAUSE] TABLE_NOT_FOUND_ERROR`, {
+            tableId,
+            reason,
+            availableTables: Array.from(gameManager.tables.keys())
+        });
         return;
     }
     
@@ -383,9 +391,12 @@ function resumeSimulation(tableId) {
     
     // ROOT TRACING: Log resume success with full state
     // REPORT TO USER: Resume successful
-    console.log(`[LogWatcher] ✓ SIMULATION RESUMED: ${tableId}`);
-    console.log(`[LogWatcher] Pause duration: ${Math.floor(pauseDuration / 1000)}s`);
-    console.log(`[LogWatcher] Table state: ${table.isPaused ? 'STILL PAUSED' : 'RESUMED'}`);
+    gameLogger.gameEvent('LOG_WATCHER', `[RESUME] SIMULATION_RESUMED_FULL`, {
+        tableId,
+        pauseDuration: `${Math.floor(pauseDuration / 1000)}s`,
+        tablePausedState: table.isPaused,
+        tableName: table.name
+    });
     
     gameLogger.gameEvent('LOG_WATCHER', `[RESUME] SUCCESS`, {
         tableId,
@@ -1043,7 +1054,9 @@ module.exports = {
 
 // If run directly, try to watch (but won't have full access to managers)
 if (require.main === module) {
-    console.log(`[LogWatcher] Starting standalone log watcher...`);
-    console.log(`[LogWatcher] Note: For full functionality, integrate with server.js\n`);
+    const gameLogger = require('../src/utils/GameLogger');
+    gameLogger.gameEvent('LOG_WATCHER', `[INIT] STANDALONE_MODE`, {
+        note: 'For full functionality, integrate with server.js'
+    });
     watchLogs();
 }
