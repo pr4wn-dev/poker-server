@@ -1294,6 +1294,7 @@ function initialize(gameMgr, simMgr, sockHandler) {
         socketHandlerExists: !!sockHandler
     });
     watchLogs();
+    startActiveMonitoring(); // Start active monitoring for simulation detection and status reports
 }
 
 // Export for use
