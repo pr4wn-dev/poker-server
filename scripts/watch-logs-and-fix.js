@@ -1337,20 +1337,25 @@ function activeMonitoring() {
     // Check gameManager.tables FIRST - this is where tables actually are
     try {
         const totalTables = gameManager.tables ? gameManager.tables.size : 0;
+        const allTableIds = gameManager.tables ? Array.from(gameManager.tables.keys()) : [];
+        const simulationTableIds = [];
+        
         gameLogger.gameEvent('LOG_WATCHER', `[ACTIVE_MONITORING] CHECKING_GAMEMANAGER_TABLES`, {
             totalTables,
-            tableIds: gameManager.tables ? Array.from(gameManager.tables.keys()) : []
+            tableIds: allTableIds
         });
         
         for (const [tableId, table] of gameManager.tables) {
             if (table) {
+                const isSim = table.isSimulation || false;
                 gameLogger.gameEvent('LOG_WATCHER', `[ACTIVE_MONITORING] FOUND_TABLE`, {
                     tableId,
                     name: table.name,
-                    isSimulation: table.isSimulation || false
+                    isSimulation: isSim
                 });
                 
-                if (table.isSimulation) {
+                if (isSim) {
+                    simulationTableIds.push(tableId);
                     tableIds.add(tableId);
                     simulationTables.push({
                         id: tableId,
@@ -1365,6 +1370,16 @@ function activeMonitoring() {
                     });
                 }
             }
+        }
+        
+        if (simulationTableIds.length > 0) {
+            gameLogger.error('LOG_WATCHER', `[ACTIVE_MONITORING] SIMULATIONS_FOUND_IN_GAMEMANAGER`, {
+                count: simulationTableIds.length,
+                tableIds: simulationTableIds,
+                tableNames: simulationTables.map(t => t.name),
+                message: `Found ${simulationTableIds.length} simulation(s) in gameManager.tables`,
+                reportToUser: true
+            });
         }
     } catch (error) {
         gameLogger.error('LOG_WATCHER', `[ACTIVE_MONITORING] ERROR_CHECKING_TABLES`, {
