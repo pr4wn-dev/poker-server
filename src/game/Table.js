@@ -192,10 +192,7 @@ class Table {
                 return true; // Unknown fix, allow it
             }
             const fix = this._fixAttempts[fixId];
-            // If permanently disabled or in failed set, never allow it again
-            if (fix.permanentlyDisabled || this._failedFixes.has(fixId)) {
-                return false;
-            }
+            // If this specific method is disabled, don't use it (but issue can still be fixed with different method)
             return !fix.disabled;
         };
         
@@ -236,24 +233,28 @@ class Table {
                     ...details
                 });
                 
-                // PERMANENTLY DISABLE FIX after MAX_FAILURES failures
-                // Once disabled, this fix can NEVER be re-enabled to prevent going back and forth
+                // DISABLE THIS SPECIFIC FIX METHOD after MAX_FAILURES failures
+                // This method has failed too many times - must try a DIFFERENT approach for the same issue
                 if (fix.failures >= MAX_FAILURES) {
                     fix.disabled = true;
-                    fix.permanentlyDisabled = true;
-                    this._failedFixes.add(fixId); // Add to failed set - prevents any future attempts
-                    gameLogger.error(this.name, `[FIX] PERMANENTLY_DISABLED`, { fixId, failures: fix.failures, maxFailures: MAX_FAILURES, message: 'Fix method permanently disabled - must use different approach' });
-                    gameLogger.gameEvent(this.name, `[FIX ATTEMPT] ${fixId} PERMANENTLY DISABLED - TOO MANY FAILURES`, {
+                    fix.methodFailed = true; // Mark this method as failed, but issue still needs fixing
+                    gameLogger.error(this.name, `[FIX] METHOD_DISABLED`, { 
+                        fixId, 
+                        failures: fix.failures, 
+                        maxFailures: MAX_FAILURES, 
+                        message: 'This fix method has failed too many times - must try a different approach for the same issue' 
+                    });
+                    gameLogger.gameEvent(this.name, `[FIX ATTEMPT] ${fixId} METHOD_DISABLED - TRY_DIFFERENT_APPROACH`, {
                         fixId,
                         totalFailures: fix.failures,
                         maxFailures: MAX_FAILURES,
                         totalAttempts: fix.attempts,
                         successRate: ((fix.attempts - fix.failures) / fix.attempts * 100).toFixed(1) + '%',
-                        recommendation: `Fix has failed ${fix.failures} times. Current approach is not working - MUST try a completely different approach! This fix will NEVER be re-enabled.`,
+                        recommendation: `Fix method ${fixId} has failed ${fix.failures} times. This specific approach is not working - MUST try a completely different fix method for the same underlying issue.`,
                         lastFailure: fix.lastFailure,
-                        permanentlyDisabled: true,
-                        warning: 'DO NOT re-enable this fix - it has been proven to not work. Use a different approach instead.',
-                        investigationRequired: `CRITICAL: When a fix is permanently disabled, you MUST investigate the root cause. The fix failing ${fix.failures} times indicates a deeper problem in the code that needs to be fixed at the source, not patched with workarounds. Check the lastFailure details and trace back to find where the actual bug is occurring.`
+                        methodDisabled: true,
+                        actionRequired: `CRITICAL: This fix method is disabled, but the underlying issue still exists. You MUST implement a different fix approach for the same problem. Check the lastFailure details to understand what's not working.`,
+                        note: 'The issue still needs to be fixed - just use a different method/approach'
                     });
                 }
             } else {

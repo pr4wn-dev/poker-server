@@ -754,22 +754,25 @@ async function fixGeneralIssue(issue, tableId) {
         return true; // Might resolve on next operation
     }
     
-    // Chip calculation issues - these are logged but may not need pause
+    // Chip calculation issues - CRITICAL: These need investigation, don't just mark as fixed
     // Check for "chip" (singular) or "chips" (plural) and "created" or "lost"
     if ((message.includes('chip') || message.includes('chips')) && (message.includes('lost') || message.includes('created'))) {
         const gameLogger = require('../src/utils/GameLogger');
-        gameLogger.gameEvent('LOG_WATCHER', `[FIX] CHIP_ISSUE_DETECTED`, {
+        gameLogger.error('LOG_WATCHER', `[FIX] CHIP_ISSUE_CRITICAL`, {
             tableId,
             message: issue.message.substring(0, 200),
-            action: 'Marking as logged for analysis - will resume'
+            action: 'CRITICAL: Chips being created/lost - this is a serious bug that needs investigation',
+            severity: 'critical',
+            requiresInvestigation: true
         });
         gameLogger.gameEvent('LOG_WATCHER', `[FIX_GENERAL] CHIP_ISSUE_DETECTED`, {
             tableId,
-            message: issue.message.substring(0, 200)
+            message: issue.message.substring(0, 200),
+            note: 'This is logged but the underlying issue needs to be fixed at the root cause'
         });
-        // These are logged for analysis, but may not require immediate pause
-        // Chip created/lost issues are validation warnings that are logged for analysis
-        return true; // Logged for analysis, can resume
+        // These are critical issues - log them but don't auto-resume
+        // The issue needs to be investigated and fixed, not just logged
+        return false; // Don't mark as fixed - needs investigation
     }
     
     // Pot-related issues - these are validation warnings, not critical errors
