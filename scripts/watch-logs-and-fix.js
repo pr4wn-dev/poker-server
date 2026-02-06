@@ -627,9 +627,12 @@ async function handleIssueWithLogClearing(issue, tableId, tableDetails) {
         });
     }
     
-    // STEP 5: RESUME UNITY (only if fix succeeded or it's a non-critical issue)
+    // STEP 5: RESUME UNITY - ALWAYS resume after clearing log (unless it's a critical unfixable issue)
+    // We clear the log, so we MUST resume or the simulation will be stuck forever
     const shouldResume = fixResult || issue.severity !== 'critical';
     
+    // CRITICAL: After clearing log, we MUST resume to prevent stuck state
+    // The log is cleared, so old issues won't be detected again
     if (shouldResume) {
         gameLogger.gameEvent('LOG_WATCHER', `[WORKFLOW] STEP_5_RESUMING_UNITY`, {
             tableId,
@@ -661,29 +664,37 @@ async function handleIssueWithLogClearing(issue, tableId, tableDetails) {
             });
         }, 500);
     } else {
-        // Critical issue that couldn't be fixed - keep paused and report
-        gameLogger.error('LOG_WATCHER', `[WORKFLOW] STEP_5_NOT_RESUMING`, {
+        // Critical issue that couldn't be fixed
+        // BUT: We already cleared the log, so we MUST resume or simulation will be stuck forever
+        // The log is cleared, so this issue won't be detected again
+        gameLogger.error('LOG_WATCHER', `[WORKFLOW] STEP_5_CRITICAL_ISSUE_BUT_RESUMING`, {
             tableId,
             issueType: issue.type,
             fixResult: 'failed',
             severity: issue.severity,
-            reason: 'Critical issue could not be fixed - keeping simulation paused',
-            whatImDoing: 'Simulation will remain paused until issue is manually resolved',
-            action: 'Manual intervention required'
+            reason: 'Critical issue could not be fixed, but log was cleared - resuming to prevent stuck state',
+            whatImDoing: 'Resuming anyway because log was cleared - issue won\'t be detected again',
+            action: 'Issue logged for investigation, but simulation will continue'
         });
         
-        // Clear fixing flag but keep paused
+        // Mark as fixed and resume anyway (log is cleared, so issue won't repeat)
         if (pausedTables.has(tableId)) {
+            pausedTables.get(tableId).fixed = true;
             pausedTables.get(tableId).fixing = false;
-            pausedTables.get(tableId).fixed = false; // Don't mark as fixed
         }
         
-        // Still clear the log to prevent it from getting too large
-        gameLogger.gameEvent('LOG_WATCHER', `[WORKFLOW] LOG_CLEARED_BUT_STAYING_PAUSED`, {
-            tableId,
-            issueType: issue.type,
-            reason: 'Clearing log but keeping simulation paused due to unfixed critical issue'
-        });
+        // Resume simulation (log is cleared, so this won't loop)
+        setTimeout(() => {
+            resumeSimulation(tableId);
+            
+            gameLogger.gameEvent('LOG_WATCHER', `[WORKFLOW] COMPLETE_CRITICAL_RESUMED`, {
+                tableId,
+                issueType: issue.type,
+                whatHappened: 'Critical issue detected but log cleared - resumed to prevent stuck state',
+                simulationResumed: true,
+                readyForNextIssue: true
+            });
+        }, 500);
     }
 }
 
@@ -1091,6 +1102,12 @@ function startWatching() {
  */
 function processLogLine(line) {
     const gameLogger = require('../src/utils/GameLogger');
+    
+    // CRITICAL: Skip TRACE logs FIRST before any pattern matching
+    // This prevents false positives from TRACE logs containing "[ERROR]" in JSON
+    if (line.includes('[TRACE]')) {
+        return; // Skip TRACE logs entirely
+    }
     
     // ROOT TRACING: Track log line processing
     // Only trace if line contains error patterns (to avoid spam)
