@@ -1557,8 +1557,18 @@ function activeMonitoring() {
     }
     
     // ALWAYS report status every 10 seconds - regardless of simulation state
+    // CRITICAL: This log is written with [ERROR] level so I (the assistant) can easily find and report it
     const now = Date.now();
     if (now - lastStatusReport >= STATUS_REPORT_INTERVAL) {
+        const statusMessage = simulationTables.length > 0 
+            ? `STATUS: ${simulationTables.length} active simulation(s) running` 
+            : 'STATUS: No active simulations - monitoring for new ones';
+        
+        const whatImDoing = simulationTables.length > 0
+            ? `I'm actively monitoring ${simulationTables.length} simulation(s). All systems operational. Will report immediately if any issues are detected.`
+            : 'I am actively monitoring the game logs and will report any issues immediately. Waiting for simulations to start.';
+        
+        // Write to log with [ERROR] level so it's easy to find
         gameLogger.error('LOG_WATCHER', `[ACTIVE_MONITORING] STATUS_REPORT`, {
             action: 'STATUS_UPDATE',
             activeSimulations: simulationTables.length,
@@ -1571,14 +1581,12 @@ function activeMonitoring() {
                 pot: s.pot,
                 activePlayers: s.activePlayers
             })) : [],
-            message: simulationTables.length > 0 
-                ? `STATUS: ${simulationTables.length} active simulation(s) running` 
-                : 'STATUS: No active simulations - monitoring for new ones',
-            whatImDoing: simulationTables.length > 0
-                ? `I'm actively monitoring ${simulationTables.length} simulation(s). All systems operational. Will report immediately if any issues are detected.`
-                : 'I am actively monitoring the game logs and will report any issues immediately. Waiting for simulations to start.',
+            message: statusMessage,
+            whatImDoing: whatImDoing,
             timestamp: new Date().toISOString(),
-            reportToUser: true // Flag for me to read and report
+            reportToUser: true, // Flag for me to read and report
+            // CRITICAL: Add a clear marker so I can easily find these reports
+            REPORT_MARKER: '=== STATUS REPORT FOR USER ==='
         });
         lastStatusReport = now;
     }
