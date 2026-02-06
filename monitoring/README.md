@@ -139,13 +139,15 @@ The monitor will:
 **Automation Features** (both modes):
 - ✅ Auto-restart server if needed
 - ✅ Auto-restart database (MySQL) if needed
-- ✅ Auto-restart Unity if needed
-- ✅ Auto-connect Unity to server
-- ✅ Auto-login Unity
+- ✅ Auto-restart Unity if needed (runs in normal visible window)
+- ✅ Unity auto-connects to server (via command-line args)
+- ✅ Unity auto-logs in (via command-line args)
 
 **Simulation Mode Only**:
-- ✅ Auto-create simulation table
-- ✅ Auto-start simulation
+- ✅ Unity auto-creates simulation table (handled by Unity)
+- ✅ Unity auto-starts simulation (handled by Unity)
+
+**Important**: Unity runs in **normal visible window** - you can watch everything happen. Unity receives command-line args (`-autoMode simulation` or `-autoMode normal`) and handles all automation internally.
 
 **Note:** The server also runs `scripts/watch-logs-and-fix.js` automatically, which is now a **pause/resume service only**. It responds to Monitor's pause/resume markers and handles log maintenance (archiving/clearing when >5MB). It does NOT auto-fix issues.
 
@@ -174,6 +176,96 @@ The monitor will:
    - Dashboard status returns to "MONITORING ACTIVE"
    - Statistics continue tracking
    - Ready for next issue
+
+---
+
+## 🤖 Unity Auto-Mode Implementation
+
+Monitor passes command-line arguments to Unity, and Unity handles all automation internally. Unity runs in a **normal visible window** so you can watch everything happen.
+
+### Command-Line Arguments Unity Receives
+
+When Monitor starts Unity, it passes:
+- `-projectPath [path]` - Unity project path
+- `-autoMode [simulation|normal]` - Automation mode
+- `-serverUrl [url]` - Server URL for auto-connect
+- `-autoLogin [username]` - Username for auto-login
+- `-autoPassword [password]` - Password for auto-login (if configured)
+
+### What Unity Needs to Implement
+
+**1. Command-Line Argument Parsing:**
+```csharp
+// In Unity startup code (e.g., GameManager or NetworkManager)
+string[] args = Environment.GetCommandLineArgs();
+string autoMode = GetCommandLineArg(args, "-autoMode"); // "simulation" or "normal"
+string serverUrl = GetCommandLineArg(args, "-serverUrl");
+string autoLogin = GetCommandLineArg(args, "-autoLogin");
+string autoPassword = GetCommandLineArg(args, "-autoPassword");
+```
+
+**2. Auto-Connect on Startup:**
+```csharp
+if (!string.IsNullOrEmpty(serverUrl)) {
+    ConnectToServer(serverUrl);
+}
+```
+
+**3. Auto-Login:**
+```csharp
+if (!string.IsNullOrEmpty(autoLogin)) {
+    Login(autoLogin, autoPassword);
+}
+```
+
+**4. Auto-Create Table (Simulation Mode Only):**
+```csharp
+if (autoMode == "simulation") {
+    // Wait for login to complete
+    OnLoginSuccess += () => {
+        CreateSimulationTable(new TableConfig {
+            name = "Auto Simulation",
+            maxPlayers = 9,
+            startingChips = 10000,
+            smallBlind = 50,
+            bigBlind = 100,
+            isSimulation = true
+        });
+    };
+}
+```
+
+**5. Auto-Start Simulation (Simulation Mode Only):**
+```csharp
+if (autoMode == "simulation") {
+    OnTableCreated += (tableId) => {
+        StartSimulation(tableId);
+    };
+}
+```
+
+**6. Normal Mode:**
+```csharp
+if (autoMode == "normal") {
+    // Auto-connect and auto-login, but wait for user to create table
+    // User creates table manually, then plays normally
+}
+```
+
+### Benefits of This Approach
+
+- ✅ **Unity runs normally** - Visible window, you can watch everything
+- ✅ **Uses existing code** - Same socket events as normal gameplay
+- ✅ **Easy to debug** - All logic in Unity, can step through code
+- ✅ **No new APIs needed** - Uses existing `create_table` and `start_simulation` events
+- ✅ **Realistic testing** - Unity acts exactly like a real player/bot
+
+### Monitor's Role
+
+Monitor just:
+1. Restarts Unity with command-line args if needed
+2. Watches logs and fixes issues (same as always)
+3. Unity handles all the automation internally
 
 ---
 

@@ -952,16 +952,32 @@ function Restart-UnityIfNeeded {
                 Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Unity not running, starting..." -ForegroundColor "Yellow"
             }
             
-            # Start Unity with project path
+            # Start Unity with project path and auto-mode
             $unityArgs = @(
                 "-projectPath", $config.unity.projectPath
             )
             
+            # Pass auto-mode to Unity (simulation or normal)
+            if ($config.simulation.enabled) {
+                $unityArgs += "-autoMode", "simulation"
+            } else {
+                $unityArgs += "-autoMode", "normal"
+            }
+            
+            # Pass server URL for auto-connect
             if ($config.unity.autoConnectOnStartup) {
-                # Pass server URL as command line arg (Unity needs to support this)
                 $unityArgs += "-serverUrl", $config.unity.serverUrl
             }
             
+            # Pass login credentials for auto-login
+            if ($config.automation.autoLogin -and $config.login.username) {
+                $unityArgs += "-autoLogin", $config.login.username
+                if ($config.login.password) {
+                    $unityArgs += "-autoPassword", $config.login.password
+                }
+            }
+            
+            # Start Unity in normal window (visible, not headless) so user can see everything
             Start-Process -FilePath $config.unity.executablePath -ArgumentList $unityArgs -WindowStyle Normal
             Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Unity started, waiting for connection..." -ForegroundColor "Cyan"
             
@@ -1002,28 +1018,13 @@ function Restart-UnityIfNeeded {
     }
 }
 
-# Function to create and start simulation table (simulation mode only)
-function Start-SimulationTable {
-    if (-not $config.simulation.enabled) {
-        return $false  # Not in simulation mode
-    }
-    
-    try {
-        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] SIMULATION: Creating simulation table..." -ForegroundColor "Cyan"
-        
-        # TODO: Implement via Socket.IO client or HTTP API
-        # For now, this is a placeholder - Unity needs to handle table creation
-        # Or we need to add HTTP API endpoint for table creation
-        
-        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] SIMULATION: Table creation requires Unity client or HTTP API endpoint" -ForegroundColor "Yellow"
-        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] SIMULATION: TODO: Implement auto-create table functionality" -ForegroundColor "Gray"
-        
-        return $false
-    } catch {
-        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] SIMULATION: Error creating table: $_" -ForegroundColor "Red"
-        return $false
-    }
-}
+# Note: Table creation and simulation start are handled by Unity itself
+# Unity receives -autoMode command-line arg and handles:
+# - Auto-connect to server
+# - Auto-login
+# - Auto-create table (simulation mode only)
+# - Auto-start simulation (simulation mode only)
+# Monitor just restarts Unity with the right args - Unity does the rest
 
 # Function to check and maintain all services
 function Maintain-Services {
