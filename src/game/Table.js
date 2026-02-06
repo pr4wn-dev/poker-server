@@ -963,7 +963,8 @@ class Table {
         // This is NOT masking - this is fixing the root cause: timer too short for bot processing
         const defaultTurnTimeLimit = options.turnTimeLimit || 20000;
         const previousTurnTimeLimit = this.isSimulation ? 500 : defaultTurnTimeLimit; // Previous value was 500ms for simulations
-        this.turnTimeLimit = this.isSimulation ? 2000 : defaultTurnTimeLimit; // 2000ms for simulations, 20 seconds for regular games
+        // Use provided turnTimeLimit if set (respects fast mode), otherwise default to 2000ms for simulations
+        this.turnTimeLimit = this.isSimulation ? (options.turnTimeLimit || 2000) : defaultTurnTimeLimit;
         
         // Record fix attempt - timer increase is the fix method
         // Note: _recordFixAttempt is defined later in constructor, but we'll call it after all initialization
