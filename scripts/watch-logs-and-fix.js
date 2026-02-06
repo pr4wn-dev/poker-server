@@ -28,7 +28,10 @@ const ERROR_PATTERNS = [
     /Chip.*created/i,
     /Pot.*mismatch/i,
     /FIX.*FAILED/i,
-    /PERMANENTLY DISABLED/i
+    /PERMANENTLY DISABLED/i,
+    /\[FIX\] DISABLED/i,
+    /SIMULATION BOT TIMEOUT/i,
+    /\[TIMER\].*TIMEOUT.*auto-folding/i
 ];
 
 // Patterns for item ante specific issues

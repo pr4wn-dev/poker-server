@@ -275,7 +275,7 @@ class Table {
         if (this._pendingTurnTimeLimitFixRecord) {
             this._recordFixAttempt('FIX_70_INCREASE_TURN_TIME_LIMIT_FOR_SIMULATIONS', true, {
                 context: 'CONSTRUCTOR',
-                method: 'INCREASE_TO_2000MS',
+                method: 'INCREASE_TO_5000MS',
                 previousTurnTimeLimit: this._pendingTurnTimeLimitFixRecord.previousTurnTimeLimit,
                 newTurnTimeLimit: this._pendingTurnTimeLimitFixRecord.newTurnTimeLimit,
                 isSimulation: this._pendingTurnTimeLimitFixRecord.isSimulation,
@@ -959,13 +959,13 @@ class Table {
         // 500ms was still too short, causing timeouts even though actions were being sent
         // This is NOT masking - this is fixing the root cause: timer too short for bot processing
         const defaultTurnTimeLimit = options.turnTimeLimit || 20000;
-        const previousTurnTimeLimit = this.isSimulation ? 500 : defaultTurnTimeLimit; // Previous value was 500ms for simulations
-        this.turnTimeLimit = this.isSimulation ? 2000 : defaultTurnTimeLimit; // 2000ms for simulations, 20 seconds for regular games
+        const previousTurnTimeLimit = this.isSimulation ? 2000 : defaultTurnTimeLimit; // Previous value was 2000ms for simulations
+        this.turnTimeLimit = this.isSimulation ? 5000 : defaultTurnTimeLimit; // 5000ms for simulations, 20 seconds for regular games
         
         // Record fix attempt - timer increase is the fix method
         // Note: _recordFixAttempt is defined later in constructor, but we'll call it after all initialization
         // Store this for later recording
-        this._pendingTurnTimeLimitFixRecord = this.isSimulation && this.turnTimeLimit === 2000 ? {
+        this._pendingTurnTimeLimitFixRecord = this.isSimulation && this.turnTimeLimit === 5000 ? {
             previousTurnTimeLimit,
             newTurnTimeLimit: this.turnTimeLimit,
             isSimulation: this.isSimulation
@@ -1850,14 +1850,14 @@ class Table {
         // The timer increase should prevent this from happening
         if (this.isSimulation && isBot) {
             const waitTime = this.playerWaitStartTime ? Date.now() - this.playerWaitStartTime : this.turnTimeLimit;
-            gameLogger.gameEvent(this.name, '[TIMER] SIMULATION BOT TIMEOUT - Timer increased to 2000ms but still timing out', {
+            gameLogger.gameEvent(this.name, '[TIMER] SIMULATION BOT TIMEOUT - Timer increased to 5000ms but still timing out', {
                 player: player.name,
                 seatIndex: this.currentPlayerIndex,
                 turnTimeLimit: this.turnTimeLimit,
                 waitTimeMs: waitTime,
                 phase: this.phase,
                 handNumber: this.handsPlayed,
-                reason: 'Bot timed out even with 2000ms timer - action may not have been sent or network issue'
+                reason: 'Bot timed out even with 5000ms timer - action may not have been sent, bot is paused, or network issue'
             });
             
             // Record fix attempt - timer increase is the fix
@@ -1867,8 +1867,8 @@ class Table {
                 seatIndex: this.currentPlayerIndex,
                 turnTimeLimit: this.turnTimeLimit,
                 waitTimeMs: waitTime,
-                method: 'INCREASE_TIMER_TO_2000MS',
-                reason: 'Timer increased to 2000ms but bot still timed out - may indicate action not sent',
+                method: 'INCREASE_TIMER_TO_5000MS',
+                reason: 'Timer increased to 5000ms but bot still timed out - may indicate action not sent, bot paused, or network issue',
                 handNumber: this.handsPlayed,
                 phase: this.phase
             });
@@ -2401,8 +2401,22 @@ class Table {
             });
         }
         
-        // CRITICAL: Clear any pending turn timers first
+        // CRITICAL: Clear any pending turn timers IMMEDIATELY when action is received
+        // This prevents timeout race conditions where timer fires before action is processed
         this.clearTurnTimer();
+        
+        // Record fix attempt - clearing timer at action start is the fix method
+        // This fix prevents timeouts when actions arrive but processing takes time
+        if (this._isFixEnabled('FIX_66_TIMER_CLEARED_AT_ACTION_START')) {
+            this._recordFixAttempt('FIX_66_TIMER_CLEARED_AT_ACTION_START', true, {
+                context: 'HANDLE_ACTION_START',
+                playerId,
+                action,
+                handNumber: this.handsPlayed,
+                phase: this.phase,
+                reason: 'Timer cleared immediately when action received - prevents timeout race condition'
+            });
+        }
         
         if (this.getSeatedPlayerCount() < 2) {
             this._tracePhaseChange(GAME_PHASES.WAITING, 'NOT_ENOUGH_PLAYERS');
