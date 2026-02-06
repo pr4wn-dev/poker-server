@@ -1330,20 +1330,61 @@ function activeMonitoring() {
         return;
     }
     
-    // Get all simulation tables
+    // Get all simulation tables - check both gameManager.tables and simulationManager.activeSimulations
     const simulationTables = [];
-    for (const [tableId, table] of gameManager.tables) {
-        if (table.isSimulation) {
-            simulationTables.push({
-                id: tableId,
-                name: table.name,
-                handsPlayed: table.handsPlayed,
-                phase: table.phase,
-                isPaused: table.isPaused,
-                pauseReason: table.pauseReason,
-                gameStarted: table.gameStarted,
-                pot: table.pot,
-                activePlayers: table.seats.filter(s => s && s.isActive).length
+    const tableIds = new Set();
+    
+    // Check gameManager.tables
+    try {
+        for (const [tableId, table] of gameManager.tables) {
+            if (table && table.isSimulation) {
+                tableIds.add(tableId);
+                simulationTables.push({
+                    id: tableId,
+                    name: table.name,
+                    handsPlayed: table.handsPlayed || 0,
+                    phase: table.phase || 'waiting',
+                    isPaused: table.isPaused || false,
+                    pauseReason: table.pauseReason || null,
+                    gameStarted: table.gameStarted || false,
+                    pot: table.pot || 0,
+                    activePlayers: table.seats ? table.seats.filter(s => s && s.isActive).length : 0
+                });
+            }
+        }
+    } catch (error) {
+        gameLogger.error('LOG_WATCHER', `[ACTIVE_MONITORING] ERROR_CHECKING_TABLES`, {
+            error: error.message,
+            stack: error.stack
+        });
+    }
+    
+    // Also check simulationManager.activeSimulations to catch any we might have missed
+    if (simulationManager && simulationManager.activeSimulations) {
+        try {
+            for (const [tableId, sim] of simulationManager.activeSimulations) {
+                if (!tableIds.has(tableId)) {
+                    const table = gameManager.getTable(tableId);
+                    if (table && table.isSimulation) {
+                        tableIds.add(tableId);
+                        simulationTables.push({
+                            id: tableId,
+                            name: table.name,
+                            handsPlayed: table.handsPlayed || 0,
+                            phase: table.phase || 'waiting',
+                            isPaused: table.isPaused || false,
+                            pauseReason: table.pauseReason || null,
+                            gameStarted: table.gameStarted || false,
+                            pot: table.pot || 0,
+                            activePlayers: table.seats ? table.seats.filter(s => s && s.isActive).length : 0
+                        });
+                    }
+                }
+            }
+        } catch (error) {
+            gameLogger.error('LOG_WATCHER', `[ACTIVE_MONITORING] ERROR_CHECKING_SIMULATIONS`, {
+                error: error.message,
+                stack: error.stack
             });
         }
     }
