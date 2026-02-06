@@ -1230,13 +1230,42 @@ class SimulationManager {
      * Pause a simulation - bots will stop taking actions
      */
     pauseSimulation(tableId, reason = 'manual_pause') {
+        const gameLogger = require('../utils/GameLogger');
+        
+        // ROOT TRACING: Track pause attempt
+        gameLogger.gameEvent('SIMULATION_MANAGER', `[PAUSE] ATTEMPT`, {
+            tableId,
+            reason,
+            activeSimulationsCount: this.activeSimulations.size,
+            simulationExists: this.activeSimulations.has(tableId),
+            ioExists: !!this.io,
+            gameManagerExists: !!this.gameManager,
+            stackTrace: new Error().stack?.split('\n').slice(2, 8).join(' | ') || 'NO_STACK'
+        });
+        
         console.log(`[SimulationManager] pauseSimulation CALLED: tableId=${tableId}, reason=${reason}`);
         const simulation = this.activeSimulations.get(tableId);
         if (!simulation) {
+            gameLogger.gameEvent('SIMULATION_MANAGER', `[PAUSE] ERROR`, {
+                tableId,
+                reason,
+                error: 'SIMULATION_NOT_FOUND',
+                availableTableIds: Array.from(this.activeSimulations.keys())
+            });
             console.error(`[SimulationManager] ⚠️ Cannot pause - simulation not found for tableId=${tableId}`);
             this.log('WARN', 'Cannot pause simulation - not found', { tableId });
             return { success: false, error: 'Simulation not found' };
         }
+        
+        // ROOT TRACING: Log before pause
+        gameLogger.gameEvent('SIMULATION_MANAGER', `[PAUSE] BEFORE_STATE`, {
+            tableId,
+            reason,
+            wasPaused: simulation.isPaused,
+            previousReason: simulation.pauseReason,
+            botCount: simulation.socketBots?.length || 0,
+            gameStarted: simulation.gameStarted || false
+        });
         
         console.log(`[SimulationManager] ⚠️⚠️⚠️ PAUSING SIMULATION: tableId=${tableId}, reason=${reason}`);
         simulation.isPaused = true;
@@ -1287,25 +1316,60 @@ class SimulationManager {
         }
         
         // Notify all socket bots to pause
+        let botsPaused = 0;
+        let botsPauseErrors = 0;
         for (const bot of simulation.socketBots) {
-            bot.isPaused = true;
+            try {
+                bot.isPaused = true;
+                botsPaused++;
+            } catch (error) {
+                botsPauseErrors++;
+                gameLogger.gameEvent('SIMULATION_MANAGER', `[PAUSE] BOT_PAUSE_ERROR`, {
+                    tableId,
+                    botName: bot?.name || 'unknown',
+                    error: error.message
+                });
+            }
         }
         
         this.log('INFO', 'Simulation paused', { tableId, reason });
         
         // Also emit simulation_paused event for backwards compatibility
+        let eventsEmitted = 0;
         if (this.io) {
-            const pauseEvent = {
-                tableId,
-                reason,
-                pausedAt: simulation.pausedAt
-            };
-            
-            const tableRoom = `table:${tableId}`;
-            const spectatorRoom = `spectator:${tableId}`;
-            this.io.to(tableRoom).emit('simulation_paused', pauseEvent);
-            this.io.to(spectatorRoom).emit('simulation_paused', pauseEvent);
+            try {
+                const pauseEvent = {
+                    tableId,
+                    reason,
+                    pausedAt: simulation.pausedAt
+                };
+                
+                const tableRoom = `table:${tableId}`;
+                const spectatorRoom = `spectator:${tableId}`;
+                this.io.to(tableRoom).emit('simulation_paused', pauseEvent);
+                this.io.to(spectatorRoom).emit('simulation_paused', pauseEvent);
+                eventsEmitted = 2;
+            } catch (error) {
+                gameLogger.gameEvent('SIMULATION_MANAGER', `[PAUSE] EVENT_EMIT_ERROR`, {
+                    tableId,
+                    error: error.message
+                });
+            }
         }
+        
+        // ROOT TRACING: Log pause success with full state
+        gameLogger.gameEvent('SIMULATION_MANAGER', `[PAUSE] SUCCESS`, {
+            tableId,
+            reason,
+            pausedAt: simulation.pausedAt,
+            botsPaused,
+            botsPauseErrors,
+            totalBots: simulation.socketBots?.length || 0,
+            eventsEmitted,
+            tablePaused: table?.isPaused || false,
+            tablePauseReason: table?.pauseReason || null,
+            stateBroadcastSent: !!this.io
+        });
         
         return { success: true, reason };
     }
@@ -1314,18 +1378,52 @@ class SimulationManager {
      * Resume a paused simulation
      */
     resumeSimulation(tableId) {
+        const gameLogger = require('../utils/GameLogger');
+        
+        // ROOT TRACING: Track resume attempt
+        gameLogger.gameEvent('SIMULATION_MANAGER', `[RESUME] ATTEMPT`, {
+            tableId,
+            activeSimulationsCount: this.activeSimulations.size,
+            simulationExists: this.activeSimulations.has(tableId),
+            simulationPaused: this.activeSimulations.get(tableId)?.isPaused || false,
+            ioExists: !!this.io,
+            gameManagerExists: !!this.gameManager,
+            stackTrace: new Error().stack?.split('\n').slice(2, 8).join(' | ') || 'NO_STACK'
+        });
+        
         const simulation = this.activeSimulations.get(tableId);
         if (!simulation) {
+            gameLogger.gameEvent('SIMULATION_MANAGER', `[RESUME] ERROR`, {
+                tableId,
+                error: 'SIMULATION_NOT_FOUND',
+                availableTableIds: Array.from(this.activeSimulations.keys())
+            });
             this.log('WARN', 'Cannot resume simulation - not found', { tableId });
             return { success: false, error: 'Simulation not found' };
         }
         
         if (!simulation.isPaused) {
+            gameLogger.gameEvent('SIMULATION_MANAGER', `[RESUME] ERROR`, {
+                tableId,
+                error: 'NOT_PAUSED',
+                currentPausedState: simulation.isPaused
+            });
             this.log('WARN', 'Cannot resume simulation - not paused', { tableId });
             return { success: false, error: 'Simulation is not paused' };
         }
         
         const pauseDuration = Date.now() - simulation.pausedAt;
+        
+        // ROOT TRACING: Log before resume
+        gameLogger.gameEvent('SIMULATION_MANAGER', `[RESUME] BEFORE_STATE`, {
+            tableId,
+            pauseReason: simulation.pauseReason,
+            pauseDuration: `${Math.floor(pauseDuration / 1000)}s`,
+            pausedAt: simulation.pausedAt,
+            botCount: simulation.socketBots?.length || 0,
+            gameStarted: simulation.gameStarted || false
+        });
+        
         simulation.isPaused = false;
         simulation.pauseReason = null;
         simulation.pausedAt = null;
