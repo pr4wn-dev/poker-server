@@ -357,6 +357,135 @@ function Test-ServerRunning {
     }
 }
 
+# Function to verify Unity is actually connected and playing (not just that a simulation table exists)
+function Get-UnityActualStatus {
+    try {
+        $status = @{
+            ProcessRunning = $false
+            ConnectedToServer = $false
+            InGameScene = $false
+            ReceivingGameUpdates = $false
+            LastGameActivity = $null
+            LastConnectionActivity = $null
+            Status = "UNKNOWN"
+            Details = @()
+        }
+        
+        # Check 1: Is Unity process running?
+        $unityProcess = Get-Process -Name "Unity" -ErrorAction SilentlyContinue
+        $status.ProcessRunning = $null -ne $unityProcess
+        if ($status.ProcessRunning) {
+            $status.Details += "Process: Running (PID: $($unityProcess.Id))"
+        } else {
+            $status.Details += "Process: NOT running"
+            $status.Status = "STOPPED"
+            return $status
+        }
+        
+        # Check 2: Is Unity connected to server?
+        try {
+            $healthCheck = Invoke-WebRequest -Uri "$serverUrl/health" -TimeoutSec 2 -ErrorAction Stop
+            $health = $healthCheck.Content | ConvertFrom-Json
+            $status.ConnectedToServer = $health.onlinePlayers -gt 0
+            if ($status.ConnectedToServer) {
+                $status.Details += "Server Connection: Connected ($($health.onlinePlayers) players online)"
+                $status.LastConnectionActivity = Get-Date
+            } else {
+                $status.Details += "Server Connection: NOT connected (0 players online)"
+            }
+        } catch {
+            $status.ConnectedToServer = $false
+            $status.Details += "Server Connection: Health check failed - $($_.Exception.Message)"
+        }
+        
+        # Check 3: Is Unity in a game scene (not MainMenuScene)?
+        if (Test-Path $logFile) {
+            $recentLines = Get-Content $logFile -Tail 500 -ErrorAction SilentlyContinue
+            $now = Get-Date
+            $gameActivityFound = $false
+            $connectionActivityFound = $false
+            
+            foreach ($line in $recentLines) {
+                # Extract timestamp
+                $lineTime = $null
+                if ($line -match '\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?)\]') {
+                    try {
+                        $lineTime = [DateTime]::Parse($matches[1])
+                    } catch {
+                        $lineTime = $null
+                    }
+                }
+                
+                if ($lineTime) {
+                    $timeDiff = ($now - $lineTime).TotalSeconds
+                    
+                    # Check for game activity (within last 2 minutes)
+                    if ($timeDiff -le 120) {
+                        # Unity is in game if we see game events
+                        if ($line -match '\[GAME\]|\[TABLE\]|table_state|player_action|game.*start|hand.*start|bet|call|fold|check|raise') {
+                            $gameActivityFound = $true
+                            if (-not $status.LastGameActivity -or $lineTime -gt $status.LastGameActivity) {
+                                $status.LastGameActivity = $lineTime
+                            }
+                        }
+                        
+                        # Check for Unity connection events (within last 2 minutes)
+                        if ($line -match 'connected|login|join.*table|Unity.*connect') {
+                            $connectionActivityFound = $true
+                            if (-not $status.LastConnectionActivity -or $lineTime -gt $status.LastConnectionActivity) {
+                                $status.LastConnectionActivity = $lineTime
+                            }
+                        }
+                    }
+                }
+            }
+            
+            $status.InGameScene = $gameActivityFound
+            $status.ReceivingGameUpdates = $gameActivityFound
+            
+            if ($gameActivityFound) {
+                $status.Details += "Game Activity: Active (last seen: $($status.LastGameActivity.ToString('HH:mm:ss')))"
+            } else {
+                $status.Details += "Game Activity: NONE (Unity may be in MainMenuScene or idle)"
+            }
+            
+            if ($connectionActivityFound) {
+                $status.Details += "Connection Activity: Recent (last seen: $($status.LastConnectionActivity.ToString('HH:mm:ss')))"
+            } else {
+                $status.Details += "Connection Activity: NONE (no recent connection events)"
+            }
+        }
+        
+        # Determine overall status
+        if (-not $status.ProcessRunning) {
+            $status.Status = "STOPPED"
+        } elseif (-not $status.ConnectedToServer) {
+            $status.Status = "IDLE"
+            $status.Details += "⚠️  Unity process running but NOT connected to server"
+        } elseif (-not $status.InGameScene) {
+            $status.Status = "IDLE"
+            $status.Details += "⚠️  Unity connected but NOT in game scene (likely in MainMenuScene)"
+        } elseif ($status.ReceivingGameUpdates) {
+            $status.Status = "ACTIVE"
+            $status.Details += "✅ Unity is connected and actively playing"
+        } else {
+            $status.Status = "CONNECTED"
+            $status.Details += "⚠️  Unity connected but no recent game activity"
+        }
+        
+        return $status
+    } catch {
+        return @{
+            ProcessRunning = $false
+            ConnectedToServer = $false
+            InGameScene = $false
+            ReceivingGameUpdates = $false
+            Status = "ERROR"
+            Details = @("Error checking Unity status: $($_.Exception.Message)")
+        }
+    }
+}
+
 # Function to get Log Watcher status from recent logs
 function Get-LogWatcherStatus {
     try {
