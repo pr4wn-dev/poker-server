@@ -209,6 +209,11 @@ class IssueDetector {
             return null;
         }
         
+        // Skip LOG_WATCHER logs (they're internal monitoring, not game errors)
+        if (logLine.includes('[LOG_WATCHER]')) {
+            return null;
+        }
+        
         // Skip TRACE logs (they're informational, not errors)
         if (logLine.includes('[TRACE]')) {
             return null;
@@ -222,6 +227,21 @@ class IssueDetector {
         // Skip FIX_ATTEMPT logs that are just informational (not actual errors)
         // Only detect FIX_ATTEMPT FAILED or METHOD_DISABLED
         if (logLine.includes('[FIX_ATTEMPT]') && !logLine.includes('FAILED') && !logLine.includes('METHOD_DISABLED') && !logLine.includes('DISABLED')) {
+            return null;
+        }
+        
+        // Skip STATUS_REPORT logs (they're informational updates, not errors)
+        if (logLine.includes('[STATUS_REPORT]') || logLine.includes('STATUS_UPDATE')) {
+            return null;
+        }
+        
+        // Skip ACTIVE_MONITORING logs (they're status updates, not errors)
+        if (logLine.includes('[ACTIVE_MONITORING]')) {
+            return null;
+        }
+        
+        // Skip WORKFLOW logs (they're process updates, not errors)
+        if (logLine.includes('[WORKFLOW]')) {
             return null;
         }
         

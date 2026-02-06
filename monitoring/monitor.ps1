@@ -447,8 +447,13 @@ while ($monitoringActive) {
             while ($null -ne ($line = $reader.ReadLine())) {
                 $stats.TotalLinesProcessed++
                 
-                # Skip our own monitoring logs
-                if ($line -match '\[MONITORING\]|\[ISSUE_DETECTOR\]') {
+                # Skip our own monitoring logs and internal system logs
+                if ($line -match '\[MONITORING\]|\[ISSUE_DETECTOR\]|\[LOG_WATCHER\]|\[TRACE\]|\[STATUS_REPORT\]|\[ACTIVE_MONITORING\]|\[WORKFLOW\]') {
+                    continue
+                }
+                
+                # Skip FIX_ATTEMPT SUCCESS logs (these are good, not errors)
+                if ($line -match '\[FIX_ATTEMPT\].*SUCCESS') {
                     continue
                 }
                 
@@ -508,15 +513,17 @@ while ($monitoringActive) {
                             $pauseMarker = "[$timestamp] [GAME] [MONITOR] [CRITICAL_ISSUE_DETECTED] Issue detected by monitor - pausing Unity | Data: {`"issueId`":`"$($addResult.issueId)`",`"severity`":`"$($issue.severity)`",`"type`":`"$($issue.type)`",`"source`":`"$($issue.source)`",`"tableId`":$(if($tableId){`"$tableId`"}else{'null'}),`"message`":`"$escapedMessage`"}"
                             Add-Content -Path $logFile -Value $pauseMarker -ErrorAction SilentlyContinue
                             
-                            Write-Info "Pause trigger written to game.log - Unity will pause automatically"
-                            Write-Info "Waiting for assistant to fix issue..."
-                            Write-Info "Message assistant: 'issue found'"
+                            # Don't write to console - update stats display instead
+                            # Write-Info "Pause trigger written to game.log - Unity will pause automatically"
+                            # Write-Info "Waiting for assistant to fix issue..."
+                            # Write-Info "Message assistant: 'issue found'"
                             
                             $isPaused = $true
                             $currentIssue = $line
                         } else {
                             if ($addResult -and $addResult.reason -eq 'duplicate') {
-                                Write-Info "Duplicate issue detected (already logged)"
+                                # Don't write to console - update stats display instead
+                                # Write-Info "Duplicate issue detected (already logged)"
                                 # CRITICAL: Even for duplicates, if Unity isn't paused yet, we should pause it
                                 # This ensures Unity stops logging and gives user time to report the issue
                                 if (-not $isPaused) {
@@ -531,8 +538,9 @@ while ($monitoringActive) {
                                 }
                             } else {
                                 $errorMsg = if ($addResult -and $addResult.error) { $addResult.error } else { "Unknown error - check Node.js script output" }
-                                Write-Error "Failed to log issue: $errorMsg"
-                                Write-Warning "Issue detected but not logged. Check issue-detector.js for errors."
+                                # Don't write to console - update stats display instead
+                                # Write-Error "Failed to log issue: $errorMsg"
+                                # Write-Warning "Issue detected but not logged. Check issue-detector.js for errors."
                             }
                         }
                     }
