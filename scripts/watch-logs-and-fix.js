@@ -1359,12 +1359,25 @@ function activeMonitoring() {
         });
     }
     
-    // Also check simulationManager.activeSimulations to catch any we might have missed
+    // CRITICAL: Also check simulationManager.activeSimulations FIRST - this is the source of truth
+    // The simulation might be in simulationManager but not yet in gameManager.tables
     if (simulationManager && simulationManager.activeSimulations) {
         try {
             for (const [tableId, sim] of simulationManager.activeSimulations) {
                 if (!tableIds.has(tableId)) {
-                    const table = gameManager.getTable(tableId);
+                    // Try to get table from gameManager
+                    let table = null;
+                    try {
+                        table = gameManager.getTable(tableId);
+                    } catch (err) {
+                        // Table might not be in gameManager yet, but it's in simulationManager
+                        gameLogger.gameEvent('LOG_WATCHER', `[ACTIVE_MONITORING] TABLE_NOT_IN_GAMEMANAGER`, {
+                            tableId,
+                            reason: 'Table in simulationManager but not in gameManager.tables yet'
+                        });
+                    }
+                    
+                    // If we have the table, use it. Otherwise, use sim data if available
                     if (table && table.isSimulation) {
                         tableIds.add(tableId);
                         simulationTables.push({
@@ -1377,6 +1390,21 @@ function activeMonitoring() {
                             gameStarted: table.gameStarted || false,
                             pot: table.pot || 0,
                             activePlayers: table.seats ? table.seats.filter(s => s && s.isActive).length : 0
+                        });
+                    } else if (sim && sim.table) {
+                        // Fallback: use sim.table if available
+                        const simTable = sim.table;
+                        tableIds.add(tableId);
+                        simulationTables.push({
+                            id: tableId,
+                            name: simTable.name || `Simulation ${tableId.substring(0, 8)}`,
+                            handsPlayed: simTable.handsPlayed || 0,
+                            phase: simTable.phase || 'waiting',
+                            isPaused: simTable.isPaused || false,
+                            pauseReason: simTable.pauseReason || null,
+                            gameStarted: simTable.gameStarted || false,
+                            pot: simTable.pot || 0,
+                            activePlayers: simTable.seats ? simTable.seats.filter(s => s && s.isActive).length : 0
                         });
                     }
                 }
