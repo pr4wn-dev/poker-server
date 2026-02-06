@@ -679,9 +679,32 @@ function startWatching() {
     const stats = fs.statSync(logFile);
     lastPosition = stats.size;
     
-    // Watch for file changes
+    const gameLogger = require('../src/utils/GameLogger');
+    gameLogger.gameEvent('LOG_WATCHER', `[WATCH] STARTED`, {
+        logFile,
+        initialSize: lastPosition,
+        watchInterval: 500,
+        monitoringActive: true,
+        continuous: true
+    });
+    
+    console.log(`[LogWatcher] ✓ Continuous monitoring ACTIVE`);
+    console.log(`[LogWatcher] Watching: ${logFile}`);
+    console.log(`[LogWatcher] Check interval: 500ms`);
+    console.log(`[LogWatcher] Monitoring: CONTINUOUS (will never stop)`);
+    console.log(`[LogWatcher] All issues will be reported with full details\n`);
+    
+    // Watch for file changes - CONTINUOUS MONITORING
     fs.watchFile(logFile, { interval: 500 }, (curr, prev) => {
         if (curr.size > lastPosition) {
+            // ROOT TRACING: File change detected
+            gameLogger.gameEvent('LOG_WATCHER', `[WATCH] FILE_CHANGED`, {
+                previousSize: lastPosition,
+                currentSize: curr.size,
+                bytesAdded: curr.size - lastPosition,
+                pausedTablesCount: pausedTables.size
+            });
+            
             // Read new content
             const stream = fs.createReadStream(logFile, {
                 start: lastPosition,
@@ -694,16 +717,38 @@ function startWatching() {
             });
             
             stream.on('end', () => {
-                // Process new lines
+                // Process new lines - EVERY LINE IS CHECKED
                 const lines = buffer.split('\n').filter(line => line.trim());
+                
+                // ROOT TRACING: Processing new lines
+                if (lines.length > 0) {
+                    gameLogger.gameEvent('LOG_WATCHER', `[WATCH] PROCESSING_LINES`, {
+                        linesCount: lines.length,
+                        pausedTablesCount: pausedTables.size
+                    });
+                }
+                
                 for (const line of lines) {
-                    processLogLine(line);
+                    processLogLine(line); // Process EVERY line
                 }
                 
                 lastPosition = curr.size;
             });
         }
     });
+    
+    // Verify monitoring is continuous
+    setInterval(() => {
+        const stats = fs.statSync(logFile);
+        if (stats.size !== lastPosition) {
+            // File changed but watchFile didn't trigger - this shouldn't happen, but log it
+            gameLogger.gameEvent('LOG_WATCHER', `[WATCH] SIZE_MISMATCH`, {
+                lastPosition,
+                actualSize: stats.size,
+                difference: stats.size - lastPosition
+            });
+        }
+    }, 5000); // Check every 5 seconds that monitoring is still active
 }
 
 /**
@@ -750,42 +795,102 @@ function processLogLine(line) {
         linePreview: line.substring(0, 150)
     });
     
-    // REPORT TO USER: Issue detected
-    console.log(`\n[LogWatcher] 🚨 ISSUE DETECTED: ${issue.type.toUpperCase()}`);
-    console.log(`[LogWatcher] Message: ${issue.message.substring(0, 200)}`);
+    // REPORT TO USER: Issue detected with FULL DETAILS
+    const fullMessage = issue.message.length > 500 ? issue.message.substring(0, 500) + '...' : issue.message;
+    console.log(`\n[LogWatcher] 🚨🚨🚨 ISSUE DETECTED 🚨🚨🚨`);
+    console.log(`[LogWatcher] Type: ${issue.type.toUpperCase()}`);
+    console.log(`[LogWatcher] Severity: ${issue.severity.toUpperCase()}`);
+    console.log(`[LogWatcher] Full Message: ${fullMessage}`);
+    console.log(`[LogWatcher] Timestamp: ${new Date().toISOString()}`);
+    console.log(`[LogWatcher] Log Line Preview: ${line.substring(0, 200)}`);
     
     const tableId = extractTableId(line);
     if (!tableId) {
         gameLogger.gameEvent('LOG_WATCHER', `[PROCESS_LINE] NO_TABLE_ID`, {
             issueType: issue.type,
+            severity: issue.severity,
+            fullMessage: fullMessage,
             messagePreview: issue.message.substring(0, 150),
-            availableTables: gameManager ? Array.from(gameManager.tables.keys()) : []
+            availableTables: gameManager ? Array.from(gameManager.tables.keys()) : [],
+            allTables: gameManager ? Array.from(gameManager.tables.entries()).map(([id, t]) => ({
+                id,
+                name: t.name,
+                isSimulation: t.isSimulation
+            })) : []
         });
-        console.log(`[LogWatcher] ⚠️  Issue detected but no simulation table found: ${issue.message.substring(0, 80)}`);
+        console.log(`[LogWatcher] ⚠️  Issue detected but no simulation table found`);
+        console.log(`[LogWatcher] Issue Type: ${issue.type}`);
+        console.log(`[LogWatcher] Issue Message: ${issue.message.substring(0, 200)}`);
+        console.log(`[LogWatcher] Available Tables: ${gameManager ? Array.from(gameManager.tables.keys()).join(', ') : 'NONE'}`);
         return;
     }
     
+    // Get table details for reporting
+    const table = gameManager ? gameManager.getTable(tableId) : null;
+    const tableDetails = table ? {
+        name: table.name,
+        isSimulation: table.isSimulation,
+        gameStarted: table.gameStarted,
+        phase: table.phase,
+        handsPlayed: table.handsPlayed,
+        pot: table.pot,
+        currentPlayerIndex: table.currentPlayerIndex,
+        isPaused: table.isPaused,
+        pauseReason: table.pauseReason
+    } : null;
+    
     // Check if already paused
     if (pausedTables.has(tableId)) {
+        const pauseInfo = pausedTables.get(tableId);
         gameLogger.gameEvent('LOG_WATCHER', `[PROCESS_LINE] ALREADY_PAUSED`, {
             tableId,
             issueType: issue.type,
-            existingReason: pausedTables.get(tableId).reason
+            existingReason: pauseInfo.reason,
+            pausedAt: pauseInfo.pausedAt,
+            fixing: pauseInfo.fixing,
+            fixed: pauseInfo.fixed
         });
-        console.log(`[LogWatcher] ⚠️  Table ${tableId} already paused. Skipping.`);
+        console.log(`[LogWatcher] ⚠️  Table ${tableId} already paused`);
+        console.log(`[LogWatcher] Existing Pause Reason: ${pauseInfo.reason}`);
+        console.log(`[LogWatcher] Paused At: ${new Date(pauseInfo.pausedAt).toISOString()}`);
+        console.log(`[LogWatcher] Currently Fixing: ${pauseInfo.fixing || false}`);
+        console.log(`[LogWatcher] New Issue Type: ${issue.type}`);
+        console.log(`[LogWatcher] New Issue Message: ${issue.message.substring(0, 200)}`);
         return; // Already paused for this table
     }
     
-    // ROOT TRACING: About to pause
+    // ROOT TRACING: About to pause with FULL STATE
     gameLogger.gameEvent('LOG_WATCHER', `[PROCESS_LINE] PAUSING_NOW`, {
         tableId,
         issueType: issue.type,
-        messagePreview: issue.message.substring(0, 150)
+        severity: issue.severity,
+        fullMessage: fullMessage,
+        messagePreview: issue.message.substring(0, 150),
+        tableDetails,
+        pausedTablesCount: pausedTables.size,
+        allPausedTables: Array.from(pausedTables.entries()).map(([id, info]) => ({
+            id,
+            reason: info.reason,
+            pausedAt: info.pausedAt
+        }))
     });
     
-    // REPORT TO USER: About to pause
-    console.log(`[LogWatcher] ⏸️  PAUSING SIMULATION: ${tableId}`);
-    console.log(`[LogWatcher] Reason: ${issue.type} - ${issue.message.substring(0, 100)}`);
+    // REPORT TO USER: About to pause with FULL DETAILS
+    console.log(`\n[LogWatcher] ⏸️⏸️⏸️  PAUSING SIMULATION ⏸️⏸️⏸️`);
+    console.log(`[LogWatcher] Table ID: ${tableId}`);
+    if (tableDetails) {
+        console.log(`[LogWatcher] Table Name: ${tableDetails.name}`);
+        console.log(`[LogWatcher] Game Started: ${tableDetails.gameStarted}`);
+        console.log(`[LogWatcher] Phase: ${tableDetails.phase}`);
+        console.log(`[LogWatcher] Hand Number: ${tableDetails.handsPlayed}`);
+        console.log(`[LogWatcher] Pot: ${tableDetails.pot}`);
+        console.log(`[LogWatcher] Current Player: ${tableDetails.currentPlayerIndex}`);
+    }
+    console.log(`[LogWatcher] Issue Type: ${issue.type}`);
+    console.log(`[LogWatcher] Issue Severity: ${issue.severity}`);
+    console.log(`[LogWatcher] Pause Reason: ${issue.type} - ${issue.message.substring(0, 100)}`);
+    console.log(`[LogWatcher] Full Issue Message: ${fullMessage}`);
+    console.log(`[LogWatcher] Timestamp: ${new Date().toISOString()}`);
     
     // Pause the simulation
     pauseSimulation(tableId, `Auto-paused: ${issue.type} - ${issue.message.substring(0, 50)}`);
