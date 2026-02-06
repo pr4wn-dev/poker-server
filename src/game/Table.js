@@ -4611,7 +4611,6 @@ class Table {
         
         player.chips -= additionalBet;
         player.currentBet = amount; // Set to total bet amount
-        const totalBetBefore = player.totalBet || 0;
         const totalBetAfter = totalBetBefore + additionalBet;
         player.totalBet = totalBetAfter; // Only add the additional amount
         
@@ -4898,7 +4897,6 @@ class Table {
         
         player.chips = 0;
         player.currentBet = newCurrentBet;
-        const totalBetBefore = player.totalBet || 0;
         const totalBetAfter = totalBetBefore + amount;
         player.totalBet = totalBetAfter; // Add all chips to totalBet
         
