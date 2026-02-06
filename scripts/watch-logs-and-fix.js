@@ -137,53 +137,10 @@ function pauseSimulation(tableId, reason) {
         currentPauseReason: table.pauseReason
     });
     
-    // Set pause state
+    // Set pause state on table (Unity will read this from table_state and pause itself)
+    // NO server-side pausing - Unity pauses itself via Time.timeScale = 0
     table.isPaused = true;
     table.pauseReason = reason;
-    
-    // Call pause callback if available
-    let callbackCalled = false;
-    if (table.onPauseSimulation) {
-        try {
-            table.onPauseSimulation(tableId, reason);
-            callbackCalled = true;
-        } catch (error) {
-            gameLogger.gameEvent('LOG_WATCHER', `[PAUSE] CALLBACK_ERROR`, {
-                tableId,
-                reason,
-                error: error.message,
-                stackTrace: error.stack
-            });
-        }
-    }
-    
-    // Use SimulationManager if available
-    let simulationManagerResult = null;
-    if (simulationManager) {
-        try {
-            const result = simulationManager.pauseSimulation(tableId, reason);
-            simulationManagerResult = result;
-            if (result && result.success) {
-                gameLogger.gameEvent('LOG_WATCHER', `[PAUSE] SIMULATION_PAUSED_VIA_MANAGER`, {
-                    tableId,
-                    reason
-                });
-            } else {
-                gameLogger.gameEvent('LOG_WATCHER', `[PAUSE] SIMULATION_MANAGER_FAILED`, {
-                    tableId,
-                    reason,
-                    result: result || 'null'
-                });
-            }
-        } catch (error) {
-            gameLogger.gameEvent('LOG_WATCHER', `[PAUSE] SIMULATION_MANAGER_ERROR`, {
-                tableId,
-                reason,
-                error: error.message,
-                stackTrace: error.stack
-            });
-        }
-    }
     
     pausedTables.set(tableId, {
         reason,
@@ -191,16 +148,46 @@ function pauseSimulation(tableId, reason) {
         fixed: false
     });
     
-    // Broadcast pause to Unity
+    // Broadcast table_state with isPaused=true so Unity can pause itself
+    // Unity reads state.isPaused from table_state and pauses via Time.timeScale = 0
     let broadcastSent = false;
     if (socketHandler && socketHandler.io) {
         try {
-            socketHandler.io.to(`table:${tableId}`).emit('simulation_paused', {
+            // Broadcast table_state to all sockets in table room so Unity sees isPaused=true
+            const tableRoom = `table:${tableId}`;
+            const spectatorRoom = `spectator:${tableId}`;
+            
+            const tableSockets = socketHandler.io.sockets.adapter.rooms.get(tableRoom);
+            if (tableSockets) {
+                for (const socketId of tableSockets) {
+                    const socket = socketHandler.io.sockets.sockets.get(socketId);
+                    if (socket) {
+                        const userId = socket.data?.userId || null;
+                        const state = table.getState(userId);
+                        socket.emit('table_state', state); // Unity reads state.isPaused and pauses itself
+                    }
+                }
+            }
+            
+            // Also broadcast to spectators
+            const spectatorSockets = socketHandler.io.sockets.adapter.rooms.get(spectatorRoom);
+            if (spectatorSockets) {
+                for (const socketId of spectatorSockets) {
+                    const socket = socketHandler.io.sockets.sockets.get(socketId);
+                    if (socket) {
+                        const userId = socket.data?.userId || null;
+                        const state = table.getState(userId);
+                        socket.emit('table_state', state);
+                    }
+                }
+            }
+            
+            broadcastSent = true;
+            gameLogger.gameEvent('LOG_WATCHER', `[PAUSE] TABLE_STATE_BROADCAST`, {
                 tableId,
                 reason,
-                pausedAt: Date.now()
+                message: 'table_state broadcasted with isPaused=true - Unity will pause itself'
             });
-            broadcastSent = true;
         } catch (error) {
             gameLogger.gameEvent('LOG_WATCHER', `[PAUSE] BROADCAST_ERROR`, {
                 tableId,
@@ -226,12 +213,11 @@ function pauseSimulation(tableId, reason) {
         reason,
         tableName: table.name,
         pausedAt: Date.now(),
-        callbackCalled,
-        simulationManagerResult: simulationManagerResult?.success || false,
         broadcastSent,
         pausedTablesCount: pausedTables.size,
         tablePausedState: table.isPaused,
-        tablePauseReason: table.pauseReason
+        tablePauseReason: table.pauseReason,
+        message: 'table.isPaused set to true, table_state broadcasted - Unity will pause itself via Time.timeScale = 0'
     });
 }
 
@@ -329,52 +315,52 @@ function resumeSimulation(tableId) {
         phase: table.phase
     });
     
-    // Clear pause state
+    // Clear pause state (Unity will read this from table_state and resume itself)
+    // NO server-side resuming - Unity resumes itself via Time.timeScale = 1
     table.isPaused = false;
     table.pauseReason = null;
     
-    // Use SimulationManager if available
-    let simulationManagerResult = null;
-    if (simulationManager) {
-        try {
-            const result = simulationManager.resumeSimulation(tableId);
-            simulationManagerResult = result;
-            if (result && result.success) {
-                gameLogger.gameEvent('LOG_WATCHER', `[RESUME] SIMULATION_RESUMED_VIA_MANAGER`, {
-                    tableId
-                });
-            } else {
-                gameLogger.gameEvent('LOG_WATCHER', `[RESUME] SIMULATION_MANAGER_FAILED`, {
-                    tableId,
-                    result: result || 'null'
-                });
-            }
-        } catch (error) {
-            gameLogger.gameEvent('LOG_WATCHER', `[RESUME] SIMULATION_MANAGER_ERROR`, {
-                tableId,
-                error: error.message,
-                stackTrace: error.stack
-            });
-            gameLogger.error('LOG_WATCHER', `[RESUME] ERROR_RESUMING`, {
-                tableId,
-                error: error.message,
-                stackTrace: error.stack
-            });
-            // Continue anyway - table state is already updated
-        }
-    }
-    
     pausedTables.delete(tableId);
     
-    // Broadcast resume to Unity
+    // Broadcast table_state with isPaused=false so Unity can resume itself
+    // Unity reads state.isPaused from table_state and resumes via Time.timeScale = 1
     let broadcastSent = false;
     if (socketHandler && socketHandler.io) {
         try {
-            socketHandler.io.to(`table:${tableId}`).emit('simulation_resumed', {
-                tableId,
-                resumedAt: Date.now()
-            });
+            // Broadcast table_state to all sockets in table room so Unity sees isPaused=false
+            const tableRoom = `table:${tableId}`;
+            const spectatorRoom = `spectator:${tableId}`;
+            
+            const tableSockets = socketHandler.io.sockets.adapter.rooms.get(tableRoom);
+            if (tableSockets) {
+                for (const socketId of tableSockets) {
+                    const socket = socketHandler.io.sockets.sockets.get(socketId);
+                    if (socket) {
+                        const userId = socket.data?.userId || null;
+                        const state = table.getState(userId);
+                        socket.emit('table_state', state); // Unity reads state.isPaused and resumes itself
+                    }
+                }
+            }
+            
+            // Also broadcast to spectators
+            const spectatorSockets = socketHandler.io.sockets.adapter.rooms.get(spectatorRoom);
+            if (spectatorSockets) {
+                for (const socketId of spectatorSockets) {
+                    const socket = socketHandler.io.sockets.sockets.get(socketId);
+                    if (socket) {
+                        const userId = socket.data?.userId || null;
+                        const state = table.getState(userId);
+                        socket.emit('table_state', state);
+                    }
+                }
+            }
+            
             broadcastSent = true;
+            gameLogger.gameEvent('LOG_WATCHER', `[RESUME] TABLE_STATE_BROADCAST`, {
+                tableId,
+                message: 'table_state broadcasted with isPaused=false - Unity will resume itself'
+            });
         } catch (error) {
             gameLogger.gameEvent('LOG_WATCHER', `[RESUME] BROADCAST_ERROR`, {
                 tableId,
@@ -398,13 +384,13 @@ function resumeSimulation(tableId) {
         pauseDuration: `${Math.floor(pauseDuration / 1000)}s`,
         tableName: table.name,
         resumedAt: Date.now(),
-        simulationManagerResult: simulationManagerResult?.success || false,
         broadcastSent,
         pausedTablesCount: pausedTables.size,
         tablePausedState: table.isPaused,
         tablePauseReason: table.pauseReason,
         gameStarted: table.gameStarted,
-        phase: table.phase
+        phase: table.phase,
+        message: 'table.isPaused set to false, table_state broadcasted - Unity will resume itself via Time.timeScale = 1'
     });
 }
 
