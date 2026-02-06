@@ -1222,6 +1222,21 @@ class SocketBot {
             });
         });
     }
+    
+    /**
+     * Set pause state (called by SimulationManager)
+     */
+    setPaused(paused) {
+        this.isPaused = paused;
+        this.log('PAUSE', `Bot ${paused ? 'paused' : 'resumed'}`, { paused });
+    }
+    
+    /**
+     * Resume bot (alias for setPaused(false))
+     */
+    setResumed() {
+        this.setPaused(false);
+    }
 }
 
 /**
