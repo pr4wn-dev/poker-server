@@ -295,11 +295,24 @@ class IssueDetector {
             const data = JSON.parse(fs.readFileSync(this.pendingIssuesFile, 'utf8'));
             
             // Check if similar issue already exists (prevent duplicates)
-            const similarIssue = data.issues.find(existing => 
-                existing.message === issue.message && 
-                existing.source === issue.source &&
-                (Date.now() - new Date(existing.detectedAt).getTime()) < 60000 // Within last minute
-            );
+            // Improved: Check message similarity (not exact match) and extend time window
+            const now = Date.now();
+            const similarIssue = data.issues.find(existing => {
+                const timeDiff = now - new Date(existing.detectedAt).getTime();
+                const isRecent = timeDiff < 300000; // Within last 5 minutes (was 1 minute)
+                
+                // Check if same source and similar message (not exact match)
+                if (existing.source === issue.source && isRecent) {
+                    // Compare message similarity (first 200 chars)
+                    const existingMsg = existing.message.substring(0, 200).toLowerCase();
+                    const newMsg = issue.message.substring(0, 200).toLowerCase();
+                    
+                    // If messages are very similar (80% match), consider duplicate
+                    const similarity = calculateSimilarity(existingMsg, newMsg);
+                    return similarity > 0.8;
+                }
+                return false;
+            });
             
             if (!similarIssue) {
                 data.issues.push(issue);

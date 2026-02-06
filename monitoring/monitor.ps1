@@ -504,7 +504,8 @@ while ($monitoringActive) {
                             # This ensures Unity pauses immediately when monitor detects an issue
                             $logFile = Join-Path $PSScriptRoot "..\logs\game.log"
                             $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
-                            $pauseMarker = "[$timestamp] [GAME] [MONITOR] [CRITICAL_ISSUE_DETECTED] Issue detected by monitor - pausing Unity | Data: {`"issueId`":`"$($addResult.issueId)`",`"severity`":`"$($issue.severity)`",`"type`":`"$($issue.type)`",`"source`":`"$($issue.source)`",`"tableId`":$(if($tableId){`"$tableId`"}else{'null'}),`"message`":`"$($line.Replace('"','\"').Substring(0,[Math]::Min(200,$line.Length)))`"}"
+                            $escapedMessage = $line.Replace('"','\"').Replace("`n"," ").Replace("`r"," ").Substring(0,[Math]::Min(200,$line.Length))
+                            $pauseMarker = "[$timestamp] [GAME] [MONITOR] [CRITICAL_ISSUE_DETECTED] Issue detected by monitor - pausing Unity | Data: {`"issueId`":`"$($addResult.issueId)`",`"severity`":`"$($issue.severity)`",`"type`":`"$($issue.type)`",`"source`":`"$($issue.source)`",`"tableId`":$(if($tableId){`"$tableId`"}else{'null'}),`"message`":`"$escapedMessage`"}"
                             Add-Content -Path $logFile -Value $pauseMarker -ErrorAction SilentlyContinue
                             
                             Write-Info "Pause trigger written to game.log - Unity will pause automatically"
@@ -515,7 +516,7 @@ while ($monitoringActive) {
                             $currentIssue = $line
                         } else {
                             if ($addResult -and $addResult.reason -eq 'duplicate') {
-                                Write-Info "Duplicate issue detected (already logged)"
+                                Write-Info "Duplicate issue detected (already logged) - skipping pause trigger"
                             } else {
                                 $errorMsg = if ($addResult -and $addResult.error) { $addResult.error } else { "Unknown error - check Node.js script output" }
                                 Write-Error "Failed to log issue: $errorMsg"
