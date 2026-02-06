@@ -887,21 +887,72 @@ function startWatching() {
                     processLogLine(line); // Process EVERY line
                 }
                 
-                lastPosition = curr.size;
+                // CRITICAL: Update position AFTER processing - use actual current size
+                // Also verify the position is correct to prevent SIZE_MISMATCH
+                const actualSize = fs.statSync(logFile).size;
+                if (actualSize !== curr.size) {
+                    gameLogger.gameEvent('LOG_WATCHER', `[WATCH] SIZE_CHANGED_DURING_READ`, {
+                        expectedSize: curr.size,
+                        actualSize: actualSize,
+                        difference: actualSize - curr.size,
+                        action: 'Using actual size to prevent position drift'
+                    });
+                }
+                lastPosition = actualSize; // Use actual file size, not curr.size
             });
         }
     });
     
-    // Verify monitoring is continuous
+    // Verify monitoring is continuous and fix position drift
     setInterval(() => {
         const stats = fs.statSync(logFile);
         if (stats.size !== lastPosition) {
-            // File changed but watchFile didn't trigger - this shouldn't happen, but log it
-            gameLogger.gameEvent('LOG_WATCHER', `[WATCH] SIZE_MISMATCH`, {
-                lastPosition,
-                actualSize: stats.size,
-                difference: stats.size - lastPosition
-            });
+            // File changed but watchFile didn't trigger OR position drifted
+            const difference = stats.size - lastPosition;
+            
+            // If position is ahead of file (negative difference), reset to actual size
+            // This happens when log file was rotated/cleared
+            if (difference < 0 || lastPosition > stats.size) {
+                gameLogger.gameEvent('LOG_WATCHER', `[WATCH] POSITION_DRIFT_DETECTED_RESETTING`, {
+                    lastPosition,
+                    actualSize: stats.size,
+                    difference: difference,
+                    action: 'Resetting position to actual file size - log may have been rotated/cleared'
+                });
+                lastPosition = stats.size; // Reset to actual size
+            } else {
+                // File grew but watchFile didn't trigger - read the new content
+                gameLogger.gameEvent('LOG_WATCHER', `[WATCH] SIZE_MISMATCH_READING_MISSED_CONTENT`, {
+                    lastPosition,
+                    actualSize: stats.size,
+                    difference: difference,
+                    action: 'Reading missed content'
+                });
+                
+                // Read the missed content
+                const stream = fs.createReadStream(logFile, {
+                    start: lastPosition,
+                    end: stats.size
+                });
+                
+                let buffer = '';
+                stream.on('data', (chunk) => {
+                    buffer += chunk.toString();
+                });
+                
+                stream.on('end', () => {
+                    const lines = buffer.split('\n').filter(line => line.trim());
+                    if (lines.length > 0) {
+                        gameLogger.gameEvent('LOG_WATCHER', `[WATCH] PROCESSING_MISSED_LINES`, {
+                            linesCount: lines.length
+                        });
+                        for (const line of lines) {
+                            processLogLine(line);
+                        }
+                    }
+                    lastPosition = stats.size; // Update position
+                });
+            }
         }
     }, 5000); // Check every 5 seconds that monitoring is still active
 }
