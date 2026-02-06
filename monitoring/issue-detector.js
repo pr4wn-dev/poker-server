@@ -324,7 +324,7 @@ class IssueDetector {
                     const newMsg = issue.message.substring(0, 200).toLowerCase();
                     
                     // If messages are very similar (80% match), consider duplicate
-                    const similarity = calculateSimilarity(existingMsg, newMsg);
+                    const similarity = this.calculateSimilarity(existingMsg, newMsg);
                     return similarity > 0.8;
                 }
                 return false;
