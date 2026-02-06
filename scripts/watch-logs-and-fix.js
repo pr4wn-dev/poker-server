@@ -1329,16 +1329,6 @@ let latestStatus = {
     lastUpdated: null
 };
 
-// Store latest status for API endpoint and status file
-let latestStatus = {
-    timestamp: null,
-    activeSimulations: 0,
-    simulations: [],
-    message: 'Initializing...',
-    issues: [],
-    lastUpdated: null
-};
-
 /**
  * Active monitoring: Check for new simulations and report status regularly
  * This function logs findings that I (the assistant) will read and report to the user
