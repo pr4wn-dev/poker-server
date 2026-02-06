@@ -825,11 +825,11 @@ async function fixItemAnteIssue(issue, tableId) {
  * Fix general issues
  */
 async function fixGeneralIssue(issue, tableId) {
+    const gameLogger = require('../src/utils/GameLogger');
     const message = issue.message.toLowerCase();
     
     // Syntax errors - these need code fixes
     if (message.includes('syntaxerror') || message.includes('unexpected token')) {
-        const gameLogger = require('../src/utils/GameLogger');
         gameLogger.gameEvent('LOG_WATCHER', `[FIX_GENERAL] SYNTAX_ERROR_DETECTED`, {
             tableId,
             message: issue.message.substring(0, 150)
@@ -850,7 +850,6 @@ async function fixGeneralIssue(issue, tableId) {
     // Chip calculation issues - CRITICAL: These need investigation, don't just mark as fixed
     // Check for "chip" (singular) or "chips" (plural) and "created" or "lost"
     if ((message.includes('chip') || message.includes('chips')) && (message.includes('lost') || message.includes('created'))) {
-        const gameLogger = require('../src/utils/GameLogger');
         gameLogger.error('LOG_WATCHER', `[FIX] CHIP_ISSUE_CRITICAL`, {
             tableId,
             message: issue.message.substring(0, 200),
