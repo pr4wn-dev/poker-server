@@ -1361,6 +1361,13 @@ function activeMonitoring() {
     
     // CRITICAL: Also check simulationManager.activeSimulations FIRST - this is the source of truth
     // The simulation might be in simulationManager but not yet in gameManager.tables
+    gameLogger.gameEvent('LOG_WATCHER', `[ACTIVE_MONITORING] CHECKING_SIMULATION_MANAGER`, {
+        hasSimulationManager: !!simulationManager,
+        hasActiveSimulations: !!(simulationManager && simulationManager.activeSimulations),
+        activeSimulationsCount: simulationManager && simulationManager.activeSimulations ? simulationManager.activeSimulations.size : 0,
+        tableIds: simulationManager && simulationManager.activeSimulations ? Array.from(simulationManager.activeSimulations.keys()) : []
+    });
+    
     if (simulationManager && simulationManager.activeSimulations) {
         try {
             for (const [tableId, sim] of simulationManager.activeSimulations) {
