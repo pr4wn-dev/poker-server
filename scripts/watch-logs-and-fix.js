@@ -1334,22 +1334,36 @@ function activeMonitoring() {
     const simulationTables = [];
     const tableIds = new Set();
     
-    // Check gameManager.tables
+    // Check gameManager.tables FIRST - this is where tables actually are
     try {
+        const totalTables = gameManager.tables ? gameManager.tables.size : 0;
+        gameLogger.gameEvent('LOG_WATCHER', `[ACTIVE_MONITORING] CHECKING_GAMEMANAGER_TABLES`, {
+            totalTables,
+            tableIds: gameManager.tables ? Array.from(gameManager.tables.keys()) : []
+        });
+        
         for (const [tableId, table] of gameManager.tables) {
-            if (table && table.isSimulation) {
-                tableIds.add(tableId);
-                simulationTables.push({
-                    id: tableId,
+            if (table) {
+                gameLogger.gameEvent('LOG_WATCHER', `[ACTIVE_MONITORING] FOUND_TABLE`, {
+                    tableId,
                     name: table.name,
-                    handsPlayed: table.handsPlayed || 0,
-                    phase: table.phase || 'waiting',
-                    isPaused: table.isPaused || false,
-                    pauseReason: table.pauseReason || null,
-                    gameStarted: table.gameStarted || false,
-                    pot: table.pot || 0,
-                    activePlayers: table.seats ? table.seats.filter(s => s && s.isActive).length : 0
+                    isSimulation: table.isSimulation || false
                 });
+                
+                if (table.isSimulation) {
+                    tableIds.add(tableId);
+                    simulationTables.push({
+                        id: tableId,
+                        name: table.name,
+                        handsPlayed: table.handsPlayed || 0,
+                        phase: table.phase || 'waiting',
+                        isPaused: table.isPaused || false,
+                        pauseReason: table.pauseReason || null,
+                        gameStarted: table.gameStarted || false,
+                        pot: table.pot || 0,
+                        activePlayers: table.seats ? table.seats.filter(s => s && s.isActive).length : 0
+                    });
+                }
             }
         }
     } catch (error) {
