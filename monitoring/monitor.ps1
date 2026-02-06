@@ -583,6 +583,115 @@ function Start-ServerIfNeeded {
     return $true
 }
 
+# Function to set and enforce minimum window size
+function Set-MinimumWindowSize {
+    $minWidth = 80   # Minimum width in characters
+    $minHeight = 45  # Minimum height in lines (stats ~30 lines + console ~15 lines)
+    
+    # Store minimum size for checking
+    $script:minWindowWidth = $minWidth
+    $script:minWindowHeight = $minHeight
+    
+    try {
+        $currentWidth = [Console]::WindowWidth
+        $currentHeight = [Console]::WindowHeight
+        
+        if ($currentWidth -lt $minWidth -or $currentHeight -lt $minHeight) {
+            # Try using SetWindowSize method (available in PowerShell 5.1+ with .NET Framework 4.7+)
+            try {
+                [Console]::SetWindowSize($minWidth, $minHeight)
+            } catch {
+                # If SetWindowSize doesn't exist, try using Windows API
+                try {
+                    if (-not ([System.Management.Automation.PSTypeName]'WindowSizeAPI').Type) {
+                        Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public class WindowSizeAPI {
+    [DllImport("kernel32.dll")]
+    public static extern IntPtr GetConsoleWindow();
+    [DllImport("user32.dll")]
+    public static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+    [DllImport("user32.dll")]
+    public static extern bool MoveWindow(IntPtr hWnd, int X, int Y, int nWidth, int nHeight, bool bRepaint);
+    public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
+}
+"@
+                    }
+                    $hwnd = [WindowSizeAPI]::GetConsoleWindow()
+                    if ($hwnd -ne [IntPtr]::Zero) {
+                        $rect = New-Object WindowSizeAPI+RECT
+                        if ([WindowSizeAPI]::GetWindowRect($hwnd, [ref]$rect)) {
+                            # Approximate: 8x16 pixels per character (varies by font)
+                            $charWidth = 8
+                            $charHeight = 16
+                            $minPixelWidth = $minWidth * $charWidth
+                            $minPixelHeight = $minHeight * $charHeight
+                            $currentPixelWidth = $rect.Right - $rect.Left
+                            $currentPixelHeight = $rect.Bottom - $rect.Top
+                            
+                            if ($currentPixelWidth -lt $minPixelWidth -or $currentPixelHeight -lt $minPixelHeight) {
+                                [WindowSizeAPI]::MoveWindow($hwnd, $rect.Left, $rect.Top, 
+                                    [Math]::Max($minPixelWidth, $currentPixelWidth),
+                                    [Math]::Max($minPixelHeight, $currentPixelHeight), $true)
+                            }
+                        }
+                    }
+                } catch {
+                    # If all methods fail, just continue - some terminals don't support resizing
+                }
+            }
+        }
+    } catch {
+        # If setting window size fails, just continue
+    }
+}
+
+# Function to enforce minimum window size (called periodically)
+function Enforce-MinimumWindowSize {
+    if (-not $script:minWindowWidth -or -not $script:minWindowHeight) {
+        return
+    }
+    
+    try {
+        $currentWidth = [Console]::WindowWidth
+        $currentHeight = [Console]::WindowHeight
+        
+        if ($currentWidth -lt $script:minWindowWidth -or $currentHeight -lt $script:minWindowHeight) {
+            # Try SetWindowSize first (simpler, more reliable)
+            try {
+                [Console]::SetWindowSize($script:minWindowWidth, $script:minWindowHeight)
+            } catch {
+                # Fallback to Windows API if SetWindowSize not available
+                try {
+                    if ([System.Management.Automation.PSTypeName]'WindowSizeAPI'.Type) {
+                        $hwnd = [WindowSizeAPI]::GetConsoleWindow()
+                        if ($hwnd -ne [IntPtr]::Zero) {
+                            $rect = New-Object WindowSizeAPI+RECT
+                            if ([WindowSizeAPI]::GetWindowRect($hwnd, [ref]$rect)) {
+                                $charWidth = 8
+                                $charHeight = 16
+                                $minPixelWidth = $script:minWindowWidth * $charWidth
+                                $minPixelHeight = $script:minWindowHeight * $charHeight
+                                [WindowSizeAPI]::MoveWindow($hwnd, $rect.Left, $rect.Top, 
+                                    [Math]::Max($minPixelWidth, $rect.Right - $rect.Left),
+                                    [Math]::Max($minPixelHeight, $rect.Bottom - $rect.Top), $true)
+                            }
+                        }
+                    }
+                } catch {
+                    # Ignore - can't resize in this environment
+                }
+            }
+        }
+    } catch {
+        # Ignore errors - some terminals don't support resizing
+    }
+}
+
+# Set minimum window size at startup
+Set-MinimumWindowSize
+
 # Start server if needed before showing statistics
 Start-ServerIfNeeded
 
@@ -775,6 +884,13 @@ while ($monitoringActive) {
                 }
             }
             $lastServerCheck = $now
+        }
+        
+        # Enforce minimum window size periodically (every 2 seconds)
+        $lastWindowCheck = if ($script:lastWindowCheck) { $script:lastWindowCheck } else { Get-Date }
+        if (($now - $lastWindowCheck).TotalSeconds -ge 2) {
+            Enforce-MinimumWindowSize
+            $script:lastWindowCheck = $now
         }
         
         # Update statistics display periodically
