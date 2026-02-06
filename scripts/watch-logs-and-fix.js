@@ -1556,28 +1556,30 @@ function activeMonitoring() {
         lastReportedSimulations = currentSimIds;
     }
     
-    // Regular status report every 10 seconds
+    // ALWAYS report status every 10 seconds - regardless of simulation state
     const now = Date.now();
     if (now - lastStatusReport >= STATUS_REPORT_INTERVAL) {
-        if (simulationTables.length > 0) {
-            gameLogger.error('LOG_WATCHER', `[ACTIVE_MONITORING] STATUS_REPORT`, {
-                action: 'STATUS_UPDATE',
-                activeSimulations: simulationTables.length,
-                simulations: simulationTables.map(s => ({
-                    name: s.name,
-                    handsPlayed: s.handsPlayed,
-                    phase: s.phase,
-                    isPaused: s.isPaused,
-                    pauseReason: s.pauseReason,
-                    pot: s.pot,
-                    activePlayers: s.activePlayers
-                })),
-                message: `STATUS: ${simulationTables.length} active simulation(s) running`,
-                whatImDoing: `I'm actively monitoring ${simulationTables.length} simulation(s). All systems operational. Will report immediately if any issues are detected.`,
-                timestamp: new Date().toISOString(),
-                reportToUser: true // Flag for me to read and report
-            });
-        }
+        gameLogger.error('LOG_WATCHER', `[ACTIVE_MONITORING] STATUS_REPORT`, {
+            action: 'STATUS_UPDATE',
+            activeSimulations: simulationTables.length,
+            simulations: simulationTables.length > 0 ? simulationTables.map(s => ({
+                name: s.name,
+                handsPlayed: s.handsPlayed,
+                phase: s.phase,
+                isPaused: s.isPaused,
+                pauseReason: s.pauseReason,
+                pot: s.pot,
+                activePlayers: s.activePlayers
+            })) : [],
+            message: simulationTables.length > 0 
+                ? `STATUS: ${simulationTables.length} active simulation(s) running` 
+                : 'STATUS: No active simulations - monitoring for new ones',
+            whatImDoing: simulationTables.length > 0
+                ? `I'm actively monitoring ${simulationTables.length} simulation(s). All systems operational. Will report immediately if any issues are detected.`
+                : 'I am actively monitoring the game logs and will report any issues immediately. Waiting for simulations to start.',
+            timestamp: new Date().toISOString(),
+            reportToUser: true // Flag for me to read and report
+        });
         lastStatusReport = now;
     }
     
