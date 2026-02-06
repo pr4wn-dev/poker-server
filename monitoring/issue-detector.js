@@ -171,6 +171,22 @@ class IssueDetector {
     }
     
     /**
+     * Calculate string similarity (simple word-based)
+     */
+    calculateSimilarity(str1, str2) {
+        if (str1 === str2) return 1.0;
+        if (str1.length === 0 || str2.length === 0) return 0.0;
+        
+        // Simple similarity: count matching words
+        const words1 = str1.split(/\s+/).filter(w => w.length > 2); // Ignore short words
+        const words2 = str2.split(/\s+/).filter(w => w.length > 2);
+        if (words1.length === 0 || words2.length === 0) return 0.0;
+        
+        const commonWords = words1.filter(w => words2.includes(w));
+        return commonWords.length / Math.max(words1.length, words2.length);
+    }
+    
+    /**
      * Ensure pending issues file exists
      */
     ensurePendingIssuesFile() {
