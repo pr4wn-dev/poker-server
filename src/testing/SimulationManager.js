@@ -1469,11 +1469,23 @@ class SimulationManager {
         }
         
         // CRITICAL: Notify all socket bots to resume
+        let botsResumed = 0;
+        let botsResumeErrors = 0;
         for (const bot of simulation.socketBots) {
             if (bot) {
-                bot.isPaused = false;
-                bot.setPaused(false);
-                console.log(`[SimulationManager] Bot ${bot.name} unpaused`);
+                try {
+                    bot.isPaused = false;
+                    bot.setPaused(false);
+                    botsResumed++;
+                    console.log(`[SimulationManager] Bot ${bot.name} unpaused`);
+                } catch (error) {
+                    botsResumeErrors++;
+                    gameLogger.gameEvent('SIMULATION_MANAGER', `[RESUME] BOT_RESUME_ERROR`, {
+                        tableId,
+                        botName: bot?.name || 'unknown',
+                        error: error.message
+                    });
+                }
             }
         }
         
