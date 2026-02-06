@@ -1600,17 +1600,6 @@ function activeMonitoring() {
             lastUpdated: Date.now()
         };
         
-        // Write status to file for easy monitoring (updates every 10 seconds)
-        try {
-            const fs = require('fs');
-            const path = require('path');
-            const statusFile = path.join(__dirname, '..', 'status.json');
-            fs.writeFileSync(statusFile, JSON.stringify(latestStatus, null, 2), 'utf8');
-        } catch (error) {
-            gameLogger.error('LOG_WATCHER', `[ACTIVE_MONITORING] STATUS_FILE_ERROR`, {
-                error: error.message
-            });
-        }
         
         // Write to log with [ERROR] level so it's easy to find
         gameLogger.error('LOG_WATCHER', `[ACTIVE_MONITORING] STATUS_REPORT`, {
