@@ -179,6 +179,74 @@ The monitor will:
 
 ---
 
+## ⚠️ CRITICAL: Unity Pause/Resume Implementation Gap
+
+**STATUS: NOT IMPLEMENTED IN UNITY**
+
+The server sends pause/resume signals, but **Unity does not currently implement pause/resume logic**. This means:
+
+- ❌ Server sets `table.isPaused = true` and sends `table_state` with `isPaused: true`
+- ❌ Server emits `simulation_paused` socket event
+- ❌ Unity's `TableState` model is **missing** `isPaused` and `pauseReason` fields
+- ❌ Unity does **not** listen for `simulation_paused` or `simulation_resumed` events
+- ❌ Unity has **no pause/resume logic** - game continues running even when server says it's paused
+
+**What Unity Needs to Implement:**
+
+1. **Add fields to `TableState` model** (`NetworkModels.cs`):
+   ```csharp
+   public bool isPaused;
+   public string pauseReason;
+   ```
+
+2. **Listen for pause/resume events** (`PokerNetworkManager.cs`):
+   ```csharp
+   _socket.On("simulation_paused", response => {
+       var data = response.GetValue<SimulationPausedEvent>();
+       UnityMainThreadDispatcher.Enqueue(() => OnSimulationPaused?.Invoke(data));
+   });
+   
+   _socket.On("simulation_resumed", response => {
+       var data = response.GetValue<SimulationResumedEvent>();
+       UnityMainThreadDispatcher.Enqueue(() => OnSimulationResumed?.Invoke(data));
+   });
+   ```
+
+3. **Implement pause logic** (`GameController.cs`):
+   ```csharp
+   private bool _isPaused = false;
+   
+   private void HandleTableStateUpdated(TableState state) {
+       // Check if paused state changed
+       if (state.isPaused != _isPaused) {
+           _isPaused = state.isPaused;
+           if (_isPaused) {
+               PauseGame(state.pauseReason);
+           } else {
+               ResumeGame();
+           }
+       }
+       // ... rest of update logic
+   }
+   
+   private void PauseGame(string reason) {
+       Time.timeScale = 0; // Pause Unity time
+       // Stop any coroutines/timers
+       // Disable bot actions
+       Debug.Log($"[Game] PAUSED: {reason}");
+   }
+   
+   private void ResumeGame() {
+       Time.timeScale = 1; // Resume Unity time
+       // Re-enable game logic
+       Debug.Log("[Game] RESUMED");
+   }
+   ```
+
+**Until Unity implements this, pause/resume will not work.** The server is sending the signals correctly, but Unity is not responding to them.
+
+---
+
 ## 🤖 Unity Auto-Mode Implementation
 
 Monitor passes command-line arguments to Unity, and Unity handles all automation internally. Unity runs in a **normal visible window** so you can watch everything happen.

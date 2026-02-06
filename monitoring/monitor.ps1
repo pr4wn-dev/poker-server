@@ -13,7 +13,7 @@
 
 param(
     [ValidateSet("simulation", "normal")]
-    [string]$Mode = "normal"
+    [string]$Mode = "simulation"
 )
 
 $ErrorActionPreference = "Continue"
@@ -141,8 +141,12 @@ $stats = @{
     LogFileSize = 0
     ServerStatus = "Unknown"
     LastIssueLogged = $null
+    LastLogActivity = Get-Date
     PauseMarkersWritten = 0
     PauseMarkerErrors = 0
+    UnityRunning = $false
+    UnityConnected = $false
+    SimulationRunning = $false
 }
 
 # Function to call Node.js issue detector
@@ -360,8 +364,8 @@ function Get-LogWatcherStatus {
             return @{ Active = $false; PausedTables = 0; ActiveSimulations = 0; LastSeen = $null }
         }
         
-        # Read last 500 lines to find recent log watcher activity
-        $recentLines = Get-Content $logFile -Tail 500 -ErrorAction SilentlyContinue
+        # Read last 1000 lines to find recent activity (increased to catch simulations that start after a delay)
+        $recentLines = Get-Content $logFile -Tail 1000 -ErrorAction SilentlyContinue
         if (-not $recentLines) {
             return @{ Active = $false; PausedTables = 0; ActiveSimulations = 0; LastSeen = $null }
         }
@@ -370,30 +374,45 @@ function Get-LogWatcherStatus {
         $pausedTables = 0
         $activeSimulations = 0
         $lastSeen = $null
-        
-        # Look for recent LOG_WATCHER activity (within last 10 seconds)
         $now = Get-Date
+        
+        # Look for simulation indicators in multiple log types (not just LOG_WATCHER)
         foreach ($line in $recentLines) {
+            # Extract timestamp if present
+            $lineTime = $null
+            if ($line -match '\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?)\]') {
+                try {
+                    $lineTime = [DateTime]::Parse($matches[1])
+                } catch {
+                    $lineTime = $null
+                }
+            }
+            
+            # Check if line is recent (within last 60 seconds for simulation detection)
+            $isRecent = $false
+            if ($lineTime) {
+                $timeDiff = ($now - $lineTime).TotalSeconds
+                $isRecent = $timeDiff -le 60  # Check last 60 seconds for simulations
+            } else {
+                # If no timestamp, assume recent if it's in the tail
+                $isRecent = $true
+            }
+            
+            if (-not $isRecent) {
+                continue
+            }
+            
+            # Check LOG_WATCHER entries
             if ($line -match '\[LOG_WATCHER\]') {
-                # Extract timestamp
-                if ($line -match '\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?)\]') {
-                    try {
-                        $lineTime = [DateTime]::Parse($matches[1])
-                        $timeDiff = ($now - $lineTime).TotalSeconds
-                        
-                        # If seen within last 10 seconds, consider it active
-                        if ($timeDiff -le 10) {
-                            $isActive = $true
-                            if (-not $lastSeen -or $lineTime -gt $lastSeen) {
-                                $lastSeen = $lineTime
-                            }
-                        }
-                    } catch {
-                        # If timestamp parsing fails, just check if line exists
+                if ($lineTime) {
+                    $timeDiff = ($now - $lineTime).TotalSeconds
+                    if ($timeDiff -le 10) {
                         $isActive = $true
+                        if (-not $lastSeen -or $lineTime -gt $lastSeen) {
+                            $lastSeen = $lineTime
+                        }
                     }
                 } else {
-                    # No timestamp but has LOG_WATCHER - assume active
                     $isActive = $true
                 }
                 
@@ -407,6 +426,50 @@ function Get-LogWatcherStatus {
                     $activeSimulations = [Math]::Max($activeSimulations, [int]$matches[1])
                 } elseif ($line -match '"simulationTablesFound":(\d+)') {
                     $activeSimulations = [Math]::Max($activeSimulations, [int]$matches[1])
+                }
+            }
+            
+            # Check STATUS_REPORT entries for simulation info
+            if ($line -match '\[STATUS_REPORT\]') {
+                if ($line -match '"activeSimulations":(\d+)' -or $line -match '"activeSimulationsCount":(\d+)') {
+                    $simCount = [int]$matches[1]
+                    if ($simCount -gt 0) {
+                        $activeSimulations = [Math]::Max($activeSimulations, $simCount)
+                    }
+                }
+            }
+            
+            # Check for explicit simulation start/activity indicators
+            if ($line -match '\[SIM\]|SIMULATION_STARTED|SIMULATION_ACTIVE|simulation.*start|table.*simulation.*created') {
+                if ($lineTime) {
+                    $timeDiff = ($now - $lineTime).TotalSeconds
+                    if ($timeDiff -le 30) {  # Simulation activity within last 30 seconds
+                        $activeSimulations = [Math]::Max($activeSimulations, 1)
+                    }
+                } else {
+                    $activeSimulations = [Math]::Max($activeSimulations, 1)
+                }
+            }
+            
+            # Check for simulation completion (10/10 games)
+            if ($line -match 'Game\s+10\s*/\s*10|10\s*/\s*10\s+games|simulation.*complete|maxGames.*reached|handsPlayed.*10') {
+                if ($lineTime) {
+                    $timeDiff = ($now - $lineTime).TotalSeconds
+                    if ($timeDiff -le 10) {  # Just completed (within last 10 seconds)
+                        $activeSimulations = 0
+                    }
+                } else {
+                    $activeSimulations = 0
+                }
+            }
+            
+            # Check for simulation end indicators
+            if ($line -match 'SIMULATION_ENDED|SIMULATION_STOPPED|TABLE_DESTROYED.*simulation') {
+                if ($lineTime) {
+                    $timeDiff = ($now - $lineTime).TotalSeconds
+                    if ($timeDiff -le 5) {  # Just ended (within last 5 seconds)
+                        $activeSimulations = 0
+                    }
                 }
             }
         }
@@ -485,314 +548,169 @@ function Show-Statistics {
     # Save current stats for next comparison
     $script:previousStats = $currentStatsSnapshot
     
+    # Get Unity and Simulation status
+    $unityStatus = "STOPPED"; $unityColor = "Red"
+    if ($stats.UnityRunning) {
+        try {
+            $healthCheck = Invoke-WebRequest -Uri "$serverUrl/health" -TimeoutSec 1 -ErrorAction Stop
+            $health = $healthCheck.Content | ConvertFrom-Json
+            if ($health.onlinePlayers -gt 0) { $unityStatus = "CONNECTED"; $unityColor = "Green" }
+            else { $unityStatus = "IDLE"; $unityColor = "Yellow" }
+        } catch { $unityStatus = "RUNNING"; $unityColor = "Yellow" }
+    }
+    $simStatus = if ($stats.SimulationRunning) { "ACTIVE" } else { "STOPPED" }
+    $simColor = if ($stats.SimulationRunning) { "Green" } else { "Red" }
+    $logWatcherStatus = Get-LogWatcherStatus
+    # Calculate time since last activity (with null check)
+    if ($stats.LastLogActivity -and $stats.LastLogActivity -is [DateTime]) {
+        $timeSinceActivity = (Get-Date) - $stats.LastLogActivity
+        $activityText = "$([math]::Round($timeSinceActivity.TotalSeconds))s ago"
+        $activityColor = if ($timeSinceActivity.TotalSeconds -lt 60) { "Green" } elseif ($timeSinceActivity.TotalSeconds -lt 120) { "Yellow" } else { "Red" }
+    } else {
+        $activityText = "N/A"
+        $activityColor = "Gray"
+    }
+    
     # Only clear screen on first display, then update in place
     if ($script:firstDisplay -eq $null) {
         Clear-Host
         $script:firstDisplay = $true
     } else {
-        # Move cursor to top (line 0) to overwrite stats in place
-        # Use a small delay to ensure cursor position is stable
-        [Console]::CursorVisible = $false  # Hide cursor during update to reduce flicker
+        [Console]::CursorVisible = $false
         [Console]::SetCursorPosition(0, 0)
-        Start-Sleep -Milliseconds 10  # Small delay for stability
+        Start-Sleep -Milliseconds 10
     }
-    Write-Host "+==============================================================================+" -ForegroundColor Cyan
-    Write-Host "|" -NoNewline -ForegroundColor Cyan
-    Write-Host "              AUTOMATED ISSUE MONITORING SYSTEM - LIVE STATISTICS              " -NoNewline -ForegroundColor White
-    Write-Host "|" -ForegroundColor Cyan
-    Write-Host "+==============================================================================+" -ForegroundColor Cyan
     
-    # Monitoring Status
-    Write-Host "| " -NoNewline -ForegroundColor Cyan
-    Write-Host "Status: " -NoNewline -ForegroundColor White
-    if ($isPaused) {
-        Write-Host "PAUSED (Issue Detected)" -NoNewline -ForegroundColor Red
-    } else {
-        Write-Host "MONITORING ACTIVE" -NoNewline -ForegroundColor Green
-    }
-    Write-Host (" " * 50) -NoNewline
-    Write-Host "|" -ForegroundColor Cyan
+    # Get console width for dynamic layout
+    $consoleWidth = [Console]::WindowWidth
+    if ($consoleWidth -lt 120) { $consoleWidth = 120 }
+    $colWidth = [Math]::Floor(($consoleWidth - 6) / 3)  # 3 columns with separators
     
-    Write-Host "| " -NoNewline -ForegroundColor Cyan
-    Write-Host "Uptime: " -NoNewline -ForegroundColor White
+    # Header
+    $headerText = "AUTOMATED ISSUE MONITORING SYSTEM - LIVE STATISTICS"
+    Write-Host ("=" * $consoleWidth) -ForegroundColor Cyan
+    $headerPadding = [Math]::Max(0, [Math]::Floor(($consoleWidth - $headerText.Length) / 2))
+    Write-Host (" " * $headerPadding + $headerText) -ForegroundColor White
+    Write-Host ("=" * $consoleWidth) -ForegroundColor Cyan
+    
+    # Top status bar - single row across full width
+    $statusText = if ($isPaused) { "PAUSED" } else { "ACTIVE" }
+    $statusColor = if ($isPaused) { "Red" } else { "Green" }
+    $serverStatusText = if ($stats.ServerStatus -eq "Online") { "ONLINE" } else { "OFFLINE" }
+    $serverStatusColor = if ($stats.ServerStatus -eq "Online") { "Green" } else { "Red" }
+    
+    Write-Host ""
+    Write-Host "STATUS: " -NoNewline -ForegroundColor White
+    Write-Host $statusText -NoNewline -ForegroundColor $statusColor
+    Write-Host " | " -NoNewline -ForegroundColor DarkGray
+    Write-Host "UPTIME: " -NoNewline -ForegroundColor White
     Write-Host $uptimeStr -NoNewline -ForegroundColor Yellow
-    Write-Host (" " * (60 - $uptimeStr.Length)) -NoNewline
-    Write-Host "|" -ForegroundColor Cyan
+    Write-Host " | " -NoNewline -ForegroundColor DarkGray
+    Write-Host "SERVER: " -NoNewline -ForegroundColor White
+    Write-Host $serverStatusText -NoNewline -ForegroundColor $serverStatusColor
+    Write-Host " | " -NoNewline -ForegroundColor DarkGray
+    Write-Host "UNITY: " -NoNewline -ForegroundColor White
+    Write-Host $unityStatus -NoNewline -ForegroundColor $unityColor
+    Write-Host " | " -NoNewline -ForegroundColor DarkGray
+    Write-Host "SIM: " -NoNewline -ForegroundColor White
+    Write-Host $simStatus -NoNewline -ForegroundColor $simColor
+    Write-Host " | " -NoNewline -ForegroundColor DarkGray
+    Write-Host "ACTIVITY: " -NoNewline -ForegroundColor White
+    Write-Host $activityText -NoNewline -ForegroundColor $activityColor
+    Write-Host ""
+    Write-Host ("-" * $consoleWidth) -ForegroundColor DarkGray
     
-    Write-Host "| " -NoNewline -ForegroundColor Cyan
-    Write-Host "Server: " -NoNewline -ForegroundColor White
-    if ($stats.ServerStatus -eq "Online") {
-        Write-Host "ONLINE" -NoNewline -ForegroundColor Green
-    } else {
-        Write-Host "OFFLINE" -NoNewline -ForegroundColor Red
+    # Build three columns of data
+    $col1Lines = @()
+    $col2Lines = @()
+    $col3Lines = @()
+    
+    # Column 1: System Status & Automation
+    $col1Lines += "SYSTEM STATUS"
+    $col1Lines += ("-" * ($colWidth - 2))
+    $col1Lines += "Log Watcher: " + $(if($logWatcherStatus.Active){"ACTIVE"}else{"INACTIVE"})
+    if ($logWatcherStatus.PausedTables -gt 0) {
+        $col1Lines += "  Paused: " + $logWatcherStatus.PausedTables
     }
-    Write-Host (" " * 50) -NoNewline
-    Write-Host "|" -ForegroundColor Cyan
+    $col1Lines += "Simulations: " + $logWatcherStatus.ActiveSimulations
+    $col1Lines += "Database: " + $(if($stats.ServerStatus -eq "Online"){"CONNECTED"}else{"UNKNOWN"})
+    $col1Lines += ""
+    $col1Lines += "AUTOMATION"
+    $col1Lines += ("-" * ($colWidth - 2))
+    $col1Lines += "Mode: " + $config.mode.ToUpper()
+    $col1Lines += "Auto-Restart Server: " + $(if($config.automation.autoRestartServer){"ENABLED"}else{"DISABLED"})
+    $col1Lines += "Auto-Restart Unity: " + $(if($config.automation.autoRestartUnity){"ENABLED"}else{"DISABLED"})
+    $col1Lines += "Auto-Restart DB: " + $(if($config.automation.autoRestartDatabase){"ENABLED"}else{"DISABLED"})
     
-    Write-Host "+==============================================================================+" -ForegroundColor Cyan
-    
-    # System Components Status
-    Write-Host "| " -NoNewline -ForegroundColor Cyan
-    Write-Host "SYSTEM COMPONENTS" -ForegroundColor Yellow
-    Write-Host "| " -NoNewline -ForegroundColor Cyan
-    Write-Host ("-" * 70) -ForegroundColor DarkGray
-    
-    # Log Watcher Status (from recent logs)
-    $logWatcherStatus = Get-LogWatcherStatus
-    Write-Host "| " -NoNewline -ForegroundColor Cyan
-    Write-Host "  Log Watcher: " -NoNewline -ForegroundColor White
-    if ($logWatcherStatus.Active) {
-        Write-Host "ACTIVE" -NoNewline -ForegroundColor Green
-        if ($logWatcherStatus.PausedTables -gt 0) {
-            Write-Host " ($($logWatcherStatus.PausedTables) paused)" -NoNewline -ForegroundColor Yellow
-        }
-    } else {
-        Write-Host "INACTIVE" -NoNewline -ForegroundColor Red
-    }
-    Write-Host (" " * 40) -NoNewline
-    Write-Host "|" -ForegroundColor Cyan
-    
-    # Active Simulations Status
-    Write-Host "| " -NoNewline -ForegroundColor Cyan
-    Write-Host "  Simulations: " -NoNewline -ForegroundColor White
-    if ($logWatcherStatus.ActiveSimulations -gt 0) {
-        Write-Host ("{0:N0} active" -f $logWatcherStatus.ActiveSimulations) -NoNewline -ForegroundColor Cyan
-    } else {
-        Write-Host "0 active" -NoNewline -ForegroundColor Gray
-    }
-    Write-Host (" " * 40) -NoNewline
-    Write-Host "|" -ForegroundColor Cyan
-    
-    # Database Status (inferred from server status for now)
-    Write-Host "| " -NoNewline -ForegroundColor Cyan
-    Write-Host "  Database: " -NoNewline -ForegroundColor White
-    if ($stats.ServerStatus -eq "Online") {
-        Write-Host "CONNECTED" -NoNewline -ForegroundColor Green
-    } else {
-        Write-Host "UNKNOWN" -NoNewline -ForegroundColor Gray
-    }
-    Write-Host (" " * 40) -NoNewline
-    Write-Host "|" -ForegroundColor Cyan
-    
-    Write-Host "+==============================================================================+" -ForegroundColor Cyan
-    
-    # Detection Statistics
-    Write-Host "| " -NoNewline -ForegroundColor Cyan
-    Write-Host "DETECTION STATISTICS" -ForegroundColor Yellow
-    Write-Host "| " -NoNewline -ForegroundColor Cyan
-    Write-Host ("-" * 70) -ForegroundColor DarkGray
-    Write-Host "| " -NoNewline -ForegroundColor Cyan
-    Write-Host "  Lines Processed: " -NoNewline -ForegroundColor White
-    Write-Host ("{0:N0}" -f $stats.TotalLinesProcessed) -NoNewline -ForegroundColor Cyan
-    Write-Host (" " * 40) -NoNewline
-    Write-Host "|" -ForegroundColor Cyan
-    
-    Write-Host "| " -NoNewline -ForegroundColor Cyan
-    Write-Host "  Issues Detected: " -NoNewline -ForegroundColor White
-    Write-Host ("{0:N0}" -f $stats.IssuesDetected) -NoNewline -ForegroundColor $(if ($stats.IssuesDetected -gt 0) { "Red" } else { "Green" })
-    Write-Host (" " * 40) -NoNewline
-    Write-Host "|" -ForegroundColor Cyan
-    
-    Write-Host "| " -NoNewline -ForegroundColor Cyan
-    Write-Host "  Unique Patterns: " -NoNewline -ForegroundColor White
-    Write-Host ("{0:N0}" -f $stats.UniquePatterns.Count) -NoNewline -ForegroundColor Cyan
-    Write-Host (" " * 40) -NoNewline
-    Write-Host "|" -ForegroundColor Cyan
-    
-    Write-Host "| " -NoNewline -ForegroundColor Cyan
-    Write-Host "  Log File Size: " -NoNewline -ForegroundColor White
-    Write-Host ("{0:N2} MB" -f $stats.LogFileSize) -NoNewline -ForegroundColor Cyan
-    Write-Host (" " * 40) -NoNewline
-    Write-Host "|" -ForegroundColor Cyan
-    
+    # Column 2: Detection & Issues
+    $col2Lines += "DETECTION STATS"
+    $col2Lines += ("-" * ($colWidth - 2))
+    $col2Lines += "Lines: " + ("{0:N0}" -f $stats.TotalLinesProcessed)
+    $col2Lines += "Issues: " + ("{0:N0}" -f $stats.IssuesDetected)
+    $col2Lines += "Patterns: " + $stats.UniquePatterns.Count
+    $col2Lines += "Log Size: " + ("{0:N2} MB" -f $stats.LogFileSize)
     if ($stats.LastIssueTime) {
-        Write-Host "| " -NoNewline -ForegroundColor Cyan
-        Write-Host "  Last Issue: " -NoNewline -ForegroundColor White
-        Write-Host $stats.LastIssueTime.ToString("HH:mm:ss") -NoNewline -ForegroundColor Yellow
-        Write-Host (" " * 40) -NoNewline
-        Write-Host "|" -ForegroundColor Cyan
+        $col2Lines += "Last Issue: " + $stats.LastIssueTime.ToString("HH:mm:ss")
     }
+    $col2Lines += "Pause Markers: " + $stats.PauseMarkersWritten
+    $col2Lines += ""
+    $col2Lines += "ISSUES BY SEVERITY"
+    $col2Lines += ("-" * ($colWidth - 2))
+    $col2Lines += "Critical: " + ("{0:N0}" -f $stats.IssuesBySeverity.critical)
+    $col2Lines += "High:     " + ("{0:N0}" -f $stats.IssuesBySeverity.high)
+    $col2Lines += "Medium:   " + ("{0:N0}" -f $stats.IssuesBySeverity.medium)
+    $col2Lines += "Low:      " + ("{0:N0}" -f $stats.IssuesBySeverity.low)
     
-    Write-Host "| " -NoNewline -ForegroundColor Cyan
-    Write-Host "  Pause Markers: " -NoNewline -ForegroundColor White
-    Write-Host ("{0:N0}" -f $stats.PauseMarkersWritten) -NoNewline -ForegroundColor $(if ($stats.PauseMarkersWritten -gt 0) { "Green" } else { "Gray" })
-    if ($stats.PauseMarkerErrors -gt 0) {
-        Write-Host " (Errors: $($stats.PauseMarkerErrors))" -NoNewline -ForegroundColor Red
-    }
-    Write-Host (" " * 30) -NoNewline
-    Write-Host "|" -ForegroundColor Cyan
-    
-    Write-Host "+==============================================================================+" -ForegroundColor Cyan
-    
-    # Issues by Severity
-    Write-Host "| " -NoNewline -ForegroundColor Cyan
-    Write-Host "ISSUES BY SEVERITY" -ForegroundColor Yellow
-    Write-Host "| " -NoNewline -ForegroundColor Cyan
-    Write-Host ("-" * 70) -ForegroundColor DarkGray
-    Write-Host "| " -NoNewline -ForegroundColor Cyan
-    Write-Host "  Critical: " -NoNewline -ForegroundColor White
-    Write-Host ("{0:N0}" -f $stats.IssuesBySeverity.critical) -NoNewline -ForegroundColor Red
-    Write-Host (" " * 50) -NoNewline
-    Write-Host "|" -ForegroundColor Cyan
-    
-    Write-Host "| " -NoNewline -ForegroundColor Cyan
-    Write-Host "  High:     " -NoNewline -ForegroundColor White
-    Write-Host ("{0:N0}" -f $stats.IssuesBySeverity.high) -NoNewline -ForegroundColor Yellow
-    Write-Host (" " * 50) -NoNewline
-    Write-Host "|" -ForegroundColor Cyan
-    
-    Write-Host "| " -NoNewline -ForegroundColor Cyan
-    Write-Host "  Medium:   " -NoNewline -ForegroundColor White
-    Write-Host ("{0:N0}" -f $stats.IssuesBySeverity.medium) -NoNewline -ForegroundColor $(if ($stats.IssuesBySeverity.medium -gt 0) { "Yellow" } else { "Gray" })
-    Write-Host (" " * 50) -NoNewline
-    Write-Host "|" -ForegroundColor Cyan
-    
-    Write-Host "| " -NoNewline -ForegroundColor Cyan
-    Write-Host "  Low:      " -NoNewline -ForegroundColor White
-    Write-Host ("{0:N0}" -f $stats.IssuesBySeverity.low) -NoNewline -ForegroundColor Gray
-    Write-Host (" " * 50) -NoNewline
-    Write-Host "|" -ForegroundColor Cyan
-    
-    Write-Host "+==============================================================================+" -ForegroundColor Cyan
-    
-    # Issues by Source
-    Write-Host "| " -NoNewline -ForegroundColor Cyan
-    Write-Host "ISSUES BY SOURCE" -ForegroundColor Yellow
-    Write-Host "| " -NoNewline -ForegroundColor Cyan
-    Write-Host ("-" * 70) -ForegroundColor DarkGray
-    Write-Host "| " -NoNewline -ForegroundColor Cyan
-    Write-Host "  Server:   " -NoNewline -ForegroundColor White
-    Write-Host ("{0:N0}" -f $stats.IssuesBySource.server) -NoNewline -ForegroundColor Cyan
-    Write-Host (" " * 50) -NoNewline
-    Write-Host "|" -ForegroundColor Cyan
-    
-    Write-Host "| " -NoNewline -ForegroundColor Cyan
-    Write-Host "  Unity:    " -NoNewline -ForegroundColor White
-    Write-Host ("{0:N0}" -f $stats.IssuesBySource.unity) -NoNewline -ForegroundColor Cyan
-    Write-Host (" " * 50) -NoNewline
-    Write-Host "|" -ForegroundColor Cyan
-    
-    Write-Host "| " -NoNewline -ForegroundColor Cyan
-    Write-Host "  Database: " -NoNewline -ForegroundColor White
-    Write-Host ("{0:N0}" -f $stats.IssuesBySource.database) -NoNewline -ForegroundColor Cyan
-    Write-Host (" " * 50) -NoNewline
-    Write-Host "|" -ForegroundColor Cyan
-    
-    Write-Host "| " -NoNewline -ForegroundColor Cyan
-    Write-Host "  Network:  " -NoNewline -ForegroundColor White
-    Write-Host ("{0:N0}" -f $stats.IssuesBySource.network) -NoNewline -ForegroundColor Cyan
-    Write-Host (" " * 50) -NoNewline
-    Write-Host "|" -ForegroundColor Cyan
-    
-    Write-Host "+==============================================================================+" -ForegroundColor Cyan
-    
-    # Fix Attempts Statistics
-    Write-Host "| " -NoNewline -ForegroundColor Cyan
-    Write-Host "FIX ATTEMPTS STATISTICS" -ForegroundColor Yellow
-    Write-Host "| " -NoNewline -ForegroundColor Cyan
-    Write-Host ("-" * 70) -ForegroundColor DarkGray
-    Write-Host "| " -NoNewline -ForegroundColor Cyan
-    Write-Host "  Total Attempts: " -NoNewline -ForegroundColor White
-    Write-Host ("{0:N0}" -f $fixStats.Total) -NoNewline -ForegroundColor Cyan
-    Write-Host (" " * 40) -NoNewline
-    Write-Host "|" -ForegroundColor Cyan
-    
-    Write-Host "| " -NoNewline -ForegroundColor Cyan
-    Write-Host "  Successful:     " -NoNewline -ForegroundColor White
-    Write-Host ("{0:N0}" -f $fixStats.Successes) -NoNewline -ForegroundColor Green
-    Write-Host (" " * 40) -NoNewline
-    Write-Host "|" -ForegroundColor Cyan
-    
-    Write-Host "| " -NoNewline -ForegroundColor Cyan
-    Write-Host "  Failed:         " -NoNewline -ForegroundColor White
-    Write-Host ("{0:N0}" -f $fixStats.Failures) -NoNewline -ForegroundColor $(if ($fixStats.Failures -gt 0) { "Red" } else { "Gray" })
-    Write-Host (" " * 40) -NoNewline
-    Write-Host "|" -ForegroundColor Cyan
-    
-    Write-Host "| " -NoNewline -ForegroundColor Cyan
-    Write-Host "  Success Rate:   " -NoNewline -ForegroundColor White
-    $successColor = if ($fixStats.SuccessRate -ge 80) { "Green" } elseif ($fixStats.SuccessRate -ge 50) { "Yellow" } else { "Red" }
-    Write-Host ("{0:N1}%" -f $fixStats.SuccessRate) -NoNewline -ForegroundColor $successColor
-    Write-Host (" " * 40) -NoNewline
-    Write-Host "|" -ForegroundColor Cyan
-    
-    Write-Host "+==============================================================================+" -ForegroundColor Cyan
-    
-    # Current Status
-    Write-Host "| " -NoNewline -ForegroundColor Cyan
-    Write-Host "CURRENT STATUS" -ForegroundColor Yellow
-    Write-Host "| " -NoNewline -ForegroundColor Cyan
-    Write-Host ("-" * 70) -ForegroundColor DarkGray
-    
-    # Focus Mode Status
+    # Column 3: Issues by Source, Fixes, Pending
+    $col3Lines += "ISSUES BY SOURCE"
+    $col3Lines += ("-" * ($colWidth - 2))
+    $col3Lines += "Server:   " + ("{0:N0}" -f $stats.IssuesBySource.server)
+    $col3Lines += "Unity:    " + ("{0:N0}" -f $stats.IssuesBySource.unity)
+    $col3Lines += "Database: " + ("{0:N0}" -f $stats.IssuesBySource.database)
+    $col3Lines += "Network:  " + ("{0:N0}" -f $stats.IssuesBySource.network)
+    $col3Lines += ""
+    $col3Lines += "FIX ATTEMPTS"
+    $col3Lines += ("-" * ($colWidth - 2))
+    $col3Lines += "Total: " + ("{0:N0}" -f $fixStats.Total)
+    $col3Lines += "Success: " + ("{0:N0}" -f $fixStats.Successes)
+    $col3Lines += "Failed: " + ("{0:N0}" -f $fixStats.Failures)
+    $col3Lines += "Rate: " + ("{0:N1}%" -f $fixStats.SuccessRate)
+    $col3Lines += ""
+    $col3Lines += "PENDING ISSUES"
+    $col3Lines += ("-" * ($colWidth - 2))
     if ($pendingInfo.InFocusMode) {
-        Write-Host "| " -NoNewline -ForegroundColor Cyan
-        Write-Host "  Mode: " -NoNewline -ForegroundColor White
-        Write-Host "FOCUS MODE" -NoNewline -ForegroundColor Yellow
-        Write-Host (" " * 50) -NoNewline
-        Write-Host "|" -ForegroundColor Cyan
-        
-        Write-Host "| " -NoNewline -ForegroundColor Cyan
-        Write-Host "  Root Issue: " -NoNewline -ForegroundColor White
-        $rootType = $pendingInfo.RootIssue.type
-        $rootSeverity = $pendingInfo.RootIssue.severity
-        Write-Host "$rootType ($rootSeverity)" -NoNewline -ForegroundColor $(if ($rootSeverity -eq 'critical') { "Red" } else { "Yellow" })
-        Write-Host (" " * 40) -NoNewline
-        Write-Host "|" -ForegroundColor Cyan
-        
-        Write-Host "| " -NoNewline -ForegroundColor Cyan
-        Write-Host "  Related Issues: " -NoNewline -ForegroundColor White
-        Write-Host ("{0:N0}" -f $pendingInfo.RelatedIssuesCount) -NoNewline -ForegroundColor Cyan
-        Write-Host (" " * 40) -NoNewline
-        Write-Host "|" -ForegroundColor Cyan
-        
-        # Show context information if available
-        if ($pendingInfo.RootIssue -and $pendingInfo.RootIssue.contextLines) {
-            Write-Host "| " -NoNewline -ForegroundColor Cyan
-            Write-Host "  Context Lines: " -NoNewline -ForegroundColor White
-            Write-Host ("{0:N0}" -f $pendingInfo.RootIssue.contextLines) -NoNewline -ForegroundColor Cyan
-            Write-Host (" " * 40) -NoNewline
-            Write-Host "|" -ForegroundColor Cyan
+        $col3Lines += "Mode: FOCUS MODE"
+        if ($pendingInfo.RootIssue) {
+            $col3Lines += "Root: " + $pendingInfo.RootIssue.type
+            $col3Lines += "Related: " + $pendingInfo.RelatedIssuesCount
+            $col3Lines += "Queued: " + $pendingInfo.QueuedIssuesCount
         }
-        
-        if ($pendingInfo.QueuedIssuesCount -gt 0) {
-            Write-Host "| " -NoNewline -ForegroundColor Cyan
-            Write-Host "  Queued Issues: " -NoNewline -ForegroundColor White
-            Write-Host ("{0:N0}" -f $pendingInfo.QueuedIssuesCount) -NoNewline -ForegroundColor Gray
-            Write-Host (" " * 40) -NoNewline
-            Write-Host "|" -ForegroundColor Cyan
-        }
-        
-        Write-Host "| " -NoNewline -ForegroundColor Cyan
-        Write-Host "  Controls: Ctrl+X = Exit Focus Mode" -ForegroundColor DarkGray
-        Write-Host (" " * 30) -NoNewline
-        Write-Host "|" -ForegroundColor Cyan
     } else {
-        Write-Host "| " -NoNewline -ForegroundColor Cyan
-        Write-Host "  Mode: " -NoNewline -ForegroundColor White
-        Write-Host "NORMAL MONITORING" -NoNewline -ForegroundColor Green
-        Write-Host (" " * 50) -NoNewline
-        Write-Host "|" -ForegroundColor Cyan
+        $col3Lines += "Mode: NORMAL"
+        $col3Lines += "Pending: " + $pendingInfo.TotalIssues
+    }
+    
+    # Display columns side by side
+    $maxLines = [Math]::Max($col1Lines.Count, [Math]::Max($col2Lines.Count, $col3Lines.Count))
+    for ($i = 0; $i -lt $maxLines; $i++) {
+        $line1 = if ($i -lt $col1Lines.Count) { $col1Lines[$i] } else { "" }
+        $line2 = if ($i -lt $col2Lines.Count) { $col2Lines[$i] } else { "" }
+        $line3 = if ($i -lt $col3Lines.Count) { $col3Lines[$i] } else { "" }
         
-        Write-Host "| " -NoNewline -ForegroundColor Cyan
-        Write-Host "  Pending Issues: " -NoNewline -ForegroundColor White
-        if ($pendingInfo.TotalIssues -gt 0) {
-            Write-Host ("{0:N0}" -f $pendingInfo.TotalIssues) -NoNewline -ForegroundColor Red
-        } else {
-            Write-Host "0" -NoNewline -ForegroundColor Green
-        }
-        Write-Host (" " * 40) -NoNewline
-        Write-Host "|" -ForegroundColor Cyan
+        # Determine colors
+        $c1 = if ($line1 -match "ACTIVE|ENABLED|CONNECTED") { "Green" } elseif ($line1 -match "INACTIVE|DISABLED|STOPPED|UNKNOWN") { "Red" } elseif ($line1 -match "SYSTEM|AUTOMATION") { "Yellow" } else { "White" }
+        $c2 = if ($line2 -match "Issues: [1-9]|Critical: [1-9]|High: [1-9]") { "Red" } elseif ($line2 -match "DETECTION|ISSUES BY SEVERITY") { "Yellow" } else { "White" }
+        $c3 = if ($line3 -match "Failed: [1-9]") { "Red" } elseif ($line3 -match "Success: [1-9]") { "Green" } elseif ($line3 -match "FOCUS MODE") { "Cyan" } elseif ($line3 -match "ISSUES BY SOURCE|FIX ATTEMPTS|PENDING ISSUES") { "Yellow" } else { "White" }
+        
+        Write-Host ($line1.PadRight($colWidth)) -NoNewline -ForegroundColor $c1
+        Write-Host " | " -NoNewline -ForegroundColor DarkGray
+        Write-Host ($line2.PadRight($colWidth)) -NoNewline -ForegroundColor $c2
+        Write-Host " | " -NoNewline -ForegroundColor DarkGray
+        Write-Host ($line3.PadRight($colWidth)) -NoNewline -ForegroundColor $c3
+        Write-Host ""
     }
     
-    if ($isPaused -and $currentIssue) {
-        Write-Host "| " -NoNewline -ForegroundColor Cyan
-        Write-Host "  Action: PAUSED - Waiting for fix..." -ForegroundColor Yellow
-        Write-Host (" " * 30) -NoNewline
-        Write-Host "|" -ForegroundColor Cyan
-    }
-    
-    Write-Host "+==============================================================================+" -ForegroundColor Cyan
+    Write-Host ("=" * $consoleWidth) -ForegroundColor Cyan
     
     # Calculate where console output should start (below stats)
     $statsHeight = [Console]::CursorTop + 1
@@ -928,6 +846,8 @@ function Restart-UnityIfNeeded {
     try {
         # Check if Unity is running
         $unityProcess = Get-Process -Name "Unity" -ErrorAction SilentlyContinue
+        $wasUnityRunning = $stats.UnityRunning
+        $isUnityRunning = $null -ne $unityProcess
         
         # Check if Unity is connected to server
         $isConnected = $false
@@ -941,6 +861,20 @@ function Restart-UnityIfNeeded {
                 $isConnected = $false
             }
         }
+        
+        # Log Unity startup when process first appears
+        if ($isUnityRunning -and -not $wasUnityRunning) {
+            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🎮 UNITY: Game process started (PID: $($unityProcess.Id))" -ForegroundColor "Green"
+        }
+        
+        # Log Unity connection when it first connects
+        if ($isConnected -and -not $stats.UnityConnected) {
+            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🎮 UNITY: Connected to server!" -ForegroundColor "Green"
+        }
+        
+        # Update stats
+        $stats.UnityRunning = $isUnityRunning
+        $stats.UnityConnected = $isConnected
         
         # If Unity is not running or not connected, restart it
         if (-not $unityProcess -or -not $isConnected) {
@@ -1243,7 +1177,10 @@ Show-Statistics
 # Main monitoring loop
 $lastStatsUpdate = Get-Date
 $lastServiceCheck = Get-Date
+$lastUnityCheck = Get-Date
+$lastServerCheck = Get-Date
 $serviceCheckInterval = 30  # Check services every 30 seconds
+$script:simulationEndTime = $null  # Track when simulation ended for idle detection
 
 while ($monitoringActive) {
     try {
@@ -1272,6 +1209,7 @@ while ($monitoringActive) {
             
             while ($null -ne ($line = $reader.ReadLine())) {
                 $stats.TotalLinesProcessed++
+                $stats.LastLogActivity = Get-Date  # Update last activity timestamp
                 
                 # Skip our own monitoring logs and internal system logs
                 if ($line -match '\[MONITORING\]|\[ISSUE_DETECTOR\]|\[LOG_WATCHER\]|\[TRACE\]|\[STATUS_REPORT\]|\[ACTIVE_MONITORING\]|\[WORKFLOW\]') {
@@ -1438,8 +1376,133 @@ while ($monitoringActive) {
             }
         }
         
-        # Check server status continuously and restart if needed (every 5 seconds)
+        # Check Unity status continuously (every 5 seconds) and restart if needed
         $now = Get-Date
+        $unityCheckInterval = 5  # Check Unity every 5 seconds
+        $timeSinceUnityCheck = $now - $lastUnityCheck
+        if ($timeSinceUnityCheck.TotalSeconds -ge $unityCheckInterval) {
+            $unityProcess = Get-Process -Name "Unity" -ErrorAction SilentlyContinue
+            $wasUnityRunning = $stats.UnityRunning
+            $isUnityRunning = $null -ne $unityProcess
+            
+            # Log Unity startup when process first appears
+            if ($isUnityRunning -and -not $wasUnityRunning) {
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🎮 UNITY: Game process detected (PID: $($unityProcess.Id))" -ForegroundColor "Green"
+            }
+            
+            # Check if Unity is connected to server
+            $isConnected = $false
+            if ($unityProcess) {
+                try {
+                    $healthCheck = Invoke-WebRequest -Uri "$serverUrl/health" -TimeoutSec 2 -ErrorAction Stop
+                    $health = $healthCheck.Content | ConvertFrom-Json
+                    $isConnected = $health.onlinePlayers -gt 0
+                    
+                    # Log Unity connection when it first connects
+                    if ($isConnected -and -not $stats.UnityConnected) {
+                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🎮 UNITY: Connected to server!" -ForegroundColor "Green"
+                    }
+                } catch {
+                    $isConnected = $false
+                }
+            }
+            
+            # Update stats
+            $stats.UnityRunning = $isUnityRunning
+            $stats.UnityConnected = $isConnected
+            
+            # If Unity is not running or not connected, restart it immediately (don't wait for Maintain-Services)
+            if ((-not $unityProcess -or -not $isConnected) -and $config.automation.autoRestartUnity) {
+                Restart-UnityIfNeeded | Out-Null
+            }
+            
+            $lastUnityCheck = $now
+        }
+        
+        # Check simulation status from logs (every 5 seconds)
+        $logWatcherStatus = Get-LogWatcherStatus
+        $wasSimulationRunning = $stats.SimulationRunning
+        
+        # Also check logs directly for simulation completion (10/10 games)
+        $simulationCompleted = $false
+        if (Test-Path $logFile) {
+            $recentLogs = Get-Content $logFile -Tail 200 -ErrorAction SilentlyContinue
+            foreach ($line in $recentLogs) {
+                # Check for simulation completion indicators
+                if ($line -match 'Reached max games|maxGames.*reached|Game\s+10\s*/\s*10|10\s*/\s*10\s+games|simulation.*complete|stopping simulation') {
+                    # Check timestamp - only if within last 30 seconds
+                    if ($line -match '\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?)\]') {
+                        try {
+                            $lineTime = [DateTime]::Parse($matches[1])
+                            $timeDiff = ((Get-Date) - $lineTime).TotalSeconds
+                            if ($timeDiff -le 30) {
+                                $simulationCompleted = $true
+                                break
+                            }
+                        } catch {
+                            # If timestamp parsing fails, assume recent
+                            $simulationCompleted = $true
+                            break
+                        }
+                    } else {
+                        # No timestamp but matches pattern - assume recent
+                        $simulationCompleted = $true
+                        break
+                    }
+                }
+            }
+        }
+        
+        # If simulation completed, mark as stopped
+        if ($simulationCompleted) {
+            $stats.SimulationRunning = $false
+            $logWatcherStatus.ActiveSimulations = 0
+        } else {
+            $stats.SimulationRunning = $logWatcherStatus.ActiveSimulations -gt 0
+        }
+        
+        # Log simulation start/stop
+        if ($stats.SimulationRunning -and -not $wasSimulationRunning) {
+            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🎲 SIMULATION: Started ($($logWatcherStatus.ActiveSimulations) active)" -ForegroundColor "Green"
+        } elseif (-not $stats.SimulationRunning -and $wasSimulationRunning) {
+            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🎲 SIMULATION: Completed (10/10 games) - Unity is now idle" -ForegroundColor "Yellow"
+            
+            # In simulation mode, if simulation ended and Unity is running but idle, restart it to start a new simulation
+            if ($config.simulation.enabled -and $config.automation.autoRestartUnity -and $stats.UnityRunning) {
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🔄 UNITY: Simulation completed - restarting Unity to start new simulation..." -ForegroundColor "Cyan"
+                $restartResult = Restart-UnityIfNeeded
+                if ($restartResult) {
+                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ✅ UNITY: Restarted - waiting for new simulation to start..." -ForegroundColor "Green"
+                } else {
+                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ❌ UNITY: Failed to restart after simulation completed" -ForegroundColor "Red"
+                }
+            } elseif ($config.simulation.enabled -and -not $stats.UnityRunning) {
+                # Unity not running after simulation ended - restart it
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🔄 UNITY: Simulation completed and Unity not running - restarting..." -ForegroundColor "Cyan"
+                Restart-UnityIfNeeded | Out-Null
+            } elseif ($config.simulation.enabled) {
+                # Simulation ended but Unity restart is disabled or Unity is not running
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  UNITY: Simulation completed but Unity restart disabled or Unity not running" -ForegroundColor "Yellow"
+            }
+        }
+        
+        # In simulation mode, check if Unity is idle (running but no simulation for >30 seconds)
+        if ($config.simulation.enabled -and $stats.UnityRunning -and -not $stats.SimulationRunning) {
+            if (-not $script:simulationEndTime) {
+                $script:simulationEndTime = Get-Date
+            }
+            $timeSinceSimEnd = (Get-Date) - $script:simulationEndTime
+            if ($timeSinceSimEnd.TotalSeconds -gt 30) {
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  UNITY: Idle for $([math]::Round($timeSinceSimEnd.TotalSeconds))s after simulation ended - restarting..." -ForegroundColor "Yellow"
+                $script:simulationEndTime = $null  # Reset timer
+                Restart-UnityIfNeeded | Out-Null
+            }
+        } else {
+            # Reset timer if simulation is running or Unity is not running
+            $script:simulationEndTime = $null
+        }
+        
+        # Check server status continuously and restart if needed (every 5 seconds)
         $serverCheckInterval = 5  # Check server every 5 seconds
         
         # Check server health every 5 seconds (independent of stats display)

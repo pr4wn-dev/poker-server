@@ -1,5 +1,5 @@
 {
-  "mode": "normal",
+  "mode": "simulation",
   "comment": "Mode: 'simulation' = fully automated including table creation, 'normal' = user creates table but everything else automated",
   "automation": {
     "autoRestartServer": true,
@@ -20,7 +20,7 @@
     "comment": "Password should be set via environment variable MONITOR_PASSWORD for security"
   },
   "simulation": {
-    "enabled": false,
+    "enabled": true,
     "comment": "Only used in simulation mode - auto-create and start simulation table",
     "tableName": "Auto Simulation",
     "maxPlayers": 9,

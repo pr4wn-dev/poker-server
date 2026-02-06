@@ -962,6 +962,86 @@ if (require.main === module) {
             console.log(JSON.stringify({ success: false, reason: 'error', error: error.message }));
             process.exit(1);
         }
+    } else if (args[0] === '--add-issue-file' && args[1]) {
+        // Add issue from JSON file (avoids PowerShell argument escaping issues)
+        try {
+            const filePath = args[1];
+            if (!fs.existsSync(filePath)) {
+                console.log(JSON.stringify({ success: false, reason: 'error', error: 'File not found: ' + filePath }));
+                process.exit(1);
+            }
+            let jsonContent = fs.readFileSync(filePath, 'utf8');
+            // Remove BOM if present and trim whitespace
+            jsonContent = jsonContent.replace(/^\uFEFF/, '').trim();
+            if (!jsonContent) {
+                console.log(JSON.stringify({ success: false, reason: 'error', error: 'File is empty' }));
+                process.exit(1);
+            }
+            // Remove any trailing newlines or whitespace that might cause parsing issues
+            jsonContent = jsonContent.replace(/\s+$/, '');
+            // Try to parse JSON
+            let issueData;
+            try {
+                issueData = JSON.parse(jsonContent);
+            } catch (parseError) {
+                console.log(JSON.stringify({ 
+                    success: false, 
+                    reason: 'error', 
+                    error: 'JSON parse error: ' + parseError.message + ' | Content length: ' + jsonContent.length + ' | First 100 chars: ' + JSON.stringify(jsonContent.substring(0, 100))
+                }));
+                process.exit(1);
+            }
+            
+            // Validate required fields
+            if (!issueData.message) {
+                console.log(JSON.stringify({ success: false, reason: 'error', error: 'Missing required field: message' }));
+                process.exit(1);
+            }
+            
+            let issue;
+            try {
+                issue = detector.createIssue(
+                    issueData.type || 'error',
+                    issueData.severity || 'critical',
+                    issueData.message || '',
+                    issueData.source || 'server'
+                );
+            } catch (createError) {
+                console.log(JSON.stringify({ 
+                    success: false, 
+                    reason: 'error', 
+                    error: 'createIssue error: ' + createError.message + ' | Stack: ' + (createError.stack || 'no stack')
+                }));
+                process.exit(1);
+            }
+            
+            // Include tableId if provided (even if null, we want to preserve it)
+            if (issueData.hasOwnProperty('tableId')) {
+                issue.tableId = issueData.tableId;
+            }
+            
+            let result;
+            try {
+                result = detector.addPendingIssue(issue);
+            } catch (addError) {
+                console.log(JSON.stringify({ 
+                    success: false, 
+                    reason: 'error', 
+                    error: 'addPendingIssue error: ' + addError.message + ' | Stack: ' + (addError.stack || 'no stack')
+                }));
+                process.exit(1);
+            }
+            
+            console.log(JSON.stringify(result));
+            process.exit(result.success ? 0 : 1);
+        } catch (error) {
+            console.log(JSON.stringify({ 
+                success: false, 
+                reason: 'error', 
+                error: error.message + ' (file: ' + (args[1] || 'unknown') + ') | Stack: ' + (error.stack || 'no stack')
+            }));
+            process.exit(1);
+        }
     } else if (args[0] === '--get-pending') {
         // Get all pending issues
         const issues = detector.getPendingIssues();
@@ -981,7 +1061,7 @@ if (require.main === module) {
         console.log(JSON.stringify(result));
         process.exit(result.success ? 0 : 1);
     } else {
-        console.error('Usage: node issue-detector.js --check <logLine> | --add-issue <json> | --get-pending | --clear | --exit-focus');
+        console.error('Usage: node issue-detector.js --check <logLine> | --add-issue <json> | --add-issue-file <file> | --get-pending | --clear | --exit-focus');
         process.exit(1);
     }
 }
