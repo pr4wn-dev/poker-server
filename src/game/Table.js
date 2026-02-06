@@ -7284,11 +7284,19 @@ class Table {
                 // (e.g., if they bet 1000 but others bet 500, they can win 2000+)
                 // So we need to check if this is legitimate or a bug
                 const ratio = data.totalAwarded / contributor.totalBet;
-                const isLegitimateSidePot = potAwards.some(a => 
+                // CRITICAL: Check if this is a legitimate side pot scenario
+                // A player can win more than they bet if:
+                // 1. They won multiple pots (main + side pots)
+                // 2. Other players bet less, allowing them to win more
+                // 3. The potAwards array has multiple entries (indicating side pots exist)
+                const hasMultiplePots = potAwards.length > 1;
+                const wonMultipleAwards = data.awards.length > 1;
+                const hasSidePotAward = potAwards.some(a => 
                     a.playerId === playerId && 
-                    a.potType === 'side_pot' &&
-                    data.awards.length > 1
+                    (a.potType === 'side' || a.potType === 'side_pot')
                 );
+                // Legitimate if: multiple pots exist OR player won multiple awards OR has side pot award
+                const isLegitimateSidePot = hasMultiplePots || wonMultipleAwards || hasSidePotAward;
                 
                 // ROOT TRACING: Track when players win more than contributed
                 gameLogger.gameEvent(this.name, '[ROOT_TRACE] PLAYER_WON_MORE_THAN_CONTRIBUTED', {
