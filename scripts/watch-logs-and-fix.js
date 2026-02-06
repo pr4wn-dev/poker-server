@@ -34,6 +34,10 @@ const ERROR_PATTERNS = [
     /\[FIX\] DISABLED/i,
     /SIMULATION BOT TIMEOUT/i,
     /\[TIMER\].*TIMEOUT.*auto-folding/i,
+    /\[ICON_LOADING\].*ISSUE_REPORTED/i,
+    /LoadItemIcon.*FAILED/i,
+    /CreateItemAnteSlot.*FAILED/i,
+    /Sprite not found/i,
     /\[ERROR\](?!.*\[LOG_WATCHER\])/i  // ERROR but NOT from LOG_WATCHER
 ];
 
