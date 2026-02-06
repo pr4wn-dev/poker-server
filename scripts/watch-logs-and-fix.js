@@ -1329,6 +1329,16 @@ let latestStatus = {
     lastUpdated: null
 };
 
+// Store latest status for API endpoint and status file
+let latestStatus = {
+    timestamp: null,
+    activeSimulations: 0,
+    simulations: [],
+    message: 'Initializing...',
+    issues: [],
+    lastUpdated: null
+};
+
 /**
  * Active monitoring: Check for new simulations and report status regularly
  * This function logs findings that I (the assistant) will read and report to the user
@@ -1657,13 +1667,19 @@ function startActiveMonitoring() {
     }
 }
 
+// Function to get latest status for API endpoint
+function getLatestStatus() {
+    return latestStatus;
+}
+
 module.exports = {
     initialize,
     watchLogs,
     pauseSimulation,
     resumeSimulation,
     getActiveSimulationTables,
-    startActiveMonitoring
+    startActiveMonitoring,
+    getLatestStatus
 };
 
 // If run directly, try to watch (but won't have full access to managers)
