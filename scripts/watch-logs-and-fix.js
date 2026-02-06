@@ -1393,8 +1393,8 @@ function activeMonitoring() {
     const currentSimIds = new Set(simulationTables.map(t => t.id));
     const newSimulations = simulationTables.filter(t => !lastReportedSimulations.has(t.id));
     
-    // On first run, report all existing simulations
-    if (isFirstRun && simulationTables.length > 0) {
+    // On first run OR if we have simulations but none reported, report all existing simulations
+    if ((isFirstRun || lastReportedSimulations.size === 0) && simulationTables.length > 0) {
         isFirstRun = false;
         for (const sim of simulationTables) {
             gameLogger.error('LOG_WATCHER', `[ACTIVE_MONITORING] EXISTING_SIMULATION_DETECTED`, {
