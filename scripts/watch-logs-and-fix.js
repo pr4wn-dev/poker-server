@@ -17,8 +17,8 @@ let simulationManager = null;
 let socketHandler = null;
 
 // Patterns that indicate issues requiring pause
+// NOTE: Exclude LOG_WATCHER errors to prevent infinite loops
 const ERROR_PATTERNS = [
-    /\[ERROR\]/i,
     /\[ROOT CAUSE\]/i,
     /\[ROOT_TRACE\].*TOTAL_BET_NOT_CLEARED/i,
     /\[ROOT_TRACE\].*PLAYER_WON_MORE_THAN_CONTRIBUTED/i,
@@ -33,7 +33,8 @@ const ERROR_PATTERNS = [
     /PERMANENTLY DISABLED/i,
     /\[FIX\] DISABLED/i,
     /SIMULATION BOT TIMEOUT/i,
-    /\[TIMER\].*TIMEOUT.*auto-folding/i
+    /\[TIMER\].*TIMEOUT.*auto-folding/i,
+    /\[ERROR\](?!.*\[LOG_WATCHER\])/i  // ERROR but NOT from LOG_WATCHER
 ];
 
 // Patterns for item ante specific issues

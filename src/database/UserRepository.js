@@ -48,7 +48,8 @@ class UserRepository {
         const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
         const userId = uuidv4();
         const startingChips = 20000000; // 20 million chips for all new users
-        console.log(`[UserRepo] Creating user with ${startingChips} starting chips`);
+        const gameLogger = require('../utils/GameLogger');
+        gameLogger.gameEvent('USER_REPO', '[REGISTER] Creating user', { username, startingChips });
         
         // Convert empty email to null to avoid duplicate key issues
         const emailValue = email && email.trim() !== '' ? email : null;
@@ -70,7 +71,7 @@ class UserRepository {
             [userId]
         );
         
-        console.log(`[UserRepo] New user registered: ${username} (${userId})`);
+        gameLogger.gameEvent('USER_REPO', '[REGISTER] New user registered', { username, userId });
         
         return { 
             success: true, 
@@ -84,7 +85,8 @@ class UserRepository {
      */
     async login(username, password) {
         try {
-            console.log(`[UserRepo] Login attempt for: ${username}`);
+            const gameLogger = require('../utils/GameLogger');
+            gameLogger.gameEvent('USER_REPO', '[LOGIN] Login attempt', { username });
             
             const user = await db.queryOne(
                 'SELECT * FROM users WHERE username = ?',
@@ -92,35 +94,35 @@ class UserRepository {
             );
             
             if (!user) {
-                console.log(`[UserRepo] Login failed: User not found: ${username}`);
+                gameLogger.gameEvent('USER_REPO', '[LOGIN] Failed - user not found', { username });
                 return { success: false, error: 'Invalid username or password' };
             }
             
             if (user.is_banned) {
-                console.log(`[UserRepo] Login failed: Account banned: ${username}`);
+                gameLogger.gameEvent('USER_REPO', '[LOGIN] Failed - account banned', { username });
                 return { success: false, error: 'Account is banned' };
             }
             
-            console.log(`[UserRepo] Comparing password for: ${username}`);
+            gameLogger.gameEvent('USER_REPO', '[LOGIN] Comparing password', { username });
             const passwordMatch = await bcrypt.compare(password, user.password_hash);
             
             if (!passwordMatch) {
-                console.log(`[UserRepo] Login failed: Invalid password for: ${username}`);
+                gameLogger.gameEvent('USER_REPO', '[LOGIN] Failed - invalid password', { username });
                 return { success: false, error: 'Invalid username or password' };
             }
             
             // Update last login
-            console.log(`[UserRepo] Updating last login for: ${username}`);
+            gameLogger.gameEvent('USER_REPO', '[LOGIN] Updating last login', { username });
             await db.query(
                 'UPDATE users SET last_login = NOW() WHERE id = ?',
                 [user.id]
             );
             
             // Get full profile
-            console.log(`[UserRepo] Getting profile for: ${username}`);
+            gameLogger.gameEvent('USER_REPO', '[LOGIN] Getting profile', { username });
             const profile = await this.getFullProfile(user.id);
             
-            console.log(`[UserRepo] User logged in successfully: ${username} (${user.id})`);
+            gameLogger.gameEvent('USER_REPO', '[LOGIN] Success', { username, userId: user.id });
             
             return { 
                 success: true, 
@@ -128,8 +130,8 @@ class UserRepository {
                 profile 
             };
         } catch (error) {
-            console.error(`[UserRepo] Login error for ${username}:`, error.message);
-            console.error(error.stack);
+            const gameLogger = require('../utils/GameLogger');
+            gameLogger.error('USER_REPO', '[LOGIN] Error', { username, error: error.message, stack: error.stack });
             return { success: false, error: 'Login failed: ' + error.message };
         }
     }
