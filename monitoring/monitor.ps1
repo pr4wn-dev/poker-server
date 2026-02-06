@@ -1308,6 +1308,7 @@ $lastStatsUpdate = Get-Date
 $lastServiceCheck = Get-Date
 $lastUnityCheck = Get-Date
 $lastServerCheck = Get-Date
+$lastUnityWarning = Get-Date
 $serviceCheckInterval = 30  # Check services every 30 seconds
 $script:simulationEndTime = $null  # Track when simulation ended for idle detection
 
