@@ -169,14 +169,14 @@ function Show-Statistics {
     # Clear screen and show header
     Clear-Host
     Write-Host "`n" -NoNewline
-    Write-Host "╔══════════════════════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-    Write-Host "║" -NoNewline -ForegroundColor Cyan
+    Write-Host "+==============================================================================+" -ForegroundColor Cyan
+    Write-Host "|" -NoNewline -ForegroundColor Cyan
     Write-Host "              AUTOMATED ISSUE MONITORING SYSTEM - LIVE STATISTICS              " -NoNewline -ForegroundColor White
-    Write-Host "║" -ForegroundColor Cyan
-    Write-Host "╠══════════════════════════════════════════════════════════════════════════════╣" -ForegroundColor Cyan
+    Write-Host "|" -ForegroundColor Cyan
+    Write-Host "+==============================================================================+" -ForegroundColor Cyan
     
     # Monitoring Status
-    Write-Host "║ " -NoNewline -ForegroundColor Cyan
+    Write-Host "| " -NoNewline -ForegroundColor Cyan
     Write-Host "Status: " -NoNewline -ForegroundColor White
     if ($isPaused) {
         Write-Host "PAUSED (Issue Detected)" -NoNewline -ForegroundColor Red
@@ -184,15 +184,15 @@ function Show-Statistics {
         Write-Host "MONITORING ACTIVE" -NoNewline -ForegroundColor Green
     }
     Write-Host (" " * 50) -NoNewline
-    Write-Host "║" -ForegroundColor Cyan
+    Write-Host "|" -ForegroundColor Cyan
     
-    Write-Host "║ " -NoNewline -ForegroundColor Cyan
+    Write-Host "| " -NoNewline -ForegroundColor Cyan
     Write-Host "Uptime: " -NoNewline -ForegroundColor White
     Write-Host $uptimeStr -NoNewline -ForegroundColor Yellow
     Write-Host (" " * (60 - $uptimeStr.Length)) -NoNewline
-    Write-Host "║" -ForegroundColor Cyan
+    Write-Host "|" -ForegroundColor Cyan
     
-    Write-Host "║ " -NoNewline -ForegroundColor Cyan
+    Write-Host "| " -NoNewline -ForegroundColor Cyan
     Write-Host "Server: " -NoNewline -ForegroundColor White
     if ($stats.ServerStatus -eq "Online") {
         Write-Host "ONLINE" -NoNewline -ForegroundColor Green
@@ -200,149 +200,149 @@ function Show-Statistics {
         Write-Host "OFFLINE" -NoNewline -ForegroundColor Red
     }
     Write-Host (" " * 50) -NoNewline
-    Write-Host "║" -ForegroundColor Cyan
+    Write-Host "|" -ForegroundColor Cyan
     
-    Write-Host "╠══════════════════════════════════════════════════════════════════════════════╣" -ForegroundColor Cyan
+    Write-Host "+==============================================================================+" -ForegroundColor Cyan
     
     # Detection Statistics
-    Write-Host "║ " -NoNewline -ForegroundColor Cyan
+    Write-Host "| " -NoNewline -ForegroundColor Cyan
     Write-Host "DETECTION STATISTICS" -ForegroundColor Yellow
-    Write-Host "║ " -NoNewline -ForegroundColor Cyan
-    Write-Host ("─" * 70) -ForegroundColor DarkGray
-    Write-Host "║ " -NoNewline -ForegroundColor Cyan
+    Write-Host "| " -NoNewline -ForegroundColor Cyan
+    Write-Host ("-" * 70) -ForegroundColor DarkGray
+    Write-Host "| " -NoNewline -ForegroundColor Cyan
     Write-Host "  Lines Processed: " -NoNewline -ForegroundColor White
     Write-Host ("{0:N0}" -f $stats.TotalLinesProcessed) -NoNewline -ForegroundColor Cyan
     Write-Host (" " * 40) -NoNewline
-    Write-Host "║" -ForegroundColor Cyan
+    Write-Host "|" -ForegroundColor Cyan
     
-    Write-Host "║ " -NoNewline -ForegroundColor Cyan
+    Write-Host "| " -NoNewline -ForegroundColor Cyan
     Write-Host "  Issues Detected: " -NoNewline -ForegroundColor White
     Write-Host ("{0:N0}" -f $stats.IssuesDetected) -NoNewline -ForegroundColor $(if ($stats.IssuesDetected -gt 0) { "Red" } else { "Green" })
     Write-Host (" " * 40) -NoNewline
-    Write-Host "║" -ForegroundColor Cyan
+    Write-Host "|" -ForegroundColor Cyan
     
-    Write-Host "║ " -NoNewline -ForegroundColor Cyan
+    Write-Host "| " -NoNewline -ForegroundColor Cyan
     Write-Host "  Unique Patterns: " -NoNewline -ForegroundColor White
     Write-Host ("{0:N0}" -f $stats.UniquePatterns.Count) -NoNewline -ForegroundColor Cyan
     Write-Host (" " * 40) -NoNewline
-    Write-Host "║" -ForegroundColor Cyan
+    Write-Host "|" -ForegroundColor Cyan
     
-    Write-Host "║ " -NoNewline -ForegroundColor Cyan
+    Write-Host "| " -NoNewline -ForegroundColor Cyan
     Write-Host "  Log File Size: " -NoNewline -ForegroundColor White
     Write-Host ("{0:N2} MB" -f $stats.LogFileSize) -NoNewline -ForegroundColor Cyan
     Write-Host (" " * 40) -NoNewline
-    Write-Host "║" -ForegroundColor Cyan
+    Write-Host "|" -ForegroundColor Cyan
     
     if ($stats.LastIssueTime) {
-        Write-Host "║ " -NoNewline -ForegroundColor Cyan
+        Write-Host "| " -NoNewline -ForegroundColor Cyan
         Write-Host "  Last Issue: " -NoNewline -ForegroundColor White
         Write-Host $stats.LastIssueTime.ToString("HH:mm:ss") -NoNewline -ForegroundColor Yellow
         Write-Host (" " * 40) -NoNewline
-        Write-Host "║" -ForegroundColor Cyan
+        Write-Host "|" -ForegroundColor Cyan
     }
     
-    Write-Host "╠══════════════════════════════════════════════════════════════════════════════╣" -ForegroundColor Cyan
+    Write-Host "+==============================================================================+" -ForegroundColor Cyan
     
     # Issues by Severity
-    Write-Host "║ " -NoNewline -ForegroundColor Cyan
+    Write-Host "| " -NoNewline -ForegroundColor Cyan
     Write-Host "ISSUES BY SEVERITY" -ForegroundColor Yellow
-    Write-Host "║ " -NoNewline -ForegroundColor Cyan
-    Write-Host ("─" * 70) -ForegroundColor DarkGray
-    Write-Host "║ " -NoNewline -ForegroundColor Cyan
+    Write-Host "| " -NoNewline -ForegroundColor Cyan
+    Write-Host ("-" * 70) -ForegroundColor DarkGray
+    Write-Host "| " -NoNewline -ForegroundColor Cyan
     Write-Host "  Critical: " -NoNewline -ForegroundColor White
     Write-Host ("{0:N0}" -f $stats.IssuesBySeverity.critical) -NoNewline -ForegroundColor Red
     Write-Host (" " * 50) -NoNewline
-    Write-Host "║" -ForegroundColor Cyan
+    Write-Host "|" -ForegroundColor Cyan
     
-    Write-Host "║ " -NoNewline -ForegroundColor Cyan
+    Write-Host "| " -NoNewline -ForegroundColor Cyan
     Write-Host "  High:     " -NoNewline -ForegroundColor White
     Write-Host ("{0:N0}" -f $stats.IssuesBySeverity.high) -NoNewline -ForegroundColor Yellow
     Write-Host (" " * 50) -NoNewline
-    Write-Host "║" -ForegroundColor Cyan
+    Write-Host "|" -ForegroundColor Cyan
     
-    Write-Host "║ " -NoNewline -ForegroundColor Cyan
+    Write-Host "| " -NoNewline -ForegroundColor Cyan
     Write-Host "  Medium:   " -NoNewline -ForegroundColor White
     Write-Host ("{0:N0}" -f $stats.IssuesBySeverity.medium) -NoNewline -ForegroundColor $(if ($stats.IssuesBySeverity.medium -gt 0) { "Yellow" } else { "Gray" })
     Write-Host (" " * 50) -NoNewline
-    Write-Host "║" -ForegroundColor Cyan
+    Write-Host "|" -ForegroundColor Cyan
     
-    Write-Host "║ " -NoNewline -ForegroundColor Cyan
+    Write-Host "| " -NoNewline -ForegroundColor Cyan
     Write-Host "  Low:      " -NoNewline -ForegroundColor White
     Write-Host ("{0:N0}" -f $stats.IssuesBySeverity.low) -NoNewline -ForegroundColor Gray
     Write-Host (" " * 50) -NoNewline
-    Write-Host "║" -ForegroundColor Cyan
+    Write-Host "|" -ForegroundColor Cyan
     
-    Write-Host "╠══════════════════════════════════════════════════════════════════════════════╣" -ForegroundColor Cyan
+    Write-Host "+==============================================================================+" -ForegroundColor Cyan
     
     # Issues by Source
-    Write-Host "║ " -NoNewline -ForegroundColor Cyan
+    Write-Host "| " -NoNewline -ForegroundColor Cyan
     Write-Host "ISSUES BY SOURCE" -ForegroundColor Yellow
-    Write-Host "║ " -NoNewline -ForegroundColor Cyan
-    Write-Host ("─" * 70) -ForegroundColor DarkGray
-    Write-Host "║ " -NoNewline -ForegroundColor Cyan
+    Write-Host "| " -NoNewline -ForegroundColor Cyan
+    Write-Host ("-" * 70) -ForegroundColor DarkGray
+    Write-Host "| " -NoNewline -ForegroundColor Cyan
     Write-Host "  Server:   " -NoNewline -ForegroundColor White
     Write-Host ("{0:N0}" -f $stats.IssuesBySource.server) -NoNewline -ForegroundColor Cyan
     Write-Host (" " * 50) -NoNewline
-    Write-Host "║" -ForegroundColor Cyan
+    Write-Host "|" -ForegroundColor Cyan
     
-    Write-Host "║ " -NoNewline -ForegroundColor Cyan
+    Write-Host "| " -NoNewline -ForegroundColor Cyan
     Write-Host "  Unity:    " -NoNewline -ForegroundColor White
     Write-Host ("{0:N0}" -f $stats.IssuesBySource.unity) -NoNewline -ForegroundColor Cyan
     Write-Host (" " * 50) -NoNewline
-    Write-Host "║" -ForegroundColor Cyan
+    Write-Host "|" -ForegroundColor Cyan
     
-    Write-Host "║ " -NoNewline -ForegroundColor Cyan
+    Write-Host "| " -NoNewline -ForegroundColor Cyan
     Write-Host "  Database: " -NoNewline -ForegroundColor White
     Write-Host ("{0:N0}" -f $stats.IssuesBySource.database) -NoNewline -ForegroundColor Cyan
     Write-Host (" " * 50) -NoNewline
-    Write-Host "║" -ForegroundColor Cyan
+    Write-Host "|" -ForegroundColor Cyan
     
-    Write-Host "║ " -NoNewline -ForegroundColor Cyan
+    Write-Host "| " -NoNewline -ForegroundColor Cyan
     Write-Host "  Network:  " -NoNewline -ForegroundColor White
     Write-Host ("{0:N0}" -f $stats.IssuesBySource.network) -NoNewline -ForegroundColor Cyan
     Write-Host (" " * 50) -NoNewline
-    Write-Host "║" -ForegroundColor Cyan
+    Write-Host "|" -ForegroundColor Cyan
     
-    Write-Host "╠══════════════════════════════════════════════════════════════════════════════╣" -ForegroundColor Cyan
+    Write-Host "+==============================================================================+" -ForegroundColor Cyan
     
     # Fix Attempts Statistics
-    Write-Host "║ " -NoNewline -ForegroundColor Cyan
+    Write-Host "| " -NoNewline -ForegroundColor Cyan
     Write-Host "FIX ATTEMPTS STATISTICS" -ForegroundColor Yellow
-    Write-Host "║ " -NoNewline -ForegroundColor Cyan
-    Write-Host ("─" * 70) -ForegroundColor DarkGray
-    Write-Host "║ " -NoNewline -ForegroundColor Cyan
+    Write-Host "| " -NoNewline -ForegroundColor Cyan
+    Write-Host ("-" * 70) -ForegroundColor DarkGray
+    Write-Host "| " -NoNewline -ForegroundColor Cyan
     Write-Host "  Total Attempts: " -NoNewline -ForegroundColor White
     Write-Host ("{0:N0}" -f $fixStats.Total) -NoNewline -ForegroundColor Cyan
     Write-Host (" " * 40) -NoNewline
-    Write-Host "║" -ForegroundColor Cyan
+    Write-Host "|" -ForegroundColor Cyan
     
-    Write-Host "║ " -NoNewline -ForegroundColor Cyan
+    Write-Host "| " -NoNewline -ForegroundColor Cyan
     Write-Host "  Successful:     " -NoNewline -ForegroundColor White
     Write-Host ("{0:N0}" -f $fixStats.Successes) -NoNewline -ForegroundColor Green
     Write-Host (" " * 40) -NoNewline
-    Write-Host "║" -ForegroundColor Cyan
+    Write-Host "|" -ForegroundColor Cyan
     
-    Write-Host "║ " -NoNewline -ForegroundColor Cyan
+    Write-Host "| " -NoNewline -ForegroundColor Cyan
     Write-Host "  Failed:         " -NoNewline -ForegroundColor White
     Write-Host ("{0:N0}" -f $fixStats.Failures) -NoNewline -ForegroundColor $(if ($fixStats.Failures -gt 0) { "Red" } else { "Gray" })
     Write-Host (" " * 40) -NoNewline
-    Write-Host "║" -ForegroundColor Cyan
+    Write-Host "|" -ForegroundColor Cyan
     
-    Write-Host "║ " -NoNewline -ForegroundColor Cyan
+    Write-Host "| " -NoNewline -ForegroundColor Cyan
     Write-Host "  Success Rate:   " -NoNewline -ForegroundColor White
     $successColor = if ($fixStats.SuccessRate -ge 80) { "Green" } elseif ($fixStats.SuccessRate -ge 50) { "Yellow" } else { "Red" }
     Write-Host ("{0:N1}%" -f $fixStats.SuccessRate) -NoNewline -ForegroundColor $successColor
     Write-Host (" " * 40) -NoNewline
-    Write-Host "║" -ForegroundColor Cyan
+    Write-Host "|" -ForegroundColor Cyan
     
-    Write-Host "╠══════════════════════════════════════════════════════════════════════════════╣" -ForegroundColor Cyan
+    Write-Host "+==============================================================================+" -ForegroundColor Cyan
     
     # Current Status
-    Write-Host "║ " -NoNewline -ForegroundColor Cyan
+    Write-Host "| " -NoNewline -ForegroundColor Cyan
     Write-Host "CURRENT STATUS" -ForegroundColor Yellow
-    Write-Host "║ " -NoNewline -ForegroundColor Cyan
-    Write-Host ("─" * 70) -ForegroundColor DarkGray
-    Write-Host "║ " -NoNewline -ForegroundColor Cyan
+    Write-Host "| " -NoNewline -ForegroundColor Cyan
+    Write-Host ("-" * 70) -ForegroundColor DarkGray
+    Write-Host "| " -NoNewline -ForegroundColor Cyan
     Write-Host "  Pending Issues: " -NoNewline -ForegroundColor White
     if ($pendingCount -gt 0) {
         Write-Host ("{0:N0}" -f $pendingCount) -NoNewline -ForegroundColor Red
@@ -350,18 +350,18 @@ function Show-Statistics {
         Write-Host "0" -NoNewline -ForegroundColor Green
     }
     Write-Host (" " * 40) -NoNewline
-    Write-Host "║" -ForegroundColor Cyan
+    Write-Host "|" -ForegroundColor Cyan
     
     if ($isPaused -and $currentIssue) {
-        Write-Host "║ " -NoNewline -ForegroundColor Cyan
+        Write-Host "| " -NoNewline -ForegroundColor Cyan
         Write-Host "  Current Issue: " -NoNewline -ForegroundColor White
         $issuePreview = $currentIssue.Substring(0, [Math]::Min(50, $currentIssue.Length))
         Write-Host $issuePreview -NoNewline -ForegroundColor Red
         Write-Host (" " * (40 - $issuePreview.Length)) -NoNewline
-        Write-Host "║" -ForegroundColor Cyan
+        Write-Host "|" -ForegroundColor Cyan
     }
     
-    Write-Host "╚══════════════════════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+    Write-Host "+==============================================================================+" -ForegroundColor Cyan
     Write-Host "`nPress Ctrl+C to stop monitoring`n" -ForegroundColor DarkGray
 }
 
