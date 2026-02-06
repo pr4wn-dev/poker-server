@@ -209,7 +209,7 @@ class Table {
             
             // If fix is already disabled, don't record attempts (but log that it was skipped)
             if (fix.disabled) {
-                console.warn(`[Table ${this.name}] ⚠️ FIX ${fixId} IS DISABLED (${fix.failures} failures) - Skipping fix attempt`);
+                gameLogger.gameEvent(this.name, `[FIX] DISABLED`, { fixId, failures: fix.failures, reason: 'Too many failures' });
                 return;
             }
             
@@ -224,7 +224,7 @@ class Table {
                     ...details
                 };
                 
-                console.error(`[Table ${this.name}] ⚠️ FIX ATTEMPT FAILED: ${fixId} | Attempt #${fix.attempts} | Total Failures: ${fix.failures}/${MAX_FAILURES} | Success Rate: ${((fix.attempts - fix.failures) / fix.attempts * 100).toFixed(1)}%`);
+                gameLogger.error(this.name, `[FIX] ATTEMPT_FAILED`, { fixId, attemptNumber: fix.attempts, failures: fix.failures, maxFailures: MAX_FAILURES, successRate: `${((fix.attempts - fix.failures) / fix.attempts * 100).toFixed(1)}%`, context: details?.context || 'unknown' });
                 gameLogger.gameEvent(this.name, `[FIX ATTEMPT] ${fixId} FAILED`, {
                     fixId,
                     attemptNumber: fix.attempts,
@@ -242,10 +242,7 @@ class Table {
                     fix.disabled = true;
                     fix.permanentlyDisabled = true;
                     this._failedFixes.add(fixId); // Add to failed set - prevents any future attempts
-                    console.error(`[Table ${this.name}] 🚫🚫🚫 FIX METHOD ${fixId} PERMANENTLY DISABLED - ${fix.failures} FAILURES (limit: ${MAX_FAILURES}) - TRY A DIFFERENT APPROACH! 🚫🚫🚫`);
-                    console.error(`[Table ${this.name}] ⚠️ WARNING: Fix METHOD ${fixId} will NEVER be tried again - must use a completely different method to fix the same issue!`);
-                    console.error(`[Table ${this.name}] ⚠️ CRITICAL: When a fix METHOD is permanently disabled, you MUST try a DIFFERENT approach to fix the issue!`);
-                    console.error(`[Table ${this.name}] ⚠️ The fix METHOD failing ${fix.failures} times means this approach doesn't work - try a different solution!`);
+                    gameLogger.error(this.name, `[FIX] PERMANENTLY_DISABLED`, { fixId, failures: fix.failures, maxFailures: MAX_FAILURES, message: 'Fix method permanently disabled - must use different approach' });
                     gameLogger.gameEvent(this.name, `[FIX ATTEMPT] ${fixId} PERMANENTLY DISABLED - TOO MANY FAILURES`, {
                         fixId,
                         totalFailures: fix.failures,
@@ -719,7 +716,7 @@ class Table {
             if (!isValid && this.totalStartingChips > 0) {
                 const errorType = difference > 0 ? 'CREATED' : 'LOST';
                 const errorMsg = `[CHIP TRACK] ${context} - Money ${errorType}: ${Math.abs(difference)} chips`;
-                console.error(`[Table ${this.name}] ⚠️ ${errorMsg}`);
+                // Already logged via gameLogger.error below
                 gameLogger.error(this.name, errorMsg, {
                     operation: movement.operation,
                     beforeState: movement.beforeState,
@@ -745,7 +742,7 @@ class Table {
                     details: movement.details
                 });
                 } else {
-                    console.error(`[Table ${this.name}] ⚠️ FIX_14_CHIP_TRACKING_VALIDATION_ERROR IS DISABLED - Root cause analysis required!`);
+                    gameLogger.error(this.name, `[FIX] FIX_14_DISABLED`, { message: 'FIX_14_CHIP_TRACKING_VALIDATION_ERROR IS DISABLED - Root cause analysis required!' });
                     gameLogger.error(this.name, '[ROOT CAUSE] Fix disabled - must investigate root cause', {
                         fixId: 'FIX_14_CHIP_TRACKING_VALIDATION_ERROR',
                         context,
@@ -793,7 +790,7 @@ class Table {
                 // ULTRA-VERBOSE: Check for pot mismatch (pot should equal sum of totalBets)
                 const potMismatch = Math.abs(this.pot - sumOfAllTotalBets);
                 if (potMismatch > 0.01 && this.pot > 0) {
-                    console.error(`[Table ${this.name}] ⚠️ POT MISMATCH DETECTED in validation: Pot=${this.pot}, Sum of totalBets=${sumOfAllTotalBets}, Difference=${this.pot - sumOfAllTotalBets} | Context: ${context}`);
+                    gameLogger.error(this.name, `[POT] MISMATCH_DETECTED`, { pot: this.pot, sumOfTotalBets: sumOfAllTotalBets, difference: this.pot - sumOfAllTotalBets, context });
                     gameLogger.gameEvent(this.name, '[MONEY] POT MISMATCH in validation', {
                         context,
                         pot: this.pot,
@@ -807,7 +804,7 @@ class Table {
                 
                 if (!isValid) {
                     const missing = this.totalStartingChips - totalChipsAndPot;
-                    console.error(`[Table ${this.name}] ⚠️ MONEY VALIDATION FAILED at ${context}: Expected ${this.totalStartingChips}, Got ${totalChipsAndPot}, Missing: ${missing}`);
+                    gameLogger.error(this.name, `[MONEY] VALIDATION_FAILED`, { context, expected: this.totalStartingChips, got: totalChipsAndPot, missing, difference: totalChipsAndPot - this.totalStartingChips });
                     
                     // CRITICAL: Include full root cause trace when validation fails
                     const recentOperations = this._rootCauseTracer.operations.slice(-50).map(op => ({
@@ -3529,7 +3526,6 @@ class Table {
                     
                     if (toCall > 0) {
                         const errorMsg = `Cannot check - need to call ${toCall}`;
-                        console.error(`[Table ${this.name}] ⚠️ FIX #6: CHECK REJECTED - ${errorMsg} | Player: ${player.name} | ToCall: ${toCall}`);
                         gameLogger.bettingAction(this.name, player.name || `Seat ${seatIndex}`, '[FIX #6] CHECK REJECTED', {
                             seatIndex,
                             toCall,
@@ -3586,7 +3582,6 @@ class Table {
                     // Only block betting if we're NOT in pre-flop OR if currentBet is 0 (post-flop with no bets yet)
                     if (this.currentBet > 0 && this.phase !== GAME_PHASES.PRE_FLOP) {
                         const errorMsg = `Cannot bet - current bet is ${this.currentBet}. Use raise or call.`;
-                        console.error(`[Table ${this.name}] ⚠️ FIX #6: BET REJECTED - ${errorMsg} | Player: ${player.name} | Amount: ${amount}`);
                         gameLogger.bettingAction(this.name, player.name || `Seat ${seatIndex}`, '[FIX #6] BET REJECTED', {
                             seatIndex,
                             amount,
@@ -3610,7 +3605,6 @@ class Table {
                         result = { success: false, error: errorMsg };
                     } else if (amount < this.bigBlind) {
                         const errorMsg = `Minimum bet is ${this.bigBlind}`;
-                        console.error(`[Table ${this.name}] ⚠️ FIX #6: BET REJECTED - ${errorMsg} | Player: ${player.name} | Amount: ${amount}`);
                         gameLogger.bettingAction(this.name, player.name || `Seat ${seatIndex}`, '[FIX #6] BET REJECTED', {
                             seatIndex,
                             amount,
@@ -3633,7 +3627,6 @@ class Table {
                         result = { success: false, error: errorMsg };
                     } else if (amount > player.chips) {
                         const errorMsg = `You don't have enough chips. You have ${player.chips}.`;
-                        console.error(`[Table ${this.name}] ⚠️ FIX #6: BET REJECTED - ${errorMsg} | Player: ${player.name} | Amount: ${amount}`);
                         gameLogger.bettingAction(this.name, player.name || `Seat ${seatIndex}`, '[FIX #6] BET REJECTED', {
                             seatIndex,
                             amount,

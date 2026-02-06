@@ -41,7 +41,8 @@ class Database {
 
             // Test connection
             const connection = await this.pool.getConnection();
-            console.log('[Database] Connected to MySQL');
+            const gameLogger = require('../utils/GameLogger');
+            gameLogger.gameEvent('DATABASE', '[CONNECTION] CONNECTED', {});
             connection.release();
 
             // Run migrations
@@ -50,8 +51,8 @@ class Database {
             this.isConnected = true;
             return true;
         } catch (error) {
-            console.error('[Database] Connection failed:', error.message);
-            console.error('[Database] Make sure MySQL is running (WAMP/XAMPP)');
+            const gameLogger = require('../utils/GameLogger');
+            gameLogger.error('DATABASE', '[CONNECTION] FAILED', { error: error.message, stack: error.stack, message: 'Make sure MySQL is running (WAMP/XAMPP)' });
             return false;
         }
     }
@@ -60,7 +61,8 @@ class Database {
      * Run all table migrations
      */
     async runMigrations() {
-        console.log('[Database] Running migrations...');
+        const gameLogger = require('../utils/GameLogger');
+        gameLogger.gameEvent('DATABASE', '[MIGRATIONS] STARTING', {});
 
         // Users table
         await this.query(`
@@ -93,7 +95,7 @@ class Database {
             // Update any users with less than 20 million chips to have 20 million
             const result = await this.query('UPDATE users SET chips = 20000000 WHERE chips < 20000000');
             if (result.affectedRows > 0) {
-                console.log(`[Database] Updated ${result.affectedRows} users to 20 million starting chips`);
+                gameLogger.gameEvent('DATABASE', '[MIGRATIONS] USERS_UPDATED', { affectedRows: result.affectedRows });
             }
         } catch (e) {
             // Migration already applied or column doesn't exist yet
@@ -242,7 +244,7 @@ class Database {
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         `);
 
-        console.log('[Database] Migrations complete - all tables ready');
+        gameLogger.gameEvent('DATABASE', '[MIGRATIONS] COMPLETE', {});
     }
 
     /**
@@ -271,7 +273,8 @@ class Database {
         if (this.pool) {
             await this.pool.end();
             this.isConnected = false;
-            console.log('[Database] Connection closed');
+            const gameLogger = require('../utils/GameLogger');
+            gameLogger.gameEvent('DATABASE', '[CONNECTION] CLOSED', {});
         }
     }
 }

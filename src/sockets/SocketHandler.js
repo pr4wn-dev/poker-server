@@ -28,14 +28,15 @@ class SocketHandler {
 
     initialize() {
         this.io.on('connection', (socket) => {
-            console.log(`[Socket] Client connected: ${socket.id}`);
+            gameLogger.gameEvent('SYSTEM', `[SOCKET] CLIENT_CONNECTED`, { socketId: socket.id });
 
             // ============ Authentication ============
             
             socket.on('register', async (data, callback) => {
-                console.log('[Register] Received:', data);
+                gameLogger.gameEvent('SYSTEM', `[AUTH] REGISTER_ATTEMPT`, { username: data?.username, email: data?.email });
                 if (!db.isConnected) {
                     const error = { success: false, error: 'Database offline' };
+                    gameLogger.error('SYSTEM', '[AUTH] REGISTER_FAILED', { error: 'Database offline', username: data?.username });
                     if (callback) callback(error);
                     socket.emit('register_response', error);
                     return;
@@ -43,13 +44,13 @@ class SocketHandler {
                 
                 const { username, password, email } = data;
                 const result = await userRepo.register(username, password, email);
-                console.log('[Register] DB result:', result);
+                gameLogger.gameEvent('SYSTEM', `[AUTH] REGISTER_RESULT`, { username, success: result.success, userId: result.userId, error: result.error });
                 
                 let response;
                 if (result.success) {
                     // Auto-login after registration
                     const loginResult = await userRepo.login(username, password);
-                    console.log('[Register] Login result:', loginResult);
+                    gameLogger.gameEvent('SYSTEM', `[AUTH] REGISTER_AUTO_LOGIN`, { username, success: loginResult.success });
                     if (loginResult.success) {
                         this.authenticateSocket(socket, loginResult.userId, loginResult.profile);
                     }
@@ -62,35 +63,35 @@ class SocketHandler {
                     response = result;
                 }
                 
-                console.log('[Register] Sending response:', JSON.stringify(response));
                 if (callback) callback(response);
                 socket.emit('register_response', response);
             });
 
             socket.on('login', async (data, callback) => {
                 try {
-                    console.log(`[Socket] Login attempt: ${data?.username || 'unknown'}`);
+                    const username = data?.username || 'unknown';
+                    gameLogger.gameEvent('SYSTEM', `[AUTH] LOGIN_ATTEMPT`, { username });
                     
                     if (!db.isConnected) {
                         const error = { success: false, error: 'Database offline' };
-                        console.error('[Socket] Login failed: Database offline');
+                        gameLogger.error('SYSTEM', '[AUTH] LOGIN_FAILED', { error: 'Database offline', username });
                         if (callback) callback(error);
                         socket.emit('login_response', error);
                         return;
                     }
                     
-                    const { username, password } = data || {};
+                    const { password } = data || {};
                     
                     if (!username || !password) {
                         const error = { success: false, error: 'Username and password required' };
-                        console.error('[Socket] Login failed: Missing credentials');
+                        gameLogger.error('SYSTEM', '[AUTH] LOGIN_FAILED', { error: 'Missing credentials', username });
                         if (callback) callback(error);
                         socket.emit('login_response', error);
                         return;
                     }
                     
                     const result = await userRepo.login(username, password);
-                    console.log(`[Socket] Login result for ${username}: ${result.success ? 'SUCCESS' : result.error}`);
+                    gameLogger.gameEvent('SYSTEM', `[AUTH] LOGIN_RESULT`, { username, success: result.success, userId: result.userId, error: result.error });
                     
                     let response;
                     if (result.success) {
@@ -107,8 +108,7 @@ class SocketHandler {
                     if (callback) callback(response);
                     socket.emit('login_response', response);
                 } catch (error) {
-                    console.error('[Socket] Login error:', error.message);
-                    console.error(error.stack);
+                    gameLogger.error('SYSTEM', '[AUTH] LOGIN_EXCEPTION', { error: error.message, stack: error.stack, username: data?.username });
                     const errorResponse = { success: false, error: 'Login failed: ' + error.message };
                     if (callback) callback(errorResponse);
                     socket.emit('login_response', errorResponse);
@@ -135,7 +135,7 @@ class SocketHandler {
             socket.on('get_inventory', async (data, callback) => {
                 const user = this.getAuthenticatedUser(socket);
                 if (!user) {
-                    console.error('[SocketHandler] get_inventory: Not authenticated');
+                    gameLogger.error('SYSTEM', '[INVENTORY] GET_INVENTORY_FAILED', { error: 'Not authenticated', socketId: socket.id });
                     if (callback && typeof callback === 'function') {
                         callback({ success: false, error: 'Not authenticated' });
                     }
@@ -220,7 +220,7 @@ class SocketHandler {
             socket.on('get_test_items', async (data, callback) => {
                 const user = this.getAuthenticatedUser(socket);
                 if (!user) {
-                    console.error('[SocketHandler] get_test_items: Not authenticated');
+                    gameLogger.error('SYSTEM', '[INVENTORY] GET_TEST_ITEMS_FAILED', { error: 'Not authenticated', socketId: socket.id });
                     const errorResponse = { success: false, error: 'Not authenticated' };
                     if (callback && typeof callback === 'function') {
                         callback(errorResponse);
@@ -429,7 +429,7 @@ class SocketHandler {
             
             socket.on('get_tables', (data, callback) => {
                 const tables = this.gameManager.getPublicTableList();
-                console.log(`[SocketHandler] get_tables - returning ${tables.length} tables`);
+                gameLogger.gameEvent('SYSTEM', `[LOBBY] GET_TABLES`, { tableCount: tables.length });
                 const response = { success: true, tables };
                 if (callback) callback(response);
                 socket.emit('get_tables_response', response);
@@ -437,10 +437,10 @@ class SocketHandler {
 
             socket.on('create_table', async (data, callback) => {
                 try {
-                    console.log('[SocketHandler] create_table received:', JSON.stringify(data));
+                    gameLogger.gameEvent('SYSTEM', `[TABLE] CREATE_REQUEST`, { data: data });
                     const user = this.getAuthenticatedUser(socket);
                     if (!user) {
-                        console.log('[SocketHandler] create_table FAILED - not authenticated');
+                        gameLogger.error('SYSTEM', '[TABLE] CREATE_FAILED', { error: 'Not authenticated' });
                         const error = { success: false, error: 'Not authenticated' };
                         if (callback) callback(error);
                         socket.emit('create_table_response', error);
@@ -462,7 +462,7 @@ class SocketHandler {
                         player.chips = dbUser.chips;
                     }
 
-                    console.log('[SocketHandler] create_table - user authenticated:', user.username);
+                    gameLogger.gameEvent('SYSTEM', `[TABLE] CREATE_AUTHENTICATED`, { userId: user.userId, username: user.username });
                     const table = this.gameManager.createTable({
                         ...data,
                         creatorId: user.userId
@@ -472,7 +472,7 @@ class SocketHandler {
                     try {
                         this.setupTableCallbacks(table);
                     } catch (err) {
-                        console.error('[SocketHandler] setupTableCallbacks ERROR:', err);
+                        gameLogger.error('SYSTEM', '[TABLE] SETUP_CALLBACKS_ERROR', { error: err.message, stack: err.stack });
                     }
                     
                     // Auto-join the creator to seat 0
@@ -485,14 +485,14 @@ class SocketHandler {
                     try {
                         state = table.getState(user.userId);
                     } catch (err) {
-                        console.error('[SocketHandler] getState ERROR:', err);
+                        gameLogger.error('SYSTEM', '[TABLE] GET_STATE_ERROR', { error: err.message, stack: err.stack });
                         state = { id: table.id, name: table.name, phase: 'waiting' };
                     }
                     
                     try {
                         publicInfo = table.getPublicInfo();
                     } catch (err) {
-                        console.error('[SocketHandler] getPublicInfo ERROR:', err);
+                        gameLogger.error('SYSTEM', '[TABLE] GET_PUBLIC_INFO_ERROR', { error: err.message, stack: err.stack });
                         publicInfo = { id: table.id, name: table.name, maxPlayers: table.maxPlayers };
                     }
                     
@@ -503,20 +503,20 @@ class SocketHandler {
                         seatIndex: joinResult.success ? joinResult.seatIndex : -1,
                         state 
                     };
-                    console.log(`[SocketHandler] create_table SUCCESS - seatIndex: ${response.seatIndex}`);
+                    gameLogger.gameEvent('SYSTEM', `[TABLE] CREATE_SUCCESS`, { userId: user.userId, tableId: response.tableId, seatIndex: response.seatIndex });
                     
                     if (callback) {
                         try {
                             callback(response);
                         } catch (err) {
-                            console.error('[SocketHandler] Callback error:', err);
+                            gameLogger.error('SYSTEM', '[TABLE] CALLBACK_ERROR', { error: err.message, stack: err.stack });
                         }
                     }
                     try {
                         socket.emit('create_table_response', response);
-                        console.log('[SocketHandler] Response emitted');
+                        gameLogger.gameEvent('SYSTEM', `[TABLE] RESPONSE_EMITTED`, { tableId: response.tableId });
                     } catch (err) {
-                        console.error('[SocketHandler] Emit error:', err);
+                        gameLogger.error('SYSTEM', '[TABLE] EMIT_ERROR', { error: err.message, stack: err.stack });
                     }
                     
                     // Broadcast new table to lobby
@@ -524,23 +524,23 @@ class SocketHandler {
                         try {
                             this.io.emit('table_created', publicInfo);
                         } catch (err) {
-                            console.error('[SocketHandler] Broadcast error:', err);
+                            gameLogger.error('SYSTEM', '[TABLE] BROADCAST_ERROR', { error: err.message, stack: err.stack });
                         }
                     });
                 } catch (error) {
-                    console.error('[SocketHandler] create_table FATAL ERROR:', error);
+                    gameLogger.error('SYSTEM', '[TABLE] CREATE_EXCEPTION', { error: error.message, stack: error.stack });
                     const errorResponse = { success: false, error: `Server error: ${error.message}` };
                     if (callback) {
                         try {
                             callback(errorResponse);
                         } catch (err) {
-                            console.error('[SocketHandler] Error callback failed:', err);
+                            gameLogger.error('SYSTEM', '[TABLE] ERROR_CALLBACK_FAILED', { error: err.message, stack: err.stack });
                         }
                     }
                     try {
                         socket.emit('create_table_response', errorResponse);
                     } catch (err) {
-                        console.error('[SocketHandler] Error emit failed:', err);
+                        gameLogger.error('SYSTEM', '[TABLE] ERROR_EMIT_FAILED', { error: err.message, stack: err.stack });
                     }
                 }
             });
@@ -549,11 +549,16 @@ class SocketHandler {
             
             socket.on('start_simulation', async (data, callback) => {
                 try {
-                    console.log('[SocketHandler] ========== start_simulation EVENT RECEIVED ==========');
-                    console.log('[SocketHandler] Data:', JSON.stringify(data));
                     const user = this.getAuthenticatedUser(socket);
+                    gameLogger.gameEvent('SYSTEM', `[SIMULATION] START_REQUEST`, { 
+                        userId: user?.userId || 'unauthenticated',
+                        username: user?.profile?.username || 'unknown',
+                        data: data
+                    });
+                    
                     if (!user) {
                         const error = { success: false, error: 'Not authenticated' };
+                        gameLogger.error('SYSTEM', '[SIMULATION] START_FAILED', { error: 'Not authenticated' });
                         if (callback) callback(error);
                         socket.emit('start_simulation_response', error);
                         return;
@@ -568,11 +573,10 @@ class SocketHandler {
                         turnTimeLimit = 5000,
                         blindIncreaseInterval = 0,
                         socketBotRatio = 0.5,
-                        itemAnteEnabled = false, // Allow item ante in simulations
-                        itemAnteCollectionTime = 60000 // Time to collect items (60 sec default)
+                        itemAnteEnabled = false,
+                        itemAnteCollectionTime = 60000
                     } = data;
                     
-                    console.log('[SocketHandler] Calling simulationManager.startSimulation...');
                     const result = await this.simulationManager.startSimulation({
                         creatorId: user.userId,
                         tableName,
@@ -583,51 +587,50 @@ class SocketHandler {
                         turnTimeLimit,
                         blindIncreaseInterval,
                         socketBotRatio: Math.min(Math.max(socketBotRatio, 0), 1),
-                        itemAnteEnabled: !!itemAnteEnabled, // Convert to boolean
+                        itemAnteEnabled: !!itemAnteEnabled,
                         itemAnteCollectionTime: itemAnteCollectionTime || 60000
                     });
                     
-                    console.log('[SocketHandler] start_simulation result:', JSON.stringify(result));
+                    gameLogger.gameEvent('SYSTEM', `[SIMULATION] START_RESULT`, { 
+                        userId: user.userId,
+                        username: user.profile?.username,
+                        success: result.success,
+                        tableId: result.tableId,
+                        error: result.error
+                    });
                     
                     if (result.success) {
-                        // CRITICAL: Verify table exists before proceeding
                         const simTable = this.gameManager.getTable(result.tableId);
                         if (!simTable) {
-                            console.error(`[SocketHandler] ERROR: Table ${result.tableId} not found in GameManager!`);
+                            gameLogger.error('SYSTEM', '[SIMULATION] START_FAILED', { error: `Table ${result.tableId} not found in GameManager`, userId: user.userId });
                             const errorResponse = { success: false, error: `Table ${result.tableId} was not created` };
                             if (callback) callback(errorResponse);
                             socket.emit('start_simulation_response', errorResponse);
                             return;
                         }
                         
-                        console.log(`[SocketHandler] Table ${result.tableId} found: ${simTable.name}`);
-                        
-                        // CRITICAL: Set up table callbacks for state broadcasting
-                        console.log(`[SocketHandler] Setting up callbacks for simulation table ${result.tableId}`);
                         try {
                             this.setupTableCallbacks(simTable);
-                            console.log(`[SocketHandler] Callbacks set up successfully`);
+                            gameLogger.gameEvent('SYSTEM', `[SIMULATION] CALLBACKS_SETUP`, { tableId: result.tableId });
                         } catch (err) {
-                            console.error(`[SocketHandler] Error setting up callbacks:`, err);
+                            gameLogger.error('SYSTEM', '[SIMULATION] CALLBACKS_SETUP_ERROR', { tableId: result.tableId, error: err.message, stack: err.stack });
                         }
                         
-                        // Join creator as spectator
                         try {
                             simTable.addSpectator(user.userId, user.profile?.username || 'Creator', socket.id);
                             socket.join(`table:${result.tableId}`);
                             socket.join(`spectator:${result.tableId}`);
-                            console.log(`[SocketHandler] Added ${user.userId} as spectator`);
+                            gameLogger.gameEvent('SYSTEM', `[SIMULATION] CREATOR_ADDED_AS_SPECTATOR`, { tableId: result.tableId, userId: user.userId });
                         } catch (err) {
-                            console.error(`[SocketHandler] Error adding spectator:`, err);
+                            gameLogger.error('SYSTEM', '[SIMULATION] ADD_SPECTATOR_ERROR', { tableId: result.tableId, userId: user.userId, error: err.message });
                         }
                         
-                        // Get table state
                         let state, publicInfo;
                         try {
                             state = simTable.getState(user.userId);
                             publicInfo = simTable.getPublicInfo();
                         } catch (err) {
-                            console.error(`[SocketHandler] Error getting state:`, err);
+                            gameLogger.error('SYSTEM', '[SIMULATION] GET_STATE_ERROR', { tableId: result.tableId, error: err.message });
                             state = { id: simTable.id, name: simTable.name, phase: 'waiting' };
                             publicInfo = { id: simTable.id, name: simTable.name, maxPlayers: simTable.maxPlayers };
                         }
@@ -639,46 +642,43 @@ class SocketHandler {
                             state
                         };
                         
-                        console.log('[SocketHandler] Sending start_simulation response...');
                         if (callback) {
                             try {
                                 callback(response);
-                                console.log('[SocketHandler] Callback executed');
                             } catch (err) {
-                                console.error('[SocketHandler] Callback error:', err);
+                                gameLogger.error('SYSTEM', '[SIMULATION] CALLBACK_ERROR', { tableId: result.tableId, error: err.message });
                             }
                         }
                         try {
                             socket.emit('start_simulation_response', response);
-                            console.log('[SocketHandler] Response emitted');
                         } catch (err) {
-                            console.error('[SocketHandler] Emit error:', err);
+                            gameLogger.error('SYSTEM', '[SIMULATION] EMIT_ERROR', { tableId: result.tableId, error: err.message });
                         }
                     } else {
-                        console.error('[SocketHandler] start_simulation failed:', result.error);
+                        gameLogger.error('SYSTEM', '[SIMULATION] START_FAILED', { userId: user.userId, error: result.error });
                         if (callback) callback(result);
                         socket.emit('start_simulation_response', result);
                     }
                 } catch (error) {
-                    console.error('[SocketHandler] start_simulation FATAL ERROR:', error);
+                    gameLogger.error('SYSTEM', '[SIMULATION] START_EXCEPTION', { error: error.message, stack: error.stack });
                     const errorResponse = { success: false, error: `Server error: ${error.message}` };
                     if (callback) {
                         try {
                             callback(errorResponse);
                         } catch (err) {
-                            console.error('[SocketHandler] Error callback failed:', err);
+                            gameLogger.error('SYSTEM', '[SIMULATION] CALLBACK_ERROR', { error: err.message });
                         }
                     }
                     try {
                         socket.emit('start_simulation_response', errorResponse);
                     } catch (err) {
-                        console.error('[SocketHandler] Error emit failed:', err);
+                        gameLogger.error('SYSTEM', '[SIMULATION] EMIT_ERROR', { error: err.message });
                     }
                 }
             });
             
             socket.on('pause_simulation', (data, callback) => {
-                console.log('[SocketHandler] pause_simulation received:', JSON.stringify(data));
+                gameLogger.gameEvent('SYSTEM', `[SIMULATION] PAUSE_REQUEST`, { data: data });
                 const user = this.getAuthenticatedUser(socket);
                 if (!user) {
                     const error = { success: false, error: 'Not authenticated' };
@@ -701,7 +701,7 @@ class SocketHandler {
             });
             
             socket.on('resume_simulation', (data, callback) => {
-                console.log('[SocketHandler] resume_simulation received:', JSON.stringify(data));
+                gameLogger.gameEvent('SYSTEM', `[SIMULATION] RESUME_REQUEST`, { data: data });
                 const user = this.getAuthenticatedUser(socket);
                 if (!user) {
                     const error = { success: false, error: 'Not authenticated' };
@@ -724,7 +724,7 @@ class SocketHandler {
             });
             
             socket.on('stop_simulation', (data, callback) => {
-                console.log('[SocketHandler] stop_simulation received:', JSON.stringify(data));
+                gameLogger.gameEvent('SYSTEM', `[SIMULATION] STOP_REQUEST`, { data: data });
                 const user = this.getAuthenticatedUser(socket);
                 if (!user) {
                     const error = { success: false, error: 'Not authenticated' };
@@ -735,7 +735,7 @@ class SocketHandler {
                 const { tableId } = data;
                 const result = this.simulationManager.stopSimulation(tableId);
                 
-                console.log('[SocketHandler] stop_simulation result:', result);
+                gameLogger.gameEvent('SYSTEM', `[SIMULATION] STOP_RESULT`, { result: result });
                 if (callback) callback(result);
                 
                 if (result.success) {
@@ -755,7 +755,7 @@ class SocketHandler {
             });
             
             socket.on('set_simulation_speed', (data, callback) => {
-                console.log('[SocketHandler] set_simulation_speed received:', JSON.stringify(data));
+                gameLogger.gameEvent('SYSTEM', `[SIMULATION] SET_SPEED_REQUEST`, { data: data });
                 const { fastMode } = data;
                 this.simulationManager.setFastMode(fastMode === true);
                 if (callback) callback({ 
@@ -868,18 +868,18 @@ class SocketHandler {
 
             socket.on('leave_table', async (callback) => {
                 const respond = (response) => {
-                    console.log(`[SocketHandler] LEAVE_TABLE RESPONSE | success=${response.success}, error=${response.error || 'none'}`);
+                    gameLogger.gameEvent('SYSTEM', `[TABLE] LEAVE_RESPONSE`, { success: response.success, error: response.error || 'none' });
                     if (callback) callback(response);
                     socket.emit('leave_table_response', response);
                 };
                 
                 const user = this.getAuthenticatedUser(socket);
                 if (!user) {
-                    console.log('[SocketHandler] LEAVE_TABLE FAILED | Not authenticated');
+                    gameLogger.error('SYSTEM', '[TABLE] LEAVE_FAILED', { error: 'Not authenticated' });
                     return respond({ success: false, error: 'Not authenticated' });
                 }
 
-                console.log(`[SocketHandler] LEAVE_TABLE REQUEST | userId=${user.userId}, username=${user.profile?.username || 'unknown'}`);
+                gameLogger.gameEvent('SYSTEM', `[TABLE] LEAVE_REQUEST`, { userId: user.userId, username: user.profile?.username || 'unknown' });
                 
                 const player = this.gameManager.players.get(user.userId);
                 let tableId = player?.currentTableId;
@@ -893,14 +893,14 @@ class SocketHandler {
                         if (t.isSpectator(user.userId)) {
                             tableId = tid;
                             table = t;
-                            console.log(`[SocketHandler] Found spectator ${user.profile?.username} at table ${tableId} (currentTableId was not set)`);
+                            gameLogger.gameEvent('SYSTEM', `[TABLE] LEAVE_FOUND_SPECTATOR`, { userId: user.userId, username: user.profile?.username, tableId });
                             break;
                         }
                         // Also check if user is the creator (even if not in a seat or as spectator)
                         if (t.creatorId === user.userId && !tableId) {
                             tableId = tid;
                             table = t;
-                            console.log(`[SocketHandler] Found creator ${user.profile?.username} at table ${tableId}`);
+                            gameLogger.gameEvent('SYSTEM', `[TABLE] LEAVE_FOUND_CREATOR`, { userId: user.userId, username: user.profile?.username, tableId });
                             break;
                         }
                     }
@@ -919,7 +919,7 @@ class SocketHandler {
                         player.isSpectating = false;
                     }
                     
-                    console.log(`[SocketHandler] Spectator ${user.profile?.username} left table ${tableId}`);
+                    gameLogger.gameEvent('SYSTEM', `[TABLE] SPECTATOR_LEFT`, { userId: user.userId, username: user.profile?.username, tableId });
                     return respond({ success: true });
                 }
                 
@@ -939,16 +939,16 @@ class SocketHandler {
                             userId: user.userId
                         });
                         
-                        console.log(`[SocketHandler] ${user.profile?.username || user.userId} left table ${tableId}`);
+                        gameLogger.gameEvent('SYSTEM', `[TABLE] PLAYER_LEFT`, { userId: user.userId, username: user.profile?.username || user.userId, tableId });
                     } else {
-                        console.log(`[SocketHandler] LEAVE_TABLE FAILED | Error: ${result.error}`);
+                        gameLogger.error('SYSTEM', '[TABLE] LEAVE_FAILED', { userId: user.userId, tableId, error: result.error });
                     }
                     
                     return respond(result);
                 }
                 
                 // If we get here, user is not at any table
-                console.log(`[SocketHandler] LEAVE_TABLE FAILED | User ${user.userId} is not at any table`);
+                gameLogger.error('SYSTEM', '[TABLE] LEAVE_FAILED', { userId: user.userId, error: 'User is not at any table' });
                 return respond({ success: false, error: 'Not at a table' });
             });
 
@@ -1039,7 +1039,7 @@ class SocketHandler {
                 seat.chips += amount;
                 player.chips = seat.chips;
                 
-                console.log(`[SocketHandler] ${user.username} rebought ${amount} chips at table ${table.name}`);
+                gameLogger.gameEvent('SYSTEM', `[TABLE] REBUY`, { userId: user.userId, username: user.username, amount, tableId: table.id, tableName: table.name });
                 
                 // Broadcast updated state
                 this.broadcastTableState(player.currentTableId);
@@ -1061,33 +1061,33 @@ class SocketHandler {
             // Start the game (table creator only) - initiates ready-up phase
             socket.on('start_game', (data, callback) => {
                 const respond = (response) => {
-                    console.log(`[SocketHandler] START_GAME RESPONSE | success=${response.success}, error=${response.error || 'none'}`);
+                    gameLogger.gameEvent('SYSTEM', `[TABLE] START_GAME_RESPONSE`, { success: response.success, error: response.error || 'none' });
                     if (callback) callback(response);
                     socket.emit('start_game_response', response);
                 };
                 
                 const user = this.getAuthenticatedUser(socket);
                 if (!user) {
-                    console.log('[SocketHandler] START_GAME FAILED | Not authenticated');
+                    gameLogger.error('SYSTEM', '[TABLE] START_GAME_FAILED', { error: 'Not authenticated' });
                     return respond({ success: false, error: 'Not authenticated' });
                 }
                 
                 const { tableId } = data;
-                console.log(`[SocketHandler] START_GAME REQUEST | userId=${user.userId}, tableId=${tableId}`);
+                gameLogger.gameEvent('SYSTEM', `[TABLE] START_GAME_REQUEST`, { userId: user.userId, tableId });
                 
                 const table = this.gameManager.getTable(tableId);
                 
                 if (!table) {
-                    console.log(`[SocketHandler] START_GAME FAILED | Table not found: ${tableId}`);
+                    gameLogger.error('SYSTEM', '[TABLE] START_GAME_FAILED', { userId: user.userId, tableId, error: 'Table not found' });
                     return respond({ success: false, error: 'Table not found' });
                 }
                 
-                console.log(`[SocketHandler] START_GAME TABLE INFO | phase=${table.phase}, creatorId=${table.creatorId}, isSimulation=${table.isSimulation}, players=${table.getSeatedPlayerCount()}`);
+                gameLogger.gameEvent('SYSTEM', `[TABLE] START_GAME_TABLE_INFO`, { tableId, phase: table.phase, creatorId: table.creatorId, isSimulation: table.isSimulation, playerCount: table.getSeatedPlayerCount() });
                 
                 const result = table.startReadyUp(user.userId);
                 
                 if (result.success) {
-                    console.log(`[SocketHandler] START_GAME SUCCESS | Ready-up phase started at table ${table.name}`);
+                    gameLogger.gameEvent('SYSTEM', `[TABLE] START_GAME_SUCCESS`, { tableId, tableName: table.name, userId: user.userId });
                     
                     // Broadcast ready prompt to all players
                     this.io.to(`table:${tableId}`).emit('ready_prompt', {
@@ -1098,7 +1098,7 @@ class SocketHandler {
                     // Broadcast updated state
                     this.broadcastTableState(tableId);
                 } else {
-                    console.log(`[SocketHandler] START_GAME FAILED | ${result.error}`);
+                    gameLogger.error('SYSTEM', '[TABLE] START_GAME_FAILED', { userId: user.userId, tableId, error: result.error });
                 }
                 
                 respond(result);
@@ -1126,7 +1126,7 @@ class SocketHandler {
                 const result = table.playerReady(user.userId);
                 
                 if (result.success) {
-                    console.log(`[SocketHandler] ${user.username} is ready at table ${table.name}`);
+                    gameLogger.gameEvent('SYSTEM', `[TABLE] PLAYER_READY`, { userId: user.userId, username: user.username, tableId: table.id, tableName: table.name });
                     
                     // Broadcast player ready event
                     this.io.to(`table:${tableId}`).emit('player_readied', {
@@ -1173,7 +1173,7 @@ class SocketHandler {
                 if (result.success) {
                     if (result.pendingApproval) {
                         // Notify players that approval is needed
-                        console.log(`[SocketHandler] Bot ${result.bot.name} pending approval at table`);
+                        gameLogger.gameEvent('SYSTEM', `[BOT] PENDING_APPROVAL`, { botName: result.bot.name, tableId: table.id });
                         
                         this.io.to(`table:${tableId}`).emit('bot_invite_pending', {
                             seatIndex: result.seatIndex,
@@ -1184,7 +1184,7 @@ class SocketHandler {
                         });
                     } else {
                         // Auto-approved (only creator at table)
-                        console.log(`[SocketHandler] Bot ${result.bot.name} auto-approved and joined table`);
+                        gameLogger.gameEvent('SYSTEM', `[BOT] AUTO_APPROVED`, { botName: result.bot.name, tableId: table.id });
                         
                         this.broadcastTableState(tableId);
                         
@@ -1223,7 +1223,7 @@ class SocketHandler {
                 if (result.success) {
                     if (result.bot) {
                         // All approved - bot is now active
-                        console.log(`[SocketHandler] Bot ${result.bot.name} fully approved and joined table`);
+                        gameLogger.gameEvent('SYSTEM', `[BOT] FULLY_APPROVED`, { botName: result.bot.name, tableId: table.id });
                         
                         this.broadcastTableState(tableId);
                         
@@ -1262,7 +1262,7 @@ class SocketHandler {
                 const result = this.gameManager.rejectBot(tableId, seatIndex, user.userId);
                 
                 if (result.success) {
-                    console.log(`[SocketHandler] Bot ${result.botName} rejected by ${user.username}`);
+                    gameLogger.gameEvent('SYSTEM', `[BOT] REJECTED`, { botName: result.botName, rejectedBy: user.username, userId: user.userId, tableId: table.id });
                     
                     this.io.to(`table:${tableId}`).emit('bot_rejected', {
                         seatIndex,
@@ -1297,7 +1297,7 @@ class SocketHandler {
                 const result = this.gameManager.removeBot(tableId, seatIndex);
                 
                 if (result.success) {
-                    console.log(`[SocketHandler] Bot ${result.botName} removed from table by ${user.username}`);
+                    gameLogger.gameEvent('SYSTEM', `[BOT] REMOVED`, { botName: result.botName, removedBy: user.username, userId: user.userId, tableId: table.id });
                     
                     this.broadcastTableState(tableId);
                     
@@ -1373,7 +1373,7 @@ class SocketHandler {
                 seat.isSittingOut = true;
                 seat.sitOutTime = Date.now();
                 
-                console.log(`[SocketHandler] ${user.username} is sitting out at table ${table.name}`);
+                gameLogger.gameEvent('SYSTEM', `[TABLE] PLAYER_SIT_OUT`, { userId: user.userId, username: user.username, tableId: table.id, tableName: table.name });
                 
                 // Notify other players
                 socket.to(`table:${table.id}`).emit('player_sitting_out', {
@@ -1419,7 +1419,7 @@ class SocketHandler {
                 seat.isSittingOut = false;
                 seat.sitOutTime = null;
                 
-                console.log(`[SocketHandler] ${user.username} is back at table ${table.name}`);
+                gameLogger.gameEvent('SYSTEM', `[TABLE] PLAYER_SIT_BACK`, { userId: user.userId, username: user.username, tableId: table.id, tableName: table.name });
                 
                 // Notify other players
                 socket.to(`table:${table.id}`).emit('player_sitting_back', {
@@ -1593,7 +1593,7 @@ class SocketHandler {
                     const requests = await userRepo.getPendingFriendRequests(user.userId);
                     respond({ success: true, requests });
                 } catch (error) {
-                    console.error('[Friends] Error getting requests:', error);
+                    gameLogger.error('SYSTEM', '[FRIENDS] GET_REQUESTS_ERROR', { userId: user.userId, error: error.message, stack: error.stack });
                     respond({ success: false, error: 'Failed to load friend requests' });
                 }
             });
@@ -2201,7 +2201,7 @@ class SocketHandler {
                         }))
                     });
                 } catch (error) {
-                    console.error('[Leaderboard] Error:', error);
+                    gameLogger.error('SYSTEM', '[LEADERBOARD] ERROR', { userId: user.userId, error: error.message, stack: error.stack });
                     respond({ success: false, error: 'Failed to load leaderboard' });
                 }
             });
@@ -2264,7 +2264,7 @@ class SocketHandler {
                         reward: rewards[Math.min(currentDay - 1, 6)]
                     });
                 } catch (error) {
-                    console.error('[DailyReward] Error:', error);
+                    gameLogger.error('SYSTEM', '[DAILY_REWARD] ERROR', { userId: user.userId, error: error.message, stack: error.stack });
                     respond({ success: false, error: 'Failed to get daily reward status' });
                 }
             });
@@ -2323,7 +2323,7 @@ class SocketHandler {
                     // Update streak and last claim
                     await userRepo.updateDailyStreak(user.userId, newStreak, now.toISOString());
                     
-                    console.log(`[DailyReward] ${user.username} claimed day ${newStreak}: +${reward.chips} chips, +${reward.xp} XP`);
+                    gameLogger.gameEvent('SYSTEM', `[DAILY_REWARD] CLAIMED`, { userId: user.userId, username: user.username, day: newStreak, chips: reward.chips, xp: reward.xp });
                     
                     respond({
                         success: true,
@@ -2334,7 +2334,7 @@ class SocketHandler {
                         newStreak
                     });
                 } catch (error) {
-                    console.error('[DailyReward] Error claiming:', error);
+                    gameLogger.error('SYSTEM', '[DAILY_REWARD] CLAIM_ERROR', { userId: user.userId, error: error.message, stack: error.stack });
                     respond({ success: false, error: 'Failed to claim reward' });
                 }
             });
@@ -2377,7 +2377,7 @@ class SocketHandler {
                         }))
                     });
                 } catch (error) {
-                    console.error('[Achievements] Error:', error);
+                    gameLogger.error('SYSTEM', '[ACHIEVEMENTS] ERROR', { userId: user.userId, error: error.message, stack: error.stack });
                     respond({ success: false, error: 'Failed to load achievements' });
                 }
             });
@@ -2410,7 +2410,7 @@ class SocketHandler {
                         await userRepo.addXP(user.userId, result.xpReward);
                     }
                     
-                    console.log(`[Achievement] ${user.username} unlocked: ${achievementId}`);
+                    gameLogger.gameEvent('SYSTEM', `[ACHIEVEMENT] UNLOCKED`, { userId: user.userId, username: user.username, achievementId });
                     
                     respond({
                         success: true,
@@ -2418,7 +2418,7 @@ class SocketHandler {
                         xpAwarded: result.xpReward || 0
                     });
                 } catch (error) {
-                    console.error('[Achievement] Error:', error);
+                    gameLogger.error('SYSTEM', '[ACHIEVEMENT] ERROR', { userId: user.userId, error: error.message, stack: error.stack });
                     respond({ success: false, error: 'Failed to unlock achievement' });
                 }
             });
@@ -2426,7 +2426,7 @@ class SocketHandler {
             // ============ Disconnect ============
             
             socket.on('disconnect', async () => {
-                console.log(`[Socket] Client disconnected: ${socket.id}`);
+                gameLogger.gameEvent('SYSTEM', `[SOCKET] CLIENT_DISCONNECTED`, { socketId: socket.id, userId: user?.userId || 'unknown' });
                 const user = this.getAuthenticatedUser(socket);
                 
                 if (user) {
@@ -2507,7 +2507,7 @@ class SocketHandler {
                 // Rejoin room
                 socket.join(`table:${table.id}`);
                 
-                console.log(`[Socket] ${user.username} reconnected to table ${table.name}`);
+                gameLogger.gameEvent('SYSTEM', `[SOCKET] RECONNECTED_TO_TABLE`, { userId: user.userId, username: user.username, tableId: table.id, tableName: table.name });
                 
                 // Notify other players
                 socket.to(`table:${table.id}`).emit('player_reconnected', {
@@ -2557,7 +2557,7 @@ class SocketHandler {
             });
         });
 
-        console.log('[SocketHandler] Initialized');
+        gameLogger.gameEvent('SYSTEM', `[SOCKET_HANDLER] INITIALIZED`, {});
     }
 
     // ============ Reconnection Helpers ============
@@ -2567,7 +2567,7 @@ class SocketHandler {
         this.clearReconnectTimeout(userId);
         
         const timeout = setTimeout(async () => {
-            console.log(`[Socket] Reconnect timeout expired for user ${userId}`);
+            gameLogger.gameEvent('SYSTEM', `[SOCKET] RECONNECT_TIMEOUT`, { userId });
             
             const player = this.gameManager.players.get(userId);
             if (player?.currentTableId === tableId) {
@@ -2628,7 +2628,7 @@ class SocketHandler {
         // Notify friends that user came online
         this.notifyFriendsStatus(userId, true);
         
-        console.log(`[Socket] User authenticated: ${profile.username}`);
+        gameLogger.gameEvent('SYSTEM', `[SOCKET] USER_AUTHENTICATED`, { userId: profile.userId, username: profile.username });
     }
     
     deauthenticateSocket(socket) {
@@ -2671,7 +2671,7 @@ class SocketHandler {
         // Called when countdown starts/stops/updates
         table.onCountdownUpdate = () => {
             const countdown = table.getStartCountdownRemaining();
-            console.log(`[SocketHandler] Countdown update for table ${table.name}: ${countdown}s`);
+            gameLogger.gameEvent(table.id, `[TABLE] COUNTDOWN_UPDATE`, { tableName: table.name, countdown });
             
             this.io.to(`table:${table.id}`).emit('countdown_update', {
                 tableId: table.id,
@@ -2686,13 +2686,13 @@ class SocketHandler {
         // CRITICAL: Preserve any existing onGameOver callback (e.g., from SimulationManager)
         // The existing callback should run AFTER SocketHandler notifies clients
         const originalOnGameOver = table.onGameOver;
-        console.log(`[SocketHandler] Setting up onGameOver callback for table ${table.name} (${table.id}). Original callback: ${originalOnGameOver ? 'EXISTS' : 'NONE'}`);
+        gameLogger.gameEvent(table.id, `[TABLE] SETUP_GAME_OVER_CALLBACK`, { tableName: table.name, hasOriginalCallback: !!originalOnGameOver });
         gameLogger.gameEvent(table.name, '[SocketHandler] Setting up onGameOver callback', {
             tableId: table.id,
             hasOriginalCallback: !!originalOnGameOver
         });
         table.onGameOver = (winner) => {
-            console.log(`[SocketHandler] Game over at table ${table.name} - Winner: ${winner.name}`);
+            gameLogger.gameEvent(table.id, `[TABLE] GAME_OVER`, { tableName: table.name, winnerId: winner.userId, winnerName: winner.name });
             gameLogger.gameEvent(table.name, '[SocketHandler] Game over callback invoked', {
                 winner: winner.name,
                 winnerId: winner.playerId
@@ -2710,13 +2710,13 @@ class SocketHandler {
                     // CRITICAL: Check if this user is actually a spectator before sending
                     const userId = this.socketToUser.get(seat.socketId);
                     if (userId && spectatorUserIds.has(userId)) {
-                        console.log(`[SocketHandler] Skipping game_over for ${seat.name} - they are a spectator`);
+                        gameLogger.gameEvent(table.id, `[TABLE] SKIP_GAME_OVER_SPECTATOR`, { playerId: seat.userId, playerName: seat.name });
                         continue;
                     }
                     
                     // Double-check: make sure this user is not in the spectators map
                     if (userId && table.isSpectator(userId)) {
-                        console.log(`[SocketHandler] Skipping game_over for ${seat.name} - confirmed spectator via isSpectator check`);
+                        gameLogger.gameEvent(table.id, `[TABLE] SKIP_GAME_OVER_SPECTATOR_CONFIRMED`, { playerId: seat.userId, playerName: seat.name });
                         continue;
                     }
                     
@@ -2739,7 +2739,7 @@ class SocketHandler {
             const spectatorSockets = this.io.sockets.adapter.rooms.get(spectatorRoom);
             const spectatorCount = spectatorSockets ? spectatorSockets.size : 0;
             
-            console.log(`[SocketHandler] Sending game_over to ${playersNotified} players and ${spectatorCount} spectators (informational only)`);
+            gameLogger.gameEvent(table.id, `[TABLE] GAME_OVER_BROADCAST`, { playersNotified, spectatorCount, informational: true });
             
             // CRITICAL: Send to spectator room only, and mark as informational
             // This ensures spectators don't get the regular game_over event from table room
@@ -2763,7 +2763,7 @@ class SocketHandler {
         
         // Called when ANY player (human or bot) takes an action
         table.onPlayerAction = (playerId, action, amount) => {
-            console.log(`[SocketHandler] Player action: ${playerId} ${action} ${amount}`);
+            gameLogger.gameEvent(table.id, `[TABLE] PLAYER_ACTION`, { playerId, action, amount });
             
             this.io.to(`table:${table.id}`).emit('player_action', {
                 playerId: playerId,
@@ -2774,7 +2774,7 @@ class SocketHandler {
         
         // Called when a hand is complete (showdown or all folded)
         table.onHandComplete = (result) => {
-            console.log(`[SocketHandler] Hand complete: ${result.winnerName} wins ${result.potAmount} with ${result.handName}`);
+            gameLogger.gameEvent(table.id, `[TABLE] HAND_COMPLETE`, { winnerName: result.winnerName, potAmount: result.potAmount, handName: result.handName });
             
             this.io.to(`table:${table.id}`).emit('hand_result', {
                 tableId: table.id,
@@ -2788,7 +2788,7 @@ class SocketHandler {
         
         // Called when a player auto-folds due to timeout
         table.onAutoFold = (playerId, seatIndex) => {
-            console.log(`[SocketHandler] Auto-fold: ${playerId} at seat ${seatIndex}`);
+            gameLogger.gameEvent(table.id, `[TABLE] AUTO_FOLD`, { playerId, seatIndex });
             
             // Broadcast the fold action to all players at the table
             this.io.to(`table:${table.id}`).emit('player_action', {
@@ -2803,7 +2803,7 @@ class SocketHandler {
         
         // Called when ready-up phase starts
         table.onReadyPrompt = () => {
-            console.log(`[SocketHandler] Ready-up phase started at table ${table.name}`);
+            gameLogger.gameEvent(table.id, `[TABLE] READY_UP_STARTED`, { tableName: table.name });
             
             this.io.to(`table:${table.id}`).emit('ready_prompt', {
                 tableId: table.id,
@@ -2813,7 +2813,7 @@ class SocketHandler {
         
         // Called when a player didn't ready in time and becomes spectator
         table.onPlayerNotReady = (playerId, playerName) => {
-            console.log(`[SocketHandler] ${playerName} not ready - moved to spectators at table ${table.name}`);
+            gameLogger.gameEvent(table.id, `[TABLE] PLAYER_NOT_READY_MOVED_TO_SPECTATORS`, { playerName, tableName: table.name });
             
             // Find the player's socket and notify them
             const playerAuth = this.authenticatedUsers.get(playerId);
@@ -2833,7 +2833,7 @@ class SocketHandler {
         
         // Called when a player runs out of chips (eliminated)
         table.onPlayerEliminated = (data) => {
-            console.log(`[SocketHandler] ${data.playerName} eliminated at table ${table.name}`);
+            gameLogger.gameEvent(table.id, `[TABLE] PLAYER_ELIMINATED`, { playerName: data.playerName, tableName: table.name });
             
             // Broadcast to all players that someone was eliminated
             // CRITICAL: Only send to actual players, not spectators

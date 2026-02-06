@@ -206,9 +206,9 @@ async function start() {
     const dbConnected = await db.initialize();
     
     if (!dbConnected) {
-        console.error('[Server] WARNING: Database connection failed!');
-        console.error('[Server] The server will start but authentication will not work.');
-        console.error('[Server] Make sure MySQL is running (WAMP/XAMPP) and check .env settings.');
+        const gameLogger = require('./utils/GameLogger');
+        gameLogger.error('SERVER', '[DATABASE] CONNECTION_FAILED', { error: 'Database connection failed - server will start but authentication will not work' });
+        gameLogger.error('SERVER', '[DATABASE] CONNECTION_FAILED_DETAILS', { message: 'Make sure MySQL is running (WAMP/XAMPP) and check .env settings' });
         console.log('');
     } else {
         console.log('[Server] Database connected and tables ready');
