@@ -278,6 +278,75 @@ function Test-ServerRunning {
     }
 }
 
+# Function to get Log Watcher status from recent logs
+function Get-LogWatcherStatus {
+    try {
+        if (-not (Test-Path $logFile)) {
+            return @{ Active = $false; PausedTables = 0; ActiveSimulations = 0; LastSeen = $null }
+        }
+        
+        # Read last 500 lines to find recent log watcher activity
+        $recentLines = Get-Content $logFile -Tail 500 -ErrorAction SilentlyContinue
+        if (-not $recentLines) {
+            return @{ Active = $false; PausedTables = 0; ActiveSimulations = 0; LastSeen = $null }
+        }
+        
+        $isActive = $false
+        $pausedTables = 0
+        $activeSimulations = 0
+        $lastSeen = $null
+        
+        # Look for recent LOG_WATCHER activity (within last 10 seconds)
+        $now = Get-Date
+        foreach ($line in $recentLines) {
+            if ($line -match '\[LOG_WATCHER\]') {
+                # Extract timestamp
+                if ($line -match '\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?)\]') {
+                    try {
+                        $lineTime = [DateTime]::Parse($matches[1])
+                        $timeDiff = ($now - $lineTime).TotalSeconds
+                        
+                        # If seen within last 10 seconds, consider it active
+                        if ($timeDiff -le 10) {
+                            $isActive = $true
+                            if (-not $lastSeen -or $lineTime -gt $lastSeen) {
+                                $lastSeen = $lineTime
+                            }
+                        }
+                    } catch {
+                        # If timestamp parsing fails, just check if line exists
+                        $isActive = $true
+                    }
+                } else {
+                    # No timestamp but has LOG_WATCHER - assume active
+                    $isActive = $true
+                }
+                
+                # Extract paused tables count
+                if ($line -match '"pausedTablesCount":(\d+)') {
+                    $pausedTables = [Math]::Max($pausedTables, [int]$matches[1])
+                }
+                
+                # Extract active simulations count
+                if ($line -match '"activeSimulationsCount":(\d+)') {
+                    $activeSimulations = [Math]::Max($activeSimulations, [int]$matches[1])
+                } elseif ($line -match '"simulationTablesFound":(\d+)') {
+                    $activeSimulations = [Math]::Max($activeSimulations, [int]$matches[1])
+                }
+            }
+        }
+        
+        return @{
+            Active = $isActive
+            PausedTables = $pausedTables
+            ActiveSimulations = $activeSimulations
+            LastSeen = $lastSeen
+        }
+    } catch {
+        return @{ Active = $false; PausedTables = 0; ActiveSimulations = 0; LastSeen = $null }
+    }
+}
+
 # Function to display statistics in a formatted layout
 function Show-Statistics {
     $fixStats = Get-FixAttemptsStats
@@ -383,6 +452,51 @@ function Show-Statistics {
         Write-Host "OFFLINE" -NoNewline -ForegroundColor Red
     }
     Write-Host (" " * 50) -NoNewline
+    Write-Host "|" -ForegroundColor Cyan
+    
+    Write-Host "+==============================================================================+" -ForegroundColor Cyan
+    
+    # System Components Status
+    Write-Host "| " -NoNewline -ForegroundColor Cyan
+    Write-Host "SYSTEM COMPONENTS" -ForegroundColor Yellow
+    Write-Host "| " -NoNewline -ForegroundColor Cyan
+    Write-Host ("-" * 70) -ForegroundColor DarkGray
+    
+    # Log Watcher Status (from recent logs)
+    $logWatcherStatus = Get-LogWatcherStatus
+    Write-Host "| " -NoNewline -ForegroundColor Cyan
+    Write-Host "  Log Watcher: " -NoNewline -ForegroundColor White
+    if ($logWatcherStatus.Active) {
+        Write-Host "ACTIVE" -NoNewline -ForegroundColor Green
+        if ($logWatcherStatus.PausedTables -gt 0) {
+            Write-Host " ($($logWatcherStatus.PausedTables) paused)" -NoNewline -ForegroundColor Yellow
+        }
+    } else {
+        Write-Host "INACTIVE" -NoNewline -ForegroundColor Red
+    }
+    Write-Host (" " * 40) -NoNewline
+    Write-Host "|" -ForegroundColor Cyan
+    
+    # Active Simulations Status
+    Write-Host "| " -NoNewline -ForegroundColor Cyan
+    Write-Host "  Simulations: " -NoNewline -ForegroundColor White
+    if ($logWatcherStatus.ActiveSimulations -gt 0) {
+        Write-Host ("{0:N0} active" -f $logWatcherStatus.ActiveSimulations) -NoNewline -ForegroundColor Cyan
+    } else {
+        Write-Host "0 active" -NoNewline -ForegroundColor Gray
+    }
+    Write-Host (" " * 40) -NoNewline
+    Write-Host "|" -ForegroundColor Cyan
+    
+    # Database Status (inferred from server status for now)
+    Write-Host "| " -NoNewline -ForegroundColor Cyan
+    Write-Host "  Database: " -NoNewline -ForegroundColor White
+    if ($stats.ServerStatus -eq "Online") {
+        Write-Host "CONNECTED" -NoNewline -ForegroundColor Green
+    } else {
+        Write-Host "UNKNOWN" -NoNewline -ForegroundColor Gray
+    }
+    Write-Host (" " * 40) -NoNewline
     Write-Host "|" -ForegroundColor Cyan
     
     Write-Host "+==============================================================================+" -ForegroundColor Cyan
