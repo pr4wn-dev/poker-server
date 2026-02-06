@@ -516,7 +516,19 @@ while ($monitoringActive) {
                             $currentIssue = $line
                         } else {
                             if ($addResult -and $addResult.reason -eq 'duplicate') {
-                                Write-Info "Duplicate issue detected (already logged) - skipping pause trigger"
+                                Write-Info "Duplicate issue detected (already logged)"
+                                # CRITICAL: Even for duplicates, if Unity isn't paused yet, we should pause it
+                                # This ensures Unity stops logging and gives user time to report the issue
+                                if (-not $isPaused) {
+                                    Write-Warning "Unity not paused yet - triggering pause for duplicate issue"
+                                    $logFile = Join-Path $PSScriptRoot "..\logs\game.log"
+                                    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
+                                    $escapedMessage = $line.Replace('"','\"').Replace("`n"," ").Replace("`r"," ").Substring(0,[Math]::Min(200,$line.Length))
+                                    $pauseMarker = "[$timestamp] [GAME] [MONITOR] [CRITICAL_ISSUE_DETECTED] Duplicate issue - pausing Unity to stop logging | Data: {`"issueId`":`"duplicate`",`"severity`":`"$($issue.severity)`",`"type`":`"$($issue.type)`",`"source`":`"$($issue.source)`",`"tableId`":$(if($tableId){`"$tableId`"}else{'null'}),`"message`":`"$escapedMessage`"}"
+                                    Add-Content -Path $logFile -Value $pauseMarker -ErrorAction SilentlyContinue
+                                    $isPaused = $true
+                                    $currentIssue = $line
+                                }
                             } else {
                                 $errorMsg = if ($addResult -and $addResult.error) { $addResult.error } else { "Unknown error - check Node.js script output" }
                                 Write-Error "Failed to log issue: $errorMsg"
