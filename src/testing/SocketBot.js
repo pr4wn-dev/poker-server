@@ -60,6 +60,7 @@ class SocketBot {
         this.isReady = false; // Track if we've already signaled ready
         this.readyScheduled = false; // Track if we've scheduled a ready signal
         this.isPaused = false; // Pause flag - when true, bot won't take actions
+        this.itemAnteSubmitted = false; // Track if we've submitted item to ante
         
         // Chaos tracking
         this.disconnectCount = 0;
@@ -650,6 +651,11 @@ class SocketBot {
                 return; // Don't process state or take actions while paused
             }
             
+            // ITEM ANTE: Check if we need to submit an item
+            if (state.needsItemAnteSubmission && state.itemAnteEnabled) {
+                this._handleItemAnteSubmission(state);
+            }
+            
             // Check if it's our turn
             const wasMyTurn = this.isMyTurn;
             this.isMyTurn = state.currentPlayerId === this.userId;
@@ -1129,6 +1135,92 @@ class SocketBot {
         if (this.disconnectCount > 0) count++; // Verified reconnection
         if (this.turnTracking.myTurnCount > 0) count++; // Verified turn assignment
         return count;
+    }
+    
+    /**
+     * Handle item ante submission - bots automatically get items and submit them
+     */
+    async _handleItemAnteSubmission(state) {
+        // Prevent duplicate submissions
+        if (this.itemAnteSubmitted) {
+            return;
+        }
+        
+        this.log('INFO', 'Item ante submission needed - getting items...');
+        
+        // First, get test items if we don't have any
+        this.socket.emit('get_test_items', {}, async (response) => {
+            if (!response || !response.success) {
+                this.log('WARN', 'Failed to get test items, trying inventory...', { error: response?.error });
+            }
+            
+            // Get inventory
+            this.socket.emit('get_inventory', {}, (inventoryResponse) => {
+                if (!inventoryResponse || !inventoryResponse.success || !inventoryResponse.inventory || inventoryResponse.inventory.length === 0) {
+                    this.log('ERROR', 'No items in inventory for item ante');
+                    return;
+                }
+                
+                const inventory = inventoryResponse.inventory;
+                this.log('INFO', `Got ${inventory.length} items, selecting one for ante...`);
+                
+                // Check if first item is already placed (check sidePot state)
+                let minValue = 0;
+                if (state.sidePot && state.sidePot.creatorItem && state.sidePot.creatorItem.baseValue) {
+                    minValue = state.sidePot.creatorItem.baseValue;
+                    this.log('INFO', `First item value: ${minValue}, need item >= ${minValue}`);
+                }
+                
+                // Select an appropriate item
+                let selectedItem = null;
+                if (minValue > 0) {
+                    // Need item >= minValue
+                    selectedItem = inventory.find(item => item.baseValue >= minValue);
+                    if (!selectedItem) {
+                        // Find highest value item
+                        selectedItem = inventory.reduce((max, item) => 
+                            (item.baseValue || 0) > (max.baseValue || 0) ? item : max
+                        );
+                        this.log('WARN', `No item >= ${minValue}, using highest value: ${selectedItem.baseValue}`);
+                    }
+                } else {
+                    // First item - pick a common/uncommon item (not too valuable)
+                    selectedItem = inventory.find(item => 
+                        item.rarity === 'common' || item.rarity === 'uncommon'
+                    ) || inventory[0];
+                }
+                
+                if (!selectedItem) {
+                    this.log('ERROR', 'No suitable item found');
+                    return;
+                }
+                
+                this.log('INFO', `Submitting item: ${selectedItem.name} (value: ${selectedItem.baseValue})`);
+                
+                // Submit to item ante
+                if (minValue === 0) {
+                    // First item - start the ante
+                    this.socket.emit('start_side_pot', { itemId: selectedItem.id }, (response) => {
+                        if (response && response.success) {
+                            this.itemAnteSubmitted = true;
+                            this.log('INFO', 'Item ante started successfully', { itemName: selectedItem.name });
+                        } else {
+                            this.log('ERROR', 'Failed to start item ante', { error: response?.error });
+                        }
+                    });
+                } else {
+                    // Subsequent item - submit to ante
+                    this.socket.emit('submit_to_side_pot', { itemId: selectedItem.id }, (response) => {
+                        if (response && response.success) {
+                            this.itemAnteSubmitted = true;
+                            this.log('INFO', 'Item submitted to ante successfully', { itemName: selectedItem.name });
+                        } else {
+                            this.log('ERROR', 'Failed to submit item to ante', { error: response?.error });
+                        }
+                    });
+                }
+            });
+        });
     }
 }
 
