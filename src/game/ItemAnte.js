@@ -399,16 +399,28 @@ class ItemAnte {
         
         // console.log(`[ItemAnte] ${winnerId} won ${winnings.length} items!`);
         
-        // ROOT TRACING: Log item ante award
+        // ROOT TRACING: Log item ante award with icon check
+        const itemsWithoutIcons = winnings.filter(item => !item.icon || item.icon === 'default_item');
+        const itemsWithIcons = winnings.filter(item => item.icon && item.icon !== 'default_item');
+        
         gameLogger.gameEvent(this.tableId, `[ITEM_ANTE] AWARDED`, {
             winnerId,
             itemCount: winnings.length,
+            itemsWithIcons: itemsWithIcons.length,
+            itemsWithoutIcons: itemsWithoutIcons.length,
             items: winnings.map(i => ({
                 id: i.id,
                 name: i.name,
                 templateId: i.templateId,
                 rarity: i.rarity,
-                baseValue: i.baseValue
+                baseValue: i.baseValue,
+                icon: i.icon || 'MISSING'
+            })),
+            missingIconItems: itemsWithoutIcons.map(i => ({
+                id: i.id,
+                name: i.name,
+                templateId: i.templateId,
+                icon: i.icon || 'MISSING'
             })),
             totalValue: winnings.reduce((sum, i) => sum + (i.baseValue || 0), 0),
             originalCount: this.approvedItems.length,
@@ -416,6 +428,18 @@ class ItemAnte {
             awardedAt: this.awardedAt,
             stackTrace: new Error().stack?.split('\n').slice(2, 10).join(' | ') || 'NO_STACK'
         });
+        
+        // ROOT TRACING: Warn if awarded items missing icons
+        if (itemsWithoutIcons.length > 0) {
+            gameLogger.gameEvent(this.tableId, `[ITEM_ANTE] AWARDED_MISSING_ICONS`, {
+                winnerId,
+                count: itemsWithoutIcons.length,
+                items: itemsWithoutIcons.map(i => ({
+                    name: i.name,
+                    icon: i.icon || 'MISSING'
+                }))
+            });
+        }
         
         return {
             success: true,
