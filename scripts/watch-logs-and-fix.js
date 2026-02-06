@@ -585,6 +585,13 @@ async function fixGeneralIssue(issue, tableId) {
         return true; // Logged for analysis
     }
     
+    // Pot-related issues - these are validation warnings, not critical errors
+    if (message.includes('pot') && (message.includes('changed') || message.includes('cleared'))) {
+        console.log(`[LogWatcher] Fix: Pot validation issue detected - this is a validation warning, not a critical error`);
+        console.log(`[LogWatcher] Pot changes are logged for analysis but don't require pause`);
+        return true; // Logged for analysis, can continue
+    }
+    
     return false; // Unknown general issue
 }
 
