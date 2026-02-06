@@ -1588,22 +1588,48 @@ function activeMonitoring() {
             ? `I'm actively monitoring ${simulationTables.length} simulation(s). All systems operational. Will report immediately if any issues are detected.`
             : 'I am actively monitoring the game logs and will report any issues immediately. Waiting for simulations to start.';
         
+        // Prepare simulation data
+        const simData = simulationTables.length > 0 ? simulationTables.map(s => ({
+            name: s.name,
+            handsPlayed: s.handsPlayed,
+            phase: s.phase,
+            isPaused: s.isPaused,
+            pauseReason: s.pauseReason,
+            pot: s.pot,
+            activePlayers: s.activePlayers
+        })) : [];
+        
+        // Update latest status for API endpoint and status file
+        latestStatus = {
+            timestamp: new Date().toISOString(),
+            activeSimulations: simulationTables.length,
+            simulations: simData,
+            message: statusMessage,
+            whatImDoing: whatImDoing,
+            issues: [], // Will be populated from recent issues
+            lastUpdated: Date.now()
+        };
+        
+        // Write status to file for easy monitoring (updates every 10 seconds)
+        try {
+            const fs = require('fs');
+            const path = require('path');
+            const statusFile = path.join(__dirname, '..', 'status.json');
+            fs.writeFileSync(statusFile, JSON.stringify(latestStatus, null, 2), 'utf8');
+        } catch (error) {
+            gameLogger.error('LOG_WATCHER', `[ACTIVE_MONITORING] STATUS_FILE_ERROR`, {
+                error: error.message
+            });
+        }
+        
         // Write to log with [ERROR] level so it's easy to find
         gameLogger.error('LOG_WATCHER', `[ACTIVE_MONITORING] STATUS_REPORT`, {
             action: 'STATUS_UPDATE',
             activeSimulations: simulationTables.length,
-            simulations: simulationTables.length > 0 ? simulationTables.map(s => ({
-                name: s.name,
-                handsPlayed: s.handsPlayed,
-                phase: s.phase,
-                isPaused: s.isPaused,
-                pauseReason: s.pauseReason,
-                pot: s.pot,
-                activePlayers: s.activePlayers
-            })) : [],
+            simulations: simData,
             message: statusMessage,
             whatImDoing: whatImDoing,
-            timestamp: new Date().toISOString(),
+            timestamp: latestStatus.timestamp,
             reportToUser: true, // Flag for me to read and report
             // CRITICAL: Add a clear marker so I can easily find these reports
             REPORT_MARKER: '=== STATUS REPORT FOR USER ==='
