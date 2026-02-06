@@ -615,31 +615,94 @@ async function handleIssueWithLogClearing(issue, tableId, tableDetails) {
     // Wait a moment for fix to complete
     await new Promise(resolve => setTimeout(resolve, 1000));
     
-    // STEP 4: CLEAR LOG FILE
-    gameLogger.gameEvent('LOG_WATCHER', `[WORKFLOW] STEP_4_CLEARING_LOG`, {
-        tableId,
-        issueType: issue.type,
-        logFile,
-        whatImDoing: 'Clearing log file to prevent it from getting too large...'
-    });
+    // STEP 4: ARCHIVE AND CLEAR LOG FILE (if needed)
+    const MAX_LOG_SIZE = 5 * 1024 * 1024; // 5MB - only clear if log is getting large
+    let shouldClearLog = false;
+    let logSize = 0;
     
     try {
-        // Clear the log file
-        fs.writeFileSync(logFile, '', 'utf8');
-        lastPosition = 0; // Reset position tracking
-        
-        gameLogger.gameEvent('LOG_WATCHER', `[WORKFLOW] LOG_CLEARED`, {
-            tableId,
-            logFile,
-            newSize: 0,
-            positionReset: true
-        });
+        if (fs.existsSync(logFile)) {
+            const stats = fs.statSync(logFile);
+            logSize = stats.size;
+            shouldClearLog = stats.size > MAX_LOG_SIZE;
+        }
     } catch (error) {
-        gameLogger.error('LOG_WATCHER', `[WORKFLOW] LOG_CLEAR_ERROR`, {
+        gameLogger.error('LOG_WATCHER', `[WORKFLOW] LOG_SIZE_CHECK_ERROR`, {
             tableId,
             logFile,
-            error: error.message,
-            action: 'Log file could not be cleared - continuing anyway'
+            error: error.message
+        });
+    }
+    
+    if (shouldClearLog) {
+        gameLogger.gameEvent('LOG_WATCHER', `[WORKFLOW] STEP_4_ARCHIVING_AND_CLEARING_LOG`, {
+            tableId,
+            issueType: issue.type,
+            logFile,
+            logSize,
+            maxSize: MAX_LOG_SIZE,
+            whatImDoing: 'Log file exceeded 5MB, archiving before clearing to preserve history...'
+        });
+        
+        try {
+            // Archive current log before clearing (preserve history)
+            const archiveDir = path.join(__dirname, '../logs/archived');
+            if (!fs.existsSync(archiveDir)) {
+                fs.mkdirSync(archiveDir, { recursive: true });
+            }
+            
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19);
+            const archiveFile = path.join(archiveDir, `game_${timestamp}_${issue.type.replace(/\s+/g, '_')}.log`);
+            
+            // Copy log to archive
+            fs.copyFileSync(logFile, archiveFile);
+            
+            gameLogger.gameEvent('LOG_WATCHER', `[WORKFLOW] LOG_ARCHIVED`, {
+                tableId,
+                archiveFile,
+                originalSize: logSize,
+                reason: 'Log file exceeded 5MB, archived to preserve full history'
+            });
+            
+            // Clear the log file
+            fs.writeFileSync(logFile, '', 'utf8');
+            lastPosition = 0; // Reset position tracking
+            
+            gameLogger.gameEvent('LOG_WATCHER', `[WORKFLOW] LOG_CLEARED`, {
+                tableId,
+                logFile,
+                archiveFile,
+                originalSize: logSize,
+                newSize: 0,
+                positionReset: true
+            });
+        } catch (error) {
+            gameLogger.error('LOG_WATCHER', `[WORKFLOW] LOG_ARCHIVE_CLEAR_ERROR`, {
+                tableId,
+                logFile,
+                error: error.message,
+                action: 'Log file could not be archived/cleared - continuing anyway'
+            });
+        }
+    } else {
+        // Log is still manageable - preserve history for correlation analysis
+        // Just reset position to current size (don't re-read old entries)
+        try {
+            if (fs.existsSync(logFile)) {
+                const stats = fs.statSync(logFile);
+                lastPosition = stats.size;
+            }
+        } catch (error) {
+            // Ignore - position tracking will reset on next read
+        }
+        
+        gameLogger.gameEvent('LOG_WATCHER', `[WORKFLOW] LOG_PRESERVED`, {
+            tableId,
+            logFile,
+            currentSize: logSize,
+            maxSize: MAX_LOG_SIZE,
+            reason: 'Log file is still manageable (<5MB), preserving history for correlation analysis',
+            benefit: 'Can see what fixes were tried and analyze patterns over time'
         });
     }
     
