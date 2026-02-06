@@ -712,9 +712,18 @@ function Show-Statistics {
         Clear-Host
         $script:firstDisplay = $true
     } else {
-        [Console]::CursorVisible = $false
-        [Console]::SetCursorPosition(0, 0)
-        Start-Sleep -Milliseconds 10
+        try {
+            [Console]::CursorVisible = $false
+            [Console]::SetCursorPosition(0, 0)
+            Start-Sleep -Milliseconds 10
+        } catch {
+            # Console handle may be invalid (window resized/closed) - just continue
+            # Don't spam errors - this is a common issue with console windows
+            if ($script:lastConsoleError -eq $null -or ((Get-Date) - $script:lastConsoleError).TotalSeconds -gt 60) {
+                Write-Error "Console cursor error (non-fatal): $_" -ErrorAction SilentlyContinue
+                $script:lastConsoleError = Get-Date
+            }
+        }
     }
     
     # Get console width for dynamic layout
