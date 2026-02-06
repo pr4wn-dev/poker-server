@@ -1579,18 +1579,6 @@ function activeMonitoring() {
             activePlayers: s.activePlayers
         })) : [];
         
-        // Update latest status for API endpoint and status file
-        latestStatus = {
-            timestamp: new Date().toISOString(),
-            activeSimulations: simulationTables.length,
-            simulations: simData,
-            message: statusMessage,
-            whatImDoing: whatImDoing,
-            issues: [], // Will be populated from recent issues
-            lastUpdated: Date.now()
-        };
-        
-        
         // Write to log with [ERROR] level so it's easy to find
         gameLogger.error('LOG_WATCHER', `[ACTIVE_MONITORING] STATUS_REPORT`, {
             action: 'STATUS_UPDATE',
@@ -1662,19 +1650,13 @@ function startActiveMonitoring() {
     }
 }
 
-// Function to get latest status for API endpoint
-function getLatestStatus() {
-    return latestStatus;
-}
-
 module.exports = {
     initialize,
     watchLogs,
     pauseSimulation,
     resumeSimulation,
     getActiveSimulationTables,
-    startActiveMonitoring,
-    getLatestStatus
+    startActiveMonitoring
 };
 
 // If run directly, try to watch (but won't have full access to managers)
