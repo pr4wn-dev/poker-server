@@ -24,6 +24,13 @@ $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $script:projectRoot = Split-Path -Parent $scriptDir
 Set-Location $script:projectRoot
 
+# Colors for output (define FIRST before any use)
+function Write-Status { param($message, $color = "White") Write-Host "[$(Get-Date -Format 'HH:mm:ss')] $message" -ForegroundColor $color }
+function Write-Info { param($message) Write-Status $message "Cyan" }
+function Write-Success { param($message) Write-Status $message "Green" }
+function Write-Warning { param($message) Write-Status $message "Yellow" }
+function Write-Error { param($message) Write-Status $message "Red" }
+
 # Configuration - use absolute paths to prevent directory issues
 $logFile = Join-Path $script:projectRoot "logs\game.log"
 $pendingIssuesFile = Join-Path $script:projectRoot "logs\pending-issues.json"
@@ -95,13 +102,6 @@ if (-not $config.login.password -and $env:MONITOR_PASSWORD) {
 
 Write-Info "Monitor Mode: $($config.mode)"
 Write-Info "Simulation Mode: $($config.simulation.enabled)"
-
-# Colors for output
-function Write-Status { param($message, $color = "White") Write-Host "[$(Get-Date -Format 'HH:mm:ss')] $message" -ForegroundColor $color }
-function Write-Info { param($message) Write-Status $message "Cyan" }
-function Write-Success { param($message) Write-Status $message "Green" }
-function Write-Warning { param($message) Write-Status $message "Yellow" }
-function Write-Error { param($message) Write-Status $message "Red" }
 
 # State tracking
 # Initialize lastLogPosition to END of file so we only read NEW entries (not old ones from previous runs)
