@@ -7,11 +7,17 @@
 
 $ErrorActionPreference = "Continue"
 
-# Configuration
-$logFile = "logs\game.log"
-$pendingIssuesFile = "logs\pending-issues.json"
+# Ensure we're in the correct directory (poker-server root)
+# Script is in monitoring/ folder, so go up one level
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$script:projectRoot = Split-Path -Parent $scriptDir
+Set-Location $script:projectRoot
+
+# Configuration - use absolute paths to prevent directory issues
+$logFile = Join-Path $script:projectRoot "logs\game.log"
+$pendingIssuesFile = Join-Path $script:projectRoot "logs\pending-issues.json"
 $checkInterval = 1  # Check every 1 second
-$nodeScript = "monitoring\issue-detector.js"
+$nodeScript = Join-Path $script:projectRoot "monitoring\issue-detector.js"
 $serverUrl = "http://localhost:3000"
 $statsUpdateInterval = 5  # Update stats display every 5 seconds
 
@@ -112,7 +118,7 @@ function Get-PendingIssuesCount {
 
 # Function to get fix attempts stats
 function Get-FixAttemptsStats {
-    $fixAttemptsFile = "fix-attempts.txt"
+    $fixAttemptsFile = Join-Path $script:projectRoot "fix-attempts.txt"
     if (Test-Path $fixAttemptsFile) {
         try {
             $content = Get-Content $fixAttemptsFile -Raw
@@ -621,7 +627,6 @@ while ($monitoringActive) {
                                 if (-not $isPaused) {
                                     # Don't write to console - update stats display instead
                                     # Write-Warning "Unity not paused yet - triggering pause for duplicate issue"
-                                    $logFile = Join-Path $PSScriptRoot "..\logs\game.log"
                                     $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
                                     $escapedMessage = $line.Replace('"','\"').Replace("`n"," ").Replace("`r"," ").Substring(0,[Math]::Min(200,$line.Length))
                                     $pauseMarker = "[$timestamp] [GAME] [MONITOR] [CRITICAL_ISSUE_DETECTED] Duplicate issue - pausing Unity to stop logging | Data: {`"issueId`":`"duplicate`",`"severity`":`"$($issue.severity)`",`"type`":`"$($issue.type)`",`"source`":`"$($issue.source)`",`"tableId`":$(if($tableId){`"$tableId`"}else{'null'}),`"message`":`"$escapedMessage`"}"
