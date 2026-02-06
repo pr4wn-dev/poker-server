@@ -618,6 +618,107 @@ The monitoring system tracks comprehensive statistics:
 
 ---
 
+## 🔧 System Adjustability
+
+The logging system is **highly adjustable and easy to modify**:
+
+### Adding New Error Patterns
+Simply edit `monitoring/issue-detector.js`:
+```javascript
+this.errorPatterns = {
+    critical: [
+        /YOUR_NEW_PATTERN/i,  // Just add here
+        // ... existing patterns
+    ]
+};
+```
+
+### Changing Pattern Severity
+Move patterns between severity levels:
+```javascript
+// Move from 'high' to 'critical':
+// Cut from high: []
+// Paste to critical: []
+```
+
+### Modifying Detection Logic
+Edit the `detectIssue()` method to add custom checks:
+```javascript
+detectIssue(logLine) {
+    // Add your custom detection here
+    if (customCheck(logLine)) {
+        return this.createIssue('error', 'critical', logLine, 'server');
+    }
+    // ... existing detection
+}
+```
+
+### Adjusting Statistics Display
+Edit `monitoring/monitor.ps1`:
+- Change `$statsUpdateInterval` for refresh rate
+- Modify `Show-Statistics()` for different metrics
+- Add new stat tracking in the main loop
+
+**No compilation needed** - Just edit and restart!
+
+---
+
+## 🎮 GPU Acceleration (Optional Enhancement)
+
+**Question:** Can we use GPU power to find issues that are hard to detect?
+
+**Answer:** Yes! GPU can help with advanced analysis, but it's best as an **optional enhancement** for batch analysis, not real-time monitoring.
+
+### What GPU Can Do Better
+
+1. **Batch Log Analysis** (Best Use Case)
+   - Analyze entire log history (millions of lines) in seconds
+   - Find patterns across multiple sessions
+   - Identify recurring issues
+
+2. **Anomaly Detection**
+   - Find unusual patterns we haven't defined
+   - Detect subtle issues like gradual performance degradation
+   - Learn "normal" vs "abnormal" behavior
+
+3. **Correlation Analysis**
+   - Link related events across time
+   - Example: "Every time X happens, Y follows 30 seconds later"
+   - Find root causes that aren't obvious
+
+4. **Pattern Learning**
+   - Learn from past fixes
+   - Suggest new patterns automatically
+   - Improve detection over time
+
+### Implementation Options
+
+**Option 1: GPU.js (JavaScript)**
+- Pure JavaScript, easy integration
+- Best for parallel pattern matching
+- Use case: Batch log analysis
+
+**Option 2: Python + CUDA**
+- Full GPU power, ML capabilities
+- Best for anomaly detection
+- Use case: Complex analysis, ML models
+
+**Option 3: Hybrid (Recommended)**
+- GPU.js for batch analysis
+- Python for ML-based detection
+- Best of both worlds
+
+### Recommendation
+
+**Start Simple:**
+- Keep real-time monitoring as-is (already fast enough)
+- Add GPU as **optional batch analyzer** for deep log analysis
+- Use when investigating complex issues or analyzing large logs
+
+**See `monitoring/GPU_ACCELERATION.md` for detailed GPU implementation guide.**
+
+---
+
 **Last Updated**: 2026-02-06
 **Version**: 1.1.0
-**Status**: Complete with Enhanced Statistics, Severity Mapping, and Real-Time Dashboard
+**Status**: Complete with Enhanced Statistics, Severity Mapping, Real-Time Dashboard, and GPU Acceleration Guide
