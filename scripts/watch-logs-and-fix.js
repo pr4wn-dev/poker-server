@@ -1377,7 +1377,7 @@ function activeMonitoring() {
                         });
                     }
                     
-                    // If we have the table, use it. Otherwise, use sim data if available
+                    // If we have the table, use it
                     if (table && table.isSimulation) {
                         tableIds.add(tableId);
                         simulationTables.push({
@@ -1391,20 +1391,26 @@ function activeMonitoring() {
                             pot: table.pot || 0,
                             activePlayers: table.seats ? table.seats.filter(s => s && s.isActive).length : 0
                         });
-                    } else if (sim && sim.table) {
-                        // Fallback: use sim.table if available
-                        const simTable = sim.table;
+                    } else {
+                        // Table not found - log it but still try to report the simulation exists
+                        gameLogger.error('LOG_WATCHER', `[ACTIVE_MONITORING] SIMULATION_FOUND_BUT_NO_TABLE`, {
+                            tableId,
+                            simKeys: sim ? Object.keys(sim) : 'sim is null',
+                            message: `Found simulation ${tableId} in simulationManager but couldn't get table from gameManager`,
+                            reportToUser: true
+                        });
+                        // Still report it exists even without full details
                         tableIds.add(tableId);
                         simulationTables.push({
                             id: tableId,
-                            name: simTable.name || `Simulation ${tableId.substring(0, 8)}`,
-                            handsPlayed: simTable.handsPlayed || 0,
-                            phase: simTable.phase || 'waiting',
-                            isPaused: simTable.isPaused || false,
-                            pauseReason: simTable.pauseReason || null,
-                            gameStarted: simTable.gameStarted || false,
-                            pot: simTable.pot || 0,
-                            activePlayers: simTable.seats ? simTable.seats.filter(s => s && s.isActive).length : 0
+                            name: `Simulation ${tableId.substring(0, 8)}`,
+                            handsPlayed: 0,
+                            phase: 'unknown',
+                            isPaused: false,
+                            pauseReason: null,
+                            gameStarted: false,
+                            pot: 0,
+                            activePlayers: 0
                         });
                     }
                 }
