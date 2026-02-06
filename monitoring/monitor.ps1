@@ -522,7 +522,8 @@ while ($monitoringActive) {
                         $addResult = Add-PendingIssue $issueData
                         
                         if ($addResult -and $addResult.success) {
-                            Write-Warning "Issue logged to pending-issues.json (ID: $($addResult.issueId))"
+                            # Don't write to console - update stats display instead
+                            # Write-Warning "Issue logged to pending-issues.json (ID: $($addResult.issueId))"
                             
                             # CRITICAL: Write a special log entry that the log watcher will detect to pause Unity
                             # This ensures Unity pauses immediately when monitor detects an issue
@@ -546,7 +547,8 @@ while ($monitoringActive) {
                                 # CRITICAL: Even for duplicates, if Unity isn't paused yet, we should pause it
                                 # This ensures Unity stops logging and gives user time to report the issue
                                 if (-not $isPaused) {
-                                    Write-Warning "Unity not paused yet - triggering pause for duplicate issue"
+                                    # Don't write to console - update stats display instead
+                                    # Write-Warning "Unity not paused yet - triggering pause for duplicate issue"
                                     $logFile = Join-Path $PSScriptRoot "..\logs\game.log"
                                     $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
                                     $escapedMessage = $line.Replace('"','\"').Replace("`n"," ").Replace("`r"," ").Substring(0,[Math]::Min(200,$line.Length))
@@ -575,7 +577,8 @@ while ($monitoringActive) {
         if ($isPaused) {
             $pendingIssues = Get-PendingIssuesCount
             if ($pendingIssues -eq 0) {
-                Write-Success "All issues fixed! Resuming monitoring..."
+                # Don't write to console - update stats display instead
+                # Write-Success "All issues fixed! Resuming monitoring..."
                 $isPaused = $false
                 $currentIssue = $null
             }
