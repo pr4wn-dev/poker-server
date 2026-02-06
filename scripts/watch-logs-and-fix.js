@@ -196,6 +196,12 @@ function pauseSimulation(tableId, reason) {
         }
     }
     
+    // REPORT TO USER: Pause successful
+    console.log(`[LogWatcher] ✓ SIMULATION PAUSED: ${tableId}`);
+    console.log(`[LogWatcher] Pause reason: ${reason}`);
+    console.log(`[LogWatcher] Table state: ${table.isPaused ? 'PAUSED' : 'NOT PAUSED'}`);
+    console.log(`[LogWatcher] Game started: ${table.gameStarted}, Phase: ${table.phase}, Hand: ${table.handsPlayed}`);
+    
     // ROOT TRACING: Log pause success with full state
     gameLogger.gameEvent('LOG_WATCHER', `[PAUSE] SUCCESS`, {
         tableId,
@@ -496,6 +502,7 @@ async function fixIssue(issue, tableId) {
             pausedTables.get(tableId).fixed = true;
             pausedTables.get(tableId).fixing = false;
             console.log(`[LogWatcher] ✓ Fix applied successfully`);
+            console.log(`[LogWatcher] ▶️  RESUMING SIMULATION: ${tableId}`);
             
             // Brief delay to ensure fix is applied
             setTimeout(() => {
@@ -505,6 +512,8 @@ async function fixIssue(issue, tableId) {
     } else {
         console.log(`[LogWatcher] ⚠️  Could not auto-fix issue. Manual intervention required.`);
         console.log(`[LogWatcher] Issue details logged. Game remains paused.`);
+        console.log(`[LogWatcher] Issue type: ${issue.type}`);
+        console.log(`[LogWatcher] Issue message: ${issue.message.substring(0, 200)}`);
     }
 }
 
@@ -673,6 +682,10 @@ function processLogLine(line) {
         linePreview: line.substring(0, 150)
     });
     
+    // REPORT TO USER: Issue detected
+    console.log(`\n[LogWatcher] 🚨 ISSUE DETECTED: ${issue.type.toUpperCase()}`);
+    console.log(`[LogWatcher] Message: ${issue.message.substring(0, 200)}`);
+    
     const tableId = extractTableId(line);
     if (!tableId) {
         gameLogger.gameEvent('LOG_WATCHER', `[PROCESS_LINE] NO_TABLE_ID`, {
@@ -691,6 +704,7 @@ function processLogLine(line) {
             issueType: issue.type,
             existingReason: pausedTables.get(tableId).reason
         });
+        console.log(`[LogWatcher] ⚠️  Table ${tableId} already paused. Skipping.`);
         return; // Already paused for this table
     }
     
@@ -700,6 +714,10 @@ function processLogLine(line) {
         issueType: issue.type,
         messagePreview: issue.message.substring(0, 150)
     });
+    
+    // REPORT TO USER: About to pause
+    console.log(`[LogWatcher] ⏸️  PAUSING SIMULATION: ${tableId}`);
+    console.log(`[LogWatcher] Reason: ${issue.type} - ${issue.message.substring(0, 100)}`);
     
     // Pause the simulation
     pauseSimulation(tableId, `Auto-paused: ${issue.type} - ${issue.message.substring(0, 50)}`);
