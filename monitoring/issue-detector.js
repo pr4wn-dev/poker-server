@@ -168,6 +168,10 @@ class IssueDetector {
         
         // Initialize pending issues file if it doesn't exist
         this.ensurePendingIssuesFile();
+        
+        // Focus mode state - tracks current focused issue group
+        this.focusedIssueGroup = null;
+        this.queuedIssues = []; // Unrelated issues queued for later
     }
     
     /**
@@ -187,6 +191,123 @@ class IssueDetector {
     }
     
     /**
+     * Extract tableId from issue message or context
+     */
+    extractTableId(issue) {
+        // Try from context first
+        if (issue.context && issue.context.tableId) {
+            return issue.context.tableId;
+        }
+        
+        // Try from message
+        const tableIdMatch = issue.message.match(/tableId["\s:]+([a-f0-9-]+)/i);
+        if (tableIdMatch) {
+            return tableIdMatch[1];
+        }
+        
+        return null;
+    }
+    
+    /**
+     * Extract error pattern/type from issue message
+     */
+    extractErrorPattern(issue) {
+        // Get the main error pattern that matched
+        for (const { pattern, severity } of this.allPatterns) {
+            if (pattern.test(issue.message)) {
+                return pattern.toString();
+            }
+        }
+        
+        // Fallback: extract key error words
+        const errorKeywords = ['pot', 'chips', 'timer', 'timeout', 'validation', 'mismatch', 'lost', 'error'];
+        for (const keyword of errorKeywords) {
+            if (issue.message.toLowerCase().includes(keyword)) {
+                return keyword;
+            }
+        }
+        
+        return 'general';
+    }
+    
+    /**
+     * Extract stack trace location (file/function) if available
+     */
+    extractStackTraceLocation(issue) {
+        if (issue.stackTrace) {
+            // Try to extract file and function from stack trace
+            const stackMatch = issue.stackTrace.match(/at\s+(\w+)\s+\(([^)]+)\)/);
+            if (stackMatch) {
+                return { function: stackMatch[1], file: stackMatch[2] };
+            }
+        }
+        return null;
+    }
+    
+    /**
+     * Extract shared keywords from two issues for correlation
+     */
+    extractSharedKeywords(issue1, issue2) {
+        const keywords = ['pot', 'chips', 'timer', 'timeout', 'validation', 'mismatch', 'lost', 'bet', 'player', 'table', 'hand'];
+        const msg1 = issue1.message.toLowerCase();
+        const msg2 = issue2.message.toLowerCase();
+        
+        return keywords.filter(keyword => msg1.includes(keyword) && msg2.includes(keyword));
+    }
+    
+    /**
+     * Check if two issues are related (grouping logic)
+     * Returns true if issues should be grouped together
+     */
+    areIssuesRelated(issue1, issue2, timeWindowMs = 30000) {
+        // Calculate time difference
+        const time1 = new Date(issue1.detectedAt || issue1.timestamp).getTime();
+        const time2 = new Date(issue2.detectedAt || issue2.timestamp).getTime();
+        const timeDiff = Math.abs(time1 - time2);
+        
+        if (timeDiff > timeWindowMs) {
+            return false; // Too far apart in time
+        }
+        
+        // PRIMARY GROUPING: Same tableId (strongest signal)
+        const tableId1 = this.extractTableId(issue1);
+        const tableId2 = this.extractTableId(issue2);
+        if (tableId1 && tableId2 && tableId1 === tableId2) {
+            return true;
+        }
+        
+        // PRIMARY GROUPING: Same error pattern/type
+        const pattern1 = this.extractErrorPattern(issue1);
+        const pattern2 = this.extractErrorPattern(issue2);
+        if (pattern1 === pattern2 && pattern1 !== 'general') {
+            return true;
+        }
+        
+        // PRIMARY GROUPING: Same stack trace location
+        const stack1 = this.extractStackTraceLocation(issue1);
+        const stack2 = this.extractStackTraceLocation(issue2);
+        if (stack1 && stack2 && stack1.function === stack2.function && stack1.file === stack2.file) {
+            return true;
+        }
+        
+        // SECONDARY GROUPING: Shared keywords (correlation analysis)
+        const sharedKeywords = this.extractSharedKeywords(issue1, issue2);
+        if (sharedKeywords.length >= 2) { // At least 2 shared keywords
+            return true;
+        }
+        
+        // SECONDARY GROUPING: Same source and similar message
+        if (issue1.source === issue2.source) {
+            const similarity = this.calculateSimilarity(issue1.message, issue2.message);
+            if (similarity > 0.5) { // 50% similarity
+                return true;
+            }
+        }
+        
+        return false;
+    }
+    
+    /**
      * Ensure pending issues file exists
      */
     ensurePendingIssuesFile() {
@@ -195,7 +316,21 @@ class IssueDetector {
             if (!fs.existsSync(dir)) {
                 fs.mkdirSync(dir, { recursive: true });
             }
-            fs.writeFileSync(this.pendingIssuesFile, JSON.stringify({ issues: [], lastUpdated: null }, null, 2));
+            fs.writeFileSync(this.pendingIssuesFile, JSON.stringify({ 
+                issues: [], 
+                lastUpdated: null,
+                focusedGroup: null,
+                fixCriteria: null
+            }, null, 2));
+        } else {
+            // Load existing focus state
+            try {
+                const data = JSON.parse(fs.readFileSync(this.pendingIssuesFile, 'utf8'));
+                this.focusedIssueGroup = data.focusedGroup || null;
+            } catch (e) {
+                // If file is corrupted, reset
+                this.focusedIssueGroup = null;
+            }
         }
     }
     
@@ -325,26 +460,90 @@ class IssueDetector {
     }
     
     /**
-     * Add issue to pending issues file
+     * Add issue to pending issues file with grouping support
      */
     addPendingIssue(issue) {
         try {
             const data = JSON.parse(fs.readFileSync(this.pendingIssuesFile, 'utf8'));
             
+            // If we're in focus mode, check if this issue is related to the focused group
+            if (this.focusedIssueGroup && data.focusedGroup) {
+                const focusedGroup = data.focusedGroup;
+                const rootIssue = focusedGroup.rootIssue;
+                
+                // Check if this issue is related to the focused group
+                if (this.areIssuesRelated(issue, rootIssue)) {
+                    // Add to focused group as a related issue
+                    if (!focusedGroup.relatedIssues) {
+                        focusedGroup.relatedIssues = [];
+                    }
+                    
+                    // Check for duplicates in related issues
+                    const isDuplicate = focusedGroup.relatedIssues.some(existing => {
+                        return existing.id === issue.id || 
+                               (this.calculateSimilarity(existing.message, issue.message) > 0.8);
+                    });
+                    
+                    if (!isDuplicate) {
+                        focusedGroup.relatedIssues.push(issue);
+                        focusedGroup.lastUpdated = new Date().toISOString();
+                        data.focusedGroup = focusedGroup;
+                        data.lastUpdated = new Date().toISOString();
+                        fs.writeFileSync(this.pendingIssuesFile, JSON.stringify(data, null, 2));
+                        
+                        gameLogger.error('MONITORING', '[ISSUE_DETECTED]', {
+                            issueId: issue.id,
+                            type: issue.type,
+                            severity: issue.severity,
+                            source: issue.source,
+                            message: issue.message.substring(0, 200),
+                            action: 'Related issue added to focused group',
+                            groupId: focusedGroup.id,
+                            relatedIssuesCount: focusedGroup.relatedIssues.length
+                        });
+                        
+                        return { success: true, reason: 'added_to_group', groupId: focusedGroup.id };
+                    }
+                    
+                    return { success: false, reason: 'duplicate_in_group' };
+                } else {
+                    // Unrelated issue - queue it for later
+                    if (!data.queuedIssues) {
+                        data.queuedIssues = [];
+                    }
+                    
+                    // Check if already queued
+                    const isQueued = data.queuedIssues.some(existing => {
+                        return existing.id === issue.id || 
+                               (this.calculateSimilarity(existing.message, issue.message) > 0.8);
+                    });
+                    
+                    if (!isQueued) {
+                        data.queuedIssues.push(issue);
+                        data.lastUpdated = new Date().toISOString();
+                        fs.writeFileSync(this.pendingIssuesFile, JSON.stringify(data, null, 2));
+                        
+                        gameLogger.info('MONITORING', '[ISSUE_QUEUED]', {
+                            issueId: issue.id,
+                            reason: 'Unrelated to focused issue - queued for later',
+                            queuedCount: data.queuedIssues.length
+                        });
+                    }
+                    
+                    return { success: false, reason: 'queued', queued: true };
+                }
+            }
+            
+            // Not in focus mode - check if this should start a new focus group
             // Check if similar issue already exists (prevent duplicates)
-            // Improved: Check message similarity (not exact match) and extend time window
             const now = Date.now();
             const similarIssue = data.issues.find(existing => {
                 const timeDiff = now - new Date(existing.detectedAt).getTime();
-                const isRecent = timeDiff < 300000; // Within last 5 minutes (was 1 minute)
+                const isRecent = timeDiff < 300000; // Within last 5 minutes
                 
-                // Check if same source and similar message (not exact match)
                 if (existing.source === issue.source && isRecent) {
-                    // Compare message similarity (first 200 chars)
                     const existingMsg = existing.message.substring(0, 200).toLowerCase();
                     const newMsg = issue.message.substring(0, 200).toLowerCase();
-                    
-                    // If messages are very similar (80% match), consider duplicate
                     const similarity = this.calculateSimilarity(existingMsg, newMsg);
                     return similarity > 0.8;
                 }
@@ -352,61 +551,187 @@ class IssueDetector {
             });
             
             if (!similarIssue) {
-                data.issues.push(issue);
+                // Start new focus group with this issue as root
+                const groupId = `group_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                const focusedGroup = {
+                    id: groupId,
+                    rootIssue: issue,
+                    relatedIssues: [],
+                    startedAt: new Date().toISOString(),
+                    lastUpdated: new Date().toISOString()
+                };
+                
+                data.focusedGroup = focusedGroup;
+                data.issues = [issue]; // Clear old issues, start fresh
                 data.lastUpdated = new Date().toISOString();
                 fs.writeFileSync(this.pendingIssuesFile, JSON.stringify(data, null, 2));
                 
-                // Log to game.log so I can see it
+                // Update internal state
+                this.focusedIssueGroup = focusedGroup;
+                
                 gameLogger.error('MONITORING', '[ISSUE_DETECTED]', {
                     issueId: issue.id,
                     type: issue.type,
                     severity: issue.severity,
                     source: issue.source,
                     message: issue.message.substring(0, 200),
-                    pendingIssuesCount: data.issues.length,
-                    action: 'Issue added to pending-issues.json - waiting for assistant to fix'
+                    action: 'New issue detected - entering FOCUS MODE',
+                    groupId: groupId
                 });
                 
-                return true;
+                return { success: true, reason: 'new_focus_group', groupId: groupId };
             }
             
-            return false; // Duplicate issue
+            return { success: false, reason: 'duplicate' };
         } catch (error) {
             gameLogger.error('MONITORING', '[ISSUE_DETECTOR] ADD_PENDING_ERROR', {
                 error: error.message,
                 stack: error.stack
             });
-            return false;
+            return { success: false, reason: 'error', error: error.message };
         }
     }
     
     /**
-     * Get pending issues
+     * Get pending issues (returns focused group if in focus mode)
      */
     getPendingIssues() {
         try {
             const data = JSON.parse(fs.readFileSync(this.pendingIssuesFile, 'utf8'));
-            return data.issues || [];
+            
+            // If in focus mode, return the focused group
+            if (data.focusedGroup) {
+                return {
+                    focusedGroup: data.focusedGroup,
+                    queuedIssues: data.queuedIssues || [],
+                    inFocusMode: true
+                };
+            }
+            
+            // Not in focus mode, return regular issues
+            return {
+                issues: data.issues || [],
+                inFocusMode: false
+            };
         } catch (error) {
-            return [];
+            return { issues: [], inFocusMode: false };
         }
     }
     
     /**
-     * Clear pending issues (after fix)
+     * Clear pending issues and exit focus mode (after fix)
      */
     clearPendingIssues() {
         try {
-            fs.writeFileSync(this.pendingIssuesFile, JSON.stringify({ issues: [], lastUpdated: null }, null, 2));
-            gameLogger.gameEvent('MONITORING', '[ISSUE_DETECTOR] PENDING_ISSUES_CLEARED', {
-                action: 'All pending issues cleared after fix'
-            });
+            const data = JSON.parse(fs.readFileSync(this.pendingIssuesFile, 'utf8'));
+            
+            // If there are queued issues, promote the first one to focus mode
+            if (data.queuedIssues && data.queuedIssues.length > 0) {
+                const nextIssue = data.queuedIssues.shift();
+                const groupId = `group_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                const focusedGroup = {
+                    id: groupId,
+                    rootIssue: nextIssue,
+                    relatedIssues: [],
+                    startedAt: new Date().toISOString(),
+                    lastUpdated: new Date().toISOString()
+                };
+                
+                fs.writeFileSync(this.pendingIssuesFile, JSON.stringify({ 
+                    issues: [],
+                    lastUpdated: new Date().toISOString(),
+                    focusedGroup: focusedGroup,
+                    queuedIssues: data.queuedIssues,
+                    fixCriteria: null
+                }, null, 2));
+                
+                this.focusedIssueGroup = focusedGroup;
+                
+                gameLogger.gameEvent('MONITORING', '[FOCUS_MODE] NEXT_ISSUE', {
+                    action: 'Previous issue fixed - focusing on next queued issue',
+                    groupId: groupId,
+                    queuedRemaining: data.queuedIssues.length
+                });
+            } else {
+                // No queued issues - clear everything and exit focus mode
+                fs.writeFileSync(this.pendingIssuesFile, JSON.stringify({ 
+                    issues: [], 
+                    lastUpdated: new Date().toISOString(),
+                    focusedGroup: null,
+                    queuedIssues: [],
+                    fixCriteria: null
+                }, null, 2));
+                
+                this.focusedIssueGroup = null;
+                
+                gameLogger.gameEvent('MONITORING', '[ISSUE_DETECTOR] PENDING_ISSUES_CLEARED', {
+                    action: 'All pending issues cleared - exiting focus mode'
+                });
+            }
+            
             return true;
         } catch (error) {
             gameLogger.error('MONITORING', '[ISSUE_DETECTOR] CLEAR_ERROR', {
                 error: error.message
             });
             return false;
+        }
+    }
+    
+    /**
+     * Set fix criteria (what to watch for after fix)
+     */
+    setFixCriteria(criteria) {
+        try {
+            const data = JSON.parse(fs.readFileSync(this.pendingIssuesFile, 'utf8'));
+            data.fixCriteria = {
+                ...criteria,
+                setAt: new Date().toISOString()
+            };
+            fs.writeFileSync(this.pendingIssuesFile, JSON.stringify(data, null, 2));
+            
+            gameLogger.gameEvent('MONITORING', '[FIX_CRITERIA] SET', {
+                action: 'Fix criteria set - monitoring for confirmation',
+                criteria: criteria
+            });
+            
+            return true;
+        } catch (error) {
+            gameLogger.error('MONITORING', '[FIX_CRITERIA] SET_ERROR', {
+                error: error.message
+            });
+            return false;
+        }
+    }
+    
+    /**
+     * Check if fix is confirmed (based on fix criteria)
+     */
+    checkFixConfirmation() {
+        try {
+            const data = JSON.parse(fs.readFileSync(this.pendingIssuesFile, 'utf8'));
+            
+            if (!data.fixCriteria) {
+                return { confirmed: false, reason: 'no_criteria' };
+            }
+            
+            const criteria = data.fixCriteria;
+            const now = Date.now();
+            const setAt = new Date(criteria.setAt).getTime();
+            const timeSinceFix = now - setAt;
+            
+            // Check time-based confirmation (wait at least 10 seconds)
+            if (timeSinceFix < 10000) {
+                return { confirmed: false, reason: 'waiting_for_time', timeRemaining: 10000 - timeSinceFix };
+            }
+            
+            // TODO: Check for pattern absence and success indicators
+            // This would require reading recent log entries
+            // For now, if criteria is set and enough time has passed, consider it confirmed
+            
+            return { confirmed: true, reason: 'time_based_confirmation' };
+        } catch (error) {
+            return { confirmed: false, reason: 'error', error: error.message };
         }
     }
     
@@ -453,15 +778,11 @@ if (require.main === module) {
                 issueData.message || '',
                 issueData.source || 'server'
             );
-            if (detector.addPendingIssue(issue)) {
-                console.log(JSON.stringify({ success: true, issueId: issue.id }));
-                process.exit(0);
-            } else {
-                console.log(JSON.stringify({ success: false, reason: 'duplicate' }));
-                process.exit(1);
-            }
+            const result = detector.addPendingIssue(issue);
+            console.log(JSON.stringify(result));
+            process.exit(result.success ? 0 : 1);
         } catch (error) {
-            console.log(JSON.stringify({ success: false, error: error.message }));
+            console.log(JSON.stringify({ success: false, reason: 'error', error: error.message }));
             process.exit(1);
         }
     } else if (args[0] === '--get-pending') {

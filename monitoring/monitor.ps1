@@ -108,17 +108,46 @@ function Add-PendingIssue {
     return $null
 }
 
-# Function to get pending issues count
-function Get-PendingIssuesCount {
+# Function to get pending issues info (handles focus mode)
+function Get-PendingIssuesInfo {
     if (Test-Path $pendingIssuesFile) {
         try {
             $content = Get-Content $pendingIssuesFile -Raw | ConvertFrom-Json
-            return ($content.issues | Measure-Object).Count
+            
+            # Check if in focus mode
+            if ($content.focusedGroup) {
+                $rootIssue = $content.focusedGroup.rootIssue
+                $relatedCount = if ($content.focusedGroup.relatedIssues) { $content.focusedGroup.relatedIssues.Count } else { 0 }
+                $queuedCount = if ($content.queuedIssues) { $content.queuedIssues.Count } else { 0 }
+                
+                return @{
+                    InFocusMode = $true
+                    RootIssue = $rootIssue
+                    RelatedIssuesCount = $relatedCount
+                    QueuedIssuesCount = $queuedCount
+                    GroupId = $content.focusedGroup.id
+                    TotalIssues = 1 + $relatedCount  # Root + related
+                }
+            } else {
+                # Not in focus mode
+                $issueCount = if ($content.issues) { $content.issues.Count } else { 0 }
+                return @{
+                    InFocusMode = $false
+                    TotalIssues = $issueCount
+                    QueuedIssuesCount = 0
+                }
+            }
         } catch {
-            return 0
+            return @{ InFocusMode = $false; TotalIssues = 0; QueuedIssuesCount = 0 }
         }
     }
-    return 0
+    return @{ InFocusMode = $false; TotalIssues = 0; QueuedIssuesCount = 0 }
+}
+
+# Function to get pending issues count (backward compatibility)
+function Get-PendingIssuesCount {
+    $info = Get-PendingIssuesInfo
+    return $info.TotalIssues
 }
 
 # Function to write console output without causing scrolling
@@ -245,8 +274,10 @@ function Test-ServerRunning {
 # Function to display statistics in a formatted layout
 function Show-Statistics {
     $fixStats = Get-FixAttemptsStats
-    $pendingCount = Get-PendingIssuesCount
-    $stats.PendingIssues = $pendingCount
+    $pendingInfo = Get-PendingIssuesInfo
+    $stats.PendingIssues = $pendingInfo.TotalIssues
+    $stats.InFocusMode = $pendingInfo.InFocusMode
+    $stats.QueuedIssues = $pendingInfo.QueuedIssuesCount
     
     # Calculate uptime
     $uptime = (Get-Date) - $stats.StartTime
@@ -496,23 +527,55 @@ function Show-Statistics {
     Write-Host "CURRENT STATUS" -ForegroundColor Yellow
     Write-Host "| " -NoNewline -ForegroundColor Cyan
     Write-Host ("-" * 70) -ForegroundColor DarkGray
-    Write-Host "| " -NoNewline -ForegroundColor Cyan
-    Write-Host "  Pending Issues: " -NoNewline -ForegroundColor White
-    if ($pendingCount -gt 0) {
-        Write-Host ("{0:N0}" -f $pendingCount) -NoNewline -ForegroundColor Red
+    
+    # Focus Mode Status
+    if ($pendingInfo.InFocusMode) {
+        Write-Host "| " -NoNewline -ForegroundColor Cyan
+        Write-Host "  Mode: " -NoNewline -ForegroundColor White
+        Write-Host "FOCUS MODE" -NoNewline -ForegroundColor Yellow
+        Write-Host (" " * 50) -NoNewline
+        Write-Host "|" -ForegroundColor Cyan
+        
+        Write-Host "| " -NoNewline -ForegroundColor Cyan
+        Write-Host "  Root Issue: " -NoNewline -ForegroundColor White
+        $rootType = $pendingInfo.RootIssue.type
+        $rootSeverity = $pendingInfo.RootIssue.severity
+        Write-Host "$rootType ($rootSeverity)" -NoNewline -ForegroundColor $(if ($rootSeverity -eq 'critical') { "Red" } else { "Yellow" })
+        Write-Host (" " * 40) -NoNewline
+        Write-Host "|" -ForegroundColor Cyan
+        
+        Write-Host "| " -NoNewline -ForegroundColor Cyan
+        Write-Host "  Related Issues: " -NoNewline -ForegroundColor White
+        Write-Host ("{0:N0}" -f $pendingInfo.RelatedIssuesCount) -NoNewline -ForegroundColor Cyan
+        Write-Host (" " * 40) -NoNewline
+        Write-Host "|" -ForegroundColor Cyan
+        
+        if ($pendingInfo.QueuedIssuesCount -gt 0) {
+            Write-Host "| " -NoNewline -ForegroundColor Cyan
+            Write-Host "  Queued Issues: " -NoNewline -ForegroundColor White
+            Write-Host ("{0:N0}" -f $pendingInfo.QueuedIssuesCount) -NoNewline -ForegroundColor Gray
+            Write-Host (" " * 40) -NoNewline
+            Write-Host "|" -ForegroundColor Cyan
+        }
     } else {
-        Write-Host "0" -NoNewline -ForegroundColor Green
+        Write-Host "| " -NoNewline -ForegroundColor Cyan
+        Write-Host "  Mode: " -NoNewline -ForegroundColor White
+        Write-Host "NORMAL MONITORING" -NoNewline -ForegroundColor Green
+        Write-Host (" " * 50) -NoNewline
+        Write-Host "|" -ForegroundColor Cyan
+        
+        Write-Host "| " -NoNewline -ForegroundColor Cyan
+        Write-Host "  Pending Issues: " -NoNewline -ForegroundColor White
+        if ($pendingInfo.TotalIssues -gt 0) {
+            Write-Host ("{0:N0}" -f $pendingInfo.TotalIssues) -NoNewline -ForegroundColor Red
+        } else {
+            Write-Host "0" -NoNewline -ForegroundColor Green
+        }
+        Write-Host (" " * 40) -NoNewline
+        Write-Host "|" -ForegroundColor Cyan
     }
-    Write-Host (" " * 40) -NoNewline
-    Write-Host "|" -ForegroundColor Cyan
     
     if ($isPaused -and $currentIssue) {
-        Write-Host "| " -NoNewline -ForegroundColor Cyan
-        Write-Host "  Current Issue: " -NoNewline -ForegroundColor White
-        $issuePreview = $currentIssue.Substring(0, [Math]::Min(50, $currentIssue.Length))
-        Write-Host $issuePreview -NoNewline -ForegroundColor Red
-        Write-Host (" " * (40 - $issuePreview.Length)) -NoNewline
-        Write-Host "|" -ForegroundColor Cyan
         Write-Host "| " -NoNewline -ForegroundColor Cyan
         Write-Host "  Action: PAUSED - Waiting for fix..." -ForegroundColor Yellow
         Write-Host (" " * 30) -NoNewline
@@ -830,9 +893,20 @@ while ($monitoringActive) {
                             # Update stats to show issue was logged
                             $stats.LastIssueLogged = Get-Date
                             
-                            # REPORT TO CONSOLE: Issue detected (write below stats, not overlapping)
-                            $issueMessage = "[$(Get-Date -Format 'HH:mm:ss')] ISSUE DETECTED: $($issue.type) ($($issue.severity))"
-                            Write-ConsoleOutput -Message $issueMessage -ForegroundColor "Yellow"
+                            # Check if this started a new focus group or was added to existing
+                            if ($addResult.reason -eq 'new_focus_group') {
+                                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] FOCUS MODE: New issue detected - entering focus mode" -ForegroundColor "Yellow"
+                                Write-ConsoleOutput -Message "  Root Issue: $($issue.type) ($($issue.severity))" -ForegroundColor "White"
+                                Write-ConsoleOutput -Message "  Group ID: $($addResult.groupId)" -ForegroundColor "Cyan"
+                            } elseif ($addResult.reason -eq 'added_to_group') {
+                                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] RELATED ISSUE: Added to focus group" -ForegroundColor "Yellow"
+                                Write-ConsoleOutput -Message "  Issue: $($issue.type) ($($issue.severity))" -ForegroundColor "White"
+                                Write-ConsoleOutput -Message "  Group ID: $($addResult.groupId)" -ForegroundColor "Cyan"
+                            } else {
+                                # Regular issue detection
+                                $issueMessage = "[$(Get-Date -Format 'HH:mm:ss')] ISSUE DETECTED: $($issue.type) ($($issue.severity))"
+                                Write-ConsoleOutput -Message $issueMessage -ForegroundColor "Yellow"
+                            }
                             
                             $messagePreview = "  Message: $($line.Substring(0, [Math]::Min(100, $line.Length)))"
                             Write-ConsoleOutput -Message $messagePreview -ForegroundColor "Gray"
@@ -862,7 +936,11 @@ while ($monitoringActive) {
                             $isPaused = $true
                             $currentIssue = $line
                         } else {
-                            if ($addResult -and $addResult.reason -eq 'duplicate') {
+                            # Handle different failure reasons
+                            if ($addResult -and $addResult.reason -eq 'queued') {
+                                # Issue was queued (unrelated to focused issue)
+                                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ISSUE QUEUED: Unrelated to focused issue - will process later" -ForegroundColor "Gray"
+                            } elseif ($addResult -and ($addResult.reason -eq 'duplicate' -or $addResult.reason -eq 'duplicate_in_group')) {
                                 # Don't write to console - update stats display instead
                                 # Write-Info "Duplicate issue detected (already logged)"
                                 # CRITICAL: Even for duplicates, if Unity isn't paused yet, we should pause it
