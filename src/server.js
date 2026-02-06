@@ -89,6 +89,17 @@ app.get('/api/tables', (req, res) => {
     res.json(gameManager.getPublicTableList());
 });
 
+// API endpoint for assistant status reports - poll this or open in browser
+app.get('/api/status', (req, res) => {
+    const status = logWatcher.getLatestStatus();
+    res.json({
+        ...status,
+        serverTime: new Date().toISOString(),
+        serverUptime: process.uptime(),
+        note: 'Poll this endpoint every 10 seconds or open in browser and refresh'
+    });
+});
+
 // API endpoint to manually save state snapshots for a table
 app.post('/api/tables/:tableId/save-snapshot', (req, res) => {
     const tableId = req.params.tableId;
