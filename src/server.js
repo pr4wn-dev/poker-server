@@ -289,9 +289,8 @@ process.on('SIGINT', async () => {
 const gameLogger = require('./utils/GameLogger');
 
 process.on('uncaughtException', (err) => {
-    const errorMsg = `[Server] Uncaught Exception: ${err.message}\n${err.stack}`;
-    gameLogger.error('SERVER', '[SHUTDOWN] UNCAUGHT_EXCEPTION', { error: errorMsg });
-    gameLogger.error('SERVER', 'Uncaught Exception', { 
+    const gameLogger = require('./utils/GameLogger');
+    gameLogger.error('SERVER', '[SHUTDOWN] UNCAUGHT_EXCEPTION', { 
         message: err.message, 
         stack: err.stack,
         name: err.name
@@ -300,9 +299,8 @@ process.on('uncaughtException', (err) => {
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-    const errorMsg = `[Server] Unhandled Rejection: ${reason}`;
-    gameLogger.error('SERVER', '[SHUTDOWN] UNCAUGHT_EXCEPTION', { error: errorMsg });
-    gameLogger.error('SERVER', 'Unhandled Rejection', { 
+    const gameLogger = require('./utils/GameLogger');
+    gameLogger.error('SERVER', '[SHUTDOWN] UNHANDLED_REJECTION', { 
         reason: reason?.toString() || String(reason),
         stack: reason?.stack || 'No stack trace',
         name: reason?.name || 'Unknown'
