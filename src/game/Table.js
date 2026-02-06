@@ -2535,16 +2535,51 @@ class Table {
         // Even though totalBet should be cleared after pot is awarded, we clear it here as a safety measure
         // to prevent bugs where totalBet persists from previous hand
         let totalBetNotClearedCount = 0;
+        const notClearedDetails = [];
+        
         for (const seat of this.seats) {
             if (seat) {
+                const seatIndex = this.seats.indexOf(seat);
+                const totalBetBeforeClear = seat.totalBet || 0;
+                const currentBetBeforeClear = seat.currentBet || 0;
+                
                 // CRITICAL: Clear totalBet to prevent it from persisting from previous hand
                 // This fixes the bug where sumOfTotalBets > pot because totalBet wasn't cleared
-                if (seat.totalBet > 0) {
+                if (totalBetBeforeClear > 0) {
                     totalBetNotClearedCount++;
-                    console.warn(`[Table ${this.name}] WARNING: Clearing totalBet=${seat.totalBet} for ${seat.name} at start of new hand - should have been cleared after pot award!`);
+                    notClearedDetails.push({
+                        player: seat.name,
+                        seatIndex,
+                        totalBet: totalBetBeforeClear,
+                        currentBet: currentBetBeforeClear
+                    });
+                    
+                    // ROOT TRACING: Track when totalBet was NOT cleared properly
+                    gameLogger.error(this.name, '[ROOT_TRACE] TOTAL_BET_NOT_CLEARED_AT_HAND_START', {
+                        operation: 'START_NEW_HAND',
+                        player: seat.name,
+                        seatIndex,
+                        totalBetBeforeClear: totalBetBeforeClear,
+                        currentBetBeforeClear: currentBetBeforeClear,
+                        previousHandNumber: this.handsPlayed,
+                        newHandNumber: this.handsPlayed + 1,
+                        phase: this.phase,
+                        warning: 'totalBet should have been cleared after pot award in previous hand - this indicates a bug in the clearing logic',
+                        stackTrace: new Error().stack?.split('\n').slice(2, 12).join(' | ') || 'NO_STACK',
+                        allSeatsState: this.seats.map((s, i) => s ? {
+                            seatIndex: i,
+                            name: s.name,
+                            totalBet: s.totalBet || 0,
+                            currentBet: s.currentBet || 0,
+                            chips: s.chips,
+                            isActive: s.isActive
+                        } : null).filter(Boolean)
+                    });
+                    
+                    console.warn(`[Table ${this.name}] WARNING: Clearing totalBet=${totalBetBeforeClear} for ${seat.name} at start of new hand - should have been cleared after pot award!`);
                     gameLogger.gameEvent(this.name, '[FIX] Clearing totalBet at hand start', {
                         player: seat.name,
-                        totalBet: seat.totalBet,
+                        totalBet: totalBetBeforeClear,
                         handNumber: this.handsPlayed + 1,
                         warning: 'totalBet should have been cleared after pot award in previous hand'
                     });
@@ -2552,6 +2587,19 @@ class Table {
                 seat.totalBet = 0;
                 seat.currentBet = 0;
             }
+        }
+        
+        // ROOT TRACING: Summary of totalBet not cleared issue
+        if (totalBetNotClearedCount > 0) {
+            gameLogger.error(this.name, '[ROOT_TRACE] TOTAL_BET_NOT_CLEARED_SUMMARY', {
+                operation: 'START_NEW_HAND',
+                totalBetNotClearedCount,
+                notClearedDetails,
+                previousHandNumber: this.handsPlayed,
+                newHandNumber: this.handsPlayed + 1,
+                phase: this.phase,
+                rootCause: 'totalBet was not cleared after pot award in previous hand - check calculateAndAwardSidePots clearing logic'
+            });
         }
         
         // Record fix attempt - if any totalBet was not cleared, this is a failure
@@ -3942,7 +3990,22 @@ class Table {
         
         player.chips -= toCall;
         player.currentBet += toCall;
-        player.totalBet = (player.totalBet || 0) + toCall;
+        const totalBetAfter = (player.totalBet || 0) + toCall;
+        player.totalBet = totalBetAfter;
+        
+        // ROOT TRACING: Track totalBet changes
+        gameLogger.gameEvent(this.name, '[ROOT_TRACE] TOTAL_BET_SET', {
+            operation: 'CALL',
+            player: player.name,
+            seatIndex,
+            totalBetBefore: totalBetBefore,
+            totalBetAfter: totalBetAfter,
+            amountAdded: toCall,
+            handNumber: this.handsPlayed,
+            phase: this.phase,
+            stackTrace: new Error().stack?.split('\n').slice(2, 8).join(' | ') || 'NO_STACK'
+        });
+        
         this.pot += toCall;
         
         // ULTRA-VERBOSE: Log after operation with FULL STATE
@@ -4195,9 +4258,25 @@ class Table {
             } : null).filter(Boolean)
         });
         
+        const totalBetBefore = player.totalBet || 0;
         player.chips -= amount;
         player.currentBet = amount;
-        player.totalBet = (player.totalBet || 0) + amount;
+        const totalBetAfter = totalBetBefore + amount;
+        player.totalBet = totalBetAfter;
+        
+        // ROOT TRACING: Track totalBet changes
+        gameLogger.gameEvent(this.name, '[ROOT_TRACE] TOTAL_BET_SET', {
+            operation: 'BET',
+            player: player.name,
+            seatIndex,
+            totalBetBefore: totalBetBefore,
+            totalBetAfter: totalBetAfter,
+            amountAdded: amount,
+            handNumber: this.handsPlayed,
+            phase: this.phase,
+            stackTrace: new Error().stack?.split('\n').slice(2, 8).join(' | ') || 'NO_STACK'
+        });
+        
         this.pot += amount;
         
         // ULTRA-VERBOSE: Log after operation with FULL STATE
@@ -4509,7 +4588,22 @@ class Table {
         
         player.chips -= additionalBet;
         player.currentBet = amount; // Set to total bet amount
-        player.totalBet = (player.totalBet || 0) + additionalBet; // Only add the additional amount
+        const totalBetBefore = player.totalBet || 0;
+        const totalBetAfter = totalBetBefore + additionalBet;
+        player.totalBet = totalBetAfter; // Only add the additional amount
+        
+        // ROOT TRACING: Track totalBet changes
+        gameLogger.gameEvent(this.name, '[ROOT_TRACE] TOTAL_BET_SET', {
+            operation: 'RAISE',
+            player: player.name,
+            seatIndex,
+            totalBetBefore: totalBetBefore,
+            totalBetAfter: totalBetAfter,
+            amountAdded: additionalBet,
+            handNumber: this.handsPlayed,
+            phase: this.phase,
+            stackTrace: new Error().stack?.split('\n').slice(2, 8).join(' | ') || 'NO_STACK'
+        });
         this.pot += additionalBet; // Only add the additional amount to pot
         
         // ULTRA-VERBOSE: Log after operation with FULL STATE
@@ -4781,7 +4875,22 @@ class Table {
         
         player.chips = 0;
         player.currentBet = newCurrentBet;
-        player.totalBet = (player.totalBet || 0) + amount; // Add all chips to totalBet
+        const totalBetBefore = player.totalBet || 0;
+        const totalBetAfter = totalBetBefore + amount;
+        player.totalBet = totalBetAfter; // Add all chips to totalBet
+        
+        // ROOT TRACING: Track totalBet changes
+        gameLogger.gameEvent(this.name, '[ROOT_TRACE] TOTAL_BET_SET', {
+            operation: 'ALL_IN',
+            player: player.name,
+            seatIndex,
+            totalBetBefore: totalBetBefore,
+            totalBetAfter: totalBetAfter,
+            amountAdded: amount,
+            handNumber: this.handsPlayed,
+            phase: this.phase,
+            stackTrace: new Error().stack?.split('\n').slice(2, 8).join(' | ') || 'NO_STACK'
+        });
         this.pot += amount; // Add all chips to pot
         
         // ULTRA-VERBOSE: Log after operation with FULL STATE
@@ -7162,29 +7271,102 @@ class Table {
                 
                 // CRITICAL: Log warning if player won significantly more than they contributed
                 // This is a red flag that might indicate a bug in side pot calculation
+                // NOTE: In side pot scenarios, players CAN legitimately win more than they contributed
+                // (e.g., if they bet 1000 but others bet 500, they can win 2000+)
+                // So we need to check if this is legitimate or a bug
+                const ratio = data.totalAwarded / contributor.totalBet;
+                const isLegitimateSidePot = potAwards.some(a => 
+                    a.playerId === playerId && 
+                    a.potType === 'side_pot' &&
+                    data.awards.length > 1
+                );
+                
+                // ROOT TRACING: Track when players win more than contributed
+                gameLogger.gameEvent(this.name, '[ROOT_TRACE] PLAYER_WON_MORE_THAN_CONTRIBUTED', {
+                    operation: 'VALIDATE_POT_AWARDS',
+                    player: contributor.name,
+                    playerId,
+                    totalBet: contributor.totalBet,
+                    totalAwarded: data.totalAwarded,
+                    ratio: ratio.toFixed(2),
+                    isLegitimateSidePot,
+                    awards: data.awards.map(a => ({
+                        amount: a.amount,
+                        potType: a.potType,
+                        handName: a.handName
+                    })),
+                    allContributors: allContributors.map(c => ({
+                        name: c.name,
+                        totalBet: c.totalBet,
+                        isFolded: c.isFolded
+                    })),
+                    potAwardsCount: potAwards.length,
+                    handNumber: this.handsPlayed,
+                    phase: this.phase,
+                    stackTrace: new Error().stack?.split('\n').slice(2, 8).join(' | ') || 'NO_STACK'
+                });
+                
                 if (data.totalAwarded > contributor.totalBet * 2) {
-                    console.error(`[Table ${this.name}] ⚠️ POTENTIAL ISSUE: ${contributor.name} won ${data.totalAwarded} but only contributed ${contributor.totalBet} (${(data.totalAwarded / contributor.totalBet).toFixed(2)}x)`);
-                    gameLogger.error(this.name, '[POT] Player won significantly more than contributed', {
-                        player: contributor.name,
-                        totalBet: contributor.totalBet,
-                        totalAwarded: data.totalAwarded,
-                        ratio: (data.totalAwarded / contributor.totalBet).toFixed(2),
-                        awards: data.awards.map(a => ({
-                            amount: a.amount,
-                            potType: a.potType,
-                            handName: a.handName
-                        })),
-                        handNumber: this.handsPlayed,
-                        phase: this.phase,
-                        warning: 'Player won more than 2x their contribution - verify side pot calculation is correct'
-                    });
-                    // Record fix attempt - this might indicate a bug
-                    this._recordFixAttempt('FIX_71_PLAYER_WON_MORE_THAN_CONTRIBUTED', false, {
+                    console.error(`[Table ${this.name}] ⚠️ POTENTIAL ISSUE: ${contributor.name} won ${data.totalAwarded} but only contributed ${contributor.totalBet} (${ratio.toFixed(2)}x)`);
+                    
+                    // Only record as error if it's NOT a legitimate side pot scenario
+                    if (!isLegitimateSidePot && ratio > 3) {
+                        gameLogger.error(this.name, '[POT] Player won significantly more than contributed (POTENTIAL BUG)', {
+                            player: contributor.name,
+                            totalBet: contributor.totalBet,
+                            totalAwarded: data.totalAwarded,
+                            ratio: ratio.toFixed(2),
+                            isLegitimateSidePot: false,
+                            awards: data.awards.map(a => ({
+                                amount: a.amount,
+                                potType: a.potType,
+                                handName: a.handName
+                            })),
+                            handNumber: this.handsPlayed,
+                            phase: this.phase,
+                            warning: 'Player won more than 3x their contribution without side pots - verify pot calculation is correct'
+                        });
+                        // Record fix attempt - this might indicate a bug
+                        this._recordFixAttempt('FIX_71_PLAYER_WON_MORE_THAN_CONTRIBUTED', false, {
+                            context: 'VALIDATE_POT_AWARDS',
+                            player: contributor.name,
+                            totalBet: contributor.totalBet,
+                            totalAwarded: data.totalAwarded,
+                            ratio: ratio,
+                            isLegitimateSidePot: false,
+                            handNumber: this.handsPlayed,
+                            phase: this.phase
+                        });
+                    } else {
+                        // Legitimate side pot scenario - record as success
+                        gameLogger.gameEvent(this.name, '[POT] Player won more than contributed (LEGITIMATE SIDE POT)', {
+                            player: contributor.name,
+                            totalBet: contributor.totalBet,
+                            totalAwarded: data.totalAwarded,
+                            ratio: ratio.toFixed(2),
+                            isLegitimateSidePot: true,
+                            handNumber: this.handsPlayed,
+                            phase: this.phase
+                        });
+                        this._recordFixAttempt('FIX_71_PLAYER_WON_MORE_THAN_CONTRIBUTED', true, {
+                            context: 'VALIDATE_POT_AWARDS',
+                            player: contributor.name,
+                            totalBet: contributor.totalBet,
+                            totalAwarded: data.totalAwarded,
+                            ratio: ratio,
+                            isLegitimateSidePot: true,
+                            handNumber: this.handsPlayed,
+                            phase: this.phase
+                        });
+                    }
+                } else {
+                    // Normal case - record as success
+                    this._recordFixAttempt('FIX_71_PLAYER_WON_MORE_THAN_CONTRIBUTED', true, {
                         context: 'VALIDATE_POT_AWARDS',
                         player: contributor.name,
                         totalBet: contributor.totalBet,
                         totalAwarded: data.totalAwarded,
-                        ratio: data.totalAwarded / contributor.totalBet,
+                        ratio: ratio,
                         handNumber: this.handsPlayed,
                         phase: this.phase
                     });
@@ -7228,7 +7410,22 @@ class Table {
             // NOTE: ALL players will have their totalBet/currentBet cleared after the loop completes
             // This prevents them from persisting to the next hand
             if (seat.totalBet > 0 || seat.currentBet > 0) {
-                // console.log(`[Table ${this.name}] [AWARD] Clearing totalBet=${seat.totalBet}, currentBet=${seat.currentBet} for winner ${seat.name}`);
+                const totalBetBeforeClear = seat.totalBet;
+                const currentBetBeforeClear = seat.currentBet;
+                
+                // ROOT TRACING: Track totalBet clearing
+                gameLogger.gameEvent(this.name, '[ROOT_TRACE] TOTAL_BET_CLEARED', {
+                    operation: 'AFTER_AWARD_WINNER',
+                    player: seat.name,
+                    seatIndex: this.seats.indexOf(seat),
+                    totalBetBeforeClear: totalBetBeforeClear,
+                    currentBetBeforeClear: currentBetBeforeClear,
+                    handNumber: this.handsPlayed,
+                    phase: this.phase,
+                    awardAmount: award.amount,
+                    stackTrace: new Error().stack?.split('\n').slice(2, 8).join(' | ') || 'NO_STACK'
+                });
+                
                 seat.totalBet = 0;
                 seat.currentBet = 0;
             }
@@ -7680,30 +7877,54 @@ class Table {
         // CRITICAL FIX: Clear totalBet and currentBet IMMEDIATELY after pot awards to prevent persistence
         let totalBetClearedCount = 0;
         let currentBetClearedCount = 0;
+        const totalBetClearingDetails = [];
+        
         for (const seat of this.seats) {
             if (seat) {
-                if (seat.totalBet > 0) {
+                const seatIndex = this.seats.indexOf(seat);
+                const totalBetBeforeClear = seat.totalBet || 0;
+                const currentBetBeforeClear = seat.currentBet || 0;
+                
+                if (totalBetBeforeClear > 0) {
                     totalBetClearedCount++;
-                    // console.log(`[Table ${this.name}] [FIX] Clearing totalBet=${seat.totalBet} for ${seat.name} after pot awards`);
-                    gameLogger.gameEvent(this.name, '[FIX] Clearing totalBet after pot awards', {
+                    totalBetClearingDetails.push({
                         player: seat.name,
-                        totalBet: seat.totalBet,
-                        handNumber: this.handsPlayed
+                        seatIndex,
+                        totalBet: totalBetBeforeClear
+                    });
+                    
+                    // ROOT TRACING: Track totalBet clearing
+                    gameLogger.gameEvent(this.name, '[ROOT_TRACE] TOTAL_BET_CLEARED', {
+                        operation: 'AFTER_CALCULATE_AND_AWARD_SIDE_POTS',
+                        player: seat.name,
+                        seatIndex,
+                        totalBetBeforeClear: totalBetBeforeClear,
+                        currentBetBeforeClear: currentBetBeforeClear,
+                        handNumber: this.handsPlayed,
+                        phase: this.phase,
+                        potAwardsCount: potAwards.length,
+                        stackTrace: new Error().stack?.split('\n').slice(2, 8).join(' | ') || 'NO_STACK'
                     });
                 }
-                if (seat.currentBet > 0) {
+                if (currentBetBeforeClear > 0) {
                     currentBetClearedCount++;
-                    // console.log(`[Table ${this.name}] [FIX] Clearing currentBet=${seat.currentBet} for ${seat.name} after pot awards`);
-                    gameLogger.gameEvent(this.name, '[FIX] Clearing currentBet after pot awards', {
-                        player: seat.name,
-                        currentBet: seat.currentBet,
-                        handNumber: this.handsPlayed
-                    });
                 }
+                
                 seat.totalBet = 0;
                 seat.currentBet = 0;
             }
         }
+        
+        // ROOT TRACING: Summary of totalBet clearing
+        gameLogger.gameEvent(this.name, '[ROOT_TRACE] TOTAL_BET_CLEARING_SUMMARY', {
+            operation: 'AFTER_CALCULATE_AND_AWARD_SIDE_POTS',
+            totalBetClearedCount,
+            currentBetClearedCount,
+            totalSeats: this.seats.filter(s => s !== null).length,
+            clearingDetails: totalBetClearingDetails,
+            handNumber: this.handsPlayed,
+            phase: this.phase
+        });
         
         // Record fix attempt - verify that all totalBet/currentBet were successfully cleared
         // Check if any still remain (which would be a failure)
