@@ -1456,33 +1456,7 @@ function activeMonitoring() {
     const currentSimIds = new Set(simulationTables.map(t => t.id));
     const newSimulations = simulationTables.filter(t => !lastReportedSimulations.has(t.id));
     
-    // On first run OR if we have simulations but none reported, report all existing simulations
-    if ((isFirstRun || lastReportedSimulations.size === 0) && simulationTables.length > 0) {
-        gameLogger.error('LOG_WATCHER', `[ACTIVE_MONITORING] FORCING_REPORT`, {
-            reason: isFirstRun ? 'first_run' : 'no_simulations_reported_yet',
-            simulationCount: simulationTables.length
-        });
-        isFirstRun = false;
-        for (const sim of simulationTables) {
-            gameLogger.error('LOG_WATCHER', `[ACTIVE_MONITORING] EXISTING_SIMULATION_DETECTED`, {
-                action: 'SIMULATION_ALREADY_RUNNING',
-                tableId: sim.id,
-                tableName: sim.name,
-                message: `EXISTING SIMULATION DETECTED: "${sim.name}"`,
-                whatImDoing: `I detected an existing simulation: "${sim.name}". I'm now actively monitoring it and will report any issues immediately.`,
-                handsPlayed: sim.handsPlayed,
-                phase: sim.phase,
-                gameStarted: sim.gameStarted,
-                isPaused: sim.isPaused,
-                activePlayers: sim.activePlayers,
-                pot: sim.pot,
-                timestamp: new Date().toISOString(),
-                reportToUser: true
-            });
-        }
-        lastReportedSimulations = currentSimIds;
-    }
-    
+    // ALWAYS report new simulations that haven't been reported yet
     if (newSimulations.length > 0) {
         // NEW SIMULATION DETECTED - REPORT TO USER VIA ERROR LOG (so I can read it)
         for (const sim of newSimulations) {
@@ -1502,6 +1476,39 @@ function activeMonitoring() {
                 reportToUser: true // Flag for me to read and report
             });
         }
+        // Mark all new simulations as reported
+        for (const sim of newSimulations) {
+            lastReportedSimulations.add(sim.id);
+        }
+    }
+    
+    // On first run, ALWAYS report ALL simulations even if already in lastReportedSimulations
+    // This handles the case where server restarts and simulations are still running
+    if (isFirstRun && simulationTables.length > 0) {
+        gameLogger.error('LOG_WATCHER', `[ACTIVE_MONITORING] FORCING_REPORT_FIRST_RUN`, {
+            reason: 'first_run',
+            simulationCount: simulationTables.length,
+            tableNames: simulationTables.map(s => s.name)
+        });
+        isFirstRun = false;
+        for (const sim of simulationTables) {
+            gameLogger.error('LOG_WATCHER', `[ACTIVE_MONITORING] EXISTING_SIMULATION_DETECTED`, {
+                action: 'SIMULATION_ALREADY_RUNNING',
+                tableId: sim.id,
+                tableName: sim.name,
+                message: `EXISTING SIMULATION DETECTED: "${sim.name}"`,
+                whatImDoing: `I detected an existing simulation: "${sim.name}". I'm now actively monitoring it and will report any issues immediately.`,
+                handsPlayed: sim.handsPlayed,
+                phase: sim.phase,
+                gameStarted: sim.gameStarted,
+                isPaused: sim.isPaused,
+                activePlayers: sim.activePlayers,
+                pot: sim.pot,
+                timestamp: new Date().toISOString(),
+                reportToUser: true
+            });
+        }
+        // Mark all as reported
         lastReportedSimulations = currentSimIds;
     }
     
