@@ -362,6 +362,12 @@ function detectIssue(logLine) {
     // Check for error patterns
     for (const pattern of ERROR_PATTERNS) {
         if (pattern.test(logLine)) {
+            const gameLogger = require('../src/utils/GameLogger');
+            gameLogger.gameEvent('LOG_WATCHER', `[DETECT_ISSUE] PATTERN_MATCHED`, {
+                pattern: pattern.toString(),
+                matchedText: logLine.match(pattern)?.[0] || 'NO_MATCH',
+                linePreview: logLine.substring(0, 150)
+            });
             return { severity: 'error', type: 'general', message: logLine };
         }
     }
@@ -369,6 +375,12 @@ function detectIssue(logLine) {
     // Check for item ante specific issues
     for (const pattern of ITEM_ANTE_ERROR_PATTERNS) {
         if (pattern.test(logLine)) {
+            const gameLogger = require('../src/utils/GameLogger');
+            gameLogger.gameEvent('LOG_WATCHER', `[DETECT_ISSUE] ITEM_ANTE_PATTERN_MATCHED`, {
+                pattern: pattern.toString(),
+                matchedText: logLine.match(pattern)?.[0] || 'NO_MATCH',
+                linePreview: logLine.substring(0, 150)
+            });
             return { severity: 'error', type: 'item_ante', message: logLine };
         }
     }
@@ -380,7 +392,21 @@ function detectIssue(logLine) {
  * Extract table ID from log line
  */
 function extractTableId(logLine) {
-    if (!gameManager) return null;
+    const gameLogger = require('../src/utils/GameLogger');
+    
+    if (!gameManager) {
+        gameLogger.gameEvent('LOG_WATCHER', `[EXTRACT_TABLE_ID] NO_GAME_MANAGER`, {
+            linePreview: logLine.substring(0, 150)
+        });
+        return null;
+    }
+    
+    // ROOT TRACING: Track table ID extraction
+    gameLogger.gameEvent('LOG_WATCHER', `[EXTRACT_TABLE_ID] ATTEMPT`, {
+        linePreview: logLine.substring(0, 150),
+        totalTables: gameManager.tables.size,
+        simulationTables: getActiveSimulationTables().length
+    });
     
     // Log format: [2026-02-05 06:28:52.223] [GAME] [[SIM] dildo's Table] ...
     const match = logLine.match(/\[\[SIM\]\s+([^\]]+)\]/);
@@ -390,6 +416,11 @@ function extractTableId(logLine) {
         const fullTableName = `[SIM] ${tableName}`;
         for (const [tableId, table] of gameManager.tables) {
             if ((table.name === tableName || table.name === fullTableName) && table.isSimulation) {
+                gameLogger.gameEvent('LOG_WATCHER', `[EXTRACT_TABLE_ID] FOUND_BY_NAME`, {
+                    tableId,
+                    tableName,
+                    matchedName: table.name
+                });
                 return tableId;
             }
         }
@@ -402,6 +433,12 @@ function extractTableId(logLine) {
             // Table.name might be "[SIM] TableName" or just "TableName"
             const cleanName = table.name.replace(/^\[SIM\]\s*/, '');
             if (cleanName === tableName && table.isSimulation) {
+                gameLogger.gameEvent('LOG_WATCHER', `[EXTRACT_TABLE_ID] FOUND_BY_CLEAN_NAME`, {
+                    tableId,
+                    tableName,
+                    cleanName,
+                    originalName: table.name
+                });
                 return tableId;
             }
         }
@@ -410,8 +447,20 @@ function extractTableId(logLine) {
     // Try to find any active simulation
     const simTables = getActiveSimulationTables();
     if (simTables.length > 0) {
+        gameLogger.gameEvent('LOG_WATCHER', `[EXTRACT_TABLE_ID] USING_FIRST_ACTIVE`, {
+            tableId: simTables[0].id,
+            totalActiveSims: simTables.length
+        });
         return simTables[0].id; // Pause first active simulation
     }
+    
+    gameLogger.gameEvent('LOG_WATCHER', `[EXTRACT_TABLE_ID] NOT_FOUND`, {
+        linePreview: logLine.substring(0, 150),
+        matchFound: !!match,
+        matchedName: match ? match[1] : null,
+        allTableNames: Array.from(gameManager.tables.values()).map(t => t.name),
+        simulationTableIds: simTables.map(t => t.id)
+    });
     
     return null;
 }
@@ -584,9 +633,30 @@ function startWatching() {
  * Process a single log line
  */
 function processLogLine(line) {
+    const gameLogger = require('../src/utils/GameLogger');
+    
+    // ROOT TRACING: Track log line processing
+    // Only trace if line contains error patterns (to avoid spam)
+    const hasErrorPattern = ERROR_PATTERNS.some(pattern => pattern.test(line)) || 
+                          ITEM_ANTE_ERROR_PATTERNS.some(pattern => pattern.test(line));
+    
+    if (hasErrorPattern) {
+        gameLogger.gameEvent('LOG_WATCHER', `[PROCESS_LINE] DETECTED_PATTERN`, {
+            linePreview: line.substring(0, 150),
+            hasErrorPattern: true,
+            pausedTablesCount: pausedTables.size
+        });
+    }
+    
     // Skip if already processing an issue
     const activePauses = Array.from(pausedTables.values()).filter(p => p.fixing);
     if (activePauses.length > 0) {
+        if (hasErrorPattern) {
+            gameLogger.gameEvent('LOG_WATCHER', `[PROCESS_LINE] SKIPPED_ALREADY_FIXING`, {
+                linePreview: line.substring(0, 150),
+                activePausesCount: activePauses.length
+            });
+        }
         return; // Don't process new issues while fixing
     }
     
@@ -595,16 +665,41 @@ function processLogLine(line) {
         return; // No issue detected
     }
     
+    // ROOT TRACING: Issue detected
+    gameLogger.gameEvent('LOG_WATCHER', `[PROCESS_LINE] ISSUE_DETECTED`, {
+        issueType: issue.type,
+        severity: issue.severity,
+        messagePreview: issue.message.substring(0, 150),
+        linePreview: line.substring(0, 150)
+    });
+    
     const tableId = extractTableId(line);
     if (!tableId) {
+        gameLogger.gameEvent('LOG_WATCHER', `[PROCESS_LINE] NO_TABLE_ID`, {
+            issueType: issue.type,
+            messagePreview: issue.message.substring(0, 150),
+            availableTables: gameManager ? Array.from(gameManager.tables.keys()) : []
+        });
         console.log(`[LogWatcher] ⚠️  Issue detected but no simulation table found: ${issue.message.substring(0, 80)}`);
         return;
     }
     
     // Check if already paused
     if (pausedTables.has(tableId)) {
+        gameLogger.gameEvent('LOG_WATCHER', `[PROCESS_LINE] ALREADY_PAUSED`, {
+            tableId,
+            issueType: issue.type,
+            existingReason: pausedTables.get(tableId).reason
+        });
         return; // Already paused for this table
     }
+    
+    // ROOT TRACING: About to pause
+    gameLogger.gameEvent('LOG_WATCHER', `[PROCESS_LINE] PAUSING_NOW`, {
+        tableId,
+        issueType: issue.type,
+        messagePreview: issue.message.substring(0, 150)
+    });
     
     // Pause the simulation
     pauseSimulation(tableId, `Auto-paused: ${issue.type} - ${issue.message.substring(0, 50)}`);
