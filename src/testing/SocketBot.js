@@ -61,6 +61,21 @@ class SocketBot {
         this.readyScheduled = false; // Track if we've scheduled a ready signal
         this.isPaused = false; // Pause flag - when true, bot won't take actions
         this.itemAnteSubmitted = false; // Track if we've submitted item to ante
+    }
+    
+    /**
+     * Set pause state (called by SimulationManager)
+     */
+    setPaused(paused) {
+        this.isPaused = paused;
+        this.log('PAUSE', `Bot ${paused ? 'paused' : 'resumed'}`, { paused });
+    }
+    
+    /**
+     * Resume bot (alias for setPaused(false))
+     */
+    setResumed() {
+        this.setPaused(false);
         
         // Chaos tracking
         this.disconnectCount = 0;
