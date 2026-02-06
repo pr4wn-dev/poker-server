@@ -1260,14 +1260,14 @@ while ($monitoringActive) {
                         
                         # Extract table ID if available
                         $tableId = $null
-                        # Try multiple patterns to extract table ID
-                        if ($line -match 'tableId[`"\s:]+([a-f0-9-]+)') {
-                            $tableId = $matches[1]
-                        } elseif ($line -match 'tableId[`"\s:]+`"([^`"]+)`"') {
+                        # Try multiple patterns to extract table ID (avoid PowerShell parsing issues with character classes)
+                        if ($line -match 'tableId[`"\s:]+`"([^`"]+)`"') {
                             $tableId = $matches[1]
                         } elseif ($line -match '"tableId"\s*:\s*"([^"]+)"') {
                             $tableId = $matches[1]
-                        } elseif ($line -match 'tableId["\s:]+([a-zA-Z0-9\-]+)') {
+                        } elseif ($line -match "tableId[`"\s:]+([\w\-]+)") {
+                            $tableId = $matches[1]
+                        } elseif ($line -match 'tableId[`"\s:]+([0-9a-f\-]{8,})') {
                             $tableId = $matches[1]
                         }
                         
