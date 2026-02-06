@@ -20,6 +20,8 @@ let socketHandler = null;
 const ERROR_PATTERNS = [
     /\[ERROR\]/i,
     /\[ROOT CAUSE\]/i,
+    /\[ROOT_TRACE\].*TOTAL_BET_NOT_CLEARED/i,
+    /\[ROOT_TRACE\].*PLAYER_WON_MORE_THAN_CONTRIBUTED/i,
     /SyntaxError/i,
     /TypeError/i,
     /ReferenceError/i,
