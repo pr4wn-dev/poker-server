@@ -874,6 +874,44 @@ Edit `monitoring/monitor.ps1`:
 
 ---
 
+---
+
+## 📋 Recent Changes (2026-02-06)
+
+### Fixed Issues:
+1. **False positives before Unity starts**: Monitor now skips internal logs (`[LOG_WATCHER]`, `[STATUS_REPORT]`, `[ACTIVE_MONITORING]`, `[WORKFLOW]`, `[FIX_ATTEMPT] SUCCESS`)
+2. **Stats dashboard scrolling**: Stats now stay fixed at top (line 0), updates in place, no scrolling
+3. **Console output overlapping stats**: Console output now writes below stats (line 25+), no overlap
+4. **Screen flashing**: Stats updates are paused when console output is written (prevents flashing)
+5. **`[ROOT_TRACE]` logs being skipped**: Monitor now detects `[ROOT_TRACE]` errors (important error indicators)
+6. **Monitor not reporting**: Added console output showing issues detected, table ID, pause marker status
+7. **Unity not pausing**: Monitor writes pause markers to `game.log`, log watcher detects them and pauses Unity
+
+### Current Features:
+- **Real-time stats dashboard**: Fixed at top (line 0), shows detection stats, issues by severity/source, fix attempts, pause markers
+- **Console reporting**: Shows issues detected in real-time below stats dashboard (line 25+)
+- **Auto-start/restart server**: Monitor automatically starts and restarts server if offline
+- **Pause marker tracking**: Shows how many pause markers were written, errors if any
+- **No scrolling**: Stats stay at top, console output below, no overlapping or flashing
+- **Issue detection**: Detects `[ROOT_TRACE]` errors (like `PLAYER_WON_MORE_THAN_CONTRIBUTED`)
+
+### Display Layout:
+```
+[Stats Dashboard - Fixed at Top - Line 0]
++==============================================================================+
+| Status, Uptime, Server, Detection Stats, Issues by Severity, etc.
++==============================================================================+
+
+[Console Output Area - Below Stats - Line 25+]
+[HH:mm:ss] ISSUE DETECTED: [type] ([severity])
+  Message: [preview]
+  Table ID: [tableId]
+  Pause marker written to game.log
+  Waiting for log watcher to pause Unity...
+```
+
+---
+
 **Last Updated**: 2026-02-06
-**Version**: 1.1.0
-**Status**: Complete with Enhanced Statistics, Severity Mapping, Real-Time Dashboard, GPU Acceleration Guide, and Log Clearing Strategy
+**Version**: 1.2.0
+**Status**: Complete with Enhanced Statistics, Severity Mapping, Real-Time Dashboard, GPU Acceleration Guide, Log Clearing Strategy, and All Recent Fixes
