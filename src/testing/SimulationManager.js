@@ -12,6 +12,7 @@
 const { SocketBot } = require('./SocketBot');
 const fs = require('fs');
 const path = require('path');
+const gameLogger = require('../utils/GameLogger');
 
 class SimulationManager {
     constructor(gameManager, serverUrl = 'http://localhost:3000') {
@@ -67,10 +68,17 @@ class SimulationManager {
     }
     
     log(level, message, data = null) {
+        // All logging now goes through gameLogger - no console output
+        // Map log levels to gameLogger methods
+        if (level === 'ERROR' || level === 'WARN') {
+            gameLogger.error('SIMULATION', message, data || {});
+        } else {
+            gameLogger.gameEvent('SIMULATION', message, data || {});
+        }
+        
+        // Also write to simulation.log for backward compatibility (but game.log is primary)
         const timestamp = new Date().toISOString();
         const logEntry = `[${timestamp}] [SIM] [${level}] ${message}${data ? ' | Data: ' + JSON.stringify(data) : ''}`;
-        
-        console.log(logEntry);
         fs.appendFileSync(this.logFile, logEntry + '\n');
     }
     

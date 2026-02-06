@@ -9,6 +9,7 @@ const AdventureManager = require('../adventure/AdventureManager');
 const TournamentManager = require('../game/TournamentManager');
 const SimulationManager = require('../testing/SimulationManager');
 const gameLogger = require('../utils/GameLogger');
+const UnityLogHandler = require('../../monitoring/unity-log-handler');
 
 class SocketHandler {
     constructor(io, gameManager) {
@@ -19,6 +20,9 @@ class SocketHandler {
         this.simulationManager = new SimulationManager(gameManager);
         // Pass io to SimulationManager so it can notify spectators
         this.simulationManager.setIO(io);
+        
+        // Initialize Unity log handler for centralized logging
+        this.unityLogHandler = new UnityLogHandler(this);
         
         // Track authenticated users: userId -> { userId, socketId, profile }
         this.authenticatedUsers = new Map();
@@ -400,6 +404,43 @@ class SocketHandler {
             });
             
             // Report icon loading issues from Unity client
+            // Unity log capture - captures ALL Unity console logs
+            socket.on('report_unity_log', (data) => {
+                const user = this.getAuthenticatedUser(socket);
+                const userId = user?.userId || 'unknown';
+                const username = user?.profile?.username || 'unknown';
+                
+                // Use UnityLogHandler if available, otherwise log directly
+                if (this.unityLogHandler) {
+                    this.unityLogHandler.handleUnityLog(userId, username, data);
+                } else {
+                    // Fallback: log directly to gameLogger
+                    const level = data.level || 'Log';
+                    const logLevel = (level === 'Error' || level === 'Exception') ? 'ERROR' : 
+                                    (level === 'Warning') ? 'WARNING' : 'GAME';
+                    
+                    gameLogger.writeLog(logLevel, 'UNITY_CLIENT', data.message || '', {
+                        userId,
+                        username,
+                        level: data.level,
+                        stackTrace: data.stackTrace,
+                        context: data.context,
+                        source: 'unity_console'
+                    });
+                    
+                    // If error, also log as error for issue detection
+                    if (level === 'Error' || level === 'Exception') {
+                        gameLogger.error('UNITY_CLIENT', '[UNITY_ERROR]', {
+                            userId,
+                            username,
+                            message: data.message,
+                            stackTrace: data.stackTrace,
+                            context: data.context
+                        });
+                    }
+                }
+            });
+            
             socket.on('report_icon_issue', (data) => {
                 const user = this.getAuthenticatedUser(socket);
                 const userId = user?.userId || 'unknown';

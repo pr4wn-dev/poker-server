@@ -136,6 +136,9 @@ module.exports = {
     GET_INVENTORY: 'get_inventory',
     GET_TEST_ITEMS: 'get_test_items',  // Development/testing only
     
+    // Client -> Server: Unity Logging (captures all Unity console logs)
+    REPORT_UNITY_LOG: 'report_unity_log',  // Unity sends all Debug.Log/LogError/LogWarning here
+    
     // Client -> Server: Adventure
     GET_WORLD_MAP: 'get_world_map',
     GET_AREA_BOSSES: 'get_area_bosses',

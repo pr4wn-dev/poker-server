@@ -55,7 +55,7 @@ const gameManager = new GameManager();
         if (socketHandler && socketHandler.simulationManager) {
             for (const [tableId, sim] of socketHandler.simulationManager.activeSimulations) {
                 if (sim.isPaused) {
-                    console.log(`[Server] Auto-resuming paused simulation: ${tableId}`);
+                    gameLogger.gameEvent('SERVER', '[STARTUP] AUTO_RESUME_SIMULATION', { tableId });
                     socketHandler.simulationManager.resumeSimulation(tableId);
                 }
             }
@@ -180,7 +180,7 @@ app.get('/api/server-info', async (req, res) => {
             }).on('error', () => resolve(null));
         });
     } catch (err) {
-        console.log('[Server] Could not fetch public IP:', err.message);
+        gameLogger.error('SERVER', '[STARTUP] PUBLIC_IP_FETCH_FAILED', { error: err.message });
     }
     
     res.json({
@@ -227,7 +227,7 @@ async function start() {
         if (socketHandler && socketHandler.simulationManager) {
             for (const [tableId, sim] of socketHandler.simulationManager.activeSimulations) {
                 if (sim.isPaused) {
-                    console.log(`[Server] Auto-resuming paused simulation: ${tableId}`);
+                    gameLogger.gameEvent('SERVER', '[STARTUP] AUTO_RESUME_SIMULATION', { tableId });
                     socketHandler.simulationManager.resumeSimulation(tableId);
                 }
             }
@@ -238,25 +238,14 @@ async function start() {
     server.listen(PORT, '0.0.0.0', () => {
         const gameLogger = require('./utils/GameLogger');
         const localIP = getLocalIP();
-        gameLogger.error('SERVER', '[STARTUP] SERVER_STARTED', {
+        gameLogger.gameEvent('SERVER', '[STARTUP] SERVER_RUNNING', {
             port: PORT,
+            localUrl: `http://localhost:${PORT}`,
+            networkUrl: `http://${localIP}:${PORT}`,
             localIP: localIP,
-            message: `SERVER STARTED SUCCESSFULLY on port ${PORT}`,
-            timestamp: new Date().toISOString(),
-            reportToUser: true
+            databaseConnected: dbConnected,
+            message: 'SERVER STARTED SUCCESSFULLY'
         });
-        console.log(`
-╔══════════════════════════════════════════════════════════════╗
-║                    POKER SERVER ONLINE                       ║
-╠══════════════════════════════════════════════════════════════╣
-║  Local:    http://localhost:${PORT.toString().padEnd(36)}║
-║  Network:  http://${(localIP + ':' + PORT).padEnd(42)}║
-║  Database: ${(dbConnected ? 'Connected ✓' : 'OFFLINE ✗').padEnd(50)}║
-║  WebSocket: Ready for connections                            ║
-╠══════════════════════════════════════════════════════════════╣
-║  Unity clients can connect to the Network address above      ║
-╚══════════════════════════════════════════════════════════════╝
-        `);
     });
 }
 
@@ -279,19 +268,19 @@ function getLocalIP() {
 
 // Graceful shutdown
 process.on('SIGTERM', async () => {
-    console.log('SIGTERM received, shutting down gracefully...');
+    gameLogger.gameEvent('SERVER', '[SHUTDOWN] SIGTERM_RECEIVED', { message: 'Shutting down gracefully...' });
     await db.close();
     server.close(() => {
-        console.log('Server closed');
+        gameLogger.gameEvent('SERVER', '[SHUTDOWN] SERVER_CLOSED', {});
         process.exit(0);
     });
 });
 
 process.on('SIGINT', async () => {
-    console.log('\nShutting down...');
+    gameLogger.gameEvent('SERVER', '[SHUTDOWN] SHUTTING_DOWN', {});
     await db.close();
     server.close(() => {
-        console.log('Server closed');
+        gameLogger.gameEvent('SERVER', '[SHUTDOWN] SERVER_CLOSED', {});
         process.exit(0);
     });
 });
@@ -301,7 +290,7 @@ const gameLogger = require('./utils/GameLogger');
 
 process.on('uncaughtException', (err) => {
     const errorMsg = `[Server] Uncaught Exception: ${err.message}\n${err.stack}`;
-    console.error(errorMsg);
+    gameLogger.error('SERVER', '[SHUTDOWN] UNCAUGHT_EXCEPTION', { error: errorMsg });
     gameLogger.error('SERVER', 'Uncaught Exception', { 
         message: err.message, 
         stack: err.stack,
@@ -312,7 +301,7 @@ process.on('uncaughtException', (err) => {
 
 process.on('unhandledRejection', (reason, promise) => {
     const errorMsg = `[Server] Unhandled Rejection: ${reason}`;
-    console.error(errorMsg);
+    gameLogger.error('SERVER', '[SHUTDOWN] UNCAUGHT_EXCEPTION', { error: errorMsg });
     gameLogger.error('SERVER', 'Unhandled Rejection', { 
         reason: reason?.toString() || String(reason),
         stack: reason?.stack || 'No stack trace',

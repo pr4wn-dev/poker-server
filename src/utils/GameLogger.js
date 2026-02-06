@@ -58,7 +58,9 @@ class GameLogger {
                 }
             }
         } catch (error) {
-            console.error('[GameLogger] Error rotating log:', error.message);
+            // Can't use gameLogger here (would cause infinite loop), use minimal error handling
+            // Write directly to stderr as last resort
+            process.stderr.write(`[GameLogger] Error rotating log: ${error.message}\n`);
         }
     }
     
@@ -85,7 +87,9 @@ class GameLogger {
             
             fs.appendFileSync(this.logFile, logEntry);
         } catch (error) {
-            console.error('[GameLogger] Error writing log:', error.message);
+            // Can't use gameLogger here (would cause infinite loop), use minimal error handling
+            // Write directly to stderr as last resort
+            process.stderr.write(`[GameLogger] Error writing log: ${error.message}\n`);
         }
     }
     
@@ -96,10 +100,12 @@ class GameLogger {
         try {
             if (fs.existsSync(this.logFile)) {
                 fs.writeFileSync(this.logFile, '');
-                console.log('[GameLogger] Log file cleared');
+                // Log to file that it was cleared
+                this.writeLog('GAME', 'GAMELOGGER', 'Log file cleared', {});
             }
         } catch (error) {
-            console.error('[GameLogger] Error clearing log:', error.message);
+            // Can't use gameLogger here (would cause infinite loop), use minimal error handling
+            process.stderr.write(`[GameLogger] Error clearing log: ${error.message}\n`);
         }
     }
     

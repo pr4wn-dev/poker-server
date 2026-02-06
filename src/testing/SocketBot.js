@@ -437,7 +437,8 @@ class SocketBot {
         const timestamp = new Date().toISOString();
         const logEntry = `[${timestamp}] [${level}] [${this.name}] ${message}${data ? ' | Data: ' + JSON.stringify(data) : ''}`;
         
-        console.log(logEntry);
+        // Logging disabled - all logs go through gameLogger
+        // This was console.log for bot output, but now goes to gameLogger
         
         if (this.enableLogging) {
             fs.appendFileSync(this.logFile, logEntry + '\n');
@@ -1262,17 +1263,16 @@ async function runSimulation(options = {}) {
             await bot.register();
             await bot.joinTable(tableId);
             bots.push(bot);
-            console.log(`Bot ${i + 1}/${botCount} joined`);
+            gameLogger.gameEvent('SOCKET_BOT', '[SIMULATION] BOT_JOINED', { botNumber: i + 1, totalBots: botCount });
             
             // Small delay between joins
             await new Promise(r => setTimeout(r, 500));
         } catch (error) {
-            console.error(`Bot ${i + 1} failed:`, error.message);
+            gameLogger.error('SOCKET_BOT', '[SIMULATION] BOT_JOIN_FAILED', { botNumber: i + 1, error: error.message });
         }
     }
     
-    console.log(`\n${bots.length} bots active. Simulation running...`);
-    console.log('Press Ctrl+C to stop.\n');
+    gameLogger.gameEvent('SOCKET_BOT', '[SIMULATION] RUNNING', { activeBots: bots.length, message: 'Simulation running - press Ctrl+C to stop' });
     
     // Keep running until interrupted
     process.on('SIGINT', () => {

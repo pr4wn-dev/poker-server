@@ -387,7 +387,8 @@ class AdventureManager {
         // Clean up
         this.activeSessions.delete(userId);
         
-        console.log(`[Adventure] ${userId} defeated ${boss.name}! +${boss.xpReward}XP, ${drops.length} drops`);
+        const gameLogger = require('../utils/GameLogger');
+        gameLogger.gameEvent('ADVENTURE', '[BOSS_BATTLE] DEFEATED', { userId, bossId, bossName: boss.name, xpReward: boss.xpReward, dropsCount: drops.length });
         
         return {
             status: 'victory',
@@ -438,7 +439,8 @@ class AdventureManager {
         
         this.activeSessions.delete(userId);
         
-        console.log(`[Adventure] ${userId} was defeated by ${session.boss.name}`);
+        const gameLogger = require('../utils/GameLogger');
+        gameLogger.gameEvent('ADVENTURE', '[BOSS_BATTLE] DEFEATED_BY_BOSS', { userId, bossId: session.boss.id, bossName: session.boss.name });
         
         return {
             status: 'defeat',
@@ -470,7 +472,8 @@ class AdventureManager {
         this.activeSessions.delete(userId);
         this.activeGames.delete(userId);
         
-        console.log(`[Adventure] ${userId} forfeited battle with ${session.boss.name}`);
+        const gameLogger = require('../utils/GameLogger');
+        gameLogger.gameEvent('ADVENTURE', '[BOSS_BATTLE] FORFEITED', { userId, bossId: session.boss.id, bossName: session.boss.name });
         
         return { 
             success: true,

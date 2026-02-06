@@ -9,7 +9,9 @@ const SimulationManager = require('../src/testing/SimulationManager');
 
 const tableId = process.argv[2] || 'e6bfca2f-764b-432e-a3b5-a691901fd805';
 
-console.log(`Resuming simulation for table: ${tableId}`);
+// All logging now goes through gameLogger - no console output
+const gameLogger = require('../src/utils/GameLogger');
+gameLogger.gameEvent('RESUME_SCRIPT_DIRECT', '[RESUME] DIRECT_RESUME', { tableId });
 
 const gameManager = new GameManager();
 const simulationManager = new SimulationManager(gameManager);

@@ -1591,6 +1591,10 @@ function activeMonitoring() {
             // CRITICAL: Add a clear marker so I can easily find these reports
             REPORT_MARKER: '=== STATUS REPORT FOR USER ==='
         });
+        
+        // All output goes to gameLogger - no console output
+        // Status reports are logged to game.log for monitoring system to read
+        
         lastStatusReport = now;
     }
     
