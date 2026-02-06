@@ -2425,22 +2425,9 @@ class Table {
             });
         }
         
-        // CRITICAL: Clear any pending turn timers IMMEDIATELY when action is received
-        // This prevents timeout race conditions where timer fires before action is processed
+        // CRITICAL: Clear any pending turn timers at hand start
+        // This prevents timeout race conditions
         this.clearTurnTimer();
-        
-        // Record fix attempt - clearing timer at action start is the fix method
-        // This fix prevents timeouts when actions arrive but processing takes time
-        if (this._isFixEnabled('FIX_66_TIMER_CLEARED_AT_ACTION_START')) {
-            this._recordFixAttempt('FIX_66_TIMER_CLEARED_AT_ACTION_START', true, {
-                context: 'HANDLE_ACTION_START',
-                playerId,
-                action,
-                handNumber: this.handsPlayed,
-                phase: this.phase,
-                reason: 'Timer cleared immediately when action received - prevents timeout race condition'
-            });
-        }
         
         if (this.getSeatedPlayerCount() < 2) {
             this._tracePhaseChange(GAME_PHASES.WAITING, 'NOT_ENOUGH_PLAYERS');
