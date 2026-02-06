@@ -85,7 +85,16 @@ class GameLogger {
             
             logEntry += '\n';
             
-            fs.appendFileSync(this.logFile, logEntry);
+            // Use fs.appendFile with file sharing flags to allow concurrent reads
+            // This prevents EBUSY errors when monitor.ps1 is reading the file
+            try {
+                const fd = fs.openSync(this.logFile, 'a', 0o666); // Open for append with read/write permissions
+                fs.writeSync(fd, logEntry);
+                fs.closeSync(fd);
+            } catch (writeError) {
+                // Fallback to appendFileSync if writeSync fails
+                fs.appendFileSync(this.logFile, logEntry, { flag: 'a' });
+            }
         } catch (error) {
             // Can't use gameLogger here (would cause infinite loop), use minimal error handling
             // Write directly to stderr as last resort

@@ -427,9 +427,10 @@ while ($monitoringActive) {
         
         # If file has grown, read new lines
         if ($currentSize -gt $lastLogPosition) {
-            $stream = [System.IO.File]::OpenRead($logFile)
-            $stream.Position = $lastLogPosition
-            $reader = New-Object System.IO.StreamReader($stream)
+            # Use FileShare.ReadWrite to allow concurrent writes while reading
+            $fileStream = [System.IO.File]::Open($logFile, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)
+            $fileStream.Position = $lastLogPosition
+            $reader = New-Object System.IO.StreamReader($fileStream)
             
             while ($null -ne ($line = $reader.ReadLine())) {
                 $stats.TotalLinesProcessed++
@@ -504,7 +505,7 @@ while ($monitoringActive) {
             }
             
             $reader.Close()
-            $stream.Close()
+            $fileStream.Close()
             $lastLogPosition = $currentSize
         }
         
