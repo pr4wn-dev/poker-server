@@ -141,10 +141,17 @@ function Get-FixAttemptsStats {
 # Function to check if server is running
 function Test-ServerRunning {
     try {
-        $response = Invoke-WebRequest -Uri "$serverUrl/health" -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop
+        # Try health endpoint with longer timeout
+        $response = Invoke-WebRequest -Uri "$serverUrl/health" -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
         return $true
     } catch {
-        return $false
+        # If health check fails, also try root endpoint as fallback
+        try {
+            $response = Invoke-WebRequest -Uri "$serverUrl/" -UseBasicParsing -TimeoutSec 3 -ErrorAction Stop
+            return $true
+        } catch {
+            return $false
+        }
     }
 }
 
