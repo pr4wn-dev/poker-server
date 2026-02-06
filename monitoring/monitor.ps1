@@ -170,8 +170,19 @@ function Show-Statistics {
         $stats.LogFileSize = [math]::Round((Get-Item $logFile).Length / 1MB, 2)
     }
     
-    # Check server status
+    # Check server status and ensure it's running
     $stats.ServerStatus = if (Test-ServerRunning) { "Online" } else { "Offline" }
+    
+    # If server is offline, attempt to start it immediately
+    if ($stats.ServerStatus -eq "Offline") {
+        Write-Warning "Server is offline. Attempting to start..."
+        $restartResult = Start-ServerIfNeeded
+        if ($restartResult) {
+            # Re-check status after restart attempt
+            Start-Sleep -Seconds 2
+            $stats.ServerStatus = if (Test-ServerRunning) { "Online" } else { "Offline" }
+        }
+    }
     
     # Clear screen and show header
     Clear-Host
