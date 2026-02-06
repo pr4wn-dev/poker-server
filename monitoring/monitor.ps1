@@ -1374,6 +1374,13 @@ while ($monitoringActive) {
                                 Write-ConsoleOutput -Message "    - Check Node.js error output for details" -ForegroundColor "Gray"
                             }
                         }
+                    } else {
+                        # Issue detected but not pausing (medium/low severity or already paused)
+                        if ($issue.severity -eq 'medium' -or $issue.severity -eq 'low') {
+                            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  ISSUE (NOT PAUSING): $($issue.type) ($($issue.severity)) - Only critical/high severity issues pause Unity" -ForegroundColor "Gray"
+                        } elseif ($isPaused) {
+                            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  ISSUE (ALREADY PAUSED): $($issue.type) ($($issue.severity)) - Unity already paused, issue queued" -ForegroundColor "Gray"
+                        }
                     }
                 }
             }
