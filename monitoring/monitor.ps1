@@ -1260,7 +1260,14 @@ while ($monitoringActive) {
                         
                         # Extract table ID if available
                         $tableId = $null
-                        if ($line -match 'tableId["\s:]+([a-f0-9\-]+)') {
+                        # Try multiple patterns to extract table ID
+                        if ($line -match 'tableId[`"\s:]+([a-f0-9-]+)') {
+                            $tableId = $matches[1]
+                        } elseif ($line -match 'tableId[`"\s:]+`"([^`"]+)`"') {
+                            $tableId = $matches[1]
+                        } elseif ($line -match '"tableId"\s*:\s*"([^"]+)"') {
+                            $tableId = $matches[1]
+                        } elseif ($line -match 'tableId["\s:]+([a-zA-Z0-9\-]+)') {
                             $tableId = $matches[1]
                         }
                         
