@@ -31,6 +31,8 @@ const ERROR_PATTERNS = [
     /\[FIX\] METHOD_DISABLED/i,  // Fix method disabled - needs different approach (CRITICAL)
     /\[FIX\] DISABLED/i,  // Fix disabled - critical
     /METHOD_DISABLED.*TRY_DIFFERENT_APPROACH/i,  // Method failed - needs new approach
+    // Exclude simulation manager resume logs - these are informational, not errors
+    /SIMULATION_MANAGER.*RESUME.*BEFORE_STATE/i  // This is informational, not an error
     /SIMULATION BOT TIMEOUT/i,
     /\[TIMER\].*TIMEOUT.*auto-folding/i,
     /\[ICON_LOADING\].*ISSUE_REPORTED/i,
@@ -38,10 +40,10 @@ const ERROR_PATTERNS = [
     /CreateItemAnteSlot.*FAILED/i,
     /Sprite not found/i,
     // Chip/Pot errors: Only detect if NOT part of fix attempt tracking
-    /(?:Chip|Chips).*(?:lost|created)(?!.*\[FIX ATTEMPT\])(?!.*FIX_2_)/i,  // Chip lost/created but NOT fix attempt tracking
-    /Pot.*mismatch(?!.*\[FIX ATTEMPT\].*SUCCESS)(?!.*FIX.*SUCCESS)/i,  // Pot mismatch but NOT fix success
-    // General errors: Exclude fix attempt tracking, LOG_WATCHER, and TRACE logs
-    /\[ERROR\](?!.*\[LOG_WATCHER\])(?!.*\[TRACE\])(?!.*\[FIX ATTEMPT\])(?!.*FIX_)/i
+    /(?:Chip|Chips).*(?:lost|created)(?!.*\[FIX ATTEMPT\])(?!.*FIX_2_)(?!.*SUCCESS)/i,  // Chip lost/created but NOT fix attempt tracking or success
+    /Pot.*mismatch(?!.*\[FIX ATTEMPT\].*SUCCESS)(?!.*FIX.*SUCCESS)(?!.*SUCCESS)/i,  // Pot mismatch but NOT fix success or any success
+    // General errors: Exclude fix attempt tracking, LOG_WATCHER, TRACE logs, and SUCCESS logs
+    /\[ERROR\](?!.*\[LOG_WATCHER\])(?!.*\[TRACE\])(?!.*\[FIX ATTEMPT\])(?!.*FIX_)(?!.*SUCCESS)/i
 ];
 
 // Patterns for item ante specific issues
