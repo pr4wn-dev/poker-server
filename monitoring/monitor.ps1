@@ -381,7 +381,19 @@ function Show-Statistics {
     }
     
     Write-Host "+==============================================================================+" -ForegroundColor Cyan
-    Write-Host "`nPress Ctrl+C to stop monitoring`n" -ForegroundColor DarkGray
+    
+    # Fill remaining screen to prevent scrolling and keep stats at top
+    $currentLine = [Console]::CursorTop
+    $windowHeight = [Console]::WindowHeight
+    $remainingLines = $windowHeight - $currentLine - 1
+    if ($remainingLines -gt 0) {
+        for ($i = 0; $i -lt $remainingLines; $i++) {
+            Write-Host ""
+        }
+    }
+    
+    # Move cursor back to top (line 0) for next update - this keeps stats visible
+    [Console]::SetCursorPosition(0, 0)
 }
 
 # Function to start server if not running
