@@ -2426,8 +2426,8 @@ class SocketHandler {
             // ============ Disconnect ============
             
             socket.on('disconnect', async () => {
-                gameLogger.gameEvent('SYSTEM', `[SOCKET] CLIENT_DISCONNECTED`, { socketId: socket.id, userId: user?.userId || 'unknown' });
                 const user = this.getAuthenticatedUser(socket);
+                gameLogger.gameEvent('SYSTEM', `[SOCKET] CLIENT_DISCONNECTED`, { socketId: socket.id, userId: user?.userId || 'unknown' });
                 
                 if (user) {
                     const player = this.gameManager.players.get(user.userId);
