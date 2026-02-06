@@ -1455,7 +1455,10 @@ class Table {
         // FIX: Reset chips to buy-in when starting a NEW game (after previous game ended)
         // Only reset if gameStarted was false (meaning this is a new game, not just a new hand)
         if (!this.gameStarted) {
-            console.log(`[Table ${this.name}] Resetting all player chips to buy-in (${this.buyIn}) for new game`);
+            gameLogger.gameEvent(this.name, '[GAME] Resetting all player chips to buy-in for new game', {
+                buyIn: this.buyIn,
+                playerCount: this.seats.filter(s => s && s.isActive !== false).length
+            });
             
         // CRITICAL: Track total starting chips for money validation
         // MUST reset to 0 first to prevent accumulation across games
@@ -1572,7 +1575,6 @@ class Table {
             // If chips are missing, we need to detect it, not mask it
             if (Math.abs(actualTotalChipsAndPot - this.totalStartingChips) > 0.01) {
                 const missingChips = this.totalStartingChips - actualTotalChipsAndPot;
-                console.error(`[Table ${this.name}] ⚠️⚠️⚠️ CRITICAL: ${missingChips} chips MISSING at game restart! totalStartingChips NOT recalculated to mask loss.`);
                 gameLogger.error(this.name, '[CRITICAL] Chips missing at game restart - totalStartingChips NOT recalculated', {
                     expectedChips: this.totalStartingChips,
                     actualTotalChipsAndPot,
@@ -1610,9 +1612,6 @@ class Table {
         // If chips are missing, this is a DIFFERENT bug that must be fixed
         if (Math.abs(actualTotalChipsAndPot - expectedTotalStartingChips) > 0.01) {
             const missingAtStart = expectedTotalStartingChips - actualTotalChipsAndPot;
-            console.error(`[Table ${this.name}] ⚠️⚠️⚠️ CRITICAL BUG: ${missingAtStart} chips ALREADY MISSING at game start!`);
-            console.error(`[Table ${this.name}] Expected: ${expectedTotalStartingChips} (${this.seats.filter(s => s && s.isActive !== false).length} players × ${this.buyIn} buy-in)`);
-            console.error(`[Table ${this.name}] Actual: ${actualTotalChipsAndPot}`);
             gameLogger.error(this.name, '[CRITICAL] Chips missing at game start', {
                 expectedChips: expectedTotalStartingChips,
                 actualTotalChipsAndPot,
@@ -1656,7 +1655,6 @@ class Table {
         const isActiveHand = this.gameStarted || (this.phase !== GAME_PHASES.WAITING && this.phase !== GAME_PHASES.COUNTDOWN && this.phase !== GAME_PHASES.READY_UP);
         // console.log(`[Table ${this.name}] handleGameStart check: phase=${this.phase}, gameStarted=${this.gameStarted}, isActiveHand=${isActiveHand}`);
         if (isActiveHand) {
-            console.error(`[Table ${this.name}] ⚠️ CRITICAL: handleGameStart called but game already started! Phase: ${this.phase}, gameStarted: ${this.gameStarted}, handNumber: ${this.handsPlayed}`);
             gameLogger.error(this.name, '[GAME] CRITICAL: handleGameStart called during active hand', {
                 phase: this.phase,
                 gameStarted: this.gameStarted,
@@ -1677,7 +1675,6 @@ class Table {
         // CRITICAL: Clear pot before starting new hand (safeguard)
         if (this.pot > 0) {
             const potBeforeClear = this.pot;
-            console.error(`[Table ${this.name}] ⚠️ CRITICAL: Pot still has ${potBeforeClear} chips before startNewHand in handleGameStart! Clearing now.`);
             gameLogger.error(this.name, '[POT] CRITICAL: Pot not cleared before startNewHand in handleGameStart - forcing clear', {
                 pot: potBeforeClear,
                 handNumber: this.handsPlayed
@@ -1696,7 +1693,11 @@ class Table {
             });
         }
         
-        console.log(`[Table ${this.name}] ✅ Calling startNewHand() - phase: ${this.phase}, gameStarted: ${this.gameStarted}`);
+        gameLogger.gameEvent(this.name, '[GAME] Calling startNewHand', {
+            phase: this.phase,
+            gameStarted: this.gameStarted,
+            handNumber: this.handsPlayed
+        });
         this.startNewHand();
         this.onStateChange?.();
     }
@@ -1747,7 +1748,11 @@ class Table {
         
         const player = this.seats[this.currentPlayerIndex];
         if (!player) {
-            console.error(`[Table ${this.name}] ERROR: startTurnTimer called but no player at seat ${this.currentPlayerIndex}`);
+            gameLogger.error(this.name, '[TIMER] ERROR: startTurnTimer called but no player at seat', {
+                seatIndex: this.currentPlayerIndex,
+                handNumber: this.handsPlayed,
+                phase: this.phase
+            });
             // Record fix attempt - no player at seat is a failure
             this._recordFixAttempt('FIX_17_START_TURN_TIMER_NO_PLAYER', false, {
                 currentPlayerIndex: this.currentPlayerIndex,
@@ -1889,7 +1894,12 @@ class Table {
             isAllIn: player.isAllIn,
             chips: player.chips
         });
-        console.log(`[Table ${this.name}] ${player.name} timed out after ${Math.floor(waitTime/1000)}s - auto-folding`);
+        gameLogger.gameEvent(this.name, '[TIMER] Player timed out - auto-folding', {
+            player: player.name,
+            waitTimeSeconds: Math.floor(waitTime/1000),
+            handNumber: this.handsPlayed,
+            phase: this.phase
+        });
         
         // Record fix attempt - timer timeout is a failure of the timer clear fix
         // This indicates the fix method (clearing timer at action start) didn't work
@@ -1928,7 +1938,12 @@ class Table {
         } else {
             // Fold failed - clear timer anyway to prevent stuck state
             this.clearTurnTimer();
-            console.error(`[Table ${this.name}] Auto-fold failed for ${player.name}: ${foldResult.error}`);
+            gameLogger.error(this.name, '[TIMER] Auto-fold failed', {
+                player: player.name,
+                error: foldResult.error,
+                handNumber: this.handsPlayed,
+                phase: this.phase
+            });
             gameLogger.gameEvent(this.name, '[TIMER] Auto-fold failed', {
                 player: player.name,
                 seatIndex: this.currentPlayerIndex,
@@ -2152,7 +2167,12 @@ class Table {
         });
         
         if (Math.abs(chipsDifference - chips) > 0.01) {
-            console.error(`[Table ${this.name}] ⚠️ CRITICAL ADD_PLAYER ERROR: Chips difference (${chipsDifference}) != added chips (${chips})!`);
+            gameLogger.error(this.name, '[CRITICAL] ADD_PLAYER ERROR: Chips difference mismatch', {
+                chipsDifference,
+                addedChips: chips,
+                player: name,
+                handNumber: this.handsPlayed
+            });
             gameLogger.error(this.name, '[ADD_PLAYER] CRITICAL: Chips difference mismatch', {
                 handNumber: this.handsPlayed,
                 player: name,
@@ -8311,8 +8331,7 @@ class Table {
             }
         } else if (seat && seat.isActive === false) {
             // CRITICAL FIX: Eliminated player won pot - redistribute to best active player
-            console.error(`[Table ${this.name}] ⚠️ CRITICAL: Eliminated player ${winner.name} won pot ${potAmount} - redistributing to best active player`);
-            gameLogger.gameEvent(this.name, '[POT] ELIMINATED WINNER - redistributing', {
+            gameLogger.error(this.name, '[POT] CRITICAL: Eliminated player won pot - redistributing', {
                 eliminatedWinner: winner.name,
                 potAmount,
                 reason: 'Player was eliminated but won pot - redistributing'
