@@ -19,7 +19,7 @@ $pendingIssuesFile = Join-Path $script:projectRoot "logs\pending-issues.json"
 $checkInterval = 1  # Check every 1 second
 $nodeScript = Join-Path $script:projectRoot "monitoring\issue-detector.js"
 $serverUrl = "http://localhost:3000"
-$statsUpdateInterval = 5  # Update stats display every 5 seconds
+$statsUpdateInterval = 10  # Update stats display every 10 seconds (reduced frequency to prevent flickering)
 
 # Colors for output
 function Write-Status { param($message, $color = "White") Write-Host "[$(Get-Date -Format 'HH:mm:ss')] $message" -ForegroundColor $color }
@@ -34,6 +34,7 @@ $isPaused = $false
 $currentIssue = $null
 $monitoringActive = $true
 $lastServerCheck = Get-Date  # Track last server health check
+$previousStats = @{}  # Track previous stats values to only update when changed
 
 # Statistics tracking
 $stats = @{
@@ -195,15 +196,48 @@ function Show-Statistics {
         }
     }
     
+    # Create a snapshot of current stats for comparison
+    $currentStatsSnapshot = @{
+        TotalLinesProcessed = $stats.TotalLinesProcessed
+        IssuesDetected = $stats.IssuesDetected
+        PendingIssues = $pendingCount
+        ServerStatus = $stats.ServerStatus
+        LogFileSize = $stats.LogFileSize
+        IsPaused = $isPaused
+        Uptime = $uptimeStr
+    }
+    
+    # Only update display if stats actually changed (reduces flickering)
+    $statsChanged = $true
+    if ($script:previousStats.Count -gt 0) {
+        $statsChanged = $false
+        foreach ($key in $currentStatsSnapshot.Keys) {
+            if ($currentStatsSnapshot[$key] -ne $script:previousStats[$key]) {
+                $statsChanged = $true
+                break
+            }
+        }
+    }
+    
+    # Skip update if nothing changed (unless it's the first display)
+    if (-not $statsChanged -and $script:firstDisplay -ne $null) {
+        return
+    }
+    
+    # Save current stats for next comparison
+    $script:previousStats = $currentStatsSnapshot
+    
     # Only clear screen on first display, then update in place
     if ($script:firstDisplay -eq $null) {
         Clear-Host
         $script:firstDisplay = $true
     } else {
         # Move cursor to top (line 0) to overwrite stats in place
+        # Use a small delay to ensure cursor position is stable
+        [Console]::CursorVisible = $false  # Hide cursor during update to reduce flicker
         [Console]::SetCursorPosition(0, 0)
+        Start-Sleep -Milliseconds 10  # Small delay for stability
     }
-    Write-Host "`n" -NoNewline
     Write-Host "+==============================================================================+" -ForegroundColor Cyan
     Write-Host "|" -NoNewline -ForegroundColor Cyan
     Write-Host "              AUTOMATED ISSUE MONITORING SYSTEM - LIVE STATISTICS              " -NoNewline -ForegroundColor White
@@ -427,6 +461,9 @@ function Show-Statistics {
     
     # Move cursor back to top (line 0) for next update - this keeps stats visible
     [Console]::SetCursorPosition(0, 0)
+    
+    # Restore cursor visibility
+    [Console]::CursorVisible = $true
 }
 
 # Function to start server if not running
@@ -688,9 +725,9 @@ while ($monitoringActive) {
         
         # Update statistics display periodically
         # BUT: Don't update if we just wrote console output (prevents flashing)
-        # Only update if console output line hasn't changed recently
+        # Only update if console output line hasn't changed recently (increased to 3 seconds for stability)
         $timeSinceLastConsoleOutput = if ($script:lastConsoleOutputTime) { ($now - $script:lastConsoleOutputTime).TotalSeconds } else { 999 }
-        if (($now - $lastStatsUpdate).TotalSeconds -ge $statsUpdateInterval -and $timeSinceLastConsoleOutput -gt 1) {
+        if (($now - $lastStatsUpdate).TotalSeconds -ge $statsUpdateInterval -and $timeSinceLastConsoleOutput -gt 3) {
             Show-Statistics
             $lastStatsUpdate = $now
         }
