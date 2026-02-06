@@ -452,12 +452,16 @@ function Get-UnityActualStatus {
                 if ($lineTime) {
                     $timeDiff = ($now - $lineTime).TotalSeconds
                     
-                    # Check for game activity (within last 2 minutes)
-                    # EXCLUDE [LOG_WATCHER] entries - those are server-side, not Unity-side
-                    if ($timeDiff -le 120 -and $line -notmatch '\[LOG_WATCHER\]|\[MONITOR\]|\[STATUS_REPORT\]') {
-                        # Unity is in game if we see actual game events (not log watcher events)
-                        # Look for table_state broadcasts, player actions, game phases, etc.
-                        if ($line -match 'table_state|player_action|game.*start|hand.*start|bet|call|fold|check|raise|preflop|flop|turn|river|showdown|phase.*preflop|phase.*flop|phase.*turn|phase.*river|phase.*showdown|\[TABLE\].*phase|currentPlayer|dealerIndex|pot.*\d+|chips.*\d+') {
+                    # Check for Unity client activity (within last 2 minutes)
+                    # EXCLUDE server-side entries - only look for actual Unity client events
+                    if ($timeDiff -le 120 -and $line -notmatch '\[LOG_WATCHER\]|\[MONITOR\]|\[STATUS_REPORT\]|\[TRACE\]|\[GAME\].*\[TRACE\]') {
+                        # Unity is in game if we see actual Unity client events:
+                        # - CLIENT_CONNECTED (Unity connecting to server)
+                        # - REPORT_UNITY_LOG (Unity sending logs)
+                        # - join_table from actual client (not bot)
+                        # - action events from Unity client
+                        # - login events
+                        if ($line -match '\[SYSTEM\].*\[SOCKET\].*CLIENT_CONNECTED|REPORT_UNITY_LOG|\[UNITY\]|join_table.*success|action.*from.*client|login.*success|Unity.*connected|client.*connected.*socket') {
                             $gameActivityFound = $true
                             if (-not $status.LastGameActivity -or $lineTime -gt $status.LastGameActivity) {
                                 $status.LastGameActivity = $lineTime
@@ -465,8 +469,8 @@ function Get-UnityActualStatus {
                         }
                         
                         # Check for Unity connection events (within last 2 minutes)
-                        # Look for actual Unity client events, not server-side monitoring
-                        if ($line -match 'Unity.*connected|client.*connected|socket.*connected|login.*success|join.*table.*success|\[UNITY\]') {
+                        # Look for actual Unity client connection events
+                        if ($line -match '\[SYSTEM\].*\[SOCKET\].*CLIENT_CONNECTED|Unity.*connected|client.*connected.*socket|login.*success') {
                             $connectionActivityFound = $true
                             if (-not $status.LastConnectionActivity -or $lineTime -gt $status.LastConnectionActivity) {
                                 $status.LastConnectionActivity = $lineTime
