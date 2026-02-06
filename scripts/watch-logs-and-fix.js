@@ -503,6 +503,21 @@ function extractTableId(logLine) {
         simulationTables: getActiveSimulationTables().length
     });
     
+    // Check for monitor marker with explicit tableId in JSON
+    // Format: [MONITOR] [CRITICAL_ISSUE_DETECTED] ... | Data: {"tableId":"...",...}
+    const monitorMatch = logLine.match(/"tableId"\s*:\s*"([a-f0-9-]+)"/i);
+    if (monitorMatch) {
+        const tableId = monitorMatch[1];
+        const table = gameManager.getTable(tableId);
+        if (table) {
+            gameLogger.gameEvent('LOG_WATCHER', `[EXTRACT_TABLE_ID] FOUND_IN_MONITOR_MARKER`, {
+                tableId,
+                tableName: table.name
+            });
+            return tableId;
+        }
+    }
+    
     // Log format: [2026-02-05 06:28:52.223] [GAME] [[SIM] dildo's Table] ...
     const match = logLine.match(/\[\[SIM\]\s+([^\]]+)\]/);
     if (match) {
