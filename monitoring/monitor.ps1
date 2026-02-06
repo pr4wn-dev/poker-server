@@ -237,6 +237,27 @@ function Get-PendingIssuesCount {
     return $info.TotalIssues
 }
 
+# Helper function to safely set cursor position (handles invalid console handle errors)
+function Set-SafeCursorPosition {
+    param(
+        [int]$X = 0,
+        [int]$Y = 0
+    )
+    
+    try {
+        [Console]::SetCursorPosition($X, $Y)
+        return $true
+    } catch {
+        # Console handle may be invalid (window resized/closed) - this is non-fatal
+        # Only log error once per minute to avoid spam
+        if ($script:lastConsoleError -eq $null -or ((Get-Date) - $script:lastConsoleError).TotalSeconds -gt 60) {
+            # Silently continue - don't spam errors
+            $script:lastConsoleError = Get-Date
+        }
+        return $false
+    }
+}
+
 # Function to write console output without causing scrolling
 function Write-ConsoleOutput {
     param(
