@@ -1316,6 +1316,9 @@ let lastReportedSimulations = new Set();
 let lastStatusReport = 0;
 const STATUS_REPORT_INTERVAL = 10000; // Report every 10 seconds
 
+// Force initial report on first run to detect existing simulations
+let isFirstRun = true;
+
 /**
  * Active monitoring: Check for new simulations and report status regularly
  * This function logs findings that I (the assistant) will read and report to the user
