@@ -1338,6 +1338,29 @@ function activeMonitoring() {
     const currentSimIds = new Set(simulationTables.map(t => t.id));
     const newSimulations = simulationTables.filter(t => !lastReportedSimulations.has(t.id));
     
+    // On first run, report all existing simulations
+    if (isFirstRun && simulationTables.length > 0) {
+        isFirstRun = false;
+        for (const sim of simulationTables) {
+            gameLogger.error('LOG_WATCHER', `[ACTIVE_MONITORING] EXISTING_SIMULATION_DETECTED`, {
+                action: 'SIMULATION_ALREADY_RUNNING',
+                tableId: sim.id,
+                tableName: sim.name,
+                message: `EXISTING SIMULATION DETECTED: "${sim.name}"`,
+                whatImDoing: `I detected an existing simulation: "${sim.name}". I'm now actively monitoring it and will report any issues immediately.`,
+                handsPlayed: sim.handsPlayed,
+                phase: sim.phase,
+                gameStarted: sim.gameStarted,
+                isPaused: sim.isPaused,
+                activePlayers: sim.activePlayers,
+                pot: sim.pot,
+                timestamp: new Date().toISOString(),
+                reportToUser: true
+            });
+        }
+        lastReportedSimulations = currentSimIds;
+    }
+    
     if (newSimulations.length > 0) {
         // NEW SIMULATION DETECTED - REPORT TO USER VIA ERROR LOG (so I can read it)
         for (const sim of newSimulations) {
@@ -1404,11 +1427,17 @@ function startActiveMonitoring() {
         activeMonitoring();
     }, 2000);
     
-    gameLogger.gameEvent('LOG_WATCHER', `[ACTIVE_MONITORING] STARTED`, {
+    // Use error log so I can detect and report this to the user
+    gameLogger.error('LOG_WATCHER', `[ACTIVE_MONITORING] STARTED`, {
         checkInterval: '2 seconds',
         statusReportInterval: '10 seconds',
-        whatImDoing: 'I will now actively monitor for new simulations and report status regularly'
+        message: 'ACTIVE MONITORING STARTED - I will detect new simulations and report status regularly',
+        whatImDoing: 'I will now actively monitor for new simulations and report status regularly',
+        reportToUser: true
     });
+    
+    // Immediate first check to detect any existing simulations
+    activeMonitoring();
 }
 
 module.exports = {
