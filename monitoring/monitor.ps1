@@ -1554,44 +1554,59 @@ while ($monitoringActive) {
             }
         }
         
-        # Check Unity status continuously (every 5 seconds) and restart if needed
+        # Check Unity actual status continuously (every 5 seconds) and restart if needed
         $now = Get-Date
         $unityCheckInterval = 5  # Check Unity every 5 seconds
         $timeSinceUnityCheck = $now - $lastUnityCheck
         if ($timeSinceUnityCheck.TotalSeconds -ge $unityCheckInterval) {
-            $unityProcess = Get-Process -Name "Unity" -ErrorAction SilentlyContinue
+            $unityActualStatus = Get-UnityActualStatus
             $wasUnityRunning = $stats.UnityRunning
-            $isUnityRunning = $null -ne $unityProcess
+            $wasUnityConnected = $stats.UnityConnected
+            $wasUnityActive = ($stats.UnityRunning -and $stats.UnityConnected)
             
-            # Log Unity startup when process first appears
-            if ($isUnityRunning -and -not $wasUnityRunning) {
-                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🎮 UNITY: Game process detected (PID: $($unityProcess.Id))" -ForegroundColor "Green"
+            # Update stats from actual status
+            $stats.UnityRunning = $unityActualStatus.ProcessRunning
+            $stats.UnityConnected = $unityActualStatus.ConnectedToServer
+            
+            # Log status changes
+            if ($unityActualStatus.ProcessRunning -and -not $wasUnityRunning) {
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🎮 UNITY: Process detected" -ForegroundColor "Green"
             }
             
-            # Check if Unity is connected to server
-            $isConnected = $false
-            if ($unityProcess) {
-                try {
-                    $healthCheck = Invoke-WebRequest -Uri "$serverUrl/health" -TimeoutSec 2 -ErrorAction Stop
-                    $health = $healthCheck.Content | ConvertFrom-Json
-                    $isConnected = $health.onlinePlayers -gt 0
-                    
-                    # Log Unity connection when it first connects
-                    if ($isConnected -and -not $stats.UnityConnected) {
-                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🎮 UNITY: Connected to server!" -ForegroundColor "Green"
-                    }
-                } catch {
-                    $isConnected = $false
+            if ($unityActualStatus.ConnectedToServer -and -not $wasUnityConnected) {
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🎮 UNITY: Connected to server!" -ForegroundColor "Green"
+            }
+            
+            # Warn if Unity is not actually playing (connected but idle)
+            if ($unityActualStatus.ProcessRunning -and $unityActualStatus.ConnectedToServer -and -not $unityActualStatus.InGameScene) {
+                if (-not $wasUnityActive -or ($now - $lastUnityWarning).TotalSeconds -gt 60) {
+                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  UNITY: Connected but NOT in game scene (likely in MainMenuScene)" -ForegroundColor "Yellow"
+                    Write-ConsoleOutput -Message "  Details: $($unityActualStatus.Details -join '; ')" -ForegroundColor "Gray"
+                    $lastUnityWarning = $now
                 }
             }
             
-            # Update stats
-            $stats.UnityRunning = $isUnityRunning
-            $stats.UnityConnected = $isConnected
-            
-            # If Unity is not running or not connected, restart it immediately (don't wait for Maintain-Services)
-            if ((-not $unityProcess -or -not $isConnected) -and $config.automation.autoRestartUnity) {
-                Restart-UnityIfNeeded | Out-Null
+            # If Unity is not running, not connected, or not actively playing (in simulation mode), restart it
+            if ($config.automation.autoRestartUnity) {
+                $shouldRestart = $false
+                $restartReason = ""
+                
+                if (-not $unityActualStatus.ProcessRunning) {
+                    $shouldRestart = $true
+                    $restartReason = "Unity process not running"
+                } elseif (-not $unityActualStatus.ConnectedToServer) {
+                    $shouldRestart = $true
+                    $restartReason = "Unity not connected to server"
+                } elseif ($config.simulation.enabled -and -not $unityActualStatus.InGameScene) {
+                    # In simulation mode, if Unity is idle (not in game scene), restart it
+                    $shouldRestart = $true
+                    $restartReason = "Unity connected but not in game scene (simulation mode requires active gameplay)"
+                }
+                
+                if ($shouldRestart) {
+                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🔄 UNITY: Restarting - $restartReason" -ForegroundColor "Cyan"
+                    Restart-UnityIfNeeded | Out-Null
+                }
             }
             
             $lastUnityCheck = $now
