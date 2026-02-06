@@ -1598,7 +1598,7 @@ function activeMonitoring() {
             simulations: simData,
             message: statusMessage,
             whatImDoing: whatImDoing,
-            timestamp: latestStatus.timestamp,
+            timestamp: new Date().toISOString(),
             reportToUser: true, // Flag for me to read and report
             // CRITICAL: Add a clear marker so I can easily find these reports
             REPORT_MARKER: '=== STATUS REPORT FOR USER ==='
