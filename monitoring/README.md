@@ -17,6 +17,50 @@ This is the **ONLY** logging system used across the entire game. It replaces all
 
 ---
 
+## 🏗️ System Architecture
+
+This monitoring system consists of **two integrated but separate components**:
+
+### 1. **Log Watcher** (Built into Server)
+- **Location**: `scripts/watch-logs-and-fix.js`
+- **Status**: Runs automatically when server starts
+- **Initialized**: `src/server.js` line 19 & 222
+- **Purpose**:
+  - Reads `game.log` continuously
+  - Detects issues using error patterns
+  - Pauses Unity when issues are found
+  - Fixes issues (or attempts to)
+  - Resumes Unity after fixes
+  - Clears logs when needed (>5MB, archives first)
+
+### 2. **Monitor** (Separate PowerShell Script)
+- **Location**: `monitoring/monitor.ps1`
+- **Status**: You run it manually
+- **Purpose**:
+  - Reads `game.log` continuously
+  - Detects issues using `issue-detector.js`
+  - Writes special markers to `game.log` when issues are found
+  - Shows real-time statistics dashboard
+  - Logs issues to `pending-issues.json`
+
+### How They Work Together
+
+1. **Monitor detects issue** → Writes marker to `game.log` with `tableId`
+2. **Log watcher reads `game.log`** → Detects marker → Pauses Unity
+3. **Both use same log file** (`game.log`) for communication
+
+### Pattern Sharing
+
+Both systems use similar error patterns. To update patterns in both systems:
+
+1. **Monitor patterns**: Edit `monitoring/issue-detector.js` → `errorPatterns` object
+2. **Log watcher patterns**: Edit `scripts/watch-logs-and-fix.js` → `ERROR_PATTERNS` array
+3. **Shared patterns file** (optional): Create `monitoring/shared-patterns.js` for both to import
+
+**Note**: When adding new patterns, update both files to keep them in sync. The monitor's patterns are more comprehensive (with severity mapping), while the log watcher's patterns are simpler (flat array).
+
+---
+
 ## 📁 File Structure
 
 ```
@@ -26,6 +70,9 @@ monitoring/
 ├── issue-detector.js        # Core issue detection engine
 ├── fix-tracker.js           # Fix attempt tracking system
 └── unity-log-handler.js     # Unity console log capture handler
+
+scripts/
+└── watch-logs-and-fix.js    # Server-side log watcher (runs automatically)
 
 logs/
 ├── game.log                 # ALL logs go here (server + Unity)
