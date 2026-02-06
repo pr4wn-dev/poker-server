@@ -1538,7 +1538,7 @@ function activeMonitoring() {
     if (newSimulations.length > 0) {
         // NEW SIMULATION DETECTED - REPORT TO USER VIA ERROR LOG (so I can read it)
         for (const sim of newSimulations) {
-            gameLogger.error('LOG_WATCHER', `[ACTIVE_MONITORING] NEW_SIMULATION_DETECTED`, {
+            gameLogger.gameEvent('LOG_WATCHER', `[ACTIVE_MONITORING] NEW_SIMULATION_DETECTED`, {
                 action: 'SIMULATION_STARTED',
                 tableId: sim.id,
                 tableName: sim.name,
@@ -1564,7 +1564,7 @@ function activeMonitoring() {
     // On first run OR if we haven't reported yet, ALWAYS report ALL simulations
     // This handles the case where server restarts and simulations are still running
     if ((isFirstRun || !hasReportedOnThisRun) && simulationTables.length > 0) {
-        gameLogger.error('LOG_WATCHER', `[ACTIVE_MONITORING] FORCING_REPORT_FIRST_RUN`, {
+        gameLogger.gameEvent('LOG_WATCHER', `[ACTIVE_MONITORING] FORCING_REPORT_FIRST_RUN`, {
             reason: isFirstRun ? 'first_run' : 'not_reported_yet',
             simulationCount: simulationTables.length,
             tableNames: simulationTables.map(s => s.name),
@@ -1574,7 +1574,7 @@ function activeMonitoring() {
         isFirstRun = false;
         hasReportedOnThisRun = true;
         for (const sim of simulationTables) {
-            gameLogger.error('LOG_WATCHER', `[ACTIVE_MONITORING] EXISTING_SIMULATION_DETECTED`, {
+            gameLogger.gameEvent('LOG_WATCHER', `[ACTIVE_MONITORING] EXISTING_SIMULATION_DETECTED`, {
                 action: 'SIMULATION_ALREADY_RUNNING',
                 tableId: sim.id,
                 tableName: sim.name,
@@ -1594,13 +1594,13 @@ function activeMonitoring() {
         lastReportedSimulations = currentSimIds;
     } else if (simulationTables.length > 0 && lastReportedSimulations.size === 0) {
         // If we have simulations but none reported (shouldn't happen, but safety check)
-        gameLogger.error('LOG_WATCHER', `[ACTIVE_MONITORING] FORCING_REPORT_NO_REPORTED`, {
+        gameLogger.gameEvent('LOG_WATCHER', `[ACTIVE_MONITORING] FORCING_REPORT_NO_REPORTED`, {
             reason: 'no_simulations_reported_yet',
             simulationCount: simulationTables.length,
             tableNames: simulationTables.map(s => s.name)
         });
         for (const sim of simulationTables) {
-            gameLogger.error('LOG_WATCHER', `[ACTIVE_MONITORING] EXISTING_SIMULATION_DETECTED`, {
+            gameLogger.gameEvent('LOG_WATCHER', `[ACTIVE_MONITORING] EXISTING_SIMULATION_DETECTED`, {
                 action: 'SIMULATION_ALREADY_RUNNING',
                 tableId: sim.id,
                 tableName: sim.name,
@@ -1643,7 +1643,7 @@ function activeMonitoring() {
         })) : [];
         
         // Write to log with [ERROR] level so it's easy to find
-        gameLogger.error('LOG_WATCHER', `[ACTIVE_MONITORING] STATUS_REPORT`, {
+        gameLogger.gameEvent('LOG_WATCHER', `[ACTIVE_MONITORING] STATUS_REPORT`, {
             action: 'STATUS_UPDATE',
             activeSimulations: simulationTables.length,
             simulations: simData,
@@ -1688,7 +1688,7 @@ function startActiveMonitoring() {
     }, 1000); // Check every 1 second instead of 2
     
     // Use error log so I can detect and report this to the user
-    gameLogger.error('LOG_WATCHER', `[ACTIVE_MONITORING] STARTED`, {
+    gameLogger.gameEvent('LOG_WATCHER', `[ACTIVE_MONITORING] STARTED`, {
         checkInterval: '1 second',
         statusReportInterval: '10 seconds',
         message: 'ACTIVE MONITORING STARTED - I will detect new simulations and report status regularly',
@@ -1710,7 +1710,7 @@ function startActiveMonitoring() {
             }, 1000); // Wait 1 second for table to be fully created
             return result;
         };
-        gameLogger.error('LOG_WATCHER', `[ACTIVE_MONITORING] HOOKED_INTO_SIMULATION_MANAGER`, {
+        gameLogger.gameEvent('LOG_WATCHER', `[ACTIVE_MONITORING] HOOKED_INTO_SIMULATION_MANAGER`, {
             message: 'I will now detect simulations immediately when they are created',
             reportToUser: true
         });
