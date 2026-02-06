@@ -64,8 +64,27 @@ function getActiveSimulationTables() {
  * Pause a simulation table
  */
 function pauseSimulation(tableId, reason) {
+    const gameLogger = require('../src/utils/GameLogger');
+    
+    // ROOT TRACING: Track pause attempt
+    gameLogger.gameEvent('LOG_WATCHER', `[PAUSE] ATTEMPT`, {
+        tableId,
+        reason,
+        alreadyPaused: pausedTables.has(tableId),
+        gameManagerExists: !!gameManager,
+        simulationManagerExists: !!simulationManager,
+        socketHandlerExists: !!socketHandler,
+        stackTrace: new Error().stack?.split('\n').slice(2, 8).join(' | ') || 'NO_STACK'
+    });
+    
     if (pausedTables.has(tableId)) {
-        console.log(`[LogWatcher] Table ${tableId} already paused: ${pausedTables.get(tableId).reason}`);
+        const existingReason = pausedTables.get(tableId).reason;
+        gameLogger.gameEvent('LOG_WATCHER', `[PAUSE] ALREADY_PAUSED`, {
+            tableId,
+            existingReason,
+            newReason: reason
+        });
+        console.log(`[LogWatcher] Table ${tableId} already paused: ${existingReason}`);
         return;
     }
     
@@ -73,6 +92,11 @@ function pauseSimulation(tableId, reason) {
     console.log(`[LogWatcher] Reason: ${reason}`);
     
     if (!gameManager) {
+        gameLogger.gameEvent('LOG_WATCHER', `[PAUSE] ERROR`, {
+            tableId,
+            reason,
+            error: 'GAME_MANAGER_NOT_INITIALIZED'
+        });
         console.error(`[LogWatcher] GameManager not initialized!`);
         return;
     }
@@ -80,24 +104,70 @@ function pauseSimulation(tableId, reason) {
     // Get the table
     const table = gameManager.getTable(tableId);
     if (!table) {
+        gameLogger.gameEvent('LOG_WATCHER', `[PAUSE] ERROR`, {
+            tableId,
+            reason,
+            error: 'TABLE_NOT_FOUND',
+            availableTables: Array.from(gameManager.tables.keys())
+        });
         console.error(`[LogWatcher] Table ${tableId} not found!`);
         return;
     }
+    
+    // ROOT TRACING: Log before pause
+    gameLogger.gameEvent('LOG_WATCHER', `[PAUSE] BEFORE_STATE`, {
+        tableId,
+        reason,
+        tableName: table.name,
+        isSimulation: table.isSimulation,
+        gameStarted: table.gameStarted,
+        phase: table.phase,
+        currentPausedState: table.isPaused,
+        currentPauseReason: table.pauseReason
+    });
     
     // Set pause state
     table.isPaused = true;
     table.pauseReason = reason;
     
     // Call pause callback if available
+    let callbackCalled = false;
     if (table.onPauseSimulation) {
-        table.onPauseSimulation(tableId, reason);
+        try {
+            table.onPauseSimulation(tableId, reason);
+            callbackCalled = true;
+        } catch (error) {
+            gameLogger.gameEvent('LOG_WATCHER', `[PAUSE] CALLBACK_ERROR`, {
+                tableId,
+                reason,
+                error: error.message,
+                stackTrace: error.stack
+            });
+        }
     }
     
     // Use SimulationManager if available
+    let simulationManagerResult = null;
     if (simulationManager) {
-        const result = simulationManager.pauseSimulation(tableId, reason);
-        if (result.success) {
-            console.log(`[LogWatcher] ✓ Simulation paused via SimulationManager`);
+        try {
+            const result = simulationManager.pauseSimulation(tableId, reason);
+            simulationManagerResult = result;
+            if (result && result.success) {
+                console.log(`[LogWatcher] ✓ Simulation paused via SimulationManager`);
+            } else {
+                gameLogger.gameEvent('LOG_WATCHER', `[PAUSE] SIMULATION_MANAGER_FAILED`, {
+                    tableId,
+                    reason,
+                    result: result || 'null'
+                });
+            }
+        } catch (error) {
+            gameLogger.gameEvent('LOG_WATCHER', `[PAUSE] SIMULATION_MANAGER_ERROR`, {
+                tableId,
+                reason,
+                error: error.message,
+                stackTrace: error.stack
+            });
         }
     }
     
@@ -108,34 +178,90 @@ function pauseSimulation(tableId, reason) {
     });
     
     // Broadcast pause to Unity
+    let broadcastSent = false;
     if (socketHandler && socketHandler.io) {
-        socketHandler.io.to(`table:${tableId}`).emit('simulation_paused', {
-            tableId,
-            reason,
-            pausedAt: Date.now()
-        });
+        try {
+            socketHandler.io.to(`table:${tableId}`).emit('simulation_paused', {
+                tableId,
+                reason,
+                pausedAt: Date.now()
+            });
+            broadcastSent = true;
+        } catch (error) {
+            gameLogger.gameEvent('LOG_WATCHER', `[PAUSE] BROADCAST_ERROR`, {
+                tableId,
+                reason,
+                error: error.message
+            });
+        }
     }
+    
+    // ROOT TRACING: Log pause success with full state
+    gameLogger.gameEvent('LOG_WATCHER', `[PAUSE] SUCCESS`, {
+        tableId,
+        reason,
+        tableName: table.name,
+        pausedAt: Date.now(),
+        callbackCalled,
+        simulationManagerResult: simulationManagerResult?.success || false,
+        broadcastSent,
+        pausedTablesCount: pausedTables.size,
+        tablePausedState: table.isPaused,
+        tablePauseReason: table.pauseReason
+    });
 }
 
 /**
  * Resume a simulation table
  */
 function resumeSimulation(tableId) {
+    const gameLogger = require('../src/utils/GameLogger');
+    
+    // ROOT TRACING: Track resume attempt
+    gameLogger.gameEvent('LOG_WATCHER', `[RESUME] ATTEMPT`, {
+        tableId,
+        wasPaused: pausedTables.has(tableId),
+        pauseInfo: pausedTables.has(tableId) ? pausedTables.get(tableId) : null,
+        gameManagerExists: !!gameManager,
+        simulationManagerExists: !!simulationManager,
+        socketHandlerExists: !!socketHandler,
+        stackTrace: new Error().stack?.split('\n').slice(2, 8).join(' | ') || 'NO_STACK'
+    });
+    
     if (!pausedTables.has(tableId)) {
+        gameLogger.gameEvent('LOG_WATCHER', `[RESUME] NOT_PAUSED`, {
+            tableId,
+            pausedTablesCount: pausedTables.size,
+            pausedTableIds: Array.from(pausedTables.keys())
+        });
         console.log(`[LogWatcher] Table ${tableId} was not paused`);
         return;
     }
     
     const pauseInfo = pausedTables.get(tableId);
+    const pauseDuration = Date.now() - pauseInfo.pausedAt;
+    
     if (!pauseInfo.fixed) {
+        gameLogger.gameEvent('LOG_WATCHER', `[RESUME] NOT_FIXED`, {
+            tableId,
+            reason: pauseInfo.reason,
+            pausedAt: pauseInfo.pausedAt,
+            pauseDuration: `${Math.floor(pauseDuration / 1000)}s`,
+            fixing: pauseInfo.fixing || false
+        });
         console.log(`[LogWatcher] ⚠️  Cannot resume ${tableId} - issue not marked as fixed yet`);
         return;
     }
     
     console.log(`\n[LogWatcher] ✓ RESUMING SIMULATION: ${tableId}`);
     console.log(`[LogWatcher] Was paused for: ${pauseInfo.reason}`);
+    console.log(`[LogWatcher] Pause duration: ${Math.floor(pauseDuration / 1000)}s`);
     
     if (!gameManager) {
+        gameLogger.gameEvent('LOG_WATCHER', `[RESUME] ERROR`, {
+            tableId,
+            error: 'GAME_MANAGER_NOT_INITIALIZED'
+        });
         console.error(`[LogWatcher] GameManager not initialized!`);
         return;
     }
@@ -143,22 +269,51 @@ function resumeSimulation(tableId) {
     // Get the table
     const table = gameManager.getTable(tableId);
     if (!table) {
+        gameLogger.gameEvent('LOG_WATCHER', `[RESUME] ERROR`, {
+            tableId,
+            error: 'TABLE_NOT_FOUND',
+            availableTables: Array.from(gameManager.tables.keys())
+        });
         console.error(`[LogWatcher] Table ${tableId} not found!`);
         return;
     }
+    
+    // ROOT TRACING: Log before resume
+    gameLogger.gameEvent('LOG_WATCHER', `[RESUME] BEFORE_STATE`, {
+        tableId,
+        reason: pauseInfo.reason,
+        pauseDuration: `${Math.floor(pauseDuration / 1000)}s`,
+        tableName: table.name,
+        currentPausedState: table.isPaused,
+        currentPauseReason: table.pauseReason,
+        gameStarted: table.gameStarted,
+        phase: table.phase
+    });
     
     // Clear pause state
     table.isPaused = false;
     table.pauseReason = null;
     
     // Use SimulationManager if available
+    let simulationManagerResult = null;
     if (simulationManager) {
         try {
             const result = simulationManager.resumeSimulation(tableId);
+            simulationManagerResult = result;
             if (result && result.success) {
                 console.log(`[LogWatcher] ✓ Simulation resumed via SimulationManager`);
+            } else {
+                gameLogger.gameEvent('LOG_WATCHER', `[RESUME] SIMULATION_MANAGER_FAILED`, {
+                    tableId,
+                    result: result || 'null'
+                });
             }
         } catch (error) {
+            gameLogger.gameEvent('LOG_WATCHER', `[RESUME] SIMULATION_MANAGER_ERROR`, {
+                tableId,
+                error: error.message,
+                stackTrace: error.stack
+            });
             console.error(`[LogWatcher] Error resuming simulation: ${error.message}`);
             // Continue anyway - table state is already updated
         }
@@ -167,12 +322,37 @@ function resumeSimulation(tableId) {
     pausedTables.delete(tableId);
     
     // Broadcast resume to Unity
+    let broadcastSent = false;
     if (socketHandler && socketHandler.io) {
-        socketHandler.io.to(`table:${tableId}`).emit('simulation_resumed', {
-            tableId,
-            resumedAt: Date.now()
-        });
+        try {
+            socketHandler.io.to(`table:${tableId}`).emit('simulation_resumed', {
+                tableId,
+                resumedAt: Date.now()
+            });
+            broadcastSent = true;
+        } catch (error) {
+            gameLogger.gameEvent('LOG_WATCHER', `[RESUME] BROADCAST_ERROR`, {
+                tableId,
+                error: error.message
+            });
+        }
     }
+    
+    // ROOT TRACING: Log resume success with full state
+    gameLogger.gameEvent('LOG_WATCHER', `[RESUME] SUCCESS`, {
+        tableId,
+        reason: pauseInfo.reason,
+        pauseDuration: `${Math.floor(pauseDuration / 1000)}s`,
+        tableName: table.name,
+        resumedAt: Date.now(),
+        simulationManagerResult: simulationManagerResult?.success || false,
+        broadcastSent,
+        pausedTablesCount: pausedTables.size,
+        tablePausedState: table.isPaused,
+        tablePauseReason: table.pauseReason,
+        gameStarted: table.gameStarted,
+        phase: table.phase
+    });
 }
 
 /**
