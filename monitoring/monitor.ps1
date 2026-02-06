@@ -1261,13 +1261,20 @@ while ($monitoringActive) {
                         # Extract table ID if available
                         $tableId = $null
                         # Try multiple patterns to extract table ID (avoid PowerShell parsing issues with character classes)
-                        if ($line -match 'tableId[`"\s:]+`"([^`"]+)`"') {
+                        # Pattern 1: tableId: "uuid" or tableId": "uuid"
+                        if ($line -match 'tableId.*?"([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})"') {
                             $tableId = $matches[1]
-                        } elseif ($line -match '"tableId"\s*:\s*"([^"]+)"') {
+                        }
+                        # Pattern 2: tableId: uuid (no quotes)
+                        elseif ($line -match 'tableId.*?([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})') {
                             $tableId = $matches[1]
-                        } elseif ($line -match "tableId[`"\s:]+([\w\-]+)") {
+                        }
+                        # Pattern 3: Any quoted value after tableId
+                        elseif ($line -match 'tableId.*?"([^"]+)"') {
                             $tableId = $matches[1]
-                        } elseif ($line -match 'tableId[`"\s:]+([0-9a-f\-]{8,})') {
+                        }
+                        # Pattern 4: Any word characters after tableId (fallback)
+                        elseif ($line -match 'tableId.*?(\w{8,})') {
                             $tableId = $matches[1]
                         }
                         
