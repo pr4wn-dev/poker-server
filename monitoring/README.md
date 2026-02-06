@@ -36,12 +36,24 @@ This monitoring system consists of **two integrated but separate components**:
 ### 2. **Monitor** (Separate PowerShell Script)
 - **Location**: `monitoring/monitor.ps1`
 - **Status**: You run it manually
+- **Modes**: 
+  - **Simulation Mode**: Fully automated including table creation and simulation start
+  - **Normal Mode**: User creates table manually, everything else automated
 - **Purpose**:
   - Reads `game.log` continuously
   - Detects issues using `issue-detector.js`
   - Writes special markers to `game.log` when issues are found
   - Shows real-time statistics dashboard
   - Logs issues to `pending-issues.json`
+  - **Automation** (both modes):
+    - Auto-restart server if needed
+    - Auto-restart database if needed
+    - Auto-restart Unity if needed
+    - Auto-connect Unity to server
+    - Auto-login Unity
+  - **Simulation Mode Only**:
+    - Auto-create simulation table
+    - Auto-start simulation
 
 ### How They Work Together
 
@@ -102,18 +114,38 @@ npm start
 **Wait for:** `Server listening on port 3000` message
 
 ### 3. Start Monitoring
+
+**Normal Mode** (default - user creates table manually):
 ```powershell
 .\monitoring\monitor.ps1
+# or explicitly:
+.\monitoring\monitor.ps1 -Mode normal
+```
+
+**Simulation Mode** (fully automated including table creation):
+```powershell
+.\monitoring\monitor.ps1 -Mode simulation
 ```
 
 The monitor will:
 - Watch `logs/game.log` continuously
 - Detect issues automatically with severity-based detection
-- Display **real-time statistics dashboard** (updates every 5 seconds)
+- Display **real-time statistics dashboard** (updates every 10 seconds)
 - Pause Unity when **critical/high** issues are found
 - Log issues to `logs/pending-issues.json`
 - Track fix attempts and success rates
 - Show comprehensive stats: issues by severity, source, patterns, fix attempts
+
+**Automation Features** (both modes):
+- ✅ Auto-restart server if needed
+- ✅ Auto-restart database (MySQL) if needed
+- ✅ Auto-restart Unity if needed
+- ✅ Auto-connect Unity to server
+- ✅ Auto-login Unity
+
+**Simulation Mode Only**:
+- ✅ Auto-create simulation table
+- ✅ Auto-start simulation
 
 **Note:** The server also runs `scripts/watch-logs-and-fix.js` automatically, which is now a **pause/resume service only**. It responds to Monitor's pause/resume markers and handles log maintenance (archiving/clearing when >5MB). It does NOT auto-fix issues.
 

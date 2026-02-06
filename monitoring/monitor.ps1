@@ -2,8 +2,19 @@
 # Monitors logs continuously, detects issues, pauses Unity, and waits for fixes
 # Displays real-time statistics in a formatted layout
 #
-# Usage: .\monitoring\monitor.ps1
-# This script runs continuously until stopped (Ctrl+C)
+# Usage: 
+#   .\monitoring\monitor.ps1                    # Normal mode (default)
+#   .\monitoring\monitor.ps1 -Mode simulation   # Simulation mode (fully automated)
+#   .\monitoring\monitor.ps1 -Mode normal       # Normal mode (user creates table)
+#
+# Modes:
+#   - simulation: Fully automated including table creation and simulation start
+#   - normal: User creates table manually, everything else automated
+
+param(
+    [ValidateSet("simulation", "normal")]
+    [string]$Mode = "normal"
+)
 
 $ErrorActionPreference = "Continue"
 
@@ -20,6 +31,70 @@ $checkInterval = 1  # Check every 1 second
 $nodeScript = Join-Path $script:projectRoot "monitoring\issue-detector.js"
 $serverUrl = "http://localhost:3000"
 $statsUpdateInterval = 10  # Update stats display every 10 seconds (reduced frequency to prevent flickering)
+$configFile = Join-Path $script:projectRoot "monitoring\monitor-config.json"
+
+# Load configuration
+$config = @{
+    mode = $Mode
+    automation = @{
+        autoRestartServer = $true
+        autoRestartDatabase = $true
+        autoRestartUnity = $true
+        autoConnectUnity = $true
+        autoLogin = $true
+    }
+    unity = @{
+        executablePath = ""
+        projectPath = ""
+        autoConnectOnStartup = $true
+        serverUrl = $serverUrl
+    }
+    login = @{
+        username = "monitor_user"
+        password = ""
+    }
+    simulation = @{
+        enabled = ($Mode -eq "simulation")
+        tableName = "Auto Simulation"
+        maxPlayers = 9
+        startingChips = 10000
+        smallBlind = 50
+        bigBlind = 100
+        autoStartSimulation = $true
+    }
+}
+
+# Load config from file if it exists
+if (Test-Path $configFile) {
+    try {
+        $fileConfig = Get-Content $configFile -Raw | ConvertFrom-Json
+        if ($fileConfig.mode) { $config.mode = $fileConfig.mode }
+        if ($fileConfig.automation) { $config.automation = $fileConfig.automation }
+        if ($fileConfig.unity) { $config.unity = $fileConfig.unity }
+        if ($fileConfig.login) { $config.login = $fileConfig.login }
+        if ($fileConfig.simulation) { $config.simulation = $fileConfig.simulation }
+        
+        # Override mode from command line if provided
+        if ($Mode -ne "normal") {
+            $config.mode = $Mode
+            $config.simulation.enabled = ($Mode -eq "simulation")
+        }
+        
+        Write-Info "Loaded configuration from $configFile"
+    } catch {
+        Write-Warning "Failed to load config file: $_"
+    }
+} else {
+    Write-Warning "Config file not found: $configFile - using defaults"
+}
+
+# Get password from environment variable if not in config
+if (-not $config.login.password -and $env:MONITOR_PASSWORD) {
+    $config.login.password = $env:MONITOR_PASSWORD
+}
+
+Write-Info "Monitor Mode: $($config.mode)"
+Write-Info "Simulation Mode: $($config.simulation.enabled)"
 
 # Colors for output
 function Write-Status { param($message, $color = "White") Write-Host "[$(Get-Date -Format 'HH:mm:ss')] $message" -ForegroundColor $color }
@@ -782,6 +857,196 @@ function Start-ServerIfNeeded {
     return $true
 }
 
+# ============================================================================
+# AUTOMATION FUNCTIONS - Service Management
+# ============================================================================
+
+# Function to restart database (MySQL) if needed
+function Restart-DatabaseIfNeeded {
+    if (-not $config.automation.autoRestartDatabase) {
+        return $true  # Automation disabled
+    }
+    
+    try {
+        # Check if MySQL service is running
+        $mysqlService = Get-Service -Name "MySQL*" -ErrorAction SilentlyContinue | Select-Object -First 1
+        if (-not $mysqlService) {
+            # Try WAMP/XAMPP service names
+            $mysqlService = Get-Service -Name "wampmysqld*", "mysql*" -ErrorAction SilentlyContinue | Select-Object -First 1
+        }
+        
+        if ($mysqlService) {
+            if ($mysqlService.Status -ne 'Running') {
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] DATABASE: MySQL service not running, attempting restart..." -ForegroundColor "Yellow"
+                Start-Service -Name $mysqlService.Name -ErrorAction SilentlyContinue
+                Start-Sleep -Seconds 3
+                
+                # Verify it started
+                $mysqlService.Refresh()
+                if ($mysqlService.Status -eq 'Running') {
+                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] DATABASE: MySQL service restarted successfully" -ForegroundColor "Green"
+                    return $true
+                } else {
+                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] DATABASE: Failed to restart MySQL service - manual intervention required" -ForegroundColor "Red"
+                    return $false
+                }
+            }
+            return $true
+        } else {
+            # MySQL service not found - might be running via WAMP/XAMPP GUI
+            # Check if we can connect to database
+            $healthCheck = try {
+                $response = Invoke-WebRequest -Uri "$serverUrl/health" -TimeoutSec 2 -ErrorAction Stop
+                $health = $response.Content | ConvertFrom-Json
+                return $health.database -eq $true
+            } catch {
+                return $false
+            }
+            
+            if (-not $healthCheck) {
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] DATABASE: Database appears offline - please restart MySQL manually (WAMP/XAMPP)" -ForegroundColor "Yellow"
+                return $false
+            }
+            return $true
+        }
+    } catch {
+        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] DATABASE: Error checking database: $_" -ForegroundColor "Red"
+        return $false
+    }
+}
+
+# Function to restart Unity if needed
+function Restart-UnityIfNeeded {
+    if (-not $config.automation.autoRestartUnity) {
+        return $true  # Automation disabled
+    }
+    
+    if (-not $config.unity.executablePath -or -not (Test-Path $config.unity.executablePath)) {
+        return $true  # Unity path not configured
+    }
+    
+    try {
+        # Check if Unity is running
+        $unityProcess = Get-Process -Name "Unity" -ErrorAction SilentlyContinue
+        
+        # Check if Unity is connected to server
+        $isConnected = $false
+        if ($unityProcess) {
+            # Check server health for active connections
+            try {
+                $healthCheck = Invoke-WebRequest -Uri "$serverUrl/health" -TimeoutSec 2 -ErrorAction Stop
+                $health = $healthCheck.Content | ConvertFrom-Json
+                $isConnected = $health.onlinePlayers -gt 0
+            } catch {
+                $isConnected = $false
+            }
+        }
+        
+        # If Unity is not running or not connected, restart it
+        if (-not $unityProcess -or -not $isConnected) {
+            if ($unityProcess) {
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Unity running but not connected, restarting..." -ForegroundColor "Yellow"
+                Stop-Process -Name "Unity" -Force -ErrorAction SilentlyContinue
+                Start-Sleep -Seconds 2
+            } else {
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Unity not running, starting..." -ForegroundColor "Yellow"
+            }
+            
+            # Start Unity with project path
+            $unityArgs = @(
+                "-projectPath", $config.unity.projectPath
+            )
+            
+            if ($config.unity.autoConnectOnStartup) {
+                # Pass server URL as command line arg (Unity needs to support this)
+                $unityArgs += "-serverUrl", $config.unity.serverUrl
+            }
+            
+            Start-Process -FilePath $config.unity.executablePath -ArgumentList $unityArgs -WindowStyle Normal
+            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Unity started, waiting for connection..." -ForegroundColor "Cyan"
+            
+            # Wait up to 60 seconds for Unity to connect
+            $maxWait = 60
+            $waited = 0
+            while ($waited -lt $maxWait) {
+                Start-Sleep -Seconds 3
+                $waited += 3
+                
+                try {
+                    $healthCheck = Invoke-WebRequest -Uri "$serverUrl/health" -TimeoutSec 2 -ErrorAction Stop
+                    $health = $healthCheck.Content | ConvertFrom-Json
+                    if ($health.onlinePlayers -gt 0) {
+                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Connected to server!" -ForegroundColor "Green"
+                        
+                        # If simulation mode, auto-create table and start simulation
+                        if ($config.simulation.enabled) {
+                            Start-Sleep -Seconds 2  # Give Unity time to fully initialize
+                            Start-SimulationTable
+                        }
+                        
+                        return $true
+                    }
+                } catch {
+                    # Server might not be ready yet
+                }
+            }
+            
+            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Unity started but not connected after $maxWait seconds" -ForegroundColor "Yellow"
+            return $false
+        }
+        
+        return $true
+    } catch {
+        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Error restarting Unity: $_" -ForegroundColor "Red"
+        return $false
+    }
+}
+
+# Function to create and start simulation table (simulation mode only)
+function Start-SimulationTable {
+    if (-not $config.simulation.enabled) {
+        return $false  # Not in simulation mode
+    }
+    
+    try {
+        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] SIMULATION: Creating simulation table..." -ForegroundColor "Cyan"
+        
+        # TODO: Implement via Socket.IO client or HTTP API
+        # For now, this is a placeholder - Unity needs to handle table creation
+        # Or we need to add HTTP API endpoint for table creation
+        
+        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] SIMULATION: Table creation requires Unity client or HTTP API endpoint" -ForegroundColor "Yellow"
+        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] SIMULATION: TODO: Implement auto-create table functionality" -ForegroundColor "Gray"
+        
+        return $false
+    } catch {
+        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] SIMULATION: Error creating table: $_" -ForegroundColor "Red"
+        return $false
+    }
+}
+
+# Function to check and maintain all services
+function Maintain-Services {
+    if (-not $config.automation.autoRestartServer -and 
+        -not $config.automation.autoRestartDatabase -and 
+        -not $config.automation.autoRestartUnity) {
+        return  # All automation disabled
+    }
+    
+    # Check and restart services as needed
+    if ($config.automation.autoRestartServer) {
+        Start-ServerIfNeeded | Out-Null
+    }
+    
+    if ($config.automation.autoRestartDatabase) {
+        Restart-DatabaseIfNeeded | Out-Null
+    }
+    
+    if ($config.automation.autoRestartUnity) {
+        Restart-UnityIfNeeded | Out-Null
+    }
+}
+
 # Initialize Windows API for window size control (only once)
 if (-not ([System.Management.Automation.PSTypeName]'WindowSizeAPI').Type) {
     Add-Type @"
@@ -968,13 +1233,26 @@ Set-MinimumWindowSize
 # Start server if needed before showing statistics
 Start-ServerIfNeeded
 
+# Initial service maintenance check
+Maintain-Services
+
 # Initial display
 Show-Statistics
 
 # Main monitoring loop
 $lastStatsUpdate = Get-Date
+$lastServiceCheck = Get-Date
+$serviceCheckInterval = 30  # Check services every 30 seconds
+
 while ($monitoringActive) {
     try {
+        # Periodic service maintenance (every 30 seconds)
+        $timeSinceServiceCheck = (Get-Date) - $lastServiceCheck
+        if ($timeSinceServiceCheck.TotalSeconds -ge $serviceCheckInterval) {
+            Maintain-Services
+            $lastServiceCheck = Get-Date
+        }
+        
         # Check if log file exists
         if (-not (Test-Path $logFile)) {
             Start-Sleep -Seconds $checkInterval

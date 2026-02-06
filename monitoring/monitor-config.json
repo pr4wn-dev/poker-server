@@ -1,0 +1,32 @@
+{
+  "mode": "normal",
+  "comment": "Mode: 'simulation' = fully automated including table creation, 'normal' = user creates table but everything else automated",
+  "automation": {
+    "autoRestartServer": true,
+    "autoRestartDatabase": true,
+    "autoRestartUnity": true,
+    "autoConnectUnity": true,
+    "autoLogin": true
+  },
+  "unity": {
+    "executablePath": "C:\\Program Files\\Unity\\Hub\\Editor\\2022.3.0f1\\Editor\\Unity.exe",
+    "projectPath": "C:\\Projects\\poker-client-unity",
+    "autoConnectOnStartup": true,
+    "serverUrl": "http://localhost:3000"
+  },
+  "login": {
+    "username": "monitor_user",
+    "password": "",
+    "comment": "Password should be set via environment variable MONITOR_PASSWORD for security"
+  },
+  "simulation": {
+    "enabled": false,
+    "comment": "Only used in simulation mode - auto-create and start simulation table",
+    "tableName": "Auto Simulation",
+    "maxPlayers": 9,
+    "startingChips": 10000,
+    "smallBlind": 50,
+    "bigBlind": 100,
+    "autoStartSimulation": true
+  }
+}
