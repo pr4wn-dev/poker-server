@@ -176,7 +176,8 @@ function Show-Statistics {
     
     # If server is offline, attempt to start it immediately
     if ($stats.ServerStatus -eq "Offline") {
-        Write-Warning "Server is offline. Attempting to start..."
+        # Don't write to console - update stats display instead
+        # Write-Warning "Server is offline. Attempting to start..."
         $restartResult = Start-ServerIfNeeded
         if ($restartResult) {
             # Re-check status after restart attempt
@@ -399,7 +400,8 @@ function Show-Statistics {
 # Function to start server if not running
 function Start-ServerIfNeeded {
     if (-not (Test-ServerRunning)) {
-        Write-Warning "Server is not running. Starting server..."
+        # Don't write to console - update stats display instead
+        # Write-Warning "Server is not running. Starting server..."
         try {
             # Kill any existing node processes first
             Get-Process node -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
@@ -407,7 +409,8 @@ function Start-ServerIfNeeded {
             
             # Start server in background
             $serverProcess = Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$PWD'; npm start" -WindowStyle Minimized -PassThru
-            Write-Info "Server starting (PID: $($serverProcess.Id)). Waiting for server to be ready..."
+            # Don't write to console - update stats display instead
+            # Write-Info "Server starting (PID: $($serverProcess.Id)). Waiting for server to be ready..."
             
             # Wait up to 30 seconds for server to start
             $maxWait = 30
@@ -416,14 +419,17 @@ function Start-ServerIfNeeded {
                 Start-Sleep -Seconds 2
                 $waited += 2
                 if (Test-ServerRunning) {
-                    Write-Success "Server is now online!"
+                    # Don't write to console - update stats display instead
+                    # Write-Success "Server is now online!"
                     return $true
                 }
             }
-            Write-Error "Server failed to start within $maxWait seconds"
+            # Don't write to console - update stats display instead
+            # Write-Error "Server failed to start within $maxWait seconds"
             return $false
         } catch {
-            Write-Error "Failed to start server: $_"
+            # Don't write to console - update stats display instead
+            # Write-Error "Failed to start server: $_"
             return $false
         }
     }
@@ -494,8 +500,9 @@ while ($monitoringActive) {
                     # Only pause for critical/high severity issues
                     if (($issue.severity -eq 'critical' -or $issue.severity -eq 'high') -and -not $isPaused) {
                         # Issue detected - pause Unity and log issue
-                        Write-Error "ISSUE DETECTED: $($issue.message.Substring(0, [Math]::Min(100, $issue.message.Length)))"
-                        Write-Error "  Type: $($issue.type), Severity: $($issue.severity), Source: $($issue.source)"
+                        # Don't write to console - update stats display instead
+                        # Write-Error "ISSUE DETECTED: $($issue.message.Substring(0, [Math]::Min(100, $issue.message.Length)))"
+                        # Write-Error "  Type: $($issue.type), Severity: $($issue.severity), Source: $($issue.source)"
                         
                         # Extract table ID if available
                         $tableId = $null
@@ -581,15 +588,18 @@ while ($monitoringActive) {
         # Check server health every 5 seconds (independent of stats display)
         if (($now - $lastServerCheck).TotalSeconds -ge $serverCheckInterval) {
             if (-not (Test-ServerRunning)) {
-                Write-Warning "Server is offline. Attempting to restart..."
+                # Don't write to console - update stats display instead
+                # Write-Warning "Server is offline. Attempting to restart..."
                 $restartResult = Start-ServerIfNeeded
                 if (-not $restartResult) {
-                    Write-Error "Failed to restart server. Will retry in $serverCheckInterval seconds..."
+                    # Don't write to console - update stats display instead
+                    # Write-Error "Failed to restart server. Will retry in $serverCheckInterval seconds..."
                 } else {
                     # Re-check after restart attempt
                     Start-Sleep -Seconds 2
                     if (Test-ServerRunning) {
-                        Write-Success "Server restarted successfully!"
+                        # Don't write to console - update stats display instead
+                        # Write-Success "Server restarted successfully!"
                     }
                 }
             }
