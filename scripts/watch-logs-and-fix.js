@@ -1305,6 +1305,7 @@ const STATUS_REPORT_INTERVAL = 10000; // Report every 10 seconds
 
 /**
  * Active monitoring: Check for new simulations and report status regularly
+ * This function logs findings that I (the assistant) will read and report to the user
  */
 function activeMonitoring() {
     const gameLogger = require('../src/utils/GameLogger');
@@ -1324,7 +1325,9 @@ function activeMonitoring() {
                 phase: table.phase,
                 isPaused: table.isPaused,
                 pauseReason: table.pauseReason,
-                gameStarted: table.gameStarted
+                gameStarted: table.gameStarted,
+                pot: table.pot,
+                activePlayers: table.seats.filter(s => s && s.isActive).length
             });
         }
     }
@@ -1334,18 +1337,22 @@ function activeMonitoring() {
     const newSimulations = simulationTables.filter(t => !lastReportedSimulations.has(t.id));
     
     if (newSimulations.length > 0) {
-        // NEW SIMULATION DETECTED - REPORT TO USER
+        // NEW SIMULATION DETECTED - REPORT TO USER VIA ERROR LOG (so I can read it)
         for (const sim of newSimulations) {
             gameLogger.error('LOG_WATCHER', `[ACTIVE_MONITORING] NEW_SIMULATION_DETECTED`, {
                 action: 'SIMULATION_STARTED',
                 tableId: sim.id,
                 tableName: sim.name,
+                message: `NEW SIMULATION DETECTED: "${sim.name}"`,
                 whatImDoing: `I detected a new simulation started: "${sim.name}". I'm now actively monitoring it and will report any issues immediately.`,
                 handsPlayed: sim.handsPlayed,
                 phase: sim.phase,
                 gameStarted: sim.gameStarted,
                 isPaused: sim.isPaused,
-                timestamp: new Date().toISOString()
+                activePlayers: sim.activePlayers,
+                pot: sim.pot,
+                timestamp: new Date().toISOString(),
+                reportToUser: true // Flag for me to read and report
             });
         }
         lastReportedSimulations = currentSimIds;
@@ -1363,10 +1370,14 @@ function activeMonitoring() {
                     handsPlayed: s.handsPlayed,
                     phase: s.phase,
                     isPaused: s.isPaused,
-                    pauseReason: s.pauseReason
+                    pauseReason: s.pauseReason,
+                    pot: s.pot,
+                    activePlayers: s.activePlayers
                 })),
+                message: `STATUS: ${simulationTables.length} active simulation(s) running`,
                 whatImDoing: `I'm actively monitoring ${simulationTables.length} simulation(s). All systems operational. Will report immediately if any issues are detected.`,
-                timestamp: new Date().toISOString()
+                timestamp: new Date().toISOString(),
+                reportToUser: true // Flag for me to read and report
             });
         }
         lastStatusReport = now;
