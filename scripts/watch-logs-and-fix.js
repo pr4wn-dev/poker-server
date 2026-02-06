@@ -1189,11 +1189,8 @@ function processLogLine(line) {
         timestamp: new Date().toISOString()
     });
     
-    // Pause the simulation
-    pauseSimulation(tableId, `Auto-paused: ${issue.type} - ${issue.message.substring(0, 50)}`);
-    
-    // Fix the issue
-    fixIssue(issue, tableId);
+    // NEW WORKFLOW: Pause → Report → Fix → Clear Log → Resume
+    handleIssueWithLogClearing(issue, tableId, tableDetails);
 }
 
 /**
