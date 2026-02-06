@@ -38,7 +38,7 @@ const ERROR_PATTERNS = [
     /LoadItemIcon.*FAILED/i,
     /CreateItemAnteSlot.*FAILED/i,
     /Sprite not found/i,
-    /\[ERROR\](?!.*\[LOG_WATCHER\])/i  // ERROR but NOT from LOG_WATCHER
+    /\[ERROR\](?!.*\[LOG_WATCHER\])(?!.*\[TRACE\])/i  // ERROR but NOT from LOG_WATCHER or TRACE logs
 ];
 
 // Patterns for item ante specific issues
@@ -621,33 +621,64 @@ async function handleIssueWithLogClearing(issue, tableId, tableDetails) {
         });
     }
     
-    // STEP 5: RESUME UNITY
-    gameLogger.gameEvent('LOG_WATCHER', `[WORKFLOW] STEP_5_RESUMING_UNITY`, {
-        tableId,
-        issueType: issue.type,
-        fixResult: fixResult ? 'success' : 'failed',
-        whatImDoing: 'Resuming Unity simulation...'
-    });
+    // STEP 5: RESUME UNITY (only if fix succeeded or it's a non-critical issue)
+    const shouldResume = fixResult || issue.severity !== 'critical';
     
-    // Mark as fixed so resume will work
-    if (pausedTables.has(tableId)) {
-        pausedTables.get(tableId).fixed = true;
-        pausedTables.get(tableId).fixing = false;
-    }
-    
-    // Resume simulation
-    setTimeout(() => {
-        resumeSimulation(tableId);
-        
-        // Report completion
-        gameLogger.gameEvent('LOG_WATCHER', `[WORKFLOW] COMPLETE`, {
+    if (shouldResume) {
+        gameLogger.gameEvent('LOG_WATCHER', `[WORKFLOW] STEP_5_RESUMING_UNITY`, {
             tableId,
             issueType: issue.type,
-            whatHappened: 'Issue handled: Paused → Reported → Fixed → Log Cleared → Resumed',
-            simulationResumed: true,
-            readyForNextIssue: true
+            fixResult: fixResult ? 'success' : 'failed',
+            severity: issue.severity,
+            reason: fixResult ? 'Fix succeeded' : 'Non-critical issue, resuming anyway',
+            whatImDoing: 'Resuming Unity simulation...'
         });
-    }, 500);
+        
+        // Mark as fixed so resume will work
+        if (pausedTables.has(tableId)) {
+            pausedTables.get(tableId).fixed = true;
+            pausedTables.get(tableId).fixing = false;
+        }
+        
+        // Resume simulation
+        setTimeout(() => {
+            resumeSimulation(tableId);
+            
+            // Report completion
+            gameLogger.gameEvent('LOG_WATCHER', `[WORKFLOW] COMPLETE`, {
+                tableId,
+                issueType: issue.type,
+                fixResult: fixResult ? 'success' : 'failed',
+                whatHappened: 'Issue handled: Paused → Reported → Fixed → Log Cleared → Resumed',
+                simulationResumed: true,
+                readyForNextIssue: true
+            });
+        }, 500);
+    } else {
+        // Critical issue that couldn't be fixed - keep paused and report
+        gameLogger.error('LOG_WATCHER', `[WORKFLOW] STEP_5_NOT_RESUMING`, {
+            tableId,
+            issueType: issue.type,
+            fixResult: 'failed',
+            severity: issue.severity,
+            reason: 'Critical issue could not be fixed - keeping simulation paused',
+            whatImDoing: 'Simulation will remain paused until issue is manually resolved',
+            action: 'Manual intervention required'
+        });
+        
+        // Clear fixing flag but keep paused
+        if (pausedTables.has(tableId)) {
+            pausedTables.get(tableId).fixing = false;
+            pausedTables.get(tableId).fixed = false; // Don't mark as fixed
+        }
+        
+        // Still clear the log to prevent it from getting too large
+        gameLogger.gameEvent('LOG_WATCHER', `[WORKFLOW] LOG_CLEARED_BUT_STAYING_PAUSED`, {
+            tableId,
+            issueType: issue.type,
+            reason: 'Clearing log but keeping simulation paused due to unfixed critical issue'
+        });
+    }
 }
 
 async function fixIssue(issue, tableId) {
