@@ -765,9 +765,9 @@ class SocketBot {
         // Removed verbose THINK log - only log when action is actually taken
         
         setTimeout(() => {
-            // Check pause state again before taking action
-            if (this.isPaused) {
-                this.log('PAUSE', 'Simulation paused - canceling scheduled action');
+            // Check pause state again before taking action (from gameState)
+            if (this.gameState?.isPaused) {
+                this.log('PAUSE', 'Unity paused - canceling scheduled action');
                 this.actionScheduled = false;
                 return;
             }
