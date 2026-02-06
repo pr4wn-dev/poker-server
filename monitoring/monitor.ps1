@@ -54,6 +54,9 @@ $stats = @{
     LastIssueTime = $null
     LogFileSize = 0
     ServerStatus = "Unknown"
+    LastIssueLogged = $null
+    PauseMarkersWritten = 0
+    PauseMarkerErrors = 0
 }
 
 # Function to call Node.js issue detector
@@ -267,6 +270,15 @@ function Show-Statistics {
         Write-Host "|" -ForegroundColor Cyan
     }
     
+    Write-Host "| " -NoNewline -ForegroundColor Cyan
+    Write-Host "  Pause Markers: " -NoNewline -ForegroundColor White
+    Write-Host ("{0:N0}" -f $stats.PauseMarkersWritten) -NoNewline -ForegroundColor $(if ($stats.PauseMarkersWritten -gt 0) { "Green" } else { "Gray" })
+    if ($stats.PauseMarkerErrors -gt 0) {
+        Write-Host " (Errors: $($stats.PauseMarkerErrors))" -NoNewline -ForegroundColor Red
+    }
+    Write-Host (" " * 30) -NoNewline
+    Write-Host "|" -ForegroundColor Cyan
+    
     Write-Host "+==============================================================================+" -ForegroundColor Cyan
     
     # Issues by Severity
@@ -384,6 +396,10 @@ function Show-Statistics {
         $issuePreview = $currentIssue.Substring(0, [Math]::Min(50, $currentIssue.Length))
         Write-Host $issuePreview -NoNewline -ForegroundColor Red
         Write-Host (" " * (40 - $issuePreview.Length)) -NoNewline
+        Write-Host "|" -ForegroundColor Cyan
+        Write-Host "| " -NoNewline -ForegroundColor Cyan
+        Write-Host "  Action: PAUSED - Waiting for fix..." -ForegroundColor Yellow
+        Write-Host (" " * 30) -NoNewline
         Write-Host "|" -ForegroundColor Cyan
     }
     
@@ -529,8 +545,8 @@ while ($monitoringActive) {
                         $addResult = Add-PendingIssue $issueData
                         
                         if ($addResult -and $addResult.success) {
-                            # Don't write to console - update stats display instead
-                            # Write-Warning "Issue logged to pending-issues.json (ID: $($addResult.issueId))"
+                            # Update stats to show issue was logged
+                            $stats.LastIssueLogged = Get-Date
                             
                             # CRITICAL: Write a special log entry that the log watcher will detect to pause Unity
                             # This ensures Unity pauses immediately when monitor detects an issue
@@ -538,12 +554,15 @@ while ($monitoringActive) {
                             $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
                             $escapedMessage = $line.Replace('"','\"').Replace("`n"," ").Replace("`r"," ").Substring(0,[Math]::Min(200,$line.Length))
                             $pauseMarker = "[$timestamp] [GAME] [MONITOR] [CRITICAL_ISSUE_DETECTED] Issue detected by monitor - pausing Unity | Data: {`"issueId`":`"$($addResult.issueId)`",`"severity`":`"$($issue.severity)`",`"type`":`"$($issue.type)`",`"source`":`"$($issue.source)`",`"tableId`":$(if($tableId){`"$tableId`"}else{'null'}),`"message`":`"$escapedMessage`"}"
-                            Add-Content -Path $logFile -Value $pauseMarker -ErrorAction SilentlyContinue
                             
-                            # Don't write to console - update stats display instead
-                            # Write-Info "Pause trigger written to game.log - Unity will pause automatically"
-                            # Write-Info "Waiting for assistant to fix issue..."
-                            # Write-Info "Message assistant: 'issue found'"
+                            # Write pause marker to log file
+                            try {
+                                Add-Content -Path $logFile -Value $pauseMarker -ErrorAction Stop
+                                $stats.PauseMarkersWritten++
+                            } catch {
+                                # If writing fails, log it but continue
+                                $stats.PauseMarkerErrors++
+                            }
                             
                             $isPaused = $true
                             $currentIssue = $line
