@@ -1436,14 +1436,21 @@ function startActiveMonitoring() {
         clearInterval(activeMonitoringInterval);
     }
     
-    // Check every 2 seconds for new simulations and report every 10 seconds
+    // Check every 1 second for new simulations (faster detection)
     activeMonitoringInterval = setInterval(() => {
-        activeMonitoring();
-    }, 2000);
+        try {
+            activeMonitoring();
+        } catch (error) {
+            gameLogger.error('LOG_WATCHER', `[ACTIVE_MONITORING] ERROR`, {
+                error: error.message,
+                stack: error.stack
+            });
+        }
+    }, 1000); // Check every 1 second instead of 2
     
     // Use error log so I can detect and report this to the user
     gameLogger.error('LOG_WATCHER', `[ACTIVE_MONITORING] STARTED`, {
-        checkInterval: '2 seconds',
+        checkInterval: '1 second',
         statusReportInterval: '10 seconds',
         message: 'ACTIVE MONITORING STARTED - I will detect new simulations and report status regularly',
         whatImDoing: 'I will now actively monitor for new simulations and report status regularly',
@@ -1452,6 +1459,23 @@ function startActiveMonitoring() {
     
     // Immediate first check to detect any existing simulations
     activeMonitoring();
+    
+    // Also hook into SimulationManager to detect new simulations immediately
+    if (simulationManager && simulationManager.startSimulation) {
+        const originalStartSimulation = simulationManager.startSimulation.bind(simulationManager);
+        simulationManager.startSimulation = async function(...args) {
+            const result = await originalStartSimulation(...args);
+            // Immediately check for new simulation after it's created
+            setTimeout(() => {
+                activeMonitoring();
+            }, 1000); // Wait 1 second for table to be fully created
+            return result;
+        };
+        gameLogger.error('LOG_WATCHER', `[ACTIVE_MONITORING] HOOKED_INTO_SIMULATION_MANAGER`, {
+            message: 'I will now detect simulations immediately when they are created',
+            reportToUser: true
+        });
+    }
 }
 
 module.exports = {
