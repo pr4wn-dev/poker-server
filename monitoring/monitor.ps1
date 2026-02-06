@@ -795,6 +795,38 @@ function Enforce-MinimumWindowSize {
     }
 }
 
+# Check for and kill any existing monitor processes (ensure only one instance)
+function Stop-ExistingMonitorInstances {
+    try {
+        # Get all PowerShell processes
+        $allPowershellProcesses = Get-Process powershell -ErrorAction SilentlyContinue
+        
+        foreach ($proc in $allPowershellProcesses) {
+            try {
+                # Check command line to see if it's running monitor.ps1
+                $cmdLine = (Get-CimInstance Win32_Process -Filter "ProcessId = $($proc.Id)" -ErrorAction SilentlyContinue).CommandLine
+                
+                if ($cmdLine -and $cmdLine -like "*monitor.ps1*") {
+                    # Don't kill ourselves
+                    if ($proc.Id -ne $PID) {
+                        Write-Info "Found existing monitor process (PID: $($proc.Id)) - stopping it..."
+                        Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+                        Start-Sleep -Milliseconds 500
+                        Write-Success "Existing monitor process stopped"
+                    }
+                }
+            } catch {
+                # Ignore errors checking individual processes
+            }
+        }
+    } catch {
+        # If we can't check, just continue
+    }
+}
+
+# Kill any existing monitor instances before starting
+Stop-ExistingMonitorInstances
+
 # Set minimum window size at startup
 Set-MinimumWindowSize
 
