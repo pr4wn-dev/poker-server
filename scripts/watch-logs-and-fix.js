@@ -1389,12 +1389,24 @@ function activeMonitoring() {
         }
     }
     
+    // DEBUG: Log what we found
+    gameLogger.gameEvent('LOG_WATCHER', `[ACTIVE_MONITORING] DEBUG_CHECK`, {
+        simulationTablesFound: simulationTables.length,
+        tableNames: simulationTables.map(t => t.name),
+        lastReportedCount: lastReportedSimulations.size,
+        isFirstRun: isFirstRun
+    });
+    
     // Detect new simulations
     const currentSimIds = new Set(simulationTables.map(t => t.id));
     const newSimulations = simulationTables.filter(t => !lastReportedSimulations.has(t.id));
     
     // On first run OR if we have simulations but none reported, report all existing simulations
     if ((isFirstRun || lastReportedSimulations.size === 0) && simulationTables.length > 0) {
+        gameLogger.error('LOG_WATCHER', `[ACTIVE_MONITORING] FORCING_REPORT`, {
+            reason: isFirstRun ? 'first_run' : 'no_simulations_reported_yet',
+            simulationCount: simulationTables.length
+        });
         isFirstRun = false;
         for (const sim of simulationTables) {
             gameLogger.error('LOG_WATCHER', `[ACTIVE_MONITORING] EXISTING_SIMULATION_DETECTED`, {
