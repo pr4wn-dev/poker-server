@@ -51,17 +51,37 @@ npm start
 
 The monitor will:
 - Watch `logs/game.log` continuously
-- Detect issues automatically
-- Pause Unity when issues are found
+- Detect issues automatically with severity-based detection
+- Display **real-time statistics dashboard** (updates every 5 seconds)
+- Pause Unity when **critical/high** issues are found
 - Log issues to `logs/pending-issues.json`
-- Show status in console
+- Track fix attempts and success rates
+- Show comprehensive stats: issues by severity, source, patterns, fix attempts
 
 ### 3. When Issue is Found
 
-1. Monitor detects issue → Pauses Unity → Logs to `pending-issues.json`
-2. You message assistant: **"issue found"**
-3. Assistant reads `pending-issues.json` → Fixes issues → Clears file → Restarts server → Resumes Unity
-4. Monitor continues automatically
+1. **Monitor detects issue** (CRITICAL or HIGH severity)
+   - Dashboard shows issue in "Current Status" section
+   - Issue logged to `pending-issues.json`
+   - Statistics updated (issues detected, severity, source)
+   
+2. **Unity pauses automatically** (via server's log watcher)
+   - Dashboard status changes to "PAUSED (Issue Detected)"
+   - Current issue preview shown
+   
+3. **You message assistant**: **"issue found"**
+   
+4. **Assistant fixes issues**:
+   - Reads `pending-issues.json`
+   - Fixes all issues
+   - Clears `pending-issues.json`
+   - Restarts server
+   - Resumes Unity
+   
+5. **Monitor continues automatically**:
+   - Dashboard status returns to "MONITORING ACTIVE"
+   - Statistics continue tracking
+   - Ready for next issue
 
 ---
 
@@ -69,14 +89,33 @@ The monitor will:
 
 ### Detection Methods
 
-1. **Pattern Matching** - Detects known error patterns:
+1. **Severity-Based Pattern Matching** - Detects known error patterns organized by severity:
+   
+   **CRITICAL Patterns** (Pauses Unity immediately):
    - Server errors (SyntaxError, TypeError, ReferenceError)
    - Connection issues (ECONNREFUSED, EADDRINUSE)
    - Database errors
-   - Unity errors (NullReferenceException, etc.)
-   - Chip/Pot mismatches
-   - Timer timeouts
-   - And 50+ more patterns
+   - Chip loss (`CHIPS.*LOST`, `Money.*lost`, `missing.*chips`)
+   - Pot not cleared (`Pot.*not.*cleared.*at.*hand.*start`)
+   - Pot mismatches (`POT.*MISMATCH`, `pot.*mismatch.*before.*calculation`)
+   - Fix system errors (`[FIX].*DISABLED`)
+   - Network failures
+   
+   **HIGH Patterns** (Logs and may pause):
+   - Unity errors (NullReferenceException, MissingReferenceException)
+   - Timer/timeout issues (`SIMULATION BOT TIMEOUT`)
+   - Action rejected (`Action.*rejected.*Not.*your.*turn`)
+   - State inconsistencies
+   - Icon loading failures
+   
+   **MEDIUM Patterns** (Logs but continues):
+   - Betting action failures (`Cannot.*bet.*current.*bet`)
+   - Validation warnings
+   - Memory/performance issues
+   
+   **LOW Patterns** (Logs only):
+   - Infinite loop detection
+   - Deprecation warnings
 
 2. **Root Tracing** - Uses `_traceUniversal` pattern from `Table.js`:
    - Tracks ALL operations with before/after state
@@ -92,10 +131,12 @@ The monitor will:
 
 ### Issue Severity Levels
 
-- **Critical** - Pauses Unity immediately (errors, exceptions, crashes)
-- **High** - Logs and may pause (state inconsistencies, validation failures)
-- **Medium** - Logs but continues (warnings, deprecations)
-- **Low** - Logs only (informational)
+- **Critical** - Pauses Unity immediately (errors, exceptions, crashes, chip loss, pot issues)
+- **High** - Logs and may pause (state inconsistencies, validation failures, action rejections)
+- **Medium** - Logs but continues (warnings, betting failures, deprecations)
+- **Low** - Logs only (informational, loop detection)
+
+**Only CRITICAL and HIGH severity issues pause Unity. MEDIUM and LOW are logged for analysis but don't interrupt gameplay.**
 
 ---
 
@@ -177,31 +218,137 @@ Debug.Log("Something happened");  // ❌ WRONG
 
 ## 🔧 Issue Detection Patterns
 
-### Server Errors
-- `SyntaxError`, `TypeError`, `ReferenceError`
-- `ECONNREFUSED`, `EADDRINUSE`
-- `SERVER.*FAILED`, `DATABASE.*FAILED`
+### CRITICAL Severity Patterns (Pauses Unity)
 
-### Game Logic Errors
+**Server Errors:**
+- `SyntaxError`, `TypeError`, `ReferenceError`, `RangeError`, `URIError`
+- `ECONNREFUSED`, `EADDRINUSE`, `Port.*already.*in use`
+- `SERVER.*FAILED`, `SERVER.*OFFLINE`
+
+**Database Errors:**
+- `DATABASE.*CONNECTION.*FAILED`, `Database.*OFFLINE`
+- `MySQL.*error`, `database.*error`
+
+**Chip/Pot Issues:**
+- `CHIPS.*LOST`, `Money.*lost`, `missing.*chips`
+- `POT.*MISMATCH`, `pot.*mismatch.*before.*calculation`
+- `Pot.*not.*cleared.*at.*hand.*start`, `Pot.*not.*cleared`
+- `chip.*validation.*failed`, `money.*validation.*failed`
+
+**Game Logic Errors:**
 - `[ROOT CAUSE]` - Root cause analysis markers
 - `[ROOT_TRACE].*TOTAL_BET_NOT_CLEARED`
 - `[ROOT_TRACE].*PLAYER_WON_MORE_THAN_CONTRIBUTED`
-- `POT.*MISMATCH`, `CHIPS.*CREATED`, `CHIPS.*LOST`
+- `[ERROR].*[POT]`, `[ERROR].*[CHIPS]`, `[ERROR].*[VALIDATION]`
 
-### Unity Errors
-- `NullReferenceException`
-- `MissingReferenceException`
-- `[UNITY].*ERROR`, `[UNITY].*EXCEPTION`
-
-### Fix System Errors
+**Fix System Errors:**
 - `[FIX].*DISABLED` - Fix method disabled
 - `METHOD_DISABLED.*TRY_DIFFERENT_APPROACH`
 
-### Timer/Timeout Issues
+**Network Errors:**
+- `socket.*error`, `connection.*lost`, `websocket.*error`, `network.*error`
+
+### HIGH Severity Patterns (May Pause)
+
+**Unity Errors:**
+- `NullReferenceException`, `MissingReferenceException`
+- `ArgumentNullException`, `InvalidOperationException`
+- `[UNITY].*ERROR`, `[UNITY].*EXCEPTION`
+
+**Timer/Timeout Issues:**
 - `SIMULATION BOT TIMEOUT`
-- `[TIMER].*TIMEOUT.*auto-folding`
+- `[TIMER].*TIMEOUT.*auto-folding`, `timer.*expired`
+
+**Action Validation:**
+- `Action.*rejected.*Not.*your.*turn`
+- `Action.*rejected.*Game.*not.*in.*progress`
+
+**State Issues:**
+- `state.*inconsistent`, `unexpected.*state`, `invalid.*state`
+
+**Unity Client Issues:**
+- `[ICON_LOADING].*ISSUE_REPORTED`
+- `LoadItemIcon.*FAILED`, `CreateItemAnteSlot.*FAILED`
+- `Sprite not found`
+
+### MEDIUM Severity Patterns (Logs Only)
+
+**Betting Failures:**
+- `Cannot.*bet.*current.*bet`
+- `Cannot.*check.*need.*to.*call`
+- `Invalid.*betting.*action`, `Betting.*Action.*Failures`
+
+**Validation Warnings:**
+- `[WARNING].*[VALIDATION]`, `[WARNING].*[POT]`, `[WARNING].*[CHIPS]`
+
+**Performance:**
+- `memory.*leak`, `heap.*overflow`, `out of memory`
+
+### LOW Severity Patterns (Logs Only)
+
+**Loop Detection:**
+- `stuck.*in.*loop`, `infinite.*loop`, `recursion.*too.*deep`
+
+**Deprecation:**
+- `deprecated`, `obsolete`
 
 ---
+
+## 📊 Real-Time Statistics Dashboard
+
+The PowerShell monitor displays a **live statistics dashboard** that updates every 5 seconds:
+
+### Dashboard Sections
+
+1. **Monitoring Status**
+   - Current status (Active/Paused)
+   - Uptime (HH:MM:SS format)
+   - Server status (Online/Offline)
+
+2. **Detection Statistics**
+   - Total lines processed
+   - Total issues detected
+   - Unique patterns found
+   - Log file size (MB)
+   - Last issue timestamp
+
+3. **Issues by Severity**
+   - Critical count (red)
+   - High count (yellow)
+   - Medium count (yellow/gray)
+   - Low count (gray)
+
+4. **Issues by Source**
+   - Server issues count
+   - Unity issues count
+   - Database issues count
+   - Network issues count
+
+5. **Fix Attempts Statistics**
+   - Total fix attempts
+   - Successful fixes (green)
+   - Failed fixes (red)
+   - Success rate percentage (color-coded: green ≥80%, yellow ≥50%, red <50%)
+
+6. **Current Status**
+   - Pending issues count
+   - Current issue preview (if paused)
+
+### Dashboard Features
+
+- **Auto-refresh**: Updates every 5 seconds automatically
+- **Color-coded**: Green = good, Yellow = warning, Red = critical
+- **Formatted layout**: Clean box-drawing characters for easy reading
+- **Real-time tracking**: All stats update as issues are detected
+
+### Viewing Statistics
+
+Simply run the monitor - statistics are displayed automatically:
+```powershell
+.\monitoring\monitor.ps1
+```
+
+The dashboard will show immediately and refresh every 5 seconds. Press `Ctrl+C` to stop.
 
 ## 🛠️ Manual Operations
 
@@ -219,6 +366,12 @@ node monitoring/issue-detector.js --clear
 ```powershell
 Get-Content fix-attempts.txt
 ```
+
+### View Real-Time Stats
+The monitor automatically displays stats. For detailed analysis:
+- Check `logs/game.log` for full issue details
+- Check `logs/pending-issues.json` for pending issues
+- Check `fix-attempts.txt` for fix attempt history
 
 ---
 
@@ -438,6 +591,33 @@ This section documents historical issues and their solutions from `CHANGELOG.md`
 
 ---
 
+## 📈 Statistics Tracking
+
+The monitoring system tracks comprehensive statistics:
+
+### Detection Metrics
+- **Total Lines Processed**: All log lines analyzed
+- **Issues Detected**: Total issues found (all severities)
+- **Unique Patterns**: Number of distinct issue patterns detected
+- **Log File Size**: Current size of `logs/game.log` in MB
+
+### Issue Breakdown
+- **By Severity**: Critical, High, Medium, Low counts
+- **By Source**: Server, Unity, Database, Network counts
+- **By Pattern**: Tracks which patterns are most common
+
+### Fix Performance
+- **Total Attempts**: All fix attempts across all fixes
+- **Success Rate**: Percentage of successful fixes
+- **Success/Failure Counts**: Detailed breakdown
+
+### Real-Time Updates
+- Statistics update as issues are detected
+- Dashboard refreshes every 5 seconds
+- All metrics are cumulative (reset on monitor restart)
+
+---
+
 **Last Updated**: 2026-02-06
 **Version**: 1.1.0
-**Status**: Complete with Enhanced Statistics and Pattern Detection
+**Status**: Complete with Enhanced Statistics, Severity Mapping, and Real-Time Dashboard
