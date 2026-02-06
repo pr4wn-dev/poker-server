@@ -59,7 +59,6 @@ class SocketBot {
         this.actionTimeout = null; // Timeout handle for stuck turn detection
         this.isReady = false; // Track if we've already signaled ready
         this.readyScheduled = false; // Track if we've scheduled a ready signal
-        this.isPaused = false; // Pause flag - when true, bot won't take actions
         this.itemAnteSubmitted = false; // Track if we've submitted item to ante
         
         // Chaos tracking
@@ -483,13 +482,13 @@ class SocketBot {
             
             // Simulation control events
             this.socket.on('simulation_paused', (data) => {
-                this.isPaused = true;
-                this.log('PAUSE', 'Simulation paused', data);
+                // Unity is paused - bots will check state.isPaused from table_state
+                this.log('PAUSE', 'Unity paused', data);
             });
             
             this.socket.on('simulation_resumed', (data) => {
-                this.isPaused = false;
-                this.log('RESUME', 'Simulation resumed', data);
+                // Unity resumed - bots will check state.isPaused from table_state
+                this.log('RESUME', 'Unity resumed', data);
                 // CRITICAL: Re-process current state to resume playing
                 if (this.gameState) {
                     this._handleTableState(this.gameState);
@@ -642,13 +641,14 @@ class SocketBot {
                 return; // Don't process this state, we're disconnecting
             }
             
-            // CRITICAL: If simulation is paused, don't take any actions
-            if (this.isPaused) {
-                this.log('PAUSE', 'Simulation paused - skipping action', { 
+            // CRITICAL: If Unity is paused (table.isPaused), don't take any actions
+            // Unity pauses the game, so game state won't advance - bots naturally won't get turns
+            if (state.isPaused) {
+                this.log('PAUSE', 'Unity paused - skipping action', { 
                     isMyTurn: state.currentPlayerId === this.userId,
                     phase: state.phase 
                 });
-                return; // Don't process state or take actions while paused
+                return; // Don't process state or take actions while Unity is paused
             }
             
             // ITEM ANTE: Check if we need to submit an item
@@ -749,9 +749,9 @@ class SocketBot {
      * Schedule an action with random delay (simulates thinking + network)
      */
     _scheduleAction() {
-        // CRITICAL: If simulation is paused, don't schedule actions
-        if (this.isPaused) {
-            this.log('PAUSE', 'Simulation paused - not scheduling action');
+        // CRITICAL: If Unity is paused (from gameState.isPaused), don't schedule actions
+        if (this.gameState?.isPaused) {
+            this.log('PAUSE', 'Unity paused - not scheduling action');
             return;
         }
         
@@ -1223,20 +1223,9 @@ class SocketBot {
         });
     }
     
-    /**
-     * Set pause state (called by SimulationManager)
-     */
-    setPaused(paused) {
-        this.isPaused = paused;
-        this.log('PAUSE', `Bot ${paused ? 'paused' : 'resumed'}`, { paused });
-    }
-    
-    /**
-     * Resume bot (alias for setPaused(false))
-     */
-    setResumed() {
-        this.setPaused(false);
-    }
+    // Note: Bots don't have individual pause state
+    // Unity pauses via table.isPaused flag in table_state
+    // Bots check state.isPaused from the game state they receive
 }
 
 /**

@@ -1315,22 +1315,10 @@ class SimulationManager {
             }
         }
         
-        // Notify all socket bots to pause
-        let botsPaused = 0;
-        let botsPauseErrors = 0;
-        for (const bot of simulation.socketBots) {
-            try {
-                bot.isPaused = true;
-                botsPaused++;
-            } catch (error) {
-                botsPauseErrors++;
-                gameLogger.gameEvent('SIMULATION_MANAGER', `[PAUSE] BOT_PAUSE_ERROR`, {
-                    tableId,
-                    botName: bot?.name || 'unknown',
-                    error: error.message
-                });
-            }
-        }
+        // Unity will pause based on table.isPaused flag in table_state
+        // Bots don't need to be paused - when Unity pauses, game state won't advance, so bots won't get turns
+        const botsPaused = 0;
+        const botsPauseErrors = 0;
         
         this.log('INFO', 'Simulation paused', { tableId, reason });
         
@@ -1468,28 +1456,10 @@ class SimulationManager {
             }
         }
         
-        // CRITICAL: Notify all socket bots to resume
-        let botsResumed = 0;
-        let botsResumeErrors = 0;
-        for (const bot of simulation.socketBots) {
-            if (bot) {
-                try {
-                    bot.isPaused = false;
-                    bot.setPaused(false);
-                    botsResumed++;
-                    console.log(`[SimulationManager] Bot ${bot.name} unpaused`);
-                } catch (error) {
-                    botsResumeErrors++;
-                    gameLogger.gameEvent('SIMULATION_MANAGER', `[RESUME] BOT_RESUME_ERROR`, {
-                        tableId,
-                        botName: bot?.name || 'unknown',
-                        error: error.message
-                    });
-                }
-            }
-        }
-        
-        this.log('INFO', 'All bots unpaused', { tableId, botCount: simulation.socketBots.length });
+        // Unity will resume based on table.isPaused flag in table_state
+        // Bots don't need to be resumed - they'll naturally continue when Unity resumes
+        const botsResumed = 0;
+        const botsResumeErrors = 0;
         
         this.log('INFO', 'Simulation resumed', { tableId, pauseDuration: `${Math.floor(pauseDuration / 1000)}s` });
         
