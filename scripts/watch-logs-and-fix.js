@@ -28,8 +28,8 @@ const ERROR_PATTERNS = [
     /Validation failed/i,
     /Chip.*lost/i,
     /Chip.*created/i,
-    /Pot.*mismatch/i,
-    /FIX.*FAILED/i,
+    /Pot.*mismatch(?!.*SUCCESS)(?!.*FIX.*SUCCESS)/i,  // Pot mismatch but NOT success/fix success logs
+    /FIX.*FAILED(?!.*SUCCESS)/i,  // Fix failed but NOT fix success
     /PERMANENTLY DISABLED/i,
     /\[FIX\] DISABLED/i,
     /SIMULATION BOT TIMEOUT/i,
@@ -1103,8 +1103,12 @@ function startWatching() {
 function processLogLine(line) {
     const gameLogger = require('../src/utils/GameLogger');
     
-    // CRITICAL: Skip TRACE logs FIRST before any pattern matching
-    // This prevents false positives from TRACE logs containing "[ERROR]" in JSON
+    // CRITICAL: Skip LOG_WATCHER and TRACE logs FIRST before any pattern matching
+    // This prevents infinite loops and false positives
+    if (line.includes('[LOG_WATCHER]')) {
+        return; // Skip watcher's own logs entirely
+    }
+    
     if (line.includes('[TRACE]')) {
         return; // Skip TRACE logs entirely
     }
