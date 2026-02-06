@@ -43,10 +43,11 @@ class IssueDetector {
                 /CHIPS.*LOST/i,
                 /Money.*lost/i,
                 /missing.*chips/i,
-                /POT.*MISMATCH/i,
-                /pot.*mismatch.*before.*calculation/i,
+                // Pot mismatches - but exclude FIX_ATTEMPT SUCCESS logs
+                /POT.*MISMATCH(?!.*\[FIX_ATTEMPT\].*SUCCESS)(?!.*SUCCESS)/i,
+                /pot.*mismatch.*before.*calculation(?!.*\[FIX_ATTEMPT\].*SUCCESS)(?!.*SUCCESS)/i,
                 /Pot.*not.*cleared.*at.*hand.*start/i,
-                /Pot.*not.*cleared/i,
+                /Pot.*not.*cleared(?!.*\[FIX_ATTEMPT\].*SUCCESS)(?!.*SUCCESS)/i,
                 
                 // FIX SYSTEM ERRORS
                 /\[FIX\] METHOD_DISABLED/i,
