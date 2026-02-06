@@ -482,7 +482,8 @@ while ($monitoringActive) {
                 }
                 
                 # Skip TRACE logs (informational only)
-                if ($line -match '\[TRACE\]') {
+                # BUT: Don't skip [ROOT_TRACE] - these are important error indicators
+                if ($line -match '\[TRACE\]' -and $line -notmatch '\[ROOT_TRACE\]') {
                     continue
                 }
                 

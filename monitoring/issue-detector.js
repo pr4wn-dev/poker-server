@@ -215,7 +215,8 @@ class IssueDetector {
         }
         
         // Skip TRACE logs (they're informational, not errors)
-        if (logLine.includes('[TRACE]')) {
+        // BUT: Don't skip [ROOT_TRACE] - these are important error indicators
+        if (logLine.includes('[TRACE]') && !logLine.includes('[ROOT_TRACE]')) {
             return null;
         }
         
