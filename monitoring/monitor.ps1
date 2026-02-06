@@ -513,6 +513,7 @@ while ($monitoringActive) {
                 if ($issue) {
                     # REPORT TO CONSOLE: Issue detected (but not yet paused)
                     # Write below stats dashboard, not overlapping
+                    # Don't update stats while writing console output (prevents flashing)
                     $currentCursorTop = [Console]::CursorTop
                     [Console]::SetCursorPosition(0, $script:consoleOutputStartLine)
                     Write-Host "[$(Get-Date -Format 'HH:mm:ss')] " -NoNewline -ForegroundColor Yellow
@@ -520,6 +521,7 @@ while ($monitoringActive) {
                     Write-Host "$($issue.type) ($($issue.severity))" -ForegroundColor White
                     # Move cursor to next line for future output
                     $script:consoleOutputStartLine++
+                    $script:lastConsoleOutputTime = Get-Date  # Track when we wrote console output
                     [Console]::SetCursorPosition(0, 0)  # Return to top for stats update
                     
                     # Update statistics
@@ -605,6 +607,7 @@ while ($monitoringActive) {
                             }
                             
                             # Return cursor to top for stats update
+                            $script:lastConsoleOutputTime = Get-Date  # Track when we wrote console output
                             [Console]::SetCursorPosition(0, 0)
                             
                             $isPaused = $true
@@ -679,7 +682,10 @@ while ($monitoringActive) {
         }
         
         # Update statistics display periodically
-        if (($now - $lastStatsUpdate).TotalSeconds -ge $statsUpdateInterval) {
+        # BUT: Don't update if we just wrote console output (prevents flashing)
+        # Only update if console output line hasn't changed recently
+        $timeSinceLastConsoleOutput = if ($script:lastConsoleOutputTime) { ($now - $script:lastConsoleOutputTime).TotalSeconds } else { 999 }
+        if (($now - $lastStatsUpdate).TotalSeconds -ge $statsUpdateInterval -and $timeSinceLastConsoleOutput -gt 1) {
             Show-Statistics
             $lastStatsUpdate = $now
         }
