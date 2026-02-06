@@ -114,6 +114,7 @@ $previousStats = @{}  # Track previous stats values to only update when changed
 $script:consoleOutputStartLine = 0  # Will be set by Show-Statistics
 $script:maxConsoleLines = 15  # Maximum number of console output lines to keep visible
 $script:consoleLineCount = 0  # Track how many console lines we've written
+$script:lastConsoleError = $null  # Track last console error to avoid spam
 
 # Statistics tracking
 $stats = @{
@@ -256,8 +257,9 @@ function Write-ConsoleOutput {
         $endClearLine = [Math]::Min($windowHeight - 1, $script:consoleOutputStartLine + $script:maxConsoleLines)
         
         for ($line = $startClearLine; $line -le $endClearLine; $line++) {
-            [Console]::SetCursorPosition(0, $line)
-            Write-Host (" " * [Console]::WindowWidth) -NoNewline
+            if (Set-SafeCursorPosition -X 0 -Y $line) {
+                Write-Host (" " * [Console]::WindowWidth) -NoNewline
+            }
         }
         
         # Reset console line count
@@ -275,8 +277,9 @@ function Write-ConsoleOutput {
         $endClearLine = [Math]::Min($windowHeight - 1, $script:consoleOutputStartLine + $script:maxConsoleLines)
         
         for ($line = $startClearLine; $line -le $endClearLine; $line++) {
-            [Console]::SetCursorPosition(0, $line)
-            Write-Host (" " * [Console]::WindowWidth) -NoNewline
+            if (Set-SafeCursorPosition -X 0 -Y $line) {
+                Write-Host (" " * [Console]::WindowWidth) -NoNewline
+            }
         }
         
         $script:consoleLineCount = 0
@@ -292,20 +295,29 @@ function Write-ConsoleOutput {
     }
     
     # Write the message (hide cursor during write to prevent flicker)
-    [Console]::CursorVisible = $false
-    [Console]::SetCursorPosition(0, $currentConsoleLine)
-    Write-Host $truncatedMessage -ForegroundColor $ForegroundColor
-    
-    # Increment line count
-    $script:consoleLineCount++
-    
-    # Track when we wrote console output
-    $script:lastConsoleOutputTime = Get-Date
-    
-    # Return cursor to top for stats (but don't update stats immediately)
-    # Restore cursor visibility
-    [Console]::SetCursorPosition(0, 0)
-    [Console]::CursorVisible = $true
+    try {
+        [Console]::CursorVisible = $false
+        if (Set-SafeCursorPosition -X 0 -Y $currentConsoleLine) {
+            Write-Host $truncatedMessage -ForegroundColor $ForegroundColor
+        } else {
+            # If cursor position failed, just write normally
+            Write-Host $truncatedMessage -ForegroundColor $ForegroundColor
+        }
+        
+        # Increment line count
+        $script:consoleLineCount++
+        
+        # Track when we wrote console output
+        $script:lastConsoleOutputTime = Get-Date
+        
+        # Return cursor to top for stats (but don't update stats immediately)
+        # Restore cursor visibility
+        Set-SafeCursorPosition -X 0 -Y 0 | Out-Null
+        [Console]::CursorVisible = $true
+    } catch {
+        # If console operations fail, just write normally
+        Write-Host $truncatedMessage -ForegroundColor $ForegroundColor
+    }
 }
 
 # Function to get fix attempts stats
@@ -714,15 +726,11 @@ function Show-Statistics {
     } else {
         try {
             [Console]::CursorVisible = $false
-            [Console]::SetCursorPosition(0, 0)
+            Set-SafeCursorPosition -X 0 -Y 0 | Out-Null
             Start-Sleep -Milliseconds 10
         } catch {
             # Console handle may be invalid (window resized/closed) - just continue
-            # Don't spam errors - this is a common issue with console windows
-            if ($script:lastConsoleError -eq $null -or ((Get-Date) - $script:lastConsoleError).TotalSeconds -gt 60) {
-                Write-Error "Console cursor error (non-fatal): $_" -ErrorAction SilentlyContinue
-                $script:lastConsoleError = Get-Date
-            }
+            # This is handled by Set-SafeCursorPosition, but catch any other errors
         }
     }
     
@@ -870,12 +878,13 @@ function Show-Statistics {
     $consoleAreaEnd = [Math]::Min($windowHeight - 1, $consoleAreaStart + $script:maxConsoleLines)
     
     for ($line = $consoleAreaStart; $line -le $consoleAreaEnd; $line++) {
-        [Console]::SetCursorPosition(0, $line)
-        Write-Host (" " * [Console]::WindowWidth) -NoNewline
+        if (Set-SafeCursorPosition -X 0 -Y $line) {
+            Write-Host (" " * [Console]::WindowWidth) -NoNewline
+        }
     }
     
     # Move cursor back to top (line 0) for next update - this keeps stats visible
-    [Console]::SetCursorPosition(0, 0)
+    Set-SafeCursorPosition -X 0 -Y 0 | Out-Null
     
     # Restore cursor visibility
     [Console]::CursorVisible = $true
