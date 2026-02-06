@@ -29,7 +29,8 @@ function Write-Warning { param($message) Write-Status $message "Yellow" }
 function Write-Error { param($message) Write-Status $message "Red" }
 
 # State tracking
-$lastLogPosition = 0
+# Initialize lastLogPosition to END of file so we only read NEW entries (not old ones from previous runs)
+$lastLogPosition = if (Test-Path $logFile) { (Get-Item $logFile).Length } else { 0 }
 $isPaused = $false
 $currentIssue = $null
 $monitoringActive = $true
