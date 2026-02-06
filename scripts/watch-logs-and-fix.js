@@ -419,6 +419,11 @@ function resumeSimulation(tableId) {
  * Analyze log line and determine if it indicates an issue
  */
 function detectIssue(logLine) {
+    // CRITICAL: Skip LOG_WATCHER's own logs to prevent infinite loops
+    if (logLine.includes('[LOG_WATCHER]')) {
+        return null;
+    }
+    
     // Check for error patterns
     for (const pattern of ERROR_PATTERNS) {
         if (pattern.test(logLine)) {
