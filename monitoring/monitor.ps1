@@ -1251,6 +1251,8 @@ while ($monitoringActive) {
                     
                     # Only pause for critical/high severity issues
                     if (($issue.severity -eq 'critical' -or $issue.severity -eq 'high') -and -not $isPaused) {
+                        # Explain why we're pausing
+                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🔴 PAUSING: $($issue.severity.ToUpper()) severity issue detected" -ForegroundColor "Red"
                         # Issue detected - pause Unity and log issue
                         # Don't write to console - update stats display instead
                         # Write-Error "ISSUE DETECTED: $($issue.message.Substring(0, [Math]::Min(100, $issue.message.Length)))"
@@ -1309,12 +1311,35 @@ while ($monitoringActive) {
                             try {
                                 Add-Content -Path $logFile -Value $pauseMarker -ErrorAction Stop
                                 $stats.PauseMarkersWritten++
-                                Write-ConsoleOutput -Message "  Pause marker written to game.log" -ForegroundColor "Green"
-                                Write-ConsoleOutput -Message "  Waiting for log watcher to pause Unity..." -ForegroundColor "Yellow"
+                                Write-ConsoleOutput -Message "  ✅ Pause marker written to game.log" -ForegroundColor "Green"
+                                Write-ConsoleOutput -Message "  ⏳ Waiting for log watcher to pause Unity..." -ForegroundColor "Yellow"
+                                
+                                # Verify pause actually happened (check logs after 2 seconds)
+                                Start-Sleep -Seconds 2
+                                $pauseVerified = Verify-UnityPaused -TableId $tableId -TimeoutSeconds 5
+                                
+                                if ($pauseVerified.Success) {
+                                    Write-ConsoleOutput -Message "  ✅ VERIFIED: Unity paused successfully" -ForegroundColor "Green"
+                                    if ($pauseVerified.Details) {
+                                        Write-ConsoleOutput -Message "    Details: $($pauseVerified.Details)" -ForegroundColor "Gray"
+                                    }
+                                } else {
+                                    Write-ConsoleOutput -Message "  ⚠️  WARNING: Unity pause NOT verified!" -ForegroundColor "Red"
+                                    Write-ConsoleOutput -Message "    Reason: $($pauseVerified.Reason)" -ForegroundColor "Yellow"
+                                    Write-ConsoleOutput -Message "    Diagnostics:" -ForegroundColor "Yellow"
+                                    
+                                    # Run diagnostics
+                                    $diagnostics = Get-PauseDiagnostics -TableId $tableId
+                                    foreach ($diag in $diagnostics) {
+                                        $color = if ($diag.Status -eq "OK") { "Green" } elseif ($diag.Status -eq "WARNING") { "Yellow" } else { "Red" }
+                                        Write-ConsoleOutput -Message "      - $($diag.Check): $($diag.Status) - $($diag.Message)" -ForegroundColor $color
+                                    }
+                                }
                             } catch {
                                 # If writing fails, log it but continue
                                 $stats.PauseMarkerErrors++
-                                Write-ConsoleOutput -Message "  ERROR: Failed to write pause marker: $_" -ForegroundColor "Red"
+                                Write-ConsoleOutput -Message "  ❌ ERROR: Failed to write pause marker: $_" -ForegroundColor "Red"
+                                Write-ConsoleOutput -Message "    Check: Log file permissions, disk space, file locks" -ForegroundColor "Yellow"
                             }
                             
                             $isPaused = $true
@@ -1341,9 +1366,12 @@ while ($monitoringActive) {
                                 }
                             } else {
                                 $errorMsg = if ($addResult -and $addResult.error) { $addResult.error } else { "Unknown error - check Node.js script output" }
-                                # Don't write to console - update stats display instead
-                                # Write-Error "Failed to log issue: $errorMsg"
-                                # Write-Warning "Issue detected but not logged. Check issue-detector.js for errors."
+                                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ❌ FAILED TO LOG ISSUE: $errorMsg" -ForegroundColor "Red"
+                                Write-ConsoleOutput -Message "  Issue detected but NOT logged to pending-issues.json" -ForegroundColor "Yellow"
+                                Write-ConsoleOutput -Message "  Diagnostics:" -ForegroundColor "Yellow"
+                                Write-ConsoleOutput -Message "    - Check if issue-detector.js is working: node monitoring/issue-detector.js --test" -ForegroundColor "Gray"
+                                Write-ConsoleOutput -Message "    - Check if pending-issues.json is writable" -ForegroundColor "Gray"
+                                Write-ConsoleOutput -Message "    - Check Node.js error output for details" -ForegroundColor "Gray"
                             }
                         }
                     }
