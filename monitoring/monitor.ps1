@@ -1556,6 +1556,7 @@ $lastServerCheck = Get-Date
 $lastUnityWarning = Get-Date
 $serviceCheckInterval = 30  # Check services every 30 seconds
 $script:simulationEndTime = $null  # Track when simulation ended for idle detection
+$script:lastServerRestart = $null  # Track when server was last restarted (to prevent restart loops)
 
 while ($monitoringActive) {
     try {
