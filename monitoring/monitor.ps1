@@ -826,23 +826,25 @@ function Show-Statistics {
     $statusColor = if ($isPaused) { "Red" } else { "Green" }
     $serverStatusText = if ($stats.ServerStatus -eq "Online") { "ONLINE" } else { "OFFLINE" }
     $serverStatusColor = if ($stats.ServerStatus -eq "Online") { "Green" } else { "Red" }
+    $pipeSeparator = [char]124
+    $separatorStr = " $pipeSeparator "
     
     Write-Host ""
     Write-Host "STATUS: " -NoNewline -ForegroundColor White
     Write-Host $statusText -NoNewline -ForegroundColor $statusColor
-    Write-Host " | " -NoNewline -ForegroundColor DarkGray
+    Write-Host $separatorStr -NoNewline -ForegroundColor DarkGray
     Write-Host "UPTIME: " -NoNewline -ForegroundColor White
     Write-Host $uptimeStr -NoNewline -ForegroundColor Yellow
-    Write-Host " | " -NoNewline -ForegroundColor DarkGray
+    Write-Host $separatorStr -NoNewline -ForegroundColor DarkGray
     Write-Host "SERVER: " -NoNewline -ForegroundColor White
     Write-Host $serverStatusText -NoNewline -ForegroundColor $serverStatusColor
-    Write-Host " | " -NoNewline -ForegroundColor DarkGray
+    Write-Host $separatorStr -NoNewline -ForegroundColor DarkGray
     Write-Host "UNITY: " -NoNewline -ForegroundColor White
     Write-Host $unityStatus -NoNewline -ForegroundColor $unityColor
-    Write-Host " | " -NoNewline -ForegroundColor DarkGray
+    Write-Host $separatorStr -NoNewline -ForegroundColor DarkGray
     Write-Host "SIM: " -NoNewline -ForegroundColor White
     Write-Host $simStatus -NoNewline -ForegroundColor $simColor
-    Write-Host " | " -NoNewline -ForegroundColor DarkGray
+    Write-Host $separatorStr -NoNewline -ForegroundColor DarkGray
     Write-Host "ACTIVITY: " -NoNewline -ForegroundColor White
     Write-Host $activityText -NoNewline -ForegroundColor $activityColor
     Write-Host ""
@@ -931,9 +933,9 @@ function Show-Statistics {
         $c3 = if ($line3 -match "Failed: [1-9]") { "Red" } elseif ($line3 -match "Success: [1-9]") { "Green" } elseif ($line3 -match "FOCUS MODE") { "Cyan" } elseif ($line3 -match "ISSUES BY SOURCE|FIX ATTEMPTS|PENDING ISSUES") { "Yellow" } else { "White" }
         
         Write-Host ($line1.PadRight($colWidth)) -NoNewline -ForegroundColor $c1
-        Write-Host " | " -NoNewline -ForegroundColor DarkGray
+        Write-Host $separatorStr -NoNewline -ForegroundColor DarkGray
         Write-Host ($line2.PadRight($colWidth)) -NoNewline -ForegroundColor $c2
-        Write-Host " | " -NoNewline -ForegroundColor DarkGray
+        Write-Host $separatorStr -NoNewline -ForegroundColor DarkGray
         Write-Host ($line3.PadRight($colWidth)) -NoNewline -ForegroundColor $c3
         Write-Host ""
     }
