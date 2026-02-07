@@ -1412,9 +1412,13 @@ function Restart-UnityIfNeeded {
             # Pass auto-mode to Unity (simulation or normal)
             if ($config.simulation.enabled) {
                 $unityArgs += "-autoMode", "simulation"
-                # Enable item ante if configured
-                if ($config.simulation.itemAnteEnabled) {
+                # Enable item ante if configured (check both boolean true and string "true")
+                $itemAnteEnabled = $config.simulation.itemAnteEnabled
+                if ($itemAnteEnabled -eq $true -or $itemAnteEnabled -eq "true") {
                     $unityArgs += "-itemAnteEnabled", "true"
+                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Item ante enabled via config" -ForegroundColor "Cyan"
+                } else {
+                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Item ante disabled (config value: $itemAnteEnabled)" -ForegroundColor "Gray"
                 }
             } else {
                 $unityArgs += "-autoMode", "normal"
