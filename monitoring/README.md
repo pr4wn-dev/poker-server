@@ -815,19 +815,21 @@ When fixes require restarts, here's what happens:
   4. Unity reconnects automatically (Socket.IO handles reconnection)
   5. Monitor detects resume marker → Unity resumes
 
-**Unity Restart (Unity code changes):**
-- ⚠️ **NOT automatically handled** - Manual intervention required:
-  1. Unity is paused (via Log Watcher)
-  2. You must manually restart Unity in debug mode
-  3. Unity reconnects to server automatically
-  4. Server state is preserved (tables, players, chips)
-  5. Simulation resumes from where it paused
+**Unity Restart (Unity code changes or disconnection):**
+- ✅ **Automatically handled** by Monitor:
+  1. Unity is paused (via Log Watcher) if issue detected
+  2. Monitor automatically restarts Unity if not running or disconnected
+  3. Unity automatically enters play mode and reconnects to server
+  4. Unity auto-connects and auto-logs in using command-line arguments
+  5. Server state is preserved (tables, players, chips)
+  6. Simulation resumes from where it paused (if resume marker is written)
 
 **Database Restart (MySQL/WAMP/XAMPP):**
-- ⚠️ **NOT automatically handled** - Manual intervention required:
-  1. You must manually restart MySQL service
-  2. Server will reconnect automatically when database is back
-  3. Unity remains paused until you tell Assistant to resume
+- ✅ **Automatically handled** by Monitor (if `autoRestartDatabase` is enabled in config):
+  1. Monitor detects MySQL service is not running
+  2. Monitor automatically restarts MySQL service
+  3. Server will reconnect automatically when database is back
+  4. Unity remains paused until you tell Assistant to resume (if paused due to issue)
 
 ### What Happens During Restart
 
@@ -847,9 +849,9 @@ When fixes require restarts, here's what happens:
 
 **Database Restart:**
 - ✅ Server detects database offline and logs errors
+- ✅ Monitor **automatically restarts MySQL service** if `autoRestartDatabase` is enabled
 - ✅ Server **auto-reconnects** when database is back
-- ⚠️ Unity remains **paused** during database downtime
-- ⚠️ You must manually restart MySQL service
+- ⚠️ Unity remains **paused** during database downtime (if paused due to issue)
 
 ### Completed Automation Features ✅
 
