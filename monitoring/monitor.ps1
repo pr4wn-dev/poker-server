@@ -1502,46 +1502,11 @@ try {
         Start-Sleep -Seconds 2  # Wait a bit more if we had to kill something
     }
     
-    # Step 3: Find and kill any remaining node processes (cleanup)
-    Write-Info "Checking for processes using port 3000..."
-    $port3000Processes = @()
-    try {
-        # Use netstat to find processes using port 3000
-        $portPattern = ':3000'
-        $netstatOutput = netstat -ano | Select-String $portPattern
-        foreach ($line in $netstatOutput) {
-            if ($line -match '\s+(\d+)\s*$') {
-                $processId = [int]$matches[1]
-                try {
-                    $process = Get-Process -Id $processId -ErrorAction SilentlyContinue
-                    if ($process -and $process.ProcessName -eq 'node') {
-                        # Only kill node.exe processes, not PowerShell or other clients
-                        $port3000Processes += $process
-                    }
-                } catch {
-                    # Process might have already terminated
-                }
-            }
-        }
-    } catch {
-        Write-Warning "Could not check port 3000: $_"
-    }
-    
-    # Step 2: Kill all node processes
+    # Step 3: Kill any remaining node processes (cleanup - should be minimal after Kill-Port3000Processes)
     $nodeProcesses = Get-Process node -ErrorAction SilentlyContinue
-    
-    # Combine both lists (remove duplicates by PID)
-    $allProcessesToKill = @{}
-    foreach ($proc in $port3000Processes) {
-        $allProcessesToKill[$proc.Id] = $proc
-    }
-    foreach ($proc in $nodeProcesses) {
-        $allProcessesToKill[$proc.Id] = $proc
-    }
-    
-    if ($allProcessesToKill.Count -gt 0) {
-        Write-Info "Killing $($allProcessesToKill.Count) process(es) (node processes and/or processes using port 3000)..."
-        foreach ($proc in $allProcessesToKill.Values) {
+    if ($nodeProcesses) {
+        Write-Info "Killing $($nodeProcesses.Count) remaining node process(es)..."
+        foreach ($proc in $nodeProcesses) {
             try {
                 Write-Info "  Killing process: $($proc.ProcessName) (PID: $($proc.Id))"
                 Stop-Process -Id $proc.Id -Force -ErrorAction Stop
@@ -1549,39 +1514,10 @@ try {
                 Write-Warning "  Failed to kill process $($proc.Id): $_"
             }
         }
-        
-        # Wait for processes to fully terminate
-        Start-Sleep -Seconds 3
-        
-        # Verify port 3000 is free
-        $portStillInUse = $true
-        $maxPortCheckWait = 10
-        $portCheckWaited = 0
-        while ($portStillInUse -and $portCheckWaited -lt $maxPortCheckWait) {
-            try {
-                $portPattern = ':3000'
-        $netstatOutput = netstat -ano | Select-String $portPattern
-                if (-not $netstatOutput) {
-                    $portStillInUse = $false
-                    Write-Success "Port 3000 is now free"
-                } else {
-                    Start-Sleep -Seconds 1
-                    $portCheckWaited += 1
-                }
-            } catch {
-                # If we can't check, assume it's free
-                $portStillInUse = $false
-            }
-        }
-        
-        if ($portStillInUse) {
-            Write-Warning "Port 3000 may still be in use after killing processes"
-        }
-    } else {
-        Write-Info "No node processes or processes using port 3000 found"
+        Start-Sleep -Seconds 1  # Brief wait for processes to terminate
     }
     
-    # Step 3: Start server in background
+    # Step 4: Start server in background (port 3000 should now be free)
     $serverProcess = Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$PWD'; npm start" -WindowStyle Minimized -PassThru
     Write-Info "Server starting (PID: $($serverProcess.Id)). Waiting for server to be ready..."
     
