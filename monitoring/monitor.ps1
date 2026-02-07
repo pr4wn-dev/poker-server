@@ -1654,7 +1654,9 @@ function Show-Statistics {
     Write-Host ("=" * $consoleWidth) -ForegroundColor Cyan
     
     # Top status bar - single row across full width
-    $statusText = if ($isVerifyingFix) { "VERIFYING FIX" } elseif ($script:isInvestigating) { "INVESTIGATING" } elseif ($isPaused) { "PAUSED (Fix Required)" } else { "ACTIVE" }
+    # Status priority: Verifying > Investigating > Paused > Active
+    # During verification, Unity remains paused (isPaused stays true), so show both states
+    $statusText = if ($isVerifyingFix) { "VERIFYING FIX (Unity Paused)" } elseif ($script:isInvestigating) { "INVESTIGATING" } elseif ($isPaused) { "PAUSED (Fix Required)" } else { "ACTIVE" }
     $statusColor = if ($isVerifyingFix) { "Cyan" } elseif ($script:isInvestigating) { "Yellow" } elseif ($isPaused) { "Red" } else { "Green" }
     $serverStatusText = if ($stats.ServerStatus -eq "Online") { "ONLINE" } else { "OFFLINE" }
     $serverStatusColor = if ($stats.ServerStatus -eq "Online") { "Green" } else { "Red" }
