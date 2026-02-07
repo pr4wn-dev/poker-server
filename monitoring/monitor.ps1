@@ -1890,21 +1890,24 @@ while ($monitoringActive) {
                 
                 # Stop orphaned simulations immediately (but throttle to once per 10 seconds)
                 if ($timeSinceLastStop.TotalSeconds -ge 10) {
-                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  SIMULATION: Server has active simulation but Unity is NOT connected to it (orphaned simulation)" -ForegroundColor "Yellow"
-                    
                     # First, verify server actually has active simulations by checking /health endpoint
                     $serverActiveSims = 0
+                    $healthCheckSuccess = $false
                     try {
                         $healthResponse = Invoke-WebRequest -Uri "$serverUrl/health" -UseBasicParsing -TimeoutSec 3 -ErrorAction Stop
                         $health = $healthResponse.Content | ConvertFrom-Json
                         $serverActiveSims = if ($health.activeSimulations) { $health.activeSimulations } else { 0 }
-                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ℹ️  Server reports $serverActiveSims active simulation(s)" -ForegroundColor "Gray"
+                        $healthCheckSuccess = $true
+                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ℹ️  Health check: Server reports $serverActiveSims active simulation(s)" -ForegroundColor "Gray"
                     } catch {
-                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  Could not check server health: $_" -ForegroundColor "Yellow"
+                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  Health check failed: $_" -ForegroundColor "Yellow"
+                        Write-ConsoleOutput -Message "  Exception type: $($_.Exception.GetType().Name)" -ForegroundColor "Gray"
+                        Write-ConsoleOutput -Message "  Exception message: $($_.Exception.Message)" -ForegroundColor "Gray"
                     }
                     
                     # Only try to stop if server actually has simulations
-                    if ($serverActiveSims -gt 0) {
+                    if ($healthCheckSuccess -and $serverActiveSims -gt 0) {
+                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  SIMULATION: Server has $serverActiveSims active simulation(s) but Unity is NOT connected (orphaned)" -ForegroundColor "Yellow"
                         try {
                             Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🛑 Stopping $serverActiveSims orphaned simulation(s)..." -ForegroundColor "Cyan"
                             $stopResponse = Invoke-WebRequest -Uri "$serverUrl/api/simulations/stop-all" -Method POST -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
@@ -1924,19 +1927,25 @@ while ($monitoringActive) {
                             $script:lastOrphanedSimStopAttempt = Get-Date
                         } catch {
                             Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ❌ Failed to stop orphaned simulations: $_" -ForegroundColor "Red"
-                            Write-ConsoleOutput -Message "  Error details: $($_.Exception.Message)" -ForegroundColor "Gray"
+                            Write-ConsoleOutput -Message "  Error type: $($_.Exception.GetType().Name)" -ForegroundColor "Gray"
+                            Write-ConsoleOutput -Message "  Error message: $($_.Exception.Message)" -ForegroundColor "Gray"
                             if ($_.Exception.Response) {
                                 try {
                                     $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
                                     $responseBody = $reader.ReadToEnd()
-                                    Write-ConsoleOutput -Message "  Response: $responseBody" -ForegroundColor "Gray"
-                                } catch {}
+                                    Write-ConsoleOutput -Message "  HTTP Response: $responseBody" -ForegroundColor "Gray"
+                                } catch {
+                                    Write-ConsoleOutput -Message "  Could not read HTTP response: $_" -ForegroundColor "Gray"
+                                }
                             }
                             $script:lastOrphanedSimStopAttempt = Get-Date
                         }
-                    } else {
-                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ℹ️  Server reports no active simulations - may be stale log data" -ForegroundColor "Gray"
+                    } elseif ($healthCheckSuccess -and $serverActiveSims -eq 0) {
+                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ℹ️  Log watcher reports simulation, but server health check shows 0 active simulations (stale log data)" -ForegroundColor "Gray"
                         $script:lastOrphanedSimStopAttempt = Get-Date
+                    } else {
+                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  Cannot verify orphaned simulation - health check failed" -ForegroundColor "Yellow"
+                        # Don't update throttle on health check failure - retry sooner
                     }
                 } else {
                     # Throttled - don't spam, but log once that we're waiting
