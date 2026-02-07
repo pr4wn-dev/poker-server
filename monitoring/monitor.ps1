@@ -2204,23 +2204,13 @@ while ($monitoringActive) {
         }
         
         # Check if issues have been fixed (pending-issues.json is empty)
+        # Note: We don't need resume markers anymore - debugger pause (Debug.Break()) doesn't need resume
+        # You just continue in the debugger when ready
         if ($isPaused) {
             $pendingInfo = Get-PendingIssuesInfo
             if ($pendingInfo.TotalIssues -eq 0 -and -not $pendingInfo.InFocusMode) {
-                # Issues have been fixed - write resume marker to game.log
-                $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
-                $resumeMarker = "[$timestamp] [GAME] [MONITOR] [ISSUES_FIXED] All issues fixed - resuming Unity | Data: {`"action`":`"resume`",`"reason`":`"pending-issues.json cleared`"}"
-                
-                try {
-                    $writeSuccess = Write-ToLogFile -FilePath $logFile -Content $resumeMarker
-                    if (-not $writeSuccess) {
-                        throw "Write-ToLogFile returned false"
-                    }
-                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ISSUES FIXED: Resume marker written to game.log" -ForegroundColor "Green"
-                    Write-ConsoleOutput -Message "  Waiting for log watcher to resume Unity..." -ForegroundColor "Yellow"
-                } catch {
-                    Write-ConsoleOutput -Message "  ERROR: Failed to write resume marker: $_" -ForegroundColor "Red"
-                }
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ISSUES FIXED: All issues resolved" -ForegroundColor "Green"
+                Write-ConsoleOutput -Message "  Continue in debugger when ready (no resume needed)" -ForegroundColor "Cyan"
                 
                 $isPaused = $false
                 $currentIssue = $null
