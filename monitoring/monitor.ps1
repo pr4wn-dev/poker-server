@@ -2282,25 +2282,45 @@ while ($monitoringActive) {
         }
         
         # Check server status continuously and restart if needed (every 5 seconds)
+        # BUT: Don't check if server was just restarted (within last 60 seconds) to prevent restart loops
         $serverCheckInterval = 5  # Check server every 5 seconds
         
+        # Check if server was just restarted (cooldown period)
+        $serverJustRestarted = $false
+        if ($script:lastServerRestart -and $script:lastServerRestart -is [DateTime]) {
+            try {
+                $timeSinceServerRestart = (Get-Date) - $script:lastServerRestart
+                if ($timeSinceServerRestart.TotalSeconds -lt 60) {
+                    $serverJustRestarted = $true
+                }
+            } catch {
+                $serverJustRestarted = $false
+            }
+        }
+        
         # Check server health every 5 seconds (independent of stats display)
+        # BUT: Skip check if server was just restarted (within cooldown period)
         if (($now - $lastServerCheck).TotalSeconds -ge $serverCheckInterval) {
-            if (-not (Test-ServerRunning)) {
-                # Don't write to console - update stats display instead
-                # Write-Warning "Server is offline. Attempting to restart..."
-                $restartResult = Start-ServerIfNeeded
-                if (-not $restartResult) {
+            if (-not $serverJustRestarted) {
+                if (-not (Test-ServerRunning)) {
                     # Don't write to console - update stats display instead
-                    # Write-Error "Failed to restart server. Will retry in $serverCheckInterval seconds..."
-                } else {
-                    # Re-check after restart attempt
-                    Start-Sleep -Seconds 2
-                    if (Test-ServerRunning) {
+                    # Write-Warning "Server is offline. Attempting to restart..."
+                    $restartResult = Start-ServerIfNeeded
+                    if (-not $restartResult) {
                         # Don't write to console - update stats display instead
-                        # Write-Success "Server restarted successfully!"
+                        # Write-Error "Failed to restart server. Will retry in $serverCheckInterval seconds..."
+                    } else {
+                        # Re-check after restart attempt
+                        Start-Sleep -Seconds 2
+                        if (Test-ServerRunning) {
+                            # Don't write to console - update stats display instead
+                            # Write-Success "Server restarted successfully!"
+                        }
                     }
                 }
+            } else {
+                # Server was just restarted - skip health check during cooldown
+                # This prevents killing the server while it's still starting up
             }
             $lastServerCheck = $now
         }
