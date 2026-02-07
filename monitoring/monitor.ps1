@@ -1940,6 +1940,20 @@ while ($monitoringActive) {
         $logWatcherStatus = Get-LogWatcherStatus
         $wasSimulationRunning = $stats.SimulationRunning
         
+        # FIRST: Get server's ACTUAL simulation count (not stale log data)
+        $serverActualCount = 0
+        try {
+            $healthResponse = Invoke-WebRequest -Uri "$serverUrl/health" -Method GET -UseBasicParsing -TimeoutSec 3 -ErrorAction Stop
+            $healthData = $healthResponse.Content | ConvertFrom-Json
+            $serverActualCount = $healthData.activeSimulations
+        } catch {
+            # If we can't check server, use log watcher count as fallback
+            $serverActualCount = $logWatcherStatus.ActiveSimulations
+        }
+        
+        # Update logWatcherStatus with server's actual count for display
+        $logWatcherStatus.ActiveSimulations = $serverActualCount
+        
         # Also check logs directly for simulation completion (10/10 games)
         $simulationCompleted = $false
         if (Test-Path $logFile) {
@@ -1974,12 +1988,13 @@ while ($monitoringActive) {
         if ($simulationCompleted) {
             $stats.SimulationRunning = $false
             $logWatcherStatus.ActiveSimulations = 0
+            $serverActualCount = 0
         } else {
             # Only consider simulation "ACTIVE" if:
             # 1. Server reports active simulations, AND
             # 2. Unity is actually connected and in a game scene (receiving game updates)
             # If there's a simulation on the server but Unity isn't connected to it, treat it as inactive
-            $serverHasSimulation = $logWatcherStatus.ActiveSimulations -gt 0
+            $serverHasSimulation = $serverActualCount -gt 0
             $unityActualStatus = Get-UnityActualStatus
             $unityIsInGame = $unityActualStatus.InGameScene -and $unityActualStatus.ReceivingGameUpdates
             
@@ -1989,16 +2004,6 @@ while ($monitoringActive) {
             }
             
             # Check for orphaned simulation (server has it but Unity doesn't)
-            # FIRST: Check server's actual count to avoid false positives from stale log data
-            $serverActualCount = -1
-            try {
-                $healthResponse = Invoke-WebRequest -Uri "$serverUrl/health" -Method GET -UseBasicParsing -TimeoutSec 3 -ErrorAction Stop
-                $healthData = $healthResponse.Content | ConvertFrom-Json
-                $serverActualCount = $healthData.activeSimulations
-            } catch {
-                # If we can't check server, use log watcher count as fallback
-                $serverActualCount = $logWatcherStatus.ActiveSimulations
-            }
             
             # Only check for orphaned simulation if server ACTUALLY has simulations
             if ($serverActualCount -gt 0 -and -not $unityIsInGame) {
