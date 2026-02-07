@@ -2729,6 +2729,7 @@ $script:simulationStartTime = $null  # Track when we first detected a simulation
 $script:monitorStartTime = Get-Date  # Track when monitor started to ignore old simulations
 $script:investigationCheckLogged = $false  # Track if we've logged the investigation check diagnostic message
 $script:lastInvestigationStateLog = $null  # Track last investigation state log time
+$script:investigationNullStartTime = $null  # Track when we first detected null startTime (for timing check)
 
 while ($monitoringActive) {
     try {
@@ -2791,12 +2792,15 @@ while ($monitoringActive) {
                 if ($script:investigationStartTime -is [DateTime]) {
                     $shouldCheckInvestigation = $true
                     $investigationStartTimeValid = $true
+                    # Reset the null startTime timer if it was set
+                    $script:investigationNullStartTime = $null
                 } else {
                     # StartTime exists but is wrong type - log and reset
                     Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] ERROR: investigationStartTime is not DateTime (type: $($script:investigationStartTime.GetType().Name)) - resetting investigation" -ForegroundColor "Red"
                     $script:isInvestigating = $false
                     $script:investigationStartTime = $null
                     $script:investigationCheckLogged = $false
+                    $script:investigationNullStartTime = $null
                 }
             } else {
                 # Investigation flag is true but startTime is null - invalid state, reset
