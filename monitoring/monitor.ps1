@@ -3221,28 +3221,72 @@ while ($monitoringActive) {
                                 Write-ConsoleOutput -Message $messagePreview -ForegroundColor "Gray"
                             }
                         } elseif ($isPaused) {
-                            # Throttle "ALREADY PAUSED" messages - only show once per 10 seconds per issue pattern
-                            $issueKey = "$($issue.type)_$($issue.severity)_$($issue.source)"
-                            $throttleKey = "paused_$issueKey"
-                            
-                            if (-not $script:issueThrottle) {
-                                $script:issueThrottle = @{}
+                            # Unity is already paused, but we should still log issues as related issues
+                            # Extract table ID if available
+                            $tableId = $null
+                            if ($line -match 'tableId.*?"([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})"') {
+                                $tableId = $matches[1]
+                            }
+                            elseif ($line -match 'tableId.*?([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})') {
+                                $tableId = $matches[1]
+                            }
+                            elseif ($line -match 'tableId.*?"([^"]+)"') {
+                                $tableId = $matches[1]
+                            }
+                            elseif ($line -match 'tableId.*?(\w{8,})') {
+                                $tableId = $matches[1]
                             }
                             
-                            $lastShown = $script:issueThrottle[$throttleKey]
-                            $shouldShow = $true
+                            # Still log issue to pending-issues.json (will be added as related issue or queued)
+                            $maxMessageLength = 1000
+                            $safeMessage = $line
+                            if ($safeMessage.Length -gt $maxMessageLength) {
+                                $safeMessage = $safeMessage.Substring(0, $maxMessageLength) + "... (truncated)"
+                            }
+                            $safeMessage = $safeMessage -replace "``", "'" -replace "`0", "" -replace "`r`n", " " -replace "`r", " " -replace "`n", " " -replace "`t", " "
                             
-                            if ($lastShown) {
-                                $timeSinceLastShown = (Get-Date) - $lastShown
-                                if ($timeSinceLastShown.TotalSeconds -lt 10) {
-                                    $shouldShow = $false
+                            $issueData = @{
+                                message = $safeMessage
+                                source = $issue.source
+                                severity = $issue.severity
+                                type = $issue.type
+                                tableId = $tableId
+                            }
+                            
+                            $addResult = Add-PendingIssue $issueData
+                            
+                            if ($addResult -and $addResult.success) {
+                                if ($addResult.reason -eq 'added_to_group') {
+                                    # Related issue added to focused group
+                                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] RELATED ISSUE: Added to focused group (Unity already paused)" -ForegroundColor "Yellow"
+                                } elseif ($addResult.reason -eq 'queued') {
+                                    # Unrelated issue queued
+                                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ISSUE QUEUED: Unrelated to focused issue (Unity already paused)" -ForegroundColor "Gray"
                                 }
-                            }
-                            
-                            if ($shouldShow) {
-                                $script:issueThrottle[$throttleKey] = Get-Date
-                                $alreadyPausedMsg = "[$(Get-Date -Format 'HH:mm:ss')] ISSUE (ALREADY PAUSED): $($issue.type) ($($issue.severity)) - Unity already paused, issue queued"
-                                Write-ConsoleOutput -Message $alreadyPausedMsg -ForegroundColor "Gray"
+                            } elseif ($addResult -and ($addResult.reason -eq 'duplicate' -or $addResult.reason -eq 'duplicate_in_group')) {
+                                # Throttle "ALREADY PAUSED" messages - only show once per 10 seconds per issue pattern
+                                $issueKey = "$($issue.type)_$($issue.severity)_$($issue.source)"
+                                $throttleKey = "paused_$issueKey"
+                                
+                                if (-not $script:issueThrottle) {
+                                    $script:issueThrottle = @{}
+                                }
+                                
+                                $lastShown = $script:issueThrottle[$throttleKey]
+                                $shouldShow = $true
+                                
+                                if ($lastShown) {
+                                    $timeSinceLastShown = (Get-Date) - $lastShown
+                                    if ($timeSinceLastShown.TotalSeconds -lt 10) {
+                                        $shouldShow = $false
+                                    }
+                                }
+                                
+                                if ($shouldShow) {
+                                    $script:issueThrottle[$throttleKey] = Get-Date
+                                    $alreadyPausedMsg = "[$(Get-Date -Format 'HH:mm:ss')] ISSUE (ALREADY PAUSED): $($issue.type) ($($issue.severity)) - Unity already paused, issue queued"
+                                    Write-ConsoleOutput -Message $alreadyPausedMsg -ForegroundColor "Gray"
+                                }
                             }
                         }
                     }
