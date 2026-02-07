@@ -2545,7 +2545,8 @@ while ($monitoringActive) {
                 $oldSimMsg = "[$timestamp] SIMULATION: Old simulation ended (was running when monitor started) - continuing to monitor"
                 Write-ConsoleOutput -Message $oldSimMsg -ForegroundColor "Gray"
                 # Don't restart Unity for old simulations - just continue monitoring
-                return
+                # Skip Unity restart logic for old simulations
+                continue
             }
             
             # Only restart Unity if we actually tracked this simulation from the start
