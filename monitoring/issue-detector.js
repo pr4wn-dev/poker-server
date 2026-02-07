@@ -359,7 +359,7 @@ class IssueDetector {
      * Check if two issues are related (grouping logic)
      * Returns true if issues should be grouped together
      */
-    areIssuesRelated(issue1, issue2, timeWindowMs = 30000) {
+    areIssuesRelated(issue1, issue2, timeWindowMs = 120000) { // Increased from 30s to 120s (2 minutes) for cascading issues
         // Calculate time difference
         const time1 = new Date(issue1.detectedAt || issue1.timestamp).getTime();
         const time2 = new Date(issue2.detectedAt || issue2.timestamp).getTime();
@@ -369,37 +369,37 @@ class IssueDetector {
             return false; // Too far apart in time
         }
         
-        // PRIMARY GROUPING: Same tableId (strongest signal)
+        // PRIMARY GROUPING: Same tableId (strongest signal - always group)
         const tableId1 = this.extractTableId(issue1);
         const tableId2 = this.extractTableId(issue2);
         if (tableId1 && tableId2 && tableId1 === tableId2) {
             return true;
         }
         
-        // PRIMARY GROUPING: Same error pattern/type
+        // PRIMARY GROUPING: Same error pattern/type (strong signal)
         const pattern1 = this.extractErrorPattern(issue1);
         const pattern2 = this.extractErrorPattern(issue2);
         if (pattern1 === pattern2 && pattern1 !== 'general') {
             return true;
         }
         
-        // PRIMARY GROUPING: Same stack trace location
+        // PRIMARY GROUPING: Same stack trace location (strong signal)
         const stack1 = this.extractStackTraceLocation(issue1);
         const stack2 = this.extractStackTraceLocation(issue2);
         if (stack1 && stack2 && stack1.function === stack2.function && stack1.file === stack2.file) {
             return true;
         }
         
-        // SECONDARY GROUPING: Shared keywords (correlation analysis)
+        // SECONDARY GROUPING: Shared keywords (correlation analysis) - requires 3+ keywords to be more strict
         const sharedKeywords = this.extractSharedKeywords(issue1, issue2);
-        if (sharedKeywords.length >= 2) { // At least 2 shared keywords
+        if (sharedKeywords.length >= 3) { // Increased from 2 to 3 to reduce false positives
             return true;
         }
         
-        // SECONDARY GROUPING: Same source and similar message
+        // SECONDARY GROUPING: Same source and similar message - increased threshold for better precision
         if (issue1.source === issue2.source) {
             const similarity = this.calculateSimilarity(issue1.message, issue2.message);
-            if (similarity > 0.5) { // 50% similarity
+            if (similarity > 0.7) { // Increased from 50% to 70% to reduce false grouping
                 return true;
             }
         }
@@ -642,7 +642,7 @@ class IssueDetector {
                     
                     return { success: false, reason: 'duplicate_in_group' };
                 } else {
-                    // Unrelated issue - queue it for later
+                    // Unrelated issue - queue it for later (keeps logs clean during focus mode)
                     if (!data.queuedIssues) {
                         data.queuedIssues = [];
                     }
@@ -660,8 +660,13 @@ class IssueDetector {
                         
                         gameLogger.info('MONITORING', '[ISSUE_QUEUED]', {
                             issueId: issue.id,
-                            reason: 'Unrelated to focused issue - queued for later',
-                            queuedCount: data.queuedIssues.length
+                            type: issue.type,
+                            severity: issue.severity,
+                            reason: 'Unrelated to focused issue - queued for later to keep logs clean',
+                            focusedIssueType: rootIssue.type,
+                            focusedIssueSeverity: rootIssue.severity,
+                            queuedCount: data.queuedIssues.length,
+                            message: `Issue "${issue.type}" queued - will be processed after current focus issue is resolved`
                         });
                     }
                     
