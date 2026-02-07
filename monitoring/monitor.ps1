@@ -1876,7 +1876,8 @@ while ($monitoringActive) {
             if ($serverHasSimulation -and $unityIsInGame) {
                 # Both server and Unity agree: simulation is active
                 $stats.SimulationRunning = $true
-            } elseif ($serverHasSimulation -and (!$unityIsInGame)) {
+            } elseif ($serverHasSimulation) {
+                if (-not $unityIsInGame) {
                 # Server has simulation but Unity isn't connected to it - treat as inactive
                 # This means there's an orphaned simulation (bots playing without Unity)
                 $stats.SimulationRunning = $false
