@@ -1818,10 +1818,31 @@ while ($monitoringActive) {
                 $issue = Invoke-IssueDetector $line
                 
                 if ($issue) {
-                    # REPORT TO CONSOLE: Issue detected (but not yet paused)
-                    # Use Write-ConsoleOutput to prevent scrolling and flickering
-                    $issueMessage = "[$(Get-Date -Format 'HH:mm:ss')] ISSUE DETECTED: $($issue.type) ($($issue.severity))"
-                    Write-ConsoleOutput -Message $issueMessage -ForegroundColor "Yellow"
+                    # Throttle duplicate issue detections - only show message once per 5 seconds per issue pattern
+                    $issueKey = "$($issue.type)_$($issue.severity)_$($issue.source)"
+                    $throttleKey = "issue_$issueKey"
+                    
+                    if (-not $script:issueThrottle) {
+                        $script:issueThrottle = @{}
+                    }
+                    
+                    $lastShown = $script:issueThrottle[$throttleKey]
+                    $shouldShow = $true
+                    
+                    if ($lastShown) {
+                        $timeSinceLastShown = (Get-Date) - $lastShown
+                        if ($timeSinceLastShown.TotalSeconds -lt 5) {
+                            $shouldShow = $false
+                        }
+                    }
+                    
+                    if ($shouldShow) {
+                        $script:issueThrottle[$throttleKey] = Get-Date
+                        # REPORT TO CONSOLE: Issue detected (but not yet paused)
+                        # Use Write-ConsoleOutput to prevent scrolling and flickering
+                        $issueMessage = "[$(Get-Date -Format 'HH:mm:ss')] ISSUE DETECTED: $($issue.type) ($($issue.severity))"
+                        Write-ConsoleOutput -Message $issueMessage -ForegroundColor "Yellow"
+                    }
                     
                     # Update statistics
                     $stats.IssuesDetected++
