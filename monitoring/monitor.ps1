@@ -659,7 +659,7 @@ function Kill-Port3000Processes {
     Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🔪 Killing processes using port 3000..." -ForegroundColor "Cyan"
     $port3000Processes = @()
     try {
-        $netstatOutput = netstat -ano | Select-String ":3000"
+        $netstatOutput = netstat -ano | Select-String ':3000'
         foreach ($line in $netstatOutput) {
             if ($line -match '\s+(\d+)\s*$') {
                 $processId = [int]$matches[1]
@@ -699,7 +699,8 @@ function Kill-Port3000Processes {
         }
         Start-Sleep -Seconds 2
         Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ✅ Killed all processes using port 3000" -ForegroundColor "Green"
-    } else {
+    }
+    else {
         Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ℹ️  No processes found using port 3000" -ForegroundColor "Gray"
     }
 }
@@ -988,7 +989,7 @@ function Start-ServerIfNeeded {
             # Kill processes using port 3000 first (more reliable than just killing node processes)
             $port3000Processes = @()
             try {
-                $netstatOutput = netstat -ano | Select-String ":3000"
+                $netstatOutput = netstat -ano | Select-String ':3000'
                 foreach ($line in $netstatOutput) {
                     if ($line -match '\s+(\d+)\s*$') {
                         $processId = [int]$matches[1]
@@ -1260,7 +1261,6 @@ function Maintain-Services {
         Restart-UnityIfNeeded | Out-Null
     }
 }
-}
 
 # Initialize Windows API for window size control (only once)
 if (-not ([System.Management.Automation.PSTypeName]'WindowSizeAPI').Type) {
@@ -1519,7 +1519,7 @@ try {
         $portCheckWaited = 0
         while ($portStillInUse -and $portCheckWaited -lt $maxPortCheckWait) {
             try {
-                $netstatOutput = netstat -ano | Select-String ":3000"
+                $netstatOutput = netstat -ano | Select-String ':3000'
                 if (-not $netstatOutput) {
                     $portStillInUse = $false
                     Write-Success "Port 3000 is now free"
