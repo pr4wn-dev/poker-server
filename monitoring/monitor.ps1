@@ -2937,6 +2937,24 @@ while ($monitoringActive) {
             }
         }
         
+        # CRITICAL FIX: If there's a focused group but no active investigation, start one
+        # This handles the case where a focus group exists but investigation never started
+        if (-not $script:isInvestigating) {
+            $pendingInfo = Get-PendingIssuesInfo
+            if ($pendingInfo -and $pendingInfo.InFocusMode -and $pendingInfo.RootIssue -and $investigationEnabled -and $investigationTimeout -gt 0) {
+                # There's a focused group but no investigation - start one now
+                $script:isInvestigating = $true
+                $script:investigationStartTime = Get-Date
+                $script:investigationCheckLogged = $false
+                $script:investigationNullStartTimeLogged = $false
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] INVESTIGATION: Starting for existing focus group ($investigationTimeout seconds)" -ForegroundColor "Cyan"
+                Write-ConsoleOutput -Message "  Root Issue: $($pendingInfo.RootIssue.type) ($($pendingInfo.RootIssue.severity))" -ForegroundColor "White"
+                # Force immediate status update
+                Update-MonitorStatus
+                $lastStatusUpdate = Get-Date
+            }
+        }
+        
         # Check if log file exists
         if (-not (Test-Path $logFile)) {
             Start-Sleep -Seconds $checkInterval
