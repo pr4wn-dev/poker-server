@@ -1254,9 +1254,6 @@ function Restart-UnityIfNeeded {
             # Enable debug mode so debugger can attach
             $unityArgs += "-debugCodeOptimization"
             
-            # Automatically enter play mode using Editor script
-            $unityArgs += "-executeMethod", "AutoPlayMode.StartPlayMode"
-            
             # Pass auto-mode to Unity (simulation or normal)
             if ($config.simulation.enabled) {
                 $unityArgs += "-autoMode", "simulation"
