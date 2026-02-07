@@ -369,6 +369,11 @@ function Add-PendingIssue {
                 if ($retryCount -ge $maxRetries) {
                     Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ISSUE DETECTOR FAILED after $maxRetries attempts: $errorDetails" -ForegroundColor "Red"
                     Write-ConsoleOutput -Message "  Monitor will continue - issue may be logged on next attempt" -ForegroundColor "Yellow"
+                    Update-MonitorStatus -statusUpdate @{
+                        issueDetectorStatus = "failed"
+                        lastIssueDetectorError = $errorDetails
+                        lastIssueDetectorErrorTime = (Get-Date).ToUniversalTime().ToString("o")
+                    }
                 } else {
                     $retryCount++
                     if ($retryCount -lt $maxRetries) {
@@ -385,6 +390,11 @@ function Add-PendingIssue {
                     continue
                 } else {
                     Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ISSUE DETECTOR EXCEPTION after $maxRetries attempts: $_" -ForegroundColor "Red"
+                    Update-MonitorStatus -statusUpdate @{
+                        issueDetectorStatus = "exception"
+                        lastIssueDetectorError = $_.Exception.Message
+                        lastIssueDetectorErrorTime = (Get-Date).ToUniversalTime().ToString("o")
+                    }
                     break
                 }
             }
