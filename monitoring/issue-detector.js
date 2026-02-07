@@ -984,11 +984,18 @@ if (require.main === module) {
             try {
                 issueData = JSON.parse(jsonContent);
             } catch (parseError) {
-                console.log(JSON.stringify({ 
-                    success: false, 
-                    reason: 'error', 
-                    error: 'JSON parse error: ' + parseError.message + ' | Content length: ' + jsonContent.length + ' | First 100 chars: ' + JSON.stringify(jsonContent.substring(0, 100))
-                }));
+                // Log detailed error information for debugging
+                const errorDetails = {
+                    success: false,
+                    reason: 'error',
+                    error: parseError.message,
+                    contentLength: jsonContent.length,
+                    firstChars: jsonContent.substring(0, 200),
+                    lastChars: jsonContent.substring(Math.max(0, jsonContent.length - 200)),
+                    hasBOM: jsonContent.charCodeAt(0) === 0xFEFF,
+                    charCodes: Array.from(jsonContent.substring(0, 50)).map(c => c.charCodeAt(0))
+                };
+                console.log(JSON.stringify(errorDetails));
                 process.exit(1);
             }
             

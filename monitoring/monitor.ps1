@@ -240,17 +240,26 @@ function Add-PendingIssue {
             if (-not $errorDetails) {
                 $errorDetails = "Node.js script returned no output (exit code: $LASTEXITCODE)"
             }
-            Write-Warning "Issue detector failed: $errorDetails"
             
             # Try to parse error from result if it's JSON
             try {
                 $errorJson = $result | ConvertFrom-Json -ErrorAction SilentlyContinue
-                if ($errorJson -and $errorJson.error) {
+                if ($errorJson) {
+                    $errorMsg = $errorJson.error
+                    if ($errorJson.contentLength) {
+                        $errorMsg += " (length: $($errorJson.contentLength))"
+                    }
+                    if ($errorJson.firstChars) {
+                        $errorMsg += " | First chars: $($errorJson.firstChars)"
+                    }
+                    Write-Warning "Issue detector failed: $errorMsg"
                     return @{ success = $false; error = $errorJson.error; reason = $errorJson.reason }
                 }
             } catch {
                 # Not JSON, return generic error
             }
+            
+            Write-Warning "Issue detector failed: $errorDetails"
         } finally {
             # Clean up temp file
             if (Test-Path $tempFile) {
