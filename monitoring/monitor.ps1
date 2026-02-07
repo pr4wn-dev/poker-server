@@ -1083,6 +1083,7 @@ function Start-ServerIfNeeded {
                 $waited += 2
                 if (Test-ServerRunning) {
                     Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ✅ Server is now online and ready!" -ForegroundColor "Green"
+                    $script:lastServerRestart = Get-Date  # Track server restart time to prevent killing it too early
                     return $true
                 }
                 # Log progress every 6 seconds
