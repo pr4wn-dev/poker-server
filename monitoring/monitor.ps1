@@ -2915,16 +2915,12 @@ while ($monitoringActive) {
                 }
             } catch {
                 Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ERROR: Investigation completion check failed: $_" -ForegroundColor "Red"
+                Write-ConsoleOutput -Message "  Stack trace: $($_.ScriptStackTrace)" -ForegroundColor "Yellow"
                 # Force complete investigation on error to prevent getting stuck
                 $script:isInvestigating = $false
                 $script:investigationStartTime = $null
                 $script:investigationCheckLogged = $false  # Reset for next investigation
             }
-        } elseif ($script:isInvestigating -and -not $script:investigationStartTime) {
-            # SELF-DIAGNOSTIC: Investigation flag is true but startTime is null - this is invalid
-            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] ERROR: isInvestigating=true but investigationStartTime is null - resetting" -ForegroundColor "Red"
-            $script:isInvestigating = $false
-            $script:investigationCheckLogged = $false
         }
         
         # Check if log file exists
