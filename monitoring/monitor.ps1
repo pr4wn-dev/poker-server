@@ -122,8 +122,8 @@ Write-Info "Simulation Mode: $($config.simulation.enabled)"
 # Initialize lastLogPosition to END of file so we only read NEW entries (not old ones from previous runs)
 $lastLogPosition = if (Test-Path $logFile) { (Get-Item $logFile).Length } else { 0 }
 $isPaused = $false
-$isInvestigating = $false  # Track if we're in investigation phase
-$investigationStartTime = $null  # When investigation started
+$script:isInvestigating = $false  # Track if we're in investigation phase
+$script:investigationStartTime = $null  # When investigation started
 $investigationTimeout = if ($config.investigation -and $config.investigation.timeoutSeconds) { $config.investigation.timeoutSeconds } else { 15 }  # Seconds to investigate before pausing
 $investigationEnabled = if ($config.investigation -and $config.investigation.enabled -ne $false) { $true } else { $false }
 $isVerifyingFix = $false  # Track if we're verifying a fix
@@ -797,9 +797,9 @@ function Update-MonitorStatus {
         $statsPauseMarkerErrors = if ($stats -and $stats.PauseMarkerErrors) { $stats.PauseMarkerErrors } else { 0 }
         
         $unityActualStatus = try { (Get-UnityActualStatus).Status } catch { "Unknown" }
-        $isInvestigatingValue = if (Get-Variable -Name "isInvestigating" -ErrorAction SilentlyContinue) { $isInvestigating } else { $false }
-        $investigationStartTimeValue = if (Get-Variable -Name "investigationStartTime" -ErrorAction SilentlyContinue) { 
-            if ($investigationStartTime -is [DateTime]) { $investigationStartTime } else { $null }
+        $isInvestigatingValue = if (Get-Variable -Name "isInvestigating" -Scope Script -ErrorAction SilentlyContinue) { $script:isInvestigating } else { $false }
+        $investigationStartTimeValue = if (Get-Variable -Name "investigationStartTime" -Scope Script -ErrorAction SilentlyContinue) { 
+            if ($script:investigationStartTime -is [DateTime]) { $script:investigationStartTime } else { $null }
         } else { 
             $null 
         }
@@ -1654,8 +1654,8 @@ function Show-Statistics {
     Write-Host ("=" * $consoleWidth) -ForegroundColor Cyan
     
     # Top status bar - single row across full width
-    $statusText = if ($isVerifyingFix) { "VERIFYING FIX" } elseif ($isInvestigating) { "INVESTIGATING" } elseif ($isPaused) { "PAUSED (Fix Required)" } else { "ACTIVE" }
-    $statusColor = if ($isVerifyingFix) { "Cyan" } elseif ($isInvestigating) { "Yellow" } elseif ($isPaused) { "Red" } else { "Green" }
+    $statusText = if ($isVerifyingFix) { "VERIFYING FIX" } elseif ($script:isInvestigating) { "INVESTIGATING" } elseif ($isPaused) { "PAUSED (Fix Required)" } else { "ACTIVE" }
+    $statusColor = if ($isVerifyingFix) { "Cyan" } elseif ($script:isInvestigating) { "Yellow" } elseif ($isPaused) { "Red" } else { "Green" }
     $serverStatusText = if ($stats.ServerStatus -eq "Online") { "ONLINE" } else { "OFFLINE" }
     $serverStatusColor = if ($stats.ServerStatus -eq "Online") { "Green" } else { "Red" }
     $pipeSeparator = [char]124
@@ -1836,8 +1836,8 @@ function Show-Statistics {
     $col3Lines += ""
     $col3Lines += "INVESTIGATION PHASE"
     $col3Lines += ("=" * ($colWidth - 2))
-    if ($isInvestigating -and $investigationStartTime) {
-        $investigationElapsed = (Get-Date) - $investigationStartTime
+    if ($script:isInvestigating -and $script:investigationStartTime) {
+        $investigationElapsed = (Get-Date) - $script:investigationStartTime
         $remaining = [Math]::Max(0, $investigationTimeout - $investigationElapsed.TotalSeconds)
         $elapsed = [Math]::Min($investigationTimeout, $investigationElapsed.TotalSeconds)
         $progressPercent = [Math]::Round(($elapsed / $investigationTimeout) * 100)
@@ -1933,7 +1933,7 @@ function Show-Statistics {
     }
     
     # Add current issue preview if paused, investigating, or verifying
-    if (($isPaused -or $isInvestigating -or $isVerifyingFix) -and $currentIssue) {
+    if (($isPaused -or $script:isInvestigating -or $isVerifyingFix) -and $currentIssue) {
         $col3Lines += ""
         $col3Lines += "CURRENT ISSUE"
         $col3Lines += ("-" * ($colWidth - 2))
@@ -2754,13 +2754,13 @@ while ($monitoringActive) {
         }
         
         # Check if investigation phase is complete
-        if ($isInvestigating -and $investigationStartTime) {
+        if ($script:isInvestigating -and $script:investigationStartTime) {
             try {
-                $investigationElapsed = (Get-Date) - $investigationStartTime
+                $investigationElapsed = (Get-Date) - $script:investigationStartTime
                 if ($investigationElapsed.TotalSeconds -ge $investigationTimeout) {
                     # Investigation complete - pause debugger now
-                    $isInvestigating = $false
-                    $investigationStartTime = $null
+                    $script:isInvestigating = $false
+                    $script:investigationStartTime = $null
                     $pendingInfo = Get-PendingIssuesInfo
                     
                     # Always complete investigation after timeout, even if pending info is missing
@@ -2804,8 +2804,8 @@ while ($monitoringActive) {
             } catch {
                 Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ERROR: Investigation completion check failed: $_" -ForegroundColor "Red"
                 # Force complete investigation on error to prevent getting stuck
-                $isInvestigating = $false
-                $investigationStartTime = $null
+                $script:isInvestigating = $false
+                $script:investigationStartTime = $null
             }
         }
         
@@ -2904,8 +2904,8 @@ while ($monitoringActive) {
                         $verificationStartTime = $null
                         $verificationPeriod = 0
                         $verificationIssuePattern = $null
-                        $isInvestigating = $true
-                        $investigationStartTime = Get-Date
+                        $script:isInvestigating = $true
+                        $script:investigationStartTime = Get-Date
                         $isPaused = $false  # Don't pause yet, let investigation complete first
                         
                         # Continue to normal issue detection below
@@ -3096,9 +3096,9 @@ while ($monitoringActive) {
                             if ($addResult -and $addResult.reason -eq 'new_focus_group' -and $investigationEnabled -and $investigationTimeout -gt 0) {
                                 # New issue detected - start investigation phase
                                 # BUT: Don't restart investigation if one is already in progress
-                                if (-not $isInvestigating) {
-                                    $isInvestigating = $true
-                                    $investigationStartTime = Get-Date
+                                if (-not $script:isInvestigating) {
+                                    $script:isInvestigating = $true
+                                    $script:investigationStartTime = Get-Date
                                     Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] INVESTIGATION: Starting ($investigationTimeout seconds) - see statistics for details" -ForegroundColor "Cyan"
                                     $currentIssue = $line
                                 } else {
@@ -3108,7 +3108,7 @@ while ($monitoringActive) {
                                 # Investigation disabled or timeout is 0 - pause immediately
                                 # OR this is a related issue added during investigation - don't restart investigation
                                 # OR issue detector failed - don't start investigation
-                                if (-not $isInvestigating) {
+                                if (-not $script:isInvestigating) {
                                     # Pause debugger immediately (with automatic verification)
                                     if ($config.unity.pauseDebuggerOnIssue) {
                                         $escapedMessage = $line.Replace('"','\"').Replace("`n"," ").Replace("`r"," ").Substring(0,[Math]::Min(200,$line.Length))
@@ -3289,9 +3289,9 @@ while ($monitoringActive) {
                                     # Only if issue was successfully logged
                                     # BUT: Don't restart investigation if one is already in progress
                                     if ($addResult -and $addResult.success -and $investigationEnabled -and $investigationTimeout -gt 0) {
-                                        if (-not $isInvestigating) {
-                                            $isInvestigating = $true
-                                            $investigationStartTime = Get-Date
+                                        if (-not $script:isInvestigating) {
+                                            $script:isInvestigating = $true
+                                            $script:investigationStartTime = Get-Date
                                             Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] INVESTIGATION: Starting investigation phase ($investigationTimeout seconds)" -ForegroundColor "Cyan"
                                             Write-ConsoleOutput -Message "  Gathering related issues..." -ForegroundColor "Gray"
                                             $currentIssue = $line
@@ -3356,9 +3356,9 @@ while ($monitoringActive) {
                                     # Start investigation phase even if Unity is already paused
                                     # BUT: Don't restart investigation if one is already in progress
                                     if ($investigationEnabled -and $investigationTimeout -gt 0) {
-                                        if (-not $isInvestigating) {
-                                            $isInvestigating = $true
-                                            $investigationStartTime = Get-Date
+                                        if (-not $script:isInvestigating) {
+                                            $script:isInvestigating = $true
+                                            $script:investigationStartTime = Get-Date
                                             Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] INVESTIGATION: Starting ($investigationTimeout seconds) - see statistics for details" -ForegroundColor "Cyan"
                                             $currentIssue = $line
                                         } else {
@@ -3415,7 +3415,7 @@ while ($monitoringActive) {
             $pendingInfo = Get-PendingIssuesInfo
             
             # Check if investigation is still in progress
-            if ($isInvestigating) {
+            if ($script:isInvestigating) {
                 Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] WARNING: fix-applied.json detected but investigation still in progress - waiting for investigation to complete" -ForegroundColor "Yellow"
                 # Don't start verification yet - wait for investigation to complete
             }
@@ -3433,7 +3433,7 @@ while ($monitoringActive) {
                     # Start verification phase
                     $isVerifyingFix = $true
                     $isPaused = $false  # No longer paused, we're verifying
-                    $isInvestigating = $false  # Investigation complete, now verifying
+                    $script:isInvestigating = $false  # Investigation complete, now verifying
                     
                     $rootIssue = $pendingInfo.RootIssue
                     $requiredRestarts = if ($fixApplied.requiredRestarts) { $fixApplied.requiredRestarts } else { @() }
@@ -3572,8 +3572,8 @@ while ($monitoringActive) {
                 $verificationPeriod = 0
                 $verificationIssuePattern = $null
                 $isPaused = $false
-                $isInvestigating = $false
-                $investigationStartTime = $null
+                $script:isInvestigating = $false
+                $script:investigationStartTime = $null
                 $currentIssue = $null
             } else {
                 # Still verifying - show countdown every 10 seconds
