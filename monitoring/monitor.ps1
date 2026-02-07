@@ -770,6 +770,90 @@ function Test-ServerRunning {
     }
 }
 
+# Function to update persistent monitor status file (for AI assistant to read)
+function Update-MonitorStatus {
+    param(
+        [hashtable]$statusUpdate = @{}
+    )
+    
+    try {
+        $status = @{
+            timestamp = (Get-Date).ToUniversalTime().ToString("o")
+            monitorRunning = $true
+            monitorStartTime = $stats.StartTime.ToString("o")
+            uptime = ((Get-Date) - $stats.StartTime).TotalSeconds
+            serverStatus = $stats.ServerStatus
+            unityStatus = @{
+                running = $stats.UnityRunning
+                connected = $stats.UnityConnected
+                actualStatus = (Get-UnityActualStatus).Status
+            }
+            investigation = @{
+                active = $isInvestigating
+                startTime = if ($investigationStartTime) { $investigationStartTime.ToString("o") } else { $null }
+                timeout = $investigationTimeout
+                timeRemaining = if ($isInvestigating -and $investigationStartTime) { [Math]::Max(0, $investigationTimeout - ((Get-Date) - $investigationStartTime).TotalSeconds) } else { $null }
+            }
+            verification = @{
+                active = $isVerifyingFix
+                startTime = if ($verificationStartTime) { $verificationStartTime.ToString("o") } else { $null }
+                period = $verificationPeriod
+                timeRemaining = if ($isVerifyingFix -and $verificationStartTime) { [Math]::Max(0, $verificationPeriod - ((Get-Date) - $verificationStartTime).TotalSeconds) } else { $null }
+            }
+            paused = $isPaused
+            currentIssue = $currentIssue
+            pendingIssues = @{
+                total = $stats.PendingIssues
+                inFocusMode = $stats.InFocusMode
+                queued = $stats.QueuedIssues
+            }
+            statistics = @{
+                linesProcessed = $stats.TotalLinesProcessed
+                issuesDetected = $stats.IssuesDetected
+                lastIssueTime = if ($stats.LastIssueTime) { $stats.LastIssueTime.ToString("o") } else { $null }
+            }
+            debuggerBreaks = @{
+                successful = $stats.PauseMarkersWritten
+                failed = $stats.PauseMarkerErrors
+            }
+            recentErrors = @()
+            recentWarnings = @()
+        }
+        
+        # Merge any additional status updates
+        foreach ($key in $statusUpdate.Keys) {
+            $status[$key] = $statusUpdate[$key]
+        }
+        
+        # Get recent errors/warnings from pending issues
+        if (Test-Path $pendingIssuesFile) {
+            try {
+                $pendingContent = Get-Content $pendingIssuesFile -Raw | ConvertFrom-Json
+                if ($pendingContent.focusedGroup) {
+                    $status.pendingIssues.rootIssue = @{
+                        type = $pendingContent.focusedGroup.rootIssue.type
+                        severity = $pendingContent.focusedGroup.rootIssue.severity
+                        source = $pendingContent.focusedGroup.rootIssue.source
+                        tableId = $pendingContent.focusedGroup.rootIssue.tableId
+                    }
+                    if ($pendingContent.focusedGroup.fixAttempts) {
+                        $status.pendingIssues.fixAttempts = $pendingContent.focusedGroup.fixAttempts.Count
+                        $status.pendingIssues.failedAttempts = ($pendingContent.focusedGroup.fixAttempts | Where-Object { $_.result -eq "failed" }).Count
+                    }
+                }
+            } catch {
+                # Ignore errors reading pending issues
+            }
+        }
+        
+        # Write to status file
+        $statusJson = $status | ConvertTo-Json -Depth 10
+        [System.IO.File]::WriteAllText($monitorStatusFile, $statusJson, [System.Text.UTF8Encoding]::new($false))
+    } catch {
+        # Don't fail if status update fails
+    }
+}
+
 # Function to automatically trigger debugger break with verification and retry
 function Invoke-DebuggerBreakWithVerification {
     param(
