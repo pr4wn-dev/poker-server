@@ -177,14 +177,36 @@ function Add-PendingIssue {
     
     try {
         # Convert to JSON and write to temp file to avoid PowerShell/Node.js argument parsing issues
-        $jsonData = $issueData | ConvertTo-Json -Compress -Depth 10
+        # First, ensure all string values are properly sanitized
+        $sanitizedData = @{
+            message = $issueData.message
+            source = $issueData.source
+            severity = $issueData.severity
+            type = $issueData.type
+            tableId = $issueData.tableId
+        }
+        
+        $jsonData = $sanitizedData | ConvertTo-Json -Compress -Depth 10
+        if (-not $jsonData -or $jsonData.Length -eq 0) {
+            Write-Warning "Failed to convert issue data to JSON"
+            return $null
+        }
+        
+        # Verify JSON is valid by trying to parse it
+        try {
+            $testParse = $jsonData | ConvertFrom-Json -ErrorAction Stop
+        } catch {
+            Write-Warning "Generated JSON is invalid: $_"
+            return $null
+        }
+        
         $tempFile = Join-Path $env:TEMP "monitor-issue-$(Get-Date -Format 'yyyyMMddHHmmss')-$(Get-Random).json"
         
         # Write JSON without BOM (UTF8NoBOM) and ensure no trailing newlines
         [System.IO.File]::WriteAllText($tempFile, $jsonData, [System.Text.UTF8Encoding]::new($false))
         
         # Small delay to ensure file is fully written
-        Start-Sleep -Milliseconds 50
+        Start-Sleep -Milliseconds 100
         
         # Verify file was written correctly
         if (-not (Test-Path $tempFile)) {
@@ -192,7 +214,7 @@ function Add-PendingIssue {
             return $null
         }
         
-        $fileContent = Get-Content $tempFile -Raw
+        $fileContent = [System.IO.File]::ReadAllText($tempFile, [System.Text.UTF8Encoding]::new($false))
         if ([string]::IsNullOrWhiteSpace($fileContent)) {
             Write-Warning "Temp file is empty: $tempFile"
             return $null
