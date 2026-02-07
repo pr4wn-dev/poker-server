@@ -89,6 +89,17 @@ if (Test-Path $configFile) {
         }
         
         Write-Info "Loaded configuration from $configFile"
+        
+        # Debug: Log itemAnteEnabled value if simulation is enabled
+        if ($config.simulation -and $config.simulation.enabled) {
+            $itemAnteValue = "not set"
+            $itemAnteType = "null"
+            if ($config.simulation.PSObject.Properties['itemAnteEnabled']) {
+                $itemAnteValue = $config.simulation.itemAnteEnabled
+                $itemAnteType = $itemAnteValue.GetType().Name
+            }
+            Write-Info "  Simulation config - itemAnteEnabled: $itemAnteValue (type: $itemAnteType)"
+        }
     } catch {
         Write-Warning "Failed to load config file: $_"
     }
