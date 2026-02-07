@@ -1938,7 +1938,6 @@ while ($monitoringActive) {
                         $script:lastOrphanedSimStopAttempt = Get-Date
                     } else {
                         Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  Cannot verify orphaned simulation - health check failed" -ForegroundColor "Yellow"
-                        # Don't update throttle on health check failure - retry sooner
                     }
                 } else {
                     # Throttled - don't spam, but log once that we're waiting
