@@ -90,7 +90,8 @@ scripts/
 
 logs/
 ├── game.log                 # ALL logs go here (server + Unity)
-└── pending-issues.json      # Issues waiting for assistant to fix
+├── pending-issues.json      # Issues waiting for assistant to fix (includes focused groups and fix attempts)
+└── fix-applied.json         # Fix applied marker (written by assistant, read by Monitor for verification)
 
 fix-attempts.txt             # Fix attempt statistics (root level)
 ```
@@ -151,31 +152,104 @@ The monitor will:
 
 **Note:** The server also runs `scripts/watch-logs-and-fix.js` automatically, which is now a **pause/resume service only**. It responds to Monitor's pause/resume markers and handles log maintenance (archiving/clearing when >5MB). It does NOT auto-fix issues.
 
-### 3. When Issue is Found
+### 3. When Issue is Found - Complete Workflow
+
+#### Phase 1: Investigation (Gathering Related Issues)
 
 1. **Monitor detects issue** (CRITICAL or HIGH severity)
-   - Dashboard shows issue in "Current Status" section
-   - Issue logged to `pending-issues.json`
+   - Dashboard shows "INVESTIGATING" status (Yellow)
+   - Monitor enters investigation phase (default: 15 seconds, configurable)
+   - Gathers related issues during this period
+   - Groups related issues together based on:
+     - Same tableId
+     - Same error pattern/type
+     - Same stack trace location
+     - Shared keywords (3+ keywords)
+     - Similar messages from same source (70%+ similarity)
+   - Issue logged to `pending-issues.json` with focused group
    - Statistics updated (issues detected, severity, source)
    
-2. **Unity pauses automatically** (via server's log watcher)
-   - Dashboard status changes to "PAUSED (Issue Detected)"
-   - Current issue preview shown
-   
-3. **You message assistant**: **"issue found"**
+2. **Investigation completes** → Monitor pauses Unity debugger
+   - Dashboard status changes to "PAUSED (Fix Required)" (Red)
+   - Shows investigation summary:
+     - Root issue type and severity
+     - Number of related issues found
+     - Group ID for tracking
+   - Unity debugger pauses via `Debug.Break()` (if debugger attached)
+   - Monitor waits for you to review and fix
+
+#### Phase 2: Fix Application
+
+3. **You message assistant**: **"fix this issue"** or **"issue found"**
    
 4. **Assistant fixes issues**:
-   - Reads `pending-issues.json`
-   - Fixes all issues
-   - Clears `pending-issues.json`
-   - **Kills all Node processes** (`taskkill /F /IM node.exe`)
-   - **Restarts server** (`npm start`)
-   - Unity resumes automatically (via server's log watcher)
+   - Reads `pending-issues.json` to understand the issue
+   - Reviews related issues and context
+   - Makes code changes to fix the issue
+   - **Writes `logs/fix-applied.json`** with:
+     ```json
+     {
+       "groupId": "group_123...",
+       "fixedAt": "2026-02-07T...",
+       "requiredRestarts": ["server"],  // or ["unity"], ["database"], ["server", "unity"], or []
+       "fixDescription": "Fixed pot calculation bug in GameManager.js line 234"
+     }
+     ```
+   - **Does NOT clear `pending-issues.json` yet** (Monitor will do this after verification)
+
+#### Phase 3: Verification (Ensuring Fix Works)
+
+5. **Monitor detects `fix-applied.json`** → Starts verification phase
+   - Dashboard status changes to "VERIFYING FIX" (Cyan)
+   - Calculates verification period dynamically:
+     - Base time: Critical (90s), High (60s), Medium (45s)
+     - +15 seconds per required restart
+     - +30 seconds for game logic issues (wait for hand cycle)
+     - +20 seconds for network issues (wait for reconnection)
+   - **Performs required restarts** (if any):
+     - Restarts services in order: database → server → Unity
+     - Waits for each service to be ready (max 60s timeout)
+   - **Waits for services to be ready** before starting verification
+   - **Starts monitoring logs** for the exact issue pattern:
+     - Matches same `type`, `source`, and `tableId` (if applicable)
+     - If pattern reappears → Fix failed
+     - If pattern doesn't reappear during full period → Fix confirmed
+
+6. **Verification result**:
+
+   **If Fix Confirmed** (issue doesn't reappear):
+   - Monitor shows: "VERIFICATION PASSED: Issue did not reappear"
+   - Clears `fix-applied.json`
+   - Clears `pending-issues.json` (moves to next queued issue if any)
+   - Dashboard status returns to "ACTIVE" (Green)
+   - Monitor continues automatically
    
-5. **Monitor continues automatically**:
-   - Dashboard status returns to "MONITORING ACTIVE"
-   - Statistics continue tracking
-   - Ready for next issue
+   **If Fix Failed** (issue reappears):
+   - Monitor shows: "VERIFICATION FAILED: Issue reappeared"
+   - Records fix attempt in `pending-issues.json` with:
+     - What was tried
+     - What restarts were done
+     - Failure reason
+     - New logs showing issue
+     - Insights for next attempt
+   - Clears `fix-applied.json`
+   - **Re-enters investigation mode** (does NOT move to next issue)
+   - Waits for you to prompt assistant again with more context
+
+#### Phase 4: Next Issue (Only After Current is Resolved)
+
+7. **Monitor only moves to next issue when current is fully resolved**:
+   - Queued issues remain queued until current investigation is complete
+   - If verification fails, Monitor stays focused on current issue
+   - Only when verification passes does Monitor move to next queued issue
+   - If no queued issues, Monitor waits for next issue detection
+
+**Key Points:**
+- ✅ **Investigation phase** gathers related issues before pausing
+- ✅ **Fix verification** ensures fixes actually work before moving on
+- ✅ **Never moves to next issue** until current is fully resolved
+- ✅ **Fix attempt tracking** helps understand what didn't work
+- ✅ **Automatic restarts** handled by Monitor during verification
 
 ---
 
@@ -215,7 +289,14 @@ Monitor uses `monitoring/monitor-config.json` for all settings. Edit this file t
     "startingChips": 10000,
     "smallBlind": 50,
     "bigBlind": 100,
-    "autoStartSimulation": true
+    "autoStartSimulation": true,
+    "itemAnteEnabled": true,
+    "comment": "itemAnteEnabled: If true, enables item ante (For Keeps) system for monitor-created simulation tables"
+  },
+  "investigation": {
+    "enabled": true,
+    "timeoutSeconds": 15,
+    "comment": "Investigation phase: Monitor waits this many seconds to gather related issues before pausing debugger. Set to 0 to pause immediately."
   }
 }
 ```
@@ -234,11 +315,18 @@ Monitor uses `monitoring/monitor-config.json` for all settings. Edit this file t
 
 4. **Debugger Pause on Issue** (`pauseDebuggerOnIssue`):
    - Default: `true`
-   - If enabled, Unity will receive a `debugger_break` socket event when critical issues are detected
+   - If enabled, Unity will receive a `debugger_break` socket event when investigation completes
    - Unity must listen for this event and call `Debug.Break()` to pause execution in the debugger
    - Requires debugger to be attached to Unity for the breakpoint to work
    - Set to `false` to disable debugger pause (Unity will still pause via `Time.timeScale = 0`)
-   - **KNOWN ISSUE (2026-02-07)**: Unity debugger pause is not working correctly. The `debugger_break` event is being emitted by the server, but Unity may not be receiving it or `Debug.Break()` may not be triggering. Investigation needed.
+   - **FIXED (2026-02-07)**: Monitor now calls `/api/debugger/break` API endpoint directly, which emits `debugger_break` event to Unity. Unity receives event and calls `Debug.Break()` correctly.
+
+5. **Investigation Phase** (`investigation`):
+   - `enabled`: Default `true` - Enable investigation phase before pausing
+   - `timeoutSeconds`: Default `15` - Seconds to gather related issues before pausing
+   - Set `timeoutSeconds: 0` to pause immediately (skip investigation)
+   - During investigation, Monitor groups related issues together
+   - Investigation completes → Monitor pauses debugger and shows summary
 
 ---
 
@@ -412,8 +500,9 @@ Monitor just:
 
 ## 📊 Fix Attempt Tracking
 
-The system tracks fix attempts to prevent repeated failures:
+The system tracks fix attempts at two levels:
 
+### 1. Fix Method Tracking (Historical)
 - **Tracks**: Attempts, failures, successes per fix method
 - **Disables**: Fix methods after 5 failures (forces different approach)
 - **Stores**: Statistics in `fix-attempts.txt`
@@ -424,6 +513,41 @@ The system tracks fix attempts to prevent repeated failures:
 - `FIX_2_CHIPS_LOST_BETTING` - Chips lost during betting
 - `FIX_66_TIMER_CLEARED_AT_ACTION_START` - Timer cleared on action
 - And 70+ more fix IDs
+
+### 2. Investigation Fix Attempt Tracking (New)
+- **Tracks**: Fix attempts per investigation group in `pending-issues.json`
+- **Records**: What was tried, restarts done, failure reason, insights
+- **Purpose**: Helps assistant understand what didn't work for next attempt
+- **Structure**: Each focused group has `fixAttempts` array:
+  ```json
+  {
+    "focusedGroup": {
+      "id": "group_123...",
+      "rootIssue": {...},
+      "relatedIssues": [...],
+      "fixAttempts": [
+        {
+          "attemptNumber": 1,
+          "timestamp": "2026-02-07T...",
+          "fixDescription": "Fixed pot calculation in GameManager.js",
+          "requiredRestarts": ["server"],
+          "restartsCompleted": ["server"],
+          "verificationPeriod": 90,
+          "result": "failed",
+          "failureReason": "Issue reappeared after 45 seconds",
+          "newLogs": ["[2026-02-07...] POT MISMATCH detected again..."],
+          "insights": "Fix didn't address root cause - pot still not cleared between hands"
+        }
+      ]
+    }
+  }
+  ```
+
+### Benefits
+- **Prevents repeated failures**: Assistant can see what was tried before
+- **Provides context**: Failure reasons and insights guide next attempt
+- **Tracks progress**: Each investigation can have multiple fix attempts
+- **Never gives up**: System stays focused until issue is resolved
 
 ---
 
@@ -571,7 +695,11 @@ The PowerShell monitor displays a **live statistics dashboard** that updates eve
 ### Dashboard Sections
 
 1. **Monitoring Status**
-   - Current status (Active/Paused)
+   - Current status:
+     - **ACTIVE** (Green) - Monitoring normally
+     - **INVESTIGATING** (Yellow) - Gathering related issues
+     - **VERIFYING FIX** (Cyan) - Verifying fix after restarts
+     - **PAUSED (Fix Required)** (Red) - Debugger paused, waiting for fix
    - Uptime (HH:MM:SS format)
    - Server status (Online/Offline)
 
@@ -645,7 +773,7 @@ The monitor automatically displays stats. For detailed analysis:
 
 ---
 
-## 🔄 Workflow Diagram
+## 🔄 Complete Workflow Diagram
 
 ```
 ┌─────────────────┐
@@ -663,30 +791,59 @@ The monitor automatically displays stats. For detailed analysis:
 │  (Watching)     │
 └─────────────────┘
          │
-         │ Issue detected
+         │ Issue detected (CRITICAL/HIGH)
          ▼
-┌─────────────────┐
-│ Pause Unity     │
-│ Log to          │
-│ pending-issues  │
-└─────────────────┘
+┌─────────────────────────┐
+│ INVESTIGATION PHASE     │
+│ (15 seconds default)    │
+│ - Gather related issues │
+│ - Group by pattern      │
+│ - Log to pending-issues  │
+└─────────────────────────┘
          │
-         │ User: "issue found"
+         │ Investigation complete
          ▼
-┌─────────────────┐
-│ Assistant       │
-│ Reads issues    │
-│ Fixes code      │
-│ Clears file     │
-│ Restarts server │
-└─────────────────┘
+┌─────────────────────────┐
+│ PAUSE DEBUGGER          │
+│ - Call Debug.Break()    │
+│ - Status: PAUSED        │
+│ - Show investigation    │
+│   summary               │
+└─────────────────────────┘
          │
-         │ Resume Unity
+         │ User: "fix this issue"
          ▼
-┌─────────────────┐
-│ Continue        │
-│ Monitoring      │
-└─────────────────┘
+┌─────────────────────────┐
+│ ASSISTANT FIXES         │
+│ - Reads pending-issues  │
+│ - Reviews context       │
+│ - Fixes code            │
+│ - Writes fix-applied.json│
+│   (with requiredRestarts)│
+└─────────────────────────┘
+         │
+         │ Monitor detects fix-applied.json
+         ▼
+┌─────────────────────────┐
+│ VERIFICATION PHASE      │
+│ - Calculate period      │
+│ - Restart services      │
+│ - Wait for ready        │
+│ - Monitor logs for      │
+│   issue pattern         │
+└─────────────────────────┘
+         │
+    ┌────┴────┐
+    │         │
+    ▼         ▼
+┌─────────┐ ┌─────────┐
+│ PASSED  │ │ FAILED  │
+│         │ │         │
+│ Clear   │ │ Record  │
+│ files   │ │ attempt │
+│ Move to │ │ Re-enter│
+│ next    │ │ invest. │
+└─────────┘ └─────────┘
 ```
 
 ---
@@ -1241,6 +1398,35 @@ Edit `monitoring/monitor.ps1`:
 
 ---
 
-**Last Updated**: 2026-02-06
-**Version**: 1.2.0
-**Status**: Complete with Enhanced Statistics, Severity Mapping, Real-Time Dashboard, GPU Acceleration Guide, Log Clearing Strategy, and All Recent Fixes
+## 🆕 Latest Features (2026-02-07)
+
+### Investigation Phase
+- Monitor gathers related issues before pausing (15 seconds default, configurable)
+- Groups related issues by pattern, tableId, stack trace, keywords
+- Shows investigation summary when complete
+- Queues unrelated issues until current investigation is resolved
+
+### Fix Verification System
+- Monitor verifies fixes actually work before moving on
+- Automatic service restarts during verification
+- Dynamic verification period based on severity, restarts, issue type
+- Pattern-based verification (exact match: type, source, tableId)
+- Fix attempt tracking in investigations (what was tried, what failed, insights)
+
+### Never Moves to Next Issue Until Resolved
+- Monitor stays focused on current investigation until verification passes
+- Queued issues remain queued until current is fully resolved
+- If verification fails, Monitor re-enters investigation mode
+- Fix attempts are recorded to help understand what didn't work
+
+### Direct Debugger Break API
+- Monitor calls `/api/debugger/break` endpoint directly
+- Server emits `debugger_break` socket event to Unity
+- Unity receives event and calls `Debug.Break()` correctly
+- More reliable than log marker approach
+
+---
+
+**Last Updated**: 2026-02-07
+**Version**: 2.0.0
+**Status**: Complete with Investigation Phase, Fix Verification System, Fix Attempt Tracking, and All Previous Features
