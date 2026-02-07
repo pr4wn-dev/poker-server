@@ -1504,10 +1504,10 @@ try {
         Start-Sleep -Seconds 2  # Wait a bit more if we had to kill something
     }
     
-    # Step 3: Kill any remaining node processes (cleanup - should be minimal after Kill-Port3000Processes)
+    # Step 3: Kill any remaining node processes BEFORE starting server (cleanup - should be minimal after Kill-Port3000Processes)
     $nodeProcesses = Get-Process node -ErrorAction SilentlyContinue
     if ($nodeProcesses) {
-        Write-Info "Killing $($nodeProcesses.Count) remaining node process(es)..."
+        Write-Info "Killing $($nodeProcesses.Count) remaining node process(es) before starting server..."
         foreach ($proc in $nodeProcesses) {
             try {
                 Write-Info "  Killing process: $($proc.ProcessName) (PID: $($proc.Id))"
@@ -1519,7 +1519,7 @@ try {
         Start-Sleep -Seconds 1  # Brief wait for processes to terminate
     }
     
-    # Step 4: Start server in background (port 3000 should now be free)
+    # Step 4: Start server in background (port 3000 should now be free, all node processes killed)
     $serverProcess = Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$PWD'; npm start" -WindowStyle Minimized -PassThru
     Write-Info "Server starting (PID: $($serverProcess.Id)). Waiting for server to be ready..."
     
