@@ -970,15 +970,33 @@ if (require.main === module) {
                 console.log(JSON.stringify({ success: false, reason: 'error', error: 'File not found: ' + filePath }));
                 process.exit(1);
             }
-            let jsonContent = fs.readFileSync(filePath, 'utf8');
-            // Remove BOM if present and trim whitespace
-            jsonContent = jsonContent.replace(/^\uFEFF/, '').trim();
-            if (!jsonContent) {
-                console.log(JSON.stringify({ success: false, reason: 'error', error: 'File is empty' }));
+            // Read file with explicit buffer handling (same method that works in tests)
+            let jsonContent;
+            try {
+                const fileBuffer = fs.readFileSync(filePath);
+                jsonContent = fileBuffer.toString('utf8');
+            } catch (readError) {
+                console.log(JSON.stringify({ 
+                    success: false, 
+                    reason: 'error', 
+                    error: 'Failed to read file: ' + readError.message 
+                }));
                 process.exit(1);
             }
-            // Remove any trailing newlines or whitespace that might cause parsing issues
-            jsonContent = jsonContent.replace(/\s+$/, '');
+            
+            // Remove BOM if present
+            if (jsonContent.length > 0 && jsonContent.charCodeAt(0) === 0xFEFF) {
+                jsonContent = jsonContent.substring(1);
+            }
+            
+            // Trim whitespace but preserve content
+            jsonContent = jsonContent.trim();
+            
+            if (!jsonContent) {
+                console.log(JSON.stringify({ success: false, reason: 'error', error: 'File is empty after trimming' }));
+                process.exit(1);
+            }
+            
             // Try to parse JSON
             let issueData;
             try {
@@ -992,8 +1010,8 @@ if (require.main === module) {
                     contentLength: jsonContent.length,
                     firstChars: jsonContent.substring(0, 200),
                     lastChars: jsonContent.substring(Math.max(0, jsonContent.length - 200)),
-                    hasBOM: jsonContent.charCodeAt(0) === 0xFEFF,
-                    charCodes: Array.from(jsonContent.substring(0, 50)).map(c => c.charCodeAt(0))
+                    hasBOM: jsonContent.length > 0 && jsonContent.charCodeAt(0) === 0xFEFF,
+                    charCodes: jsonContent.length > 0 ? Array.from(jsonContent.substring(0, Math.min(50, jsonContent.length))).map(c => c.charCodeAt(0)) : []
                 };
                 console.log(JSON.stringify(errorDetails));
                 process.exit(1);
