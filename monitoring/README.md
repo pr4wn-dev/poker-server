@@ -130,7 +130,7 @@ npm start
 The monitor will:
 - Watch `logs/game.log` continuously
 - Detect issues automatically with severity-based detection
-- Display **real-time statistics dashboard** (updates every 10 seconds)
+- Display **real-time statistics dashboard** (updates every 5 seconds)
 - Pause Unity when **critical/high** issues are found
 - Log issues to `logs/pending-issues.json`
 - Track fix attempts and success rates
