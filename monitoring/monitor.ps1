@@ -1903,8 +1903,58 @@ while ($monitoringActive) {
                         }
                         $script:lastOrphanedSimStopAttempt = Get-Date
                     } catch {
-                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ❌ Failed to stop orphaned simulations: $_" -ForegroundColor "Red"
+                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ❌ Failed to stop orphaned simulations via API: $_" -ForegroundColor "Red"
                         $script:lastOrphanedSimStopAttempt = Get-Date
+                    }
+                    
+                    # Kill processes using port 3000 (where simulations are running)
+                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🔪 Killing processes using port 3000..." -ForegroundColor "Cyan"
+                    $port3000Processes = @()
+                    try {
+                        $netstatOutput = netstat -ano | Select-String ":3000"
+                        foreach ($line in $netstatOutput) {
+                            if ($line -match '\s+(\d+)\s*$') {
+                                $processId = [int]$matches[1]
+                                try {
+                                    $process = Get-Process -Id $processId -ErrorAction SilentlyContinue
+                                    if ($process) {
+                                        $port3000Processes += $process
+                                    }
+                                } catch {
+                                    # Process might have already terminated
+                                }
+                            }
+                        }
+                    } catch {
+                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  Could not check port 3000: $_" -ForegroundColor "Yellow"
+                    }
+                    
+                    # Also kill any node processes
+                    $nodeProcesses = Get-Process node -ErrorAction SilentlyContinue
+                    
+                    # Combine both lists (remove duplicates by PID)
+                    $allProcessesToKill = @{}
+                    foreach ($proc in $port3000Processes) {
+                        $allProcessesToKill[$proc.Id] = $proc
+                    }
+                    foreach ($proc in $nodeProcesses) {
+                        $allProcessesToKill[$proc.Id] = $proc
+                    }
+                    
+                    if ($allProcessesToKill.Count -gt 0) {
+                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🔪 Killing $($allProcessesToKill.Count) process(es) using port 3000..." -ForegroundColor "Cyan"
+                        foreach ($proc in $allProcessesToKill.Values) {
+                            try {
+                                Stop-Process -Id $proc.Id -Force -ErrorAction Stop
+                                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ✅ Killed process: $($proc.ProcessName) (PID: $($proc.Id))" -ForegroundColor "Green"
+                            } catch {
+                                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  Could not kill process $($proc.Id): $_" -ForegroundColor "Yellow"
+                            }
+                        }
+                        Start-Sleep -Seconds 2
+                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ✅ Killed all processes using port 3000" -ForegroundColor "Green"
+                    } else {
+                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ℹ️  No processes found using port 3000" -ForegroundColor "Gray"
                     }
                 }
             }
