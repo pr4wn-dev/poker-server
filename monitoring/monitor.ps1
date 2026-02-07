@@ -1656,7 +1656,29 @@ function Show-Statistics {
     # Top status bar - single row across full width
     # Status priority: Verifying > Investigating > Paused > Active
     # During verification, Unity remains paused (isPaused stays true), so show both states
-    $statusText = if ($isVerifyingFix) { "VERIFYING FIX (Unity Paused)" } elseif ($script:isInvestigating) { "INVESTIGATING" } elseif ($isPaused) { "PAUSED (Fix Required)" } else { "ACTIVE" }
+    # CRITICAL: Read status from status file to avoid sync issues
+    $statusFromFile = "ACTIVE"
+    $pausedFromFile = $false
+    if (Test-Path "logs\monitor-status.json") {
+        try {
+            $statusData = Get-Content "logs\monitor-status.json" -Raw | ConvertFrom-Json
+            if ($statusData.verification -and $statusData.verification.active) {
+                $statusFromFile = "VERIFYING FIX (Unity Paused)"
+            } elseif ($statusData.investigation -and $statusData.investigation.active) {
+                $statusFromFile = "INVESTIGATING"
+            } elseif ($statusData.paused) {
+                $statusFromFile = "PAUSED (Fix Required)"
+                $pausedFromFile = $true
+            }
+        } catch {
+            # Status file read failed - fall back to variables
+            $statusFromFile = if ($isVerifyingFix) { "VERIFYING FIX (Unity Paused)" } elseif ($script:isInvestigating) { "INVESTIGATING" } elseif ($isPaused) { "PAUSED (Fix Required)" } else { "ACTIVE" }
+        }
+    } else {
+        # No status file - fall back to variables
+        $statusFromFile = if ($isVerifyingFix) { "VERIFYING FIX (Unity Paused)" } elseif ($script:isInvestigating) { "INVESTIGATING" } elseif ($isPaused) { "PAUSED (Fix Required)" } else { "ACTIVE" }
+    }
+    $statusText = $statusFromFile
     $statusColor = if ($isVerifyingFix) { "Cyan" } elseif ($script:isInvestigating) { "Yellow" } elseif ($isPaused) { "Red" } else { "Green" }
     $serverStatusText = if ($stats.ServerStatus -eq "Online") { "ONLINE" } else { "OFFLINE" }
     $serverStatusColor = if ($stats.ServerStatus -eq "Online") { "Green" } else { "Red" }
@@ -1835,13 +1857,51 @@ function Show-Statistics {
     }
     
     # Add investigation section (always visible, shows status)
+    # CRITICAL: Read from status file to avoid sync issues with variable timers
+    $investigationActive = $false
+    $investigationStartTimeValue = $null
+    $investigationTimeRemaining = $null
+    if (Test-Path "logs\monitor-status.json") {
+        try {
+            $statusData = Get-Content "logs\monitor-status.json" -Raw | ConvertFrom-Json
+            if ($statusData.investigation) {
+                $investigationActive = $statusData.investigation.active
+                if ($statusData.investigation.startTime) {
+                    try {
+                        $investigationStartTimeValue = [DateTime]::Parse($statusData.investigation.startTime)
+                    } catch {
+                        # Invalid date - ignore
+                    }
+                }
+                if ($statusData.investigation.timeRemaining) {
+                    $investigationTimeRemaining = $statusData.investigation.timeRemaining
+                }
+            }
+        } catch {
+            # Status file read failed - fall back to variables
+            $investigationActive = $script:isInvestigating
+            $investigationStartTimeValue = $script:investigationStartTime
+        }
+    } else {
+        # No status file - fall back to variables
+        $investigationActive = $script:isInvestigating
+        $investigationStartTimeValue = $script:investigationStartTime
+    }
+    
     $col3Lines += ""
     $col3Lines += "INVESTIGATION PHASE"
     $col3Lines += ("=" * ($colWidth - 2))
-    if ($script:isInvestigating -and $script:investigationStartTime) {
+    if ($investigationActive -and $investigationStartTimeValue) {
         $investigationElapsed = (Get-Date) - $script:investigationStartTime
-        $remaining = [Math]::Max(0, $investigationTimeout - $investigationElapsed.TotalSeconds)
-        $elapsed = [Math]::Min($investigationTimeout, $investigationElapsed.TotalSeconds)
+        # Use timeRemaining from status file if available, otherwise calculate
+        if ($investigationTimeRemaining -ne $null) {
+            $remaining = $investigationTimeRemaining
+            $elapsed = $investigationTimeout - $remaining
+        } else {
+            $investigationElapsed = (Get-Date) - $investigationStartTimeValue
+            $remaining = [Math]::Max(0, $investigationTimeout - $investigationElapsed.TotalSeconds)
+            $elapsed = [Math]::Min($investigationTimeout, $investigationElapsed.TotalSeconds)
+        }
         $progressPercent = [Math]::Round(($elapsed / $investigationTimeout) * 100)
         
         # Progress bar visualization (text-based)
@@ -1898,13 +1958,50 @@ function Show-Statistics {
     }
     
     # Add verification progress if verifying
-    if ($isVerifyingFix -and $verificationStartTime) {
+    # CRITICAL: Read from status file to avoid sync issues
+    $verificationActive = $false
+    $verificationStartTimeValue = $null
+    $verificationTimeRemaining = $null
+    if (Test-Path "logs\monitor-status.json") {
+        try {
+            $statusData = Get-Content "logs\monitor-status.json" -Raw | ConvertFrom-Json
+            if ($statusData.verification) {
+                $verificationActive = $statusData.verification.active
+                if ($statusData.verification.startTime) {
+                    try {
+                        $verificationStartTimeValue = [DateTime]::Parse($statusData.verification.startTime)
+                    } catch {
+                        # Invalid date - ignore
+                    }
+                }
+                if ($statusData.verification.timeRemaining) {
+                    $verificationTimeRemaining = $statusData.verification.timeRemaining
+                }
+            }
+        } catch {
+            # Status file read failed - fall back to variables
+            $verificationActive = $isVerifyingFix
+            $verificationStartTimeValue = $verificationStartTime
+        }
+    } else {
+        # No status file - fall back to variables
+        $verificationActive = $isVerifyingFix
+        $verificationStartTimeValue = $verificationStartTime
+    }
+    
+    if ($verificationActive -and $verificationStartTimeValue) {
         $col3Lines += ""
         $col3Lines += "VERIFICATION"
         $col3Lines += ("-" * ($colWidth - 2))
-        $verificationElapsed = (Get-Date) - $verificationStartTime
-        $remaining = [Math]::Max(0, $verificationPeriod - $verificationElapsed.TotalSeconds)
-        $elapsed = [Math]::Min($verificationPeriod, $verificationElapsed.TotalSeconds)
+        # Use timeRemaining from status file if available, otherwise calculate
+        if ($verificationTimeRemaining -ne $null) {
+            $remaining = $verificationTimeRemaining
+            $elapsed = $verificationPeriod - $remaining
+        } else {
+            $verificationElapsed = (Get-Date) - $verificationStartTimeValue
+            $remaining = [Math]::Max(0, $verificationPeriod - $verificationElapsed.TotalSeconds)
+            $elapsed = [Math]::Min($verificationPeriod, $verificationElapsed.TotalSeconds)
+        }
         $col3Lines += "Progress: " + ("{0:N0}s" -f $elapsed) + " / " + ("{0:N0}s" -f $verificationPeriod)
         $col3Lines += "Time Left: " + ("{0:N0}s" -f $remaining)
         
