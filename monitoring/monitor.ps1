@@ -2001,14 +2001,6 @@ while ($monitoringActive) {
                                 # Note: Log watcher handles the actual pause - no verification needed
                                 # The pause marker is written to game.log and the log watcher will detect it
                                 # Unity will pause itself when it receives the pause event from the log watcher
-                                    
-                                    # Run diagnostics
-                                    $diagnostics = Get-PauseDiagnostics -TableId $tableId
-                                    foreach ($diag in $diagnostics) {
-                                        $color = if ($diag.Status -eq "OK") { "Green" } elseif ($diag.Status -eq "WARNING") { "Yellow" } else { "Red" }
-                                        Write-ConsoleOutput -Message "      - $($diag.Check): $($diag.Status) - $($diag.Message)" -ForegroundColor $color
-                                    }
-                                }
                             } catch {
                                 # If writing fails, log it but continue
                                 $stats.PauseMarkerErrors++
