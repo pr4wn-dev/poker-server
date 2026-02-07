@@ -921,9 +921,57 @@ function Start-ServerIfNeeded {
         # Don't write to console - update stats display instead
         # Write-Warning "Server is not running. Starting server..."
         try {
-            # Kill any existing node processes first
-            Get-Process node -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-            Start-Sleep -Seconds 1
+            # Step 0: Stop all active simulations before killing server (if server is running)
+            try {
+                $stopResponse = Invoke-WebRequest -Uri "$serverUrl/api/simulations/stop-all" -Method POST -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
+                $stopResult = $stopResponse.Content | ConvertFrom-Json
+                if ($stopResult.success -and $stopResult.stopped -gt 0) {
+                    # Don't write to console - update stats display instead
+                    # Write-Info "Stopped $($stopResult.stopped) active simulation(s) before restart"
+                }
+            } catch {
+                # Server might not be running - that's okay
+            }
+            
+            # Kill processes using port 3000 first (more reliable than just killing node processes)
+            $port3000Processes = @()
+            try {
+                $netstatOutput = netstat -ano | Select-String ":3000"
+                foreach ($line in $netstatOutput) {
+                    if ($line -match '\s+(\d+)\s*$') {
+                        $pid = [int]$matches[1]
+                        try {
+                            $process = Get-Process -Id $pid -ErrorAction SilentlyContinue
+                            if ($process) {
+                                $port3000Processes += $process
+                            }
+                        } catch {
+                            # Process might have already terminated
+                        }
+                    }
+                }
+            } catch {
+                # If netstat fails, fall back to killing all node processes
+            }
+            
+            # Also kill any node processes (in case they're not on port 3000 yet)
+            $nodeProcesses = Get-Process node -ErrorAction SilentlyContinue
+            
+            # Combine both lists (remove duplicates by PID)
+            $allProcessesToKill = @{}
+            foreach ($proc in $port3000Processes) {
+                $allProcessesToKill[$proc.Id] = $proc
+            }
+            foreach ($proc in $nodeProcesses) {
+                $allProcessesToKill[$proc.Id] = $proc
+            }
+            
+            if ($allProcessesToKill.Count -gt 0) {
+                foreach ($proc in $allProcessesToKill.Values) {
+                    Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+                }
+                Start-Sleep -Seconds 2
+            }
             
             # Start server in background
             $serverProcess = Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$PWD'; npm start" -WindowStyle Minimized -PassThru
@@ -1344,8 +1392,123 @@ Stop-ExistingMonitorInstances
 # Set minimum window size at startup
 Set-MinimumWindowSize
 
-# Start server if needed before showing statistics
-Start-ServerIfNeeded
+# Always restart server on startup (kill existing node processes and start fresh)
+Write-Info "Restarting server on monitor startup..."
+try {
+    # Step 0: Stop all active simulations before killing server (if server is running)
+    Write-Info "Stopping all active simulations..."
+    try {
+        $stopResponse = Invoke-WebRequest -Uri "$serverUrl/api/simulations/stop-all" -Method POST -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
+        $stopResult = $stopResponse.Content | ConvertFrom-Json
+        if ($stopResult.success) {
+            Write-Success "Stopped $($stopResult.stopped) active simulation(s)"
+            if ($stopResult.failed -gt 0) {
+                Write-Warning "Failed to stop $($stopResult.failed) simulation(s)"
+            }
+        }
+    } catch {
+        # Server might not be running or endpoint might not exist yet - that's okay
+        Write-Info "Could not stop simulations (server may not be running): $_"
+    }
+    
+    # Step 1: Find and kill processes using port 3000
+    Write-Info "Checking for processes using port 3000..."
+    $port3000Processes = @()
+    try {
+        # Use netstat to find processes using port 3000
+        $netstatOutput = netstat -ano | Select-String ":3000"
+        foreach ($line in $netstatOutput) {
+            if ($line -match '\s+(\d+)\s*$') {
+                $pid = [int]$matches[1]
+                try {
+                    $process = Get-Process -Id $pid -ErrorAction SilentlyContinue
+                    if ($process) {
+                        $port3000Processes += $process
+                    }
+                } catch {
+                    # Process might have already terminated
+                }
+            }
+        }
+    } catch {
+        Write-Warning "Could not check port 3000: $_"
+    }
+    
+    # Step 2: Kill all node processes
+    $nodeProcesses = Get-Process node -ErrorAction SilentlyContinue
+    
+    # Combine both lists (remove duplicates by PID)
+    $allProcessesToKill = @{}
+    foreach ($proc in $port3000Processes) {
+        $allProcessesToKill[$proc.Id] = $proc
+    }
+    foreach ($proc in $nodeProcesses) {
+        $allProcessesToKill[$proc.Id] = $proc
+    }
+    
+    if ($allProcessesToKill.Count -gt 0) {
+        Write-Info "Killing $($allProcessesToKill.Count) process(es) (node processes and/or processes using port 3000)..."
+        foreach ($proc in $allProcessesToKill.Values) {
+            try {
+                Write-Info "  Killing process: $($proc.ProcessName) (PID: $($proc.Id))"
+                Stop-Process -Id $proc.Id -Force -ErrorAction Stop
+            } catch {
+                Write-Warning "  Failed to kill process $($proc.Id): $_"
+            }
+        }
+        
+        # Wait for processes to fully terminate
+        Start-Sleep -Seconds 3
+        
+        # Verify port 3000 is free
+        $portStillInUse = $true
+        $maxPortCheckWait = 10
+        $portCheckWaited = 0
+        while ($portStillInUse -and $portCheckWaited -lt $maxPortCheckWait) {
+            try {
+                $netstatOutput = netstat -ano | Select-String ":3000"
+                if (-not $netstatOutput) {
+                    $portStillInUse = $false
+                    Write-Success "Port 3000 is now free"
+                } else {
+                    Start-Sleep -Seconds 1
+                    $portCheckWaited += 1
+                }
+            } catch {
+                # If we can't check, assume it's free
+                $portStillInUse = $false
+            }
+        }
+        
+        if ($portStillInUse) {
+            Write-Warning "Port 3000 may still be in use after killing processes"
+        }
+    } else {
+        Write-Info "No node processes or processes using port 3000 found"
+    }
+    
+    # Step 3: Start server in background
+    $serverProcess = Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$PWD'; npm start" -WindowStyle Minimized -PassThru
+    Write-Info "Server starting (PID: $($serverProcess.Id)). Waiting for server to be ready..."
+    
+    # Wait up to 30 seconds for server to start
+    $maxWait = 30
+    $waited = 0
+    while ($waited -lt $maxWait) {
+        Start-Sleep -Seconds 2
+        $waited += 2
+        if (Test-ServerRunning) {
+            Write-Success "Server is now online!"
+            break
+        }
+    }
+    
+    if (-not (Test-ServerRunning)) {
+        Write-Warning "Server failed to start within $maxWait seconds"
+    }
+} catch {
+    Write-Error "Failed to restart server: $_"
+}
 
 # Initial service maintenance check
 Maintain-Services

@@ -164,6 +164,36 @@ app.post('/api/simulations/resume-all', (req, res) => {
     });
 });
 
+// API endpoint to stop ALL active simulations (for monitor/server restart)
+app.post('/api/simulations/stop-all', (req, res) => {
+    if (!socketHandler) {
+        return res.status(503).json({ success: false, error: 'Socket handler not initialized' });
+    }
+    
+    const stopped = [];
+    const failed = [];
+    
+    // Get all active simulation table IDs before iterating (to avoid modification during iteration)
+    const activeTableIds = Array.from(socketHandler.simulationManager.activeSimulations.keys());
+    
+    for (const tableId of activeTableIds) {
+        const result = socketHandler.simulationManager.stopSimulation(tableId, 'server_restart');
+        if (result.success) {
+            stopped.push(tableId);
+        } else {
+            failed.push({ tableId, error: result.error });
+        }
+    }
+    
+    res.json({ 
+        success: true, 
+        stopped: stopped.length,
+        failed: failed.length,
+        stoppedTables: stopped,
+        failedTables: failed
+    });
+});
+
 // Server info endpoint - returns local IP and public IP for remote connections
 app.get('/api/server-info', async (req, res) => {
     const localIP = getLocalIP();
