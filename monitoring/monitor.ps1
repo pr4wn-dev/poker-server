@@ -1419,9 +1419,9 @@ try {
         $netstatOutput = netstat -ano | Select-String ":3000"
         foreach ($line in $netstatOutput) {
             if ($line -match '\s+(\d+)\s*$') {
-                $pid = [int]$matches[1]
+                $processId = [int]$matches[1]
                 try {
-                    $process = Get-Process -Id $pid -ErrorAction SilentlyContinue
+                    $process = Get-Process -Id $processId -ErrorAction SilentlyContinue
                     if ($process) {
                         $port3000Processes += $process
                     }
