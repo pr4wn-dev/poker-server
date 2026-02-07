@@ -220,6 +220,15 @@ function Add-PendingIssue {
             return $null
         }
         
+        # Verify the file content is valid JSON before calling Node.js
+        try {
+            $verifyParse = $fileContent | ConvertFrom-Json -ErrorAction Stop
+        } catch {
+            Write-Warning "Temp file contains invalid JSON: $_ | Content: $($fileContent.Substring(0, [Math]::Min(200, $fileContent.Length)))"
+            # Don't delete the temp file so we can inspect it
+            return $null
+        }
+        
         try {
             $result = node $nodeScript --add-issue-file $tempFile 2>&1 | Out-String
             if ($LASTEXITCODE -eq 0 -and $result) {
