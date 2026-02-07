@@ -2765,8 +2765,8 @@ while ($monitoringActive) {
                     Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] ERROR: investigationStartTime is not a DateTime object (type: $($script:investigationStartTime.GetType().Name)), resetting investigation" -ForegroundColor "Red"
                     $script:isInvestigating = $false
                     $script:investigationStartTime = $null
-                    continue
-                }
+                    # Don't use continue here - it skips the rest of the loop! Just break out of the if block
+                } else {
                 
                 $investigationElapsed = (Get-Date) - $script:investigationStartTime
                 $elapsedSeconds = $investigationElapsed.TotalSeconds
