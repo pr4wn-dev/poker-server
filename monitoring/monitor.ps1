@@ -1980,7 +1980,7 @@ while ($monitoringActive) {
                                     $healthResponse = Invoke-WebRequest -Uri "http://localhost:3000/health" -TimeoutSec 2 -ErrorAction Stop
                                     if ($healthResponse.StatusCode -eq 200) {
                                         $health = $healthResponse.Content | ConvertFrom-Json
-                                        if ($health.activeSimulations -gt 0 -and $gameManager) {
+                                        if ($health.activeSimulations -gt 0) {
                                             # Try to get the first active simulation table ID
                                             # We'll need to query the server for active tables
                                             try {
