@@ -1946,7 +1946,6 @@ while ($monitoringActive) {
                         Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  SIMULATION: Orphaned simulation detected (throttled - will stop in $([math]::Round(10 - $timeSinceLastStop.TotalSeconds))s)" -ForegroundColor "Yellow"
                     }
                 }
-                } # End if ($unityIsInGame -eq $false)
             }
             if (-not $serverHasSimulation) {
                 # No simulation on server
