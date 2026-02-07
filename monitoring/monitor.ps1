@@ -1948,6 +1948,7 @@ while ($monitoringActive) {
                         Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  SIMULATION: Orphaned simulation detected (throttled - will stop in $([math]::Round(10 - $timeSinceLastStop.TotalSeconds))s)" -ForegroundColor "Yellow"
                     }
                 }
+                }
             } else {
                 # No simulation on server
                 $stats.SimulationRunning = $false
