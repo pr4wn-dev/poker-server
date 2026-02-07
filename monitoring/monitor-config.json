@@ -9,7 +9,7 @@
     "autoLogin": true
   },
   "unity": {
-    "executablePath": "C:\\Program Files\\Unity\\Hub\\Editor\\2022.3.0f1\\Editor\\Unity.exe",
+    "executablePath": "C:\\Program Files\\Unity\\Hub\\Editor\\6000.3.4f1\\Editor\\Unity.exe",
     "projectPath": "C:\\Projects\\poker-client-unity",
     "autoConnectOnStartup": true,
     "serverUrl": "http://localhost:3000"
