@@ -2762,7 +2762,9 @@ while ($monitoringActive) {
         
         # ALWAYS log investigation state (every 10 seconds) to diagnose why check isn't running
         if (-not $script:lastInvestigationStateLog -or ((Get-Date) - $script:lastInvestigationStateLog).TotalSeconds -ge 10) {
-            $stateMsg = "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] Investigation state check: isInvestigating=$($script:isInvestigating), startTime=$($script:investigationStartTime), type=$($script:investigationStartTime.GetType().Name)"
+            $startTimeType = if ($script:investigationStartTime) { $script:investigationStartTime.GetType().Name } else { "null" }
+            $startTimeValue = if ($script:investigationStartTime) { $script:investigationStartTime.ToString() } else { "null" }
+            $stateMsg = "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] Investigation state: isInvestigating=$($script:isInvestigating), startTime=$startTimeValue, type=$startTimeType"
             Write-ConsoleOutput -Message $stateMsg -ForegroundColor "Gray"
             $script:lastInvestigationStateLog = Get-Date
         }
@@ -3189,12 +3191,22 @@ while ($monitoringActive) {
                                 if (-not $script:isInvestigating) {
                                     $script:isInvestigating = $true
                                     $script:investigationStartTime = Get-Date
+                                    $script:investigationCheckLogged = $false  # Reset for new investigation
                                     Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] INVESTIGATION: Starting ($investigationTimeout seconds) - see statistics for details" -ForegroundColor "Cyan"
                                     $currentIssue = $line
                                 } else {
                                     Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] INVESTIGATION: Already in progress - new issue will be added to existing investigation" -ForegroundColor "Gray"
                                 }
                             } else {
+                                # DIAGNOSTIC: Log why investigation didn't start
+                                if ($addResult -and $addResult.reason -eq 'new_focus_group') {
+                                    $whyNot = @()
+                                    if (-not $investigationEnabled) { $whyNot += "investigationEnabled=false" }
+                                    if (-not $investigationTimeout -or $investigationTimeout -le 0) { $whyNot += "investigationTimeout=$investigationTimeout" }
+                                    if ($whyNot.Count -gt 0) {
+                                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] Investigation NOT started: $($whyNot -join ', ')" -ForegroundColor "Yellow"
+                                    }
+                                }
                                 # Investigation disabled or timeout is 0 - pause immediately
                                 # OR this is a related issue added during investigation - don't restart investigation
                                 # OR issue detector failed - don't start investigation
