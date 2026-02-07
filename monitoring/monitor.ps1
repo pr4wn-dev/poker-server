@@ -2769,7 +2769,33 @@ while ($monitoringActive) {
             $script:lastInvestigationStateLog = Get-Date
         }
         
-        if ($script:isInvestigating -and $script:investigationStartTime) {
+        # CRITICAL FIX: Check investigation state more robustly
+        # Don't require both to be truthy - check them separately and handle invalid states
+        $shouldCheckInvestigation = $false
+        $investigationStartTimeValid = $false
+        
+        if ($script:isInvestigating) {
+            # Investigation flag is true - check if startTime is valid
+            if ($script:investigationStartTime) {
+                if ($script:investigationStartTime -is [DateTime]) {
+                    $shouldCheckInvestigation = $true
+                    $investigationStartTimeValid = $true
+                } else {
+                    # StartTime exists but is wrong type - log and reset
+                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] ERROR: investigationStartTime is not DateTime (type: $($script:investigationStartTime.GetType().Name)) - resetting investigation" -ForegroundColor "Red"
+                    $script:isInvestigating = $false
+                    $script:investigationStartTime = $null
+                    $script:investigationCheckLogged = $false
+                }
+            } else {
+                # Investigation flag is true but startTime is null - invalid state, reset
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] ERROR: isInvestigating=true but investigationStartTime is null - resetting" -ForegroundColor "Red"
+                $script:isInvestigating = $false
+                $script:investigationCheckLogged = $false
+            }
+        }
+        
+        if ($shouldCheckInvestigation -and $investigationStartTimeValid) {
             try {
                 # SELF-DIAGNOSTIC: Log if investigation check is running (only once per investigation to avoid spam)
                 if (-not $script:investigationCheckLogged) {
