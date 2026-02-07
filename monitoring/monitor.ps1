@@ -2233,8 +2233,9 @@ function Restart-UnityIfNeeded {
         if ($unityProcess) {
             try {
                 $timeSinceUnityStart = (Get-Date) - $unityProcess.StartTime
-                # Give Unity 20 seconds to start, enter play mode, initialize, connect, login (reduced from 45s)
-                if ($timeSinceUnityStart.TotalSeconds -lt 20) {
+                # Give Unity 45 seconds to start, enter play mode, initialize, connect, login
+                # Unity needs time to: start process, load project, enter play mode, initialize, connect to server, login
+                if ($timeSinceUnityStart.TotalSeconds -lt 45) {
                     $unityJustStarted = $true
                 }
             } catch {
@@ -2309,7 +2310,7 @@ function Restart-UnityIfNeeded {
             # Start Unity in normal window (visible, not headless) with debugger support
             # Unity will automatically enter play mode via InitializeOnLoad
             Start-Process -FilePath $config.unity.executablePath -ArgumentList $unityArgs -WindowStyle Normal
-            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Unity started, will check connection status (20s grace period)" -ForegroundColor "Cyan"
+            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Unity started, will check connection status (45s grace period)" -ForegroundColor "Cyan"
             # Don't wait here - let the main loop check connection status with grace period
             return $true
         }
@@ -3561,8 +3562,8 @@ while ($monitoringActive) {
                         if ($unityProcess) {
                             try {
                                 $timeSinceUnityStart = (Get-Date) - $unityProcess.StartTime
-                                # Give Unity 20 seconds to start, enter play mode, and connect (reduced from 45s)
-                                if ($timeSinceUnityStart.TotalSeconds -lt 20) {
+                                # Give Unity 45 seconds to start, enter play mode, initialize, connect, login
+                                if ($timeSinceUnityStart.TotalSeconds -lt 45) {
                                     $unityJustStarted = $true
                                 }
                             } catch {
@@ -3572,7 +3573,7 @@ while ($monitoringActive) {
                         
                         if ($unityJustStarted) {
                             # Unity was just started - give it time to connect
-                            $timeRemaining = 20 - $timeSinceUnityStart.TotalSeconds
+                            $timeRemaining = 45 - $timeSinceUnityStart.TotalSeconds
                             if ($timeRemaining -gt 0) {
                                 $waitingMsg = "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Waiting for connection (started $([Math]::Round($timeSinceUnityStart.TotalSeconds))s ago, $([Math]::Round($timeRemaining))s remaining)"
                                 Write-ConsoleOutput -Message $waitingMsg -ForegroundColor "Gray"
