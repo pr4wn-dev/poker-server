@@ -777,44 +777,68 @@ function Update-MonitorStatus {
     )
     
     try {
+        # Safely get variable values (handle case where they might not exist yet)
+        $statsStartTime = if ($stats -and $stats.StartTime) { $stats.StartTime } else { Get-Date }
+        $statsServerStatus = if ($stats -and $stats.ServerStatus) { $stats.ServerStatus } else { "Unknown" }
+        $statsUnityRunning = if ($stats -and $stats.UnityRunning) { $stats.UnityRunning } else { $false }
+        $statsUnityConnected = if ($stats -and $stats.UnityConnected) { $stats.UnityConnected } else { $false }
+        $statsPendingIssues = if ($stats -and $stats.PendingIssues) { $stats.PendingIssues } else { 0 }
+        $statsInFocusMode = if ($stats -and $stats.InFocusMode) { $stats.InFocusMode } else { $false }
+        $statsQueuedIssues = if ($stats -and $stats.QueuedIssues) { $stats.QueuedIssues } else { 0 }
+        $statsTotalLinesProcessed = if ($stats -and $stats.TotalLinesProcessed) { $stats.TotalLinesProcessed } else { 0 }
+        $statsIssuesDetected = if ($stats -and $stats.IssuesDetected) { $stats.IssuesDetected } else { 0 }
+        $statsLastIssueTime = if ($stats -and $stats.LastIssueTime) { $stats.LastIssueTime } else { $null }
+        $statsPauseMarkersWritten = if ($stats -and $stats.PauseMarkersWritten) { $stats.PauseMarkersWritten } else { 0 }
+        $statsPauseMarkerErrors = if ($stats -and $stats.PauseMarkerErrors) { $stats.PauseMarkerErrors } else { 0 }
+        
+        $unityActualStatus = try { (Get-UnityActualStatus).Status } catch { "Unknown" }
+        $isInvestigatingValue = if (Get-Variable -Name "isInvestigating" -ErrorAction SilentlyContinue) { $isInvestigating } else { $false }
+        $investigationStartTimeValue = if (Get-Variable -Name "investigationStartTime" -ErrorAction SilentlyContinue) { $investigationStartTime } else { $null }
+        $investigationTimeoutValue = if (Get-Variable -Name "investigationTimeout" -ErrorAction SilentlyContinue) { $investigationTimeout } else { 15 }
+        $isVerifyingFixValue = if (Get-Variable -Name "isVerifyingFix" -ErrorAction SilentlyContinue) { $isVerifyingFix } else { $false }
+        $verificationStartTimeValue = if (Get-Variable -Name "verificationStartTime" -ErrorAction SilentlyContinue) { $verificationStartTime } else { $null }
+        $verificationPeriodValue = if (Get-Variable -Name "verificationPeriod" -ErrorAction SilentlyContinue) { $verificationPeriod } else { 0 }
+        $isPausedValue = if (Get-Variable -Name "isPaused" -ErrorAction SilentlyContinue) { $isPaused } else { $false }
+        $currentIssueValue = if (Get-Variable -Name "currentIssue" -ErrorAction SilentlyContinue) { $currentIssue } else { $null }
+        
         $status = @{
             timestamp = (Get-Date).ToUniversalTime().ToString("o")
             monitorRunning = $true
-            monitorStartTime = $stats.StartTime.ToString("o")
-            uptime = ((Get-Date) - $stats.StartTime).TotalSeconds
-            serverStatus = $stats.ServerStatus
+            monitorStartTime = $statsStartTime.ToString("o")
+            uptime = ((Get-Date) - $statsStartTime).TotalSeconds
+            serverStatus = $statsServerStatus
             unityStatus = @{
-                running = $stats.UnityRunning
-                connected = $stats.UnityConnected
-                actualStatus = (Get-UnityActualStatus).Status
+                running = $statsUnityRunning
+                connected = $statsUnityConnected
+                actualStatus = $unityActualStatus
             }
             investigation = @{
-                active = $isInvestigating
-                startTime = if ($investigationStartTime) { $investigationStartTime.ToString("o") } else { $null }
-                timeout = $investigationTimeout
-                timeRemaining = if ($isInvestigating -and $investigationStartTime) { [Math]::Max(0, $investigationTimeout - ((Get-Date) - $investigationStartTime).TotalSeconds) } else { $null }
+                active = $isInvestigatingValue
+                startTime = if ($investigationStartTimeValue) { $investigationStartTimeValue.ToString("o") } else { $null }
+                timeout = $investigationTimeoutValue
+                timeRemaining = if ($isInvestigatingValue -and $investigationStartTimeValue) { [Math]::Max(0, $investigationTimeoutValue - ((Get-Date) - $investigationStartTimeValue).TotalSeconds) } else { $null }
             }
             verification = @{
-                active = $isVerifyingFix
-                startTime = if ($verificationStartTime) { $verificationStartTime.ToString("o") } else { $null }
-                period = $verificationPeriod
-                timeRemaining = if ($isVerifyingFix -and $verificationStartTime) { [Math]::Max(0, $verificationPeriod - ((Get-Date) - $verificationStartTime).TotalSeconds) } else { $null }
+                active = $isVerifyingFixValue
+                startTime = if ($verificationStartTimeValue) { $verificationStartTimeValue.ToString("o") } else { $null }
+                period = $verificationPeriodValue
+                timeRemaining = if ($isVerifyingFixValue -and $verificationStartTimeValue) { [Math]::Max(0, $verificationPeriodValue - ((Get-Date) - $verificationStartTimeValue).TotalSeconds) } else { $null }
             }
-            paused = $isPaused
-            currentIssue = $currentIssue
+            paused = $isPausedValue
+            currentIssue = $currentIssueValue
             pendingIssues = @{
-                total = $stats.PendingIssues
-                inFocusMode = $stats.InFocusMode
-                queued = $stats.QueuedIssues
+                total = $statsPendingIssues
+                inFocusMode = $statsInFocusMode
+                queued = $statsQueuedIssues
             }
             statistics = @{
-                linesProcessed = $stats.TotalLinesProcessed
-                issuesDetected = $stats.IssuesDetected
-                lastIssueTime = if ($stats.LastIssueTime) { $stats.LastIssueTime.ToString("o") } else { $null }
+                linesProcessed = $statsTotalLinesProcessed
+                issuesDetected = $statsIssuesDetected
+                lastIssueTime = if ($statsLastIssueTime) { $statsLastIssueTime.ToString("o") } else { $null }
             }
             debuggerBreaks = @{
-                successful = $stats.PauseMarkersWritten
-                failed = $stats.PauseMarkerErrors
+                successful = $statsPauseMarkersWritten
+                failed = $statsPauseMarkerErrors
             }
             recentErrors = @()
             recentWarnings = @()
