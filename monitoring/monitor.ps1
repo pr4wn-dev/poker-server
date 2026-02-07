@@ -3337,7 +3337,20 @@ while ($monitoringActive) {
                             $addResult = Add-PendingIssue $issueData
                             
                             if ($addResult -and $addResult.success) {
-                                if ($addResult.reason -eq 'added_to_group') {
+                                if ($addResult.reason -eq 'new_focus_group') {
+                                    # New focus group created - start investigation even if Unity is already paused
+                                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] FOCUS MODE: New issue detected - entering focus mode (Unity already paused)" -ForegroundColor "Yellow"
+                                    Write-ConsoleOutput -Message "  Root Issue: $($issue.type) ($($issue.severity))" -ForegroundColor "White"
+                                    Write-ConsoleOutput -Message "  Group ID: $($addResult.groupId)" -ForegroundColor "Cyan"
+                                    
+                                    # Start investigation phase even if Unity is already paused
+                                    if ($investigationEnabled -and $investigationTimeout -gt 0) {
+                                        $isInvestigating = $true
+                                        $investigationStartTime = Get-Date
+                                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] INVESTIGATION: Starting ($investigationTimeout seconds) - see statistics for details" -ForegroundColor "Cyan"
+                                        $currentIssue = $line
+                                    }
+                                } elseif ($addResult.reason -eq 'added_to_group') {
                                     # Related issue added to focused group
                                     Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] RELATED ISSUE: Added to focused group (Unity already paused)" -ForegroundColor "Yellow"
                                 } elseif ($addResult.reason -eq 'queued') {
