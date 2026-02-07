@@ -2907,11 +2907,19 @@ while ($monitoringActive) {
                         Write-ConsoleOutput -Message $issueMessage -ForegroundColor "Yellow"
                     }
                     
-                    # Update statistics
+                    # Update statistics (ALWAYS update, even for duplicates)
                     $stats.IssuesDetected++
                     $stats.IssuesBySeverity[$issue.severity]++
                     $stats.IssuesBySource[$issue.source]++
                     $stats.LastIssueTime = Get-Date
+                    
+                    # Update monitor status file immediately when issue is detected
+                    Update-MonitorStatus -statusUpdate @{
+                        lastIssueDetected = (Get-Date).ToUniversalTime().ToString("o")
+                        lastIssueType = $issue.type
+                        lastIssueSeverity = $issue.severity
+                        lastIssueSource = $issue.source
+                    } -ErrorAction SilentlyContinue
                     
                     # Track unique patterns
                     $patternKey = $issue.type + "_" + $issue.severity
@@ -2920,8 +2928,11 @@ while ($monitoringActive) {
                     }
                     $stats.UniquePatterns[$patternKey]++
                     
-                    # Only pause for critical/high severity issues
-                    if (($issue.severity -eq 'critical' -or $issue.severity -eq 'high') -and -not $isPaused) {
+                    # Log ALL issues to pending-issues.json (all severities enter focus mode)
+                    # Only pause debugger for critical/high severity issues
+                    $shouldPauseDebugger = ($issue.severity -eq 'critical' -or $issue.severity -eq 'high') -and -not $isPaused
+                    
+                    if ($shouldPauseDebugger) {
                         # Explain why we're pausing
                         Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] PAUSING: $($issue.severity.ToUpper()) severity issue detected" -ForegroundColor "Red"
                         # Issue detected - pause Unity and log issue
