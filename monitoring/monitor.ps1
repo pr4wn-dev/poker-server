@@ -1027,7 +1027,22 @@ function Start-ServerIfNeeded {
                 Start-Sleep -Seconds 2  # Wait a bit more if we had to kill something
             }
             
-            # Step 3: Start server in background (port 3000 should now be free)
+            # Step 3: Kill any remaining node processes BEFORE starting server (cleanup)
+            $nodeProcesses = Get-Process node -ErrorAction SilentlyContinue
+            if ($nodeProcesses) {
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🛑 Killing $($nodeProcesses.Count) remaining node process(es) before starting server..." -ForegroundColor "Cyan"
+                foreach ($proc in $nodeProcesses) {
+                    try {
+                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')]   Killing process: $($proc.ProcessName) (PID: $($proc.Id))" -ForegroundColor "Gray"
+                        Stop-Process -Id $proc.Id -Force -ErrorAction Stop
+                    } catch {
+                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')]   ⚠️  Failed to kill process $($proc.Id): $_" -ForegroundColor "Yellow"
+                    }
+                }
+                Start-Sleep -Seconds 1  # Brief wait for processes to terminate
+            }
+            
+            # Step 4: Start server in background (port 3000 should now be free, all node processes killed)
             Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🚀 Starting Node.js server..." -ForegroundColor "Cyan"
             $serverProcess = Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$PWD'; npm start" -WindowStyle Minimized -PassThru
             Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⏳ Server process started (PID: $($serverProcess.Id)). Waiting for server to be ready..." -ForegroundColor "Cyan"
