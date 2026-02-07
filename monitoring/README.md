@@ -912,6 +912,30 @@ When fixes require restarts, here's what happens:
 - Review fix attempt logs in `logs/game.log`
 - Try different fix approach if method is disabled
 
+### Unity not starting?
+- **Check Unity executable path**: Verify `monitor-config.json` has correct path to Unity.exe
+- **Check Unity version**: Ensure the version in the path matches your installed Unity version
+- **Check project path**: Verify `projectPath` in config points to your Unity project
+- **Check for dialogs**: Unity may be waiting for user input (scene backup dialog, etc.) - Monitor cleans these up automatically
+- **Check logs**: Look for "Unity not running, starting..." messages in monitor output
+
+### Unity stuck at login?
+- **Check user exists**: The `monitor_user` account is created automatically, but verify it exists in database
+- **Check password**: Verify password in `monitor-config.json` matches the database password
+- **Check environment variable**: If using `MONITOR_PASSWORD`, ensure it's set: `$env:MONITOR_PASSWORD = "your_password"`
+- **Check server logs**: Look for login attempts and errors in `game.log`
+
+### Server restart loops?
+- **Check cooldown**: Monitor has a 60-second cooldown after server restart - wait for it to complete
+- **Check health checks**: Server health checks respect the cooldown period
+- **Check orphaned simulations**: Orphaned simulation detection also respects the cooldown
+
+### Orphaned simulations not being stopped?
+- **Check health endpoint**: Monitor uses server's `/health` endpoint for actual simulation count
+- **Check API calls**: Monitor calls `/api/simulations/stop-all` to stop orphaned simulations
+- **Check process killing**: If API fails, monitor kills processes on port 3000 and all Node.js processes
+- **Check logs**: Look for "orphaned simulation" messages and API call results
+
 ---
 
 ## 📚 Related Systems
