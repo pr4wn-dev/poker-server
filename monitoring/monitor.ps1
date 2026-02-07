@@ -2329,10 +2329,16 @@ function Restart-UnityIfNeeded {
             try {
                 $unityStatus = Get-UnityActualStatus
                 if ($unityStatus.LastConnectionActivity -and $unityStatus.LastConnectionActivity -is [DateTime]) {
-                    $timeSinceConnectionAttempt = (Get-Date) - $unityStatus.LastConnectionActivity
-                    if ($timeSinceConnectionAttempt.TotalSeconds -lt 30) {
-                        $recentConnectionAttempt = $true
+                    $now = Get-Date
+                    $lastAttempt = $unityStatus.LastConnectionActivity
+                    $timeSinceConnectionAttempt = $now - $lastAttempt
+                    # Validate time is not negative (timezone issue) and not more than 1 hour in the future
+                    if ($timeSinceConnectionAttempt.TotalSeconds -ge 0 -and $timeSinceConnectionAttempt.TotalSeconds -lt 3600) {
+                        if ($timeSinceConnectionAttempt.TotalSeconds -lt 30) {
+                            $recentConnectionAttempt = $true
+                        }
                     }
+                    # If time is negative or too far in future, ignore it (timezone issue)
                 }
             } catch {
                 # Can't check - assume no recent attempts
