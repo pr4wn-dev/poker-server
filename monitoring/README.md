@@ -247,18 +247,84 @@ The server sends pause/resume signals, but **Unity does not currently implement 
 
 ---
 
+## ⚙️ Configuration
+
+Monitor uses `monitoring/monitor-config.json` for all settings. Edit this file to configure:
+
+### Configuration File Structure
+
+```json
+{
+  "mode": "simulation",
+  "automation": {
+    "autoRestartServer": true,
+    "autoRestartDatabase": true,
+    "autoRestartUnity": true,
+    "autoConnectUnity": true,
+    "autoLogin": true
+  },
+  "unity": {
+    "executablePath": "C:\\Program Files\\Unity\\Hub\\Editor\\6000.3.4f1\\Editor\\Unity.exe",
+    "projectPath": "C:\\Projects\\poker-client-unity",
+    "autoConnectOnStartup": true,
+    "serverUrl": "http://localhost:3000"
+  },
+  "login": {
+    "username": "monitor_user",
+    "password": "monitor_pass",
+    "comment": "Password can be set via environment variable MONITOR_PASSWORD for security (overrides this value)"
+  },
+  "simulation": {
+    "enabled": true,
+    "tableName": "Auto Simulation",
+    "maxPlayers": 9,
+    "startingChips": 10000,
+    "smallBlind": 50,
+    "bigBlind": 100,
+    "autoStartSimulation": true
+  }
+}
+```
+
+### Important Configuration Notes
+
+1. **Unity Executable Path**: Must point to the correct Unity version installed on your system. Monitor will check if the path exists before starting Unity.
+
+2. **Auto-Login Credentials**: 
+   - Default username: `monitor_user`
+   - Default password: `monitor_pass`
+   - The user `monitor_user` is automatically created in the database on first run
+   - For security, you can set `MONITOR_PASSWORD` environment variable instead of storing password in config
+
+3. **Server URL**: Use `http://localhost:3000` for local development, or your server's IP address for remote connections.
+
+---
+
 ## 🤖 Unity Auto-Mode Implementation
 
 Monitor passes command-line arguments to Unity, and Unity handles all automation internally. Unity runs in a **normal visible window** so you can watch everything happen.
+
+### Unity Auto-Start Play Mode
+
+Unity automatically enters play mode when started by the monitor via an Editor script (`Assets/Scripts/Editor/AutoPlayMode.cs`) that uses `[InitializeOnLoad]`. This means:
+- Unity Editor starts normally
+- Automatically enters play mode when the project loads
+- No manual intervention needed
+- Debugger can attach normally
 
 ### Command-Line Arguments Unity Receives
 
 When Monitor starts Unity, it passes:
 - `-projectPath [path]` - Unity project path
+- `-debugCodeOptimization` - Enables debugger attachment
 - `-autoMode [simulation|normal]` - Automation mode
 - `-serverUrl [url]` - Server URL for auto-connect
 - `-autoLogin [username]` - Username for auto-login
 - `-autoPassword [password]` - Password for auto-login (if configured)
+
+### Scene Backup Cleanup
+
+Monitor automatically cleans up Unity backup files before starting Unity to prevent dialog prompts that would block automatic startup. Backup files in `[Project]/Temp/` are removed automatically.
 
 ### What Unity Needs to Implement
 
@@ -792,9 +858,17 @@ When fixes require restarts, here's what happens:
 - ✅ **Service Health Checks**: Monitor checks all services every 30 seconds
 
 **Unity Automation:**
+- ✅ **Auto-Start Play Mode**: Unity automatically enters play mode via `InitializeOnLoad` Editor script
 - ✅ **Auto-Connect**: Unity receives `-serverUrl` command-line arg and auto-connects
 - ✅ **Auto-Login**: Unity receives `-autoLogin` and `-autoPassword` args for auto-login
 - ✅ **Auto-Mode**: Unity receives `-autoMode simulation` or `-autoMode normal` for automation
+- ✅ **Scene Backup Cleanup**: Monitor automatically removes Unity backup files to prevent dialog prompts
+- ✅ **Debugger Support**: Unity starts with `-debugCodeOptimization` flag for debugger attachment
+
+**Grace Periods and Cooldowns:**
+- ✅ **Unity Startup Grace Period**: 45 seconds after Unity starts before checking for connections (allows time for play mode, initialization, connection, login)
+- ✅ **Server Restart Cooldown**: 60 seconds after server restart - Unity restarts and orphaned simulation checks are skipped during this period
+- ✅ **Connection Attempt Detection**: Monitor checks for recent connection attempts in logs (within 30 seconds) before restarting Unity
 
 ### Future Enhancements (Optional)
 
