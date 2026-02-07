@@ -1963,11 +1963,17 @@ while ($monitoringActive) {
                 }
                 
                 # Throttle: only try to stop once per 10 seconds, and don't if server was just restarted
-                if (-not $script:lastOrphanedSimStopAttempt) {
+                if (-not $script:lastOrphanedSimStopAttempt -or -not ($script:lastOrphanedSimStopAttempt -is [DateTime])) {
                     $script:lastOrphanedSimStopAttempt = (Get-Date).AddSeconds(-15)
                 }
-                $timeSinceLastStop = (Get-Date) - $script:lastOrphanedSimStopAttempt
-                $shouldStop = $timeSinceLastStop.TotalSeconds -ge 10 -and -not $serverJustRestarted
+                try {
+                    $timeSinceLastStop = (Get-Date) - $script:lastOrphanedSimStopAttempt
+                    $shouldStop = $timeSinceLastStop.TotalSeconds -ge 10 -and -not $serverJustRestarted
+                } catch {
+                    # If date arithmetic fails, reset and allow stop attempt
+                    $script:lastOrphanedSimStopAttempt = (Get-Date).AddSeconds(-15)
+                    $shouldStop = $true -and -not $serverJustRestarted
+                }
                 
                 if ($serverJustRestarted) {
                     # Silently skip - server was just restarted, give it time to stabilize
@@ -2052,10 +2058,16 @@ while ($monitoringActive) {
         # 1. No simulation on server at all
         # 2. Server has simulation but Unity isn't connected to it (orphaned simulation)
         if ($config.simulation.enabled -and $stats.UnityRunning -and -not $stats.SimulationRunning) {
-            if (-not $script:simulationEndTime) {
+            if (-not $script:simulationEndTime -or -not ($script:simulationEndTime -is [DateTime])) {
                 $script:simulationEndTime = Get-Date
             }
-            $timeSinceSimEnd = (Get-Date) - $script:simulationEndTime
+            try {
+                $timeSinceSimEnd = (Get-Date) - $script:simulationEndTime
+            } catch {
+                # If date arithmetic fails, reset the timer
+                $script:simulationEndTime = Get-Date
+                $timeSinceSimEnd = New-TimeSpan -Seconds 0
+            }
             if ($timeSinceSimEnd.TotalSeconds -gt 30) {
                 $reason = if ($logWatcherStatus.ActiveSimulations -gt 0) {
                     "orphaned simulation (server has simulation but Unity not connected)"
