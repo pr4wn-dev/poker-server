@@ -2759,6 +2759,42 @@ while ($monitoringActive) {
             $lastServiceCheck = Get-Date
         }
         
+        # CRITICAL: Check for existing focused group FIRST (before investigation check)
+        # This ensures that if a focused group exists but no investigation is active, we start one
+        # BEFORE the investigation check runs (which might see isInvestigating=true but startTime=null)
+        if (-not $script:lastFocusedGroupCheck) {
+            $script:lastFocusedGroupCheck = Get-Date
+        }
+        $timeSinceLastCheck = ((Get-Date) - $script:lastFocusedGroupCheck).TotalSeconds
+        
+        if (-not $script:isInvestigating -and $timeSinceLastCheck -ge 5) {
+            $pendingInfo = Get-PendingIssuesInfo
+            # DIAGNOSTIC: Log why investigation isn't starting
+            if (-not $pendingInfo) {
+                # No pending info - skip
+            } elseif (-not $pendingInfo.InFocusMode) {
+                # Not in focus mode - skip
+            } elseif (-not $pendingInfo.RootIssue) {
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] Focused group exists but no root issue" -ForegroundColor "Yellow"
+            } elseif (-not $investigationEnabled) {
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] Investigation disabled in config" -ForegroundColor "Yellow"
+            } elseif (-not $investigationTimeout -or $investigationTimeout -le 0) {
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] Investigation timeout invalid: $investigationTimeout" -ForegroundColor "Yellow"
+            } else {
+                # All conditions met - start investigation
+                $script:isInvestigating = $true
+                $script:investigationStartTime = Get-Date
+                $script:investigationCheckLogged = $false
+                $script:investigationNullStartTimeLogged = $false
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] INVESTIGATION: Starting for existing focus group ($investigationTimeout seconds)" -ForegroundColor "Cyan"
+                Write-ConsoleOutput -Message "  Root Issue: $($pendingInfo.RootIssue.type) ($($pendingInfo.RootIssue.severity))" -ForegroundColor "White"
+                # Force immediate status update
+                Update-MonitorStatus
+                $lastStatusUpdate = Get-Date
+            }
+            $script:lastFocusedGroupCheck = Get-Date
+        }
+        
         # Check if investigation phase is complete
         # IMPORTANT: This check runs every loop iteration to ensure investigation completes on time
         # SELF-DIAGNOSTIC: Monitor must be able to diagnose its own problems
