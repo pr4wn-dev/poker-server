@@ -1232,7 +1232,10 @@ function Show-Statistics {
     if ($stats.LastIssueTime) {
         $col2Lines += "Last Issue: " + $stats.LastIssueTime.ToString("HH:mm:ss")
     }
-    $col2Lines += "Pause Markers: " + $stats.PauseMarkersWritten
+    $col2Lines += "Debugger Breaks: " + $stats.PauseMarkersWritten
+    if ($stats.PauseMarkerErrors -gt 0) {
+        $col2Lines += "Break Errors: " + $stats.PauseMarkerErrors
+    }
     $col2Lines += ""
     $col2Lines += "ISSUES BY SEVERITY"
     $col2Lines += ("-" * ($colWidth - 2))
@@ -1630,15 +1633,23 @@ function Restart-UnityIfNeeded {
         $stats.UnityRunning = $isUnityRunning
         $stats.UnityConnected = $isConnected
         
-        # If Unity is not running or not connected, restart it
-        if (-not $unityProcess -or -not $isConnected) {
-            if ($unityProcess) {
-                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Unity running but not connected, restarting..." -ForegroundColor "Yellow"
-                Stop-Process -Name "Unity" -Force -ErrorAction SilentlyContinue
-                Start-Sleep -Seconds 2
-    } else {
-                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Unity not running, starting..." -ForegroundColor "Yellow"
+        # Check if Unity was just started (give it grace period to connect)
+        $unityJustStarted = $false
+        if ($unityProcess) {
+            try {
+                $timeSinceUnityStart = (Get-Date) - $unityProcess.StartTime
+                # Give Unity 45 seconds to start, enter play mode, initialize, connect, login
+                if ($timeSinceUnityStart.TotalSeconds -lt 45) {
+                    $unityJustStarted = $true
+                }
+            } catch {
+                # If we can't get start time, assume Unity wasn't just started
             }
+        }
+        
+        # If Unity is not running, start it
+        if (-not $unityProcess) {
+            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Unity not running, starting..." -ForegroundColor "Yellow"
             
             # Start Unity with project path and auto-mode
             $unityArgs = @(
@@ -1703,38 +1714,39 @@ function Restart-UnityIfNeeded {
             # Start Unity in normal window (visible, not headless) with debugger support
             # Unity will automatically enter play mode via InitializeOnLoad
             Start-Process -FilePath $config.unity.executablePath -ArgumentList $unityArgs -WindowStyle Normal
-            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Unity started, waiting for connection..." -ForegroundColor "Cyan"
-            
-            # Wait up to 60 seconds for Unity to connect
-            $maxWait = 60
-            $waited = 0
-            while ($waited -lt $maxWait) {
-                Start-Sleep -Seconds 3
-                $waited += 3
-                
-                try {
-                    $healthCheck = Invoke-WebRequest -Uri "$serverUrl/health" -TimeoutSec 2 -ErrorAction Stop
-                    $health = $healthCheck.Content | ConvertFrom-Json
-                    if ($health.onlinePlayers -gt 0) {
-                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Connected to server!" -ForegroundColor "Green"
-                        
-                        # If simulation mode, auto-create table and start simulation
-                        if ($config.simulation.enabled) {
-                            Start-Sleep -Seconds 2  # Give Unity time to fully initialize
-                            Start-SimulationTable
-                        }
-                        
-                        return $true
+            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Unity started, will check connection status (45s grace period)" -ForegroundColor "Cyan"
+            # Don't wait here - let the main loop check connection status with grace period
+            return $true
+        }
+        # Unity is running but not connected - check if grace period has passed
+        elseif (-not $isConnected -and -not $unityJustStarted) {
+            # Unity is running but not connected, and grace period has passed
+            # Check if there are recent connection attempts in logs
+            $recentConnectionAttempt = $false
+            try {
+                $unityStatus = Get-UnityActualStatus
+                if ($unityStatus.LastConnectionActivity -and $unityStatus.LastConnectionActivity -is [DateTime]) {
+                    $timeSinceConnectionAttempt = (Get-Date) - $unityStatus.LastConnectionActivity
+                    if ($timeSinceConnectionAttempt.TotalSeconds -lt 30) {
+                        $recentConnectionAttempt = $true
                     }
-                } catch {
-                    # Server might not be ready yet
                 }
+            } catch {
+                # Can't check - assume no recent attempts
             }
             
-            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Unity started but not connected after $maxWait seconds" -ForegroundColor "Yellow"
-            return $false
+            if (-not $recentConnectionAttempt) {
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Unity running but not connected (no recent connection attempts), restarting..." -ForegroundColor "Yellow"
+                Stop-Process -Name "Unity" -Force -ErrorAction SilentlyContinue
+                Start-Sleep -Seconds 2
+                # Restart Unity (recursive call, but will hit the "not running" branch)
+                return Restart-UnityIfNeeded
+            } else {
+                # Unity is trying to connect - wait a bit more
+                return $true
+            }
         }
-        
+        # Unity is running and connected (or still in grace period) - all good
         return $true
     } catch {
         Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Error restarting Unity: $_" -ForegroundColor "Red"
