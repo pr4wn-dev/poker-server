@@ -2090,7 +2090,8 @@ while ($monitoringActive) {
         # Log simulation start/stop
         if ($stats.SimulationRunning -and -not $wasSimulationRunning) {
             $activeCount = $logWatcherStatus.ActiveSimulations
-            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🎲 SIMULATION: Started ($activeCount active)" -ForegroundColor "Green"
+            $simStartMsg = "[$(Get-Date -Format 'HH:mm:ss')] 🎲 SIMULATION: Started ($activeCount active)"
+            Write-ConsoleOutput -Message $simStartMsg -ForegroundColor "Green"
         } elseif (-not $stats.SimulationRunning -and $wasSimulationRunning) {
             Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🎲 SIMULATION: Completed (10/10 games) - Unity is now idle" -ForegroundColor "Yellow"
             
