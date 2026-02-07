@@ -16,7 +16,7 @@ const db = require('./database/Database');
 const GameManager = require('./game/GameManager');
 const SocketHandler = require('./sockets/SocketHandler');
 const path = require('path');
-const logWatcher = require(path.join(__dirname, '..', 'scripts', 'watch-logs-and-fix'));
+const logMaintenance = require(path.join(__dirname, '..', 'scripts', 'log-maintenance'));
 
 // Configuration
 const PORT = process.env.PORT || 3000;
@@ -354,18 +354,18 @@ async function start() {
         throw err; // Re-throw to prevent server from starting in broken state
     }
     
-    // Initialize log watcher for automatic issue detection and fixing
+    // Initialize log maintenance (simple task to archive/clear logs when > 5MB)
     try {
-        logWatcher.initialize(gameManager, socketHandler.simulationManager, socketHandler);
-        console.log('[Server] Log watcher initialized');
+        logMaintenance.initialize();
+        console.log('[Server] Log maintenance initialized');
     } catch (err) {
         const gameLogger = require('./utils/GameLogger');
-        gameLogger.error('SERVER', '[STARTUP] LOG_WATCHER_INIT_FAILED', { 
+        gameLogger.error('SERVER', '[STARTUP] LOG_MAINTENANCE_INIT_FAILED', { 
             error: err.message, 
             stack: err.stack 
         });
-        console.error('[Server] WARNING: Failed to initialize log watcher:', err.message);
-        // Don't throw - log watcher is optional, server can run without it
+        console.error('[Server] WARNING: Failed to initialize log maintenance:', err.message);
+        // Don't throw - log maintenance is optional, server can run without it
     }
     
     // Auto-resume any paused simulations on server start
