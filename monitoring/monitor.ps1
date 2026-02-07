@@ -871,10 +871,15 @@ function Update-MonitorStatus {
         }
         
         # Write to status file
+        $statusFile = if (Get-Variable -Name "monitorStatusFile" -ErrorAction SilentlyContinue) { $monitorStatusFile } else { Join-Path $script:projectRoot "logs\monitor-status.json" }
+        if (-not $statusFile) {
+            $statusFile = Join-Path $script:projectRoot "logs\monitor-status.json"
+        }
         $statusJson = $status | ConvertTo-Json -Depth 10
-        [System.IO.File]::WriteAllText($monitorStatusFile, $statusJson, [System.Text.UTF8Encoding]::new($false))
+        [System.IO.File]::WriteAllText($statusFile, $statusJson, [System.Text.UTF8Encoding]::new($false))
     } catch {
-        # Don't fail if status update fails
+        # Don't fail if status update fails - but log error for debugging
+        # Write-Host "Update-MonitorStatus error: $_" -ForegroundColor Yellow
     }
 }
 
