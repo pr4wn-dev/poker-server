@@ -288,7 +288,8 @@ function Add-PendingIssue {
         $retryCount = 0
         $lastError = $null
         
-        while ($retryCount -lt $maxRetries) {
+        try {
+            while ($retryCount -lt $maxRetries) {
             try {
                 $result = node $nodeScript --add-issue-file $tempFile 2>&1 | Out-String
                 if ($LASTEXITCODE -eq 0 -and $result) {
@@ -308,7 +309,7 @@ function Add-PendingIssue {
                                 # Retryable error
                                 $retryCount++
                                 if ($retryCount -lt $maxRetries) {
-                                    Write-ConsoleOutput -Message "  Retry $retryCount/$maxRetries: $($jsonResult.error)" -ForegroundColor "Yellow"
+                                    Write-ConsoleOutput -Message "  Retry $($retryCount)/$($maxRetries): $($jsonResult.error)" -ForegroundColor "Yellow"
                                     Start-Sleep -Milliseconds 500
                                     continue
                                 }
@@ -346,7 +347,7 @@ function Add-PendingIssue {
                         if ($errorJson.reason -eq "file_locked" -or $errorJson.reason -eq "json_parse_error") {
                             $retryCount++
                             if ($retryCount -lt $maxRetries) {
-                                Write-ConsoleOutput -Message "  Retry $retryCount/$maxRetries: $errorMsg" -ForegroundColor "Yellow"
+                                Write-ConsoleOutput -Message "  Retry $($retryCount)/$($maxRetries): $errorMsg" -ForegroundColor "Yellow"
                                 Start-Sleep -Milliseconds 500
                                 continue
                             }
@@ -359,7 +360,7 @@ function Add-PendingIssue {
                     # Not JSON, try retry
                     $retryCount++
                     if ($retryCount -lt $maxRetries) {
-                        Write-ConsoleOutput -Message "  Retry $retryCount/$maxRetries: Parse error, retrying..." -ForegroundColor "Yellow"
+                        Write-ConsoleOutput -Message "  Retry $($retryCount)/$($maxRetries): Parse error, retrying..." -ForegroundColor "Yellow"
                         Start-Sleep -Milliseconds 500
                         continue
                     }
@@ -385,7 +386,7 @@ function Add-PendingIssue {
             } catch {
                 $retryCount++
                 if ($retryCount -lt $maxRetries) {
-                    Write-ConsoleOutput -Message "  Retry $retryCount/$maxRetries: Exception - $($_.Exception.Message)" -ForegroundColor "Yellow"
+                    Write-ConsoleOutput -Message "  Retry $($retryCount)/$($maxRetries): Exception - $($_.Exception.Message)" -ForegroundColor "Yellow"
                     Start-Sleep -Milliseconds 500
                     continue
                 } else {
@@ -398,7 +399,7 @@ function Add-PendingIssue {
                     break
                 }
             }
-        }
+            }
         } finally {
             # Clean up temp file
             if (Test-Path $tempFile) {
@@ -980,7 +981,7 @@ function Invoke-DebuggerBreakWithVerification {
                     # No tables received event - retry after checking Unity status
                     $retryCount++
                     if ($retryCount -lt $maxRetries) {
-                        Write-ConsoleOutput -Message "  Retry $retryCount/$maxRetries: No tables received event, verifying Unity status..." -ForegroundColor "Yellow"
+                        Write-ConsoleOutput -Message "  Retry $($retryCount)/$($maxRetries): No tables received event, verifying Unity status..." -ForegroundColor "Yellow"
                         Start-Sleep -Seconds 2
                         $unityStatus = Get-UnityActualStatus
                         if (-not $unityStatus.ConnectedToServer) {
@@ -1006,7 +1007,7 @@ function Invoke-DebuggerBreakWithVerification {
         } catch {
             $retryCount++
             if ($retryCount -lt $maxRetries) {
-                Write-ConsoleOutput -Message "  Retry $retryCount/$maxRetries: Error - $($_.Exception.Message)" -ForegroundColor "Yellow"
+                Write-ConsoleOutput -Message "  Retry $($retryCount)/$($maxRetries): Error - $($_.Exception.Message)" -ForegroundColor "Yellow"
                 Start-Sleep -Seconds 2
             } else {
                 $stats.PauseMarkerErrors++
