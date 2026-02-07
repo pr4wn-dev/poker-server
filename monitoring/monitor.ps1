@@ -1260,6 +1260,7 @@ function Maintain-Services {
         Restart-UnityIfNeeded | Out-Null
     }
 }
+}
 
 # Initialize Windows API for window size control (only once)
 if (-not ([System.Management.Automation.PSTypeName]'WindowSizeAPI').Type) {
