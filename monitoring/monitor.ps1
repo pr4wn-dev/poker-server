@@ -1948,7 +1948,8 @@ while ($monitoringActive) {
                     }
                 }
                 } # End if ($unityNotInGame)
-            } else {
+            }
+            if (-not $serverHasSimulation) {
                 # No simulation on server
                 $stats.SimulationRunning = $false
             }
