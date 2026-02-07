@@ -1229,6 +1229,13 @@ function Get-UnityActualStatus {
                 if ($line -match '\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?)\]') {
                     try {
                         $lineTime = [DateTime]::Parse($matches[1])
+                        # Validate that parsed time is not in the future (more than 1 hour ahead)
+                        # This catches timezone issues where log timestamps might be in different timezone
+                        $timeDiff = ($lineTime - $now).TotalSeconds
+                        if ($timeDiff -gt 3600) {
+                            # Timestamp is more than 1 hour in the future - likely timezone issue, ignore it
+                            $lineTime = $null
+                        }
                     } catch {
                         $lineTime = $null
                     }
