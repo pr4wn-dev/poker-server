@@ -1942,6 +1942,21 @@ while ($monitoringActive) {
                 } else {
                     "no active simulation"
                 }
+                
+                # If there's an orphaned simulation, stop it before restarting Unity
+                if ($logWatcherStatus.ActiveSimulations -gt 0) {
+                    try {
+                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🛑 Stopping orphaned simulation before restarting Unity..." -ForegroundColor "Cyan"
+                        $stopResponse = Invoke-WebRequest -Uri "$serverUrl/api/simulations/stop-all" -Method POST -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
+                        $stopResult = $stopResponse.Content | ConvertFrom-Json
+                        if ($stopResult.success -and $stopResult.stopped -gt 0) {
+                            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ✅ Stopped $($stopResult.stopped) orphaned simulation(s)" -ForegroundColor "Green"
+                        }
+                    } catch {
+                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  Could not stop orphaned simulation: $_" -ForegroundColor "Yellow"
+                    }
+                }
+                
                 Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  UNITY: Idle for $([math]::Round($timeSinceSimEnd.TotalSeconds))s - $reason - restarting..." -ForegroundColor "Yellow"
                 $script:simulationEndTime = $null  # Reset timer
                 Restart-UnityIfNeeded | Out-Null
