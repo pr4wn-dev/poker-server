@@ -501,16 +501,16 @@ function Get-UnityActualStatus {
             $status.Status = "STOPPED"
         } elseif (-not $status.ConnectedToServer) {
             $status.Status = "IDLE"
-            $status.Details += "⚠️  Unity process running but NOT connected to server"
+            $status.Details += "Unity process running but NOT connected to server"
         } elseif (-not $status.InGameScene) {
             $status.Status = "IDLE"
-            $status.Details += "⚠️  Unity connected but NOT in game scene (likely in MainMenuScene)"
+            $status.Details += "Unity connected but NOT in game scene (likely in MainMenuScene)"
         } elseif ($status.ReceivingGameUpdates) {
             $status.Status = "ACTIVE"
-            $status.Details += "✅ Unity is connected and actively playing"
+            $status.Details += "Unity is connected and actively playing"
         } else {
             $status.Status = "CONNECTED"
-            $status.Details += "⚠️  Unity connected but no recent game activity"
+            $status.Details += "Unity connected but no recent game activity"
         }
         
         return $status
@@ -677,7 +677,8 @@ function Kill-Port3000Processes {
             }
         }
     } catch {
-        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  Could not check port 3000: $_" -ForegroundColor "Yellow"
+        $portErrorMsg = "[$(Get-Date -Format 'HH:mm:ss')] Could not check port 3000: $_"
+        Write-ConsoleOutput -Message $portErrorMsg -ForegroundColor "Yellow"
     }
     
     $nodeProcesses = Get-Process node -ErrorAction SilentlyContinue
@@ -696,9 +697,11 @@ function Kill-Port3000Processes {
         foreach ($proc in $allProcessesToKill.Values) {
             try {
                 Stop-Process -Id $proc.Id -Force -ErrorAction Stop
-                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ✅ Killed process: $($proc.ProcessName) (PID: $($proc.Id))" -ForegroundColor "Green"
+                $killedMsg = "[$(Get-Date -Format 'HH:mm:ss')] Killed process: $($proc.ProcessName) (PID: $($proc.Id))"
+                Write-ConsoleOutput -Message $killedMsg -ForegroundColor "Green"
             } catch {
-                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  Could not kill process $($proc.Id): $_" -ForegroundColor "Yellow"
+                $killFailMsg = "[$(Get-Date -Format 'HH:mm:ss')] Could not kill process $($proc.Id): $_"
+                Write-ConsoleOutput -Message $killFailMsg -ForegroundColor "Yellow"
             }
         }
         Start-Sleep -Seconds 2
@@ -1058,13 +1061,15 @@ function Start-ServerIfNeeded {
             # Step 3: Kill any remaining node processes BEFORE starting server (cleanup)
             $nodeProcesses = Get-Process node -ErrorAction SilentlyContinue
             if ($nodeProcesses) {
-                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🛑 Killing $($nodeProcesses.Count) remaining node process(es) before starting server..." -ForegroundColor "Cyan"
+                $killNodeMsg = "[$(Get-Date -Format 'HH:mm:ss')] Killing $($nodeProcesses.Count) remaining node process(es) before starting server..."
+                Write-ConsoleOutput -Message $killNodeMsg -ForegroundColor "Cyan"
                 foreach ($proc in $nodeProcesses) {
                     try {
                         Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')]   Killing process: $($proc.ProcessName) (PID: $($proc.Id))" -ForegroundColor "Gray"
                         Stop-Process -Id $proc.Id -Force -ErrorAction Stop
                     } catch {
-                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')]   ⚠️  Failed to kill process $($proc.Id): $_" -ForegroundColor "Yellow"
+                        $procKillFailMsg = "[$(Get-Date -Format 'HH:mm:ss')] Failed to kill process $($proc.Id): $_"
+                        Write-ConsoleOutput -Message $procKillFailMsg -ForegroundColor "Yellow"
                     }
                 }
                 Start-Sleep -Seconds 1  # Brief wait for processes to terminate
