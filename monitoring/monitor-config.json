@@ -29,6 +29,8 @@
     "startingChips": 10000,
     "smallBlind": 50,
     "bigBlind": 100,
-    "autoStartSimulation": true
+    "autoStartSimulation": true,
+    "itemAnteEnabled": true,
+    "comment2": "itemAnteEnabled: If true, enables item ante (For Keeps) system for monitor-created simulation tables"
   }
 }

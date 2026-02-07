@@ -1411,6 +1411,10 @@ function Restart-UnityIfNeeded {
             # Pass auto-mode to Unity (simulation or normal)
             if ($config.simulation.enabled) {
                 $unityArgs += "-autoMode", "simulation"
+                # Enable item ante if configured
+                if ($config.simulation.itemAnteEnabled) {
+                    $unityArgs += "-itemAnteEnabled", "true"
+                }
             } else {
                 $unityArgs += "-autoMode", "normal"
             }
