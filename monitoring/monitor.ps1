@@ -2091,7 +2091,7 @@ while ($monitoringActive) {
         if ($stats.SimulationRunning -and -not $wasSimulationRunning) {
             $activeCount = $logWatcherStatus.ActiveSimulations
             $timestamp = Get-Date -Format 'HH:mm:ss'
-            $simStartMsg = "[$timestamp] 🎲 SIMULATION: Started - $activeCount active"
+            $simStartMsg = "[$timestamp] SIMULATION: Started - $activeCount active"
             Write-ConsoleOutput -Message $simStartMsg -ForegroundColor "Green"
         } elseif (-not $stats.SimulationRunning -and $wasSimulationRunning) {
             $timestamp = Get-Date -Format 'HH:mm:ss'
