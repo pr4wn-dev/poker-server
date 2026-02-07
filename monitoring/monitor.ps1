@@ -2646,7 +2646,8 @@ while ($monitoringActive) {
                     Write-ConsoleOutput -Message "  Got: $($fixApplied.groupId)" -ForegroundColor "White"
                     Write-ConsoleOutput -Message "  Cleaning up stale fix-applied.json" -ForegroundColor "Gray"
                     Remove-Item $fixAppliedFile -Force -ErrorAction SilentlyContinue
-                } elseif ($pendingInfo.GroupId -eq $fixApplied.groupId) {
+                }
+                elseif ($pendingInfo.GroupId -eq $fixApplied.groupId) {
                     # GroupId matches - start verification
                     # Start verification phase
                     $isVerifyingFix = $true
