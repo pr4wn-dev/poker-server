@@ -356,6 +356,7 @@ function Get-PendingIssuesInfo {
                 return @{
                     InFocusMode = $true
                     RootIssue = $rootIssue
+                    RelatedIssues = if ($content.focusedGroup.relatedIssues) { $content.focusedGroup.relatedIssues } else { @() }
                     RelatedIssuesCount = $relatedCount
                     QueuedIssuesCount = $queuedCount
                     GroupId = $content.focusedGroup.id
@@ -1264,10 +1265,60 @@ function Show-Statistics {
     if ($pendingInfo.InFocusMode) {
         $col3Lines += "Mode: FOCUS MODE"
         if ($pendingInfo.RootIssue) {
-            $col3Lines += "Root: " + $pendingInfo.RootIssue.type
-            $col3Lines += "Severity: " + $pendingInfo.RootIssue.severity.ToUpper()
+            $rootIssue = $pendingInfo.RootIssue
+            $col3Lines += "Root Issue: " + $rootIssue.type
+            $col3Lines += "Severity: " + $rootIssue.severity.ToUpper()
+            
+            # Show source and tableId if available
+            if ($rootIssue.source) {
+                $sourceText = "Source: " + $rootIssue.source
+                if ($rootIssue.tableId) {
+                    $tableShort = if ($rootIssue.tableId.Length -gt 12) { $rootIssue.tableId.Substring(0, 12) + "..." } else { $rootIssue.tableId }
+                    $sourceText += " (table: $tableShort)"
+                }
+                if ($sourceText.Length -gt ($colWidth - 2)) {
+                    $sourceText = $sourceText.Substring(0, ($colWidth - 5)) + "..."
+                }
+                $col3Lines += $sourceText
+            }
+            
+            # Show message preview (truncated)
+            if ($rootIssue.message) {
+                $msgPreview = $rootIssue.message
+                # Remove timestamps and brackets for cleaner display
+                $msgPreview = $msgPreview -replace '\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+\]', ''
+                $msgPreview = $msgPreview.Trim()
+                if ($msgPreview.Length -gt ($colWidth - 2)) {
+                    $msgPreview = $msgPreview.Substring(0, ($colWidth - 5)) + "..."
+                }
+                $col3Lines += "Msg: " + $msgPreview
+            }
+            
             $col3Lines += "Related: " + $pendingInfo.RelatedIssuesCount
             $col3Lines += "Queued: " + $pendingInfo.QueuedIssuesCount
+            
+            # Show related issues summary if available
+            if ($pendingInfo.RelatedIssues -and $pendingInfo.RelatedIssues.Count -gt 0) {
+                $col3Lines += ""
+                $col3Lines += "RELATED ISSUES:"
+                $relatedTypes = @{}
+                foreach ($related in $pendingInfo.RelatedIssues) {
+                    $type = if ($related.type) { $related.type } else { "unknown" }
+                    if (-not $relatedTypes.ContainsKey($type)) {
+                        $relatedTypes[$type] = 0
+                    }
+                    $relatedTypes[$type]++
+                }
+                # Show up to 3 most common related issue types
+                $relatedSorted = $relatedTypes.GetEnumerator() | Sort-Object Value -Descending | Select-Object -First 3
+                foreach ($typeEntry in $relatedSorted) {
+                    $typeText = "  - " + $typeEntry.Key + ": " + $typeEntry.Value
+                    if ($typeText.Length -gt ($colWidth - 2)) {
+                        $typeText = $typeText.Substring(0, ($colWidth - 5)) + "..."
+                    }
+                    $col3Lines += $typeText
+                }
+            }
             
             # Show fix attempts count if available
             try {
@@ -1276,7 +1327,12 @@ function Show-Statistics {
                     if ($pendingContent.focusedGroup -and $pendingContent.focusedGroup.fixAttempts) {
                         $fixAttemptsCount = $pendingContent.focusedGroup.fixAttempts.Count
                         if ($fixAttemptsCount -gt 0) {
+                            $failedCount = ($pendingContent.focusedGroup.fixAttempts | Where-Object { $_.result -eq "failed" }).Count
+                            $col3Lines += ""
                             $col3Lines += "Fix Attempts: " + $fixAttemptsCount
+                            if ($failedCount -gt 0) {
+                                $col3Lines += "  Failed: " + $failedCount
+                            }
                         }
                     }
                 }
@@ -1297,7 +1353,21 @@ function Show-Statistics {
         $investigationElapsed = (Get-Date) - $investigationStartTime
         $remaining = [Math]::Max(0, $investigationTimeout - $investigationElapsed.TotalSeconds)
         $col3Lines += "Time Left: " + ("{0:N0}s" -f $remaining)
-        $col3Lines += "Gathering related issues..."
+        
+        # Show what's being investigated
+        if ($pendingInfo.RootIssue) {
+            $rootType = $pendingInfo.RootIssue.type
+            $rootSource = if ($pendingInfo.RootIssue.source) { $pendingInfo.RootIssue.source } else { "unknown" }
+            $col3Lines += "Investigating: " + $rootType
+            $col3Lines += "From: " + $rootSource
+        }
+        
+        # Show related issues found so far
+        if ($pendingInfo.RelatedIssuesCount -gt 0) {
+            $col3Lines += "Found: " + $pendingInfo.RelatedIssuesCount + " related"
+        } else {
+            $col3Lines += "Gathering related issues..."
+        }
     }
     
     # Add verification progress if verifying
