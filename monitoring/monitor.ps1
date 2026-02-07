@@ -35,6 +35,7 @@ function Write-Error { param($message) Write-Status $message "Red" }
 $logFile = Join-Path $script:projectRoot "logs\game.log"
 $pendingIssuesFile = Join-Path $script:projectRoot "logs\pending-issues.json"
 $fixAppliedFile = Join-Path $script:projectRoot "logs\fix-applied.json"
+$monitorStatusFile = Join-Path $script:projectRoot "logs\monitor-status.json"  # Persistent status file for AI assistant
 $checkInterval = 1  # Check every 1 second
 $nodeScript = Join-Path $script:projectRoot "monitoring\issue-detector.js"
 $serverUrl = "http://localhost:3000"
@@ -769,9 +770,18 @@ function Invoke-DebuggerBreakWithVerification {
     
     # Step 1: Verify Unity is ready before attempting break
     $unityStatus = Get-UnityActualStatus
+    Update-MonitorStatus -statusUpdate @{
+        lastDebuggerBreakAttempt = (Get-Date).ToUniversalTime().ToString("o")
+        debuggerBreakStatus = "verifying_unity"
+    }
+    
     if (-not $unityStatus.ProcessRunning) {
         Write-ConsoleOutput -Message "  ERROR: Unity process not running - cannot pause debugger" -ForegroundColor "Red"
         Write-ConsoleOutput -Message "    Monitor will automatically restart Unity" -ForegroundColor "Yellow"
+        Update-MonitorStatus -statusUpdate @{
+            debuggerBreakStatus = "failed_unity_not_running"
+            lastError = "Unity process not running when attempting debugger break"
+        }
         return $false
     }
     
@@ -837,6 +847,11 @@ function Invoke-DebuggerBreakWithVerification {
                     } else {
                         Write-ConsoleOutput -Message "  Emitted to $($result.emittedCount) table(s)" -ForegroundColor "Cyan"
                     }
+                    Update-MonitorStatus -statusUpdate @{
+                        debuggerBreakStatus = "success"
+                        lastDebuggerBreakSuccess = (Get-Date).ToUniversalTime().ToString("o")
+                        lastDebuggerBreakTables = $result.emittedTables
+                    }
                     $success = $true
                 } elseif ($result.success -and $result.emittedCount -eq 0) {
                     # No tables received event - retry after checking Unity status
@@ -853,6 +868,11 @@ function Invoke-DebuggerBreakWithVerification {
                     } else {
                         Write-ConsoleOutput -Message "  ERROR: Failed after $maxRetries attempts - Unity may not be in a table room" -ForegroundColor "Red"
                         Write-ConsoleOutput -Message "    Monitor will continue monitoring - Unity will pause when it joins a table" -ForegroundColor "Yellow"
+                        Update-MonitorStatus -statusUpdate @{
+                            debuggerBreakStatus = "failed_no_tables"
+                            lastError = "Debugger break failed after $maxRetries attempts - no tables received event"
+                            lastErrorTime = (Get-Date).ToUniversalTime().ToString("o")
+                        }
                     }
                 } else {
                     throw "API returned success=false: $($result.error)"
@@ -868,6 +888,11 @@ function Invoke-DebuggerBreakWithVerification {
             } else {
                 $stats.PauseMarkerErrors++
                 Write-ConsoleOutput -Message "  ERROR: Failed to trigger debugger break after $maxRetries attempts: $_" -ForegroundColor "Red"
+                Update-MonitorStatus -statusUpdate @{
+                    debuggerBreakStatus = "failed_exception"
+                    lastError = "Debugger break exception after $maxRetries attempts: $_"
+                    lastErrorTime = (Get-Date).ToUniversalTime().ToString("o")
+                }
             }
         }
     }
@@ -2399,6 +2424,11 @@ if (Test-Path $fixAppliedFile) {
     Remove-Item $fixAppliedFile -Force -ErrorAction SilentlyContinue
 }
 
+# Initialize monitor status file
+Update-MonitorStatus -statusUpdate @{
+    monitorStatus = "starting"
+}
+
 # Initial display
 Show-Statistics
 
@@ -2416,6 +2446,13 @@ $script:monitorStartTime = Get-Date  # Track when monitor started to ignore old 
 
 while ($monitoringActive) {
     try {
+        # Update monitor status file periodically (every 5 seconds)
+        $timeSinceStatusUpdate = (Get-Date) - $lastStatusUpdate
+        if (-not $lastStatusUpdate -or $timeSinceStatusUpdate.TotalSeconds -ge 5) {
+            Update-MonitorStatus
+            $lastStatusUpdate = Get-Date
+        }
+        
         # Periodic service maintenance (every 30 seconds)
         $timeSinceServiceCheck = (Get-Date) - $lastServiceCheck
         if ($timeSinceServiceCheck.TotalSeconds -ge $serviceCheckInterval) {
