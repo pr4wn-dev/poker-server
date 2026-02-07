@@ -2908,7 +2908,6 @@ while ($monitoringActive) {
                             }
                         }
                     }
-                }
             } catch {
                 Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ERROR: Investigation completion check failed: $_" -ForegroundColor "Red"
                 Write-ConsoleOutput -Message "  Stack trace: $($_.ScriptStackTrace)" -ForegroundColor "Yellow"
