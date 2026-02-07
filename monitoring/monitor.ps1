@@ -284,7 +284,7 @@ function Add-PendingIssue {
         
         try {
             $result = node $nodeScript --add-issue-file $tempFile 2>&1 | Out-String
-            if ($LASTEXITCODE -eq 0 -and $result) {
+        if ($LASTEXITCODE -eq 0 -and $result) {
                 # Remove any non-JSON output (like warnings or errors)
                 $jsonLines = $result -split "`n" | Where-Object { $_ -match '^\s*\{' -or $_ -match '^\s*\[' }
                 $cleanResult = $jsonLines -join "`n"
@@ -292,7 +292,7 @@ function Add-PendingIssue {
                 if ($cleanResult) {
                     $jsonResult = $cleanResult | ConvertFrom-Json -ErrorAction SilentlyContinue
                     if ($jsonResult) {
-                        return $jsonResult
+            return $jsonResult
                     }
                 }
             }
@@ -314,14 +314,19 @@ function Add-PendingIssue {
                     if ($errorJson.firstChars) {
                         $errorMsg += " | First chars: $($errorJson.firstChars)"
                     }
-                    Write-Warning "Issue detector failed: $errorMsg"
+                    if ($errorJson.reason) {
+                        $errorMsg += " | Reason: $($errorJson.reason)"
+                    }
+                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ISSUE DETECTOR ERROR: $errorMsg" -ForegroundColor "Red"
                     return @{ success = $false; error = $errorJson.error; reason = $errorJson.reason }
                 }
             } catch {
                 # Not JSON, return generic error
             }
             
-            Write-Warning "Issue detector failed: $errorDetails"
+            # Log full error details for debugging
+            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ISSUE DETECTOR FAILED: $errorDetails" -ForegroundColor "Red"
+            Write-ConsoleOutput -Message "  Check: Node.js is installed, issue-detector.js exists, Node.js script syntax is valid" -ForegroundColor "Yellow"
         } finally {
             # Clean up temp file
             if (Test-Path $tempFile) {
@@ -1350,11 +1355,11 @@ function Show-Statistics {
         $col3Lines += "Pending: " + $pendingInfo.TotalIssues
     }
     
-    # Add investigation section if investigating (prominent display)
+    # Add investigation section (always visible, shows status)
+    $col3Lines += ""
+    $col3Lines += "INVESTIGATION PHASE"
+    $col3Lines += ("=" * ($colWidth - 2))
     if ($isInvestigating -and $investigationStartTime) {
-        $col3Lines += ""
-        $col3Lines += "INVESTIGATION PHASE"
-        $col3Lines += ("=" * ($colWidth - 2))
         $investigationElapsed = (Get-Date) - $investigationStartTime
         $remaining = [Math]::Max(0, $investigationTimeout - $investigationElapsed.TotalSeconds)
         $elapsed = [Math]::Min($investigationTimeout, $investigationElapsed.TotalSeconds)
@@ -1365,6 +1370,7 @@ function Show-Statistics {
         $filled = [Math]::Round(($elapsed / $investigationTimeout) * $progressBarWidth)
         $empty = $progressBarWidth - $filled
         $progressBar = "[" + ("#" * $filled) + ("-" * $empty) + "]"
+        $col3Lines += "Status: ACTIVE"
         $col3Lines += "Progress: $progressBar $progressPercent%"
         $col3Lines += "Time Left: " + ("{0:N0}s" -f $remaining) + " / " + ("{0:N0}s" -f $investigationTimeout)
         
@@ -1400,6 +1406,15 @@ function Show-Statistics {
             }
         } else {
             $col3Lines += "Status: Gathering related issues..."
+        }
+    } else {
+        # Not investigating - show status
+        $col3Lines += "Status: NOT ACTIVE"
+        $col3Lines += "Timeout: " + ("{0:N0}s" -f $investigationTimeout)
+        if ($investigationEnabled) {
+            $col3Lines += "Enabled: YES"
+        } else {
+            $col3Lines += "Enabled: NO"
         }
     }
     
@@ -1543,7 +1558,7 @@ function Start-ServerIfNeeded {
                 $stopResponse = Invoke-WebRequest -Uri "$serverUrl/api/simulations/stop-all" -Method POST -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop  # Reduced from 5 to 2 seconds
                 $stopResult = $stopResponse.Content | ConvertFrom-Json
                 if ($stopResult.success -and $stopResult.stopped -gt 0) {
-                    # Don't write to console - update stats display instead
+            # Don't write to console - update stats display instead
                     # Write-Info "Stopped $($stopResult.stopped) active simulation(s) before restart"
                 }
             } catch {
@@ -1622,7 +1637,7 @@ function Start-ServerIfNeeded {
                 if ($waited % 5 -eq 0) {
                     $waitingMsg = "[$(Get-Date -Format 'HH:mm:ss')] Still waiting for server... ($waited/$maxWait seconds)"
                     Write-ConsoleOutput -Message $waitingMsg -ForegroundColor "Gray"
-                }
+            }
             }
             $serverFailMsg = "[$(Get-Date -Format 'HH:mm:ss')] Server failed to start within $maxWait seconds"
             Write-ConsoleOutput -Message $serverFailMsg -ForegroundColor "Red"
@@ -2280,10 +2295,18 @@ while ($monitoringActive) {
                                     } else {
                                         Write-ConsoleOutput -Message "  Emitted to $($result.emittedCount) table(s)" -ForegroundColor "Cyan"
                                     }
+                                    Write-ConsoleOutput -Message "  Unity should call Debug.Break() if debugger is attached" -ForegroundColor "Cyan"
+                                } elseif ($result.success -and $result.emittedCount -eq 0) {
+                                    $stats.PauseMarkerErrors++
+                                    Write-ConsoleOutput -Message "  WARNING: API returned success but no tables received event" -ForegroundColor "Yellow"
+                                    Write-ConsoleOutput -Message "    Possible causes:" -ForegroundColor "Yellow"
+                                    Write-ConsoleOutput -Message "    - Unity not connected to server" -ForegroundColor "Yellow"
+                                    Write-ConsoleOutput -Message "    - Unity not in a table room" -ForegroundColor "Yellow"
+                                    Write-ConsoleOutput -Message "    - No active simulation tables" -ForegroundColor "Yellow"
+                                    Write-ConsoleOutput -Message "    - Unity not listening for debugger_break event" -ForegroundColor "Yellow"
                                 } else {
                                     $stats.PauseMarkerErrors++
-                                    Write-ConsoleOutput -Message "  WARNING: API returned success but no tables received event (emittedCount: $($result.emittedCount))" -ForegroundColor "Yellow"
-                                    Write-ConsoleOutput -Message "    Unity may not be connected or listening for debugger_break event" -ForegroundColor "Yellow"
+                                    Write-ConsoleOutput -Message "  ERROR: API returned success=false: $($result.error)" -ForegroundColor "Red"
                                 }
                             } else {
                                 throw "API returned status code $($response.StatusCode)"
@@ -2428,7 +2451,7 @@ while ($monitoringActive) {
                     
                     if ($shouldShow) {
                         $script:issueThrottle[$throttleKey] = Get-Date
-                        # REPORT TO CONSOLE: Issue detected (but not yet paused)
+                    # REPORT TO CONSOLE: Issue detected (but not yet paused)
                         # Use Write-ConsoleOutput to prevent scrolling and flickering
                         $issueMessage = "[$(Get-Date -Format 'HH:mm:ss')] ISSUE DETECTED: $($issue.type) ($($issue.severity))"
                         Write-ConsoleOutput -Message $issueMessage -ForegroundColor "Yellow"
@@ -2568,7 +2591,7 @@ while ($monitoringActive) {
                                     # Pause debugger immediately
                                     if ($config.unity.pauseDebuggerOnIssue) {
                                         try {
-                                            $escapedMessage = $line.Replace('"','\"').Replace("`n"," ").Replace("`r"," ").Substring(0,[Math]::Min(200,$line.Length))
+                            $escapedMessage = $line.Replace('"','\"').Replace("`n"," ").Replace("`r"," ").Substring(0,[Math]::Min(200,$line.Length))
                                             $reason = "$($issue.type) - $($issue.severity) severity"
                                             
                                             $body = @{
@@ -2582,7 +2605,7 @@ while ($monitoringActive) {
                                             if ($response.StatusCode -eq 200) {
                                                 $result = $response.Content | ConvertFrom-Json
                                                 if ($result.success -and $result.emittedCount -gt 0) {
-                                                    $stats.PauseMarkersWritten++
+                                $stats.PauseMarkersWritten++
                                                     Write-ConsoleOutput -Message "  Debugger break triggered via API" -ForegroundColor "Green"
                                                     if ($result.emittedTables) {
                                                         Write-ConsoleOutput -Message "  Emitted to $($result.emittedCount) table(s): $($result.emittedTables -join ', ')" -ForegroundColor "Cyan"
@@ -2596,14 +2619,14 @@ while ($monitoringActive) {
                                             } else {
                                                 throw "API returned status code $($response.StatusCode)"
                                             }
-                                        } catch {
-                                            $stats.PauseMarkerErrors++
+                            } catch {
+                                $stats.PauseMarkerErrors++
                                             Write-ConsoleOutput -Message "  ERROR: Failed to trigger debugger break via API: $_" -ForegroundColor "Red"
                                             Write-ConsoleOutput -Message "    Check: Server is running, API endpoint is accessible" -ForegroundColor "Yellow"
                                         }
                                     }
-                                    $isPaused = $true
-                                    $currentIssue = $line
+                            $isPaused = $true
+                            $currentIssue = $line
                                 }
                             }
                         } else {
@@ -2618,7 +2641,7 @@ while ($monitoringActive) {
                                 # This ensures Unity stops logging and gives user time to report the issue
                                 if (-not $isPaused -and $config.unity.pauseDebuggerOnIssue) {
                                     try {
-                                        $escapedMessage = $line.Replace('"','\"').Replace("`n"," ").Replace("`r"," ").Substring(0,[Math]::Min(200,$line.Length))
+                                    $escapedMessage = $line.Replace('"','\"').Replace("`n"," ").Replace("`r"," ").Substring(0,[Math]::Min(200,$line.Length))
                                         $reason = "Duplicate issue: $($issue.type) - $($issue.severity) severity"
                                         
                                         $body = @{
@@ -2628,8 +2651,8 @@ while ($monitoringActive) {
                                         } | ConvertTo-Json
                                         
                                         Invoke-WebRequest -Uri "$serverUrl/api/debugger/break" -Method POST -Body $body -ContentType "application/json" -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop | Out-Null
-                                        $isPaused = $true
-                                        $currentIssue = $line
+                                    $isPaused = $true
+                                    $currentIssue = $line
                                     } catch {
                                         # API call failed - continue anyway
                                     }
