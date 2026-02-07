@@ -34,6 +34,7 @@ function Write-Error { param($message) Write-Status $message "Red" }
 # Configuration - use absolute paths to prevent directory issues
 $logFile = Join-Path $script:projectRoot "logs\game.log"
 $pendingIssuesFile = Join-Path $script:projectRoot "logs\pending-issues.json"
+$fixAppliedFile = Join-Path $script:projectRoot "logs\fix-applied.json"
 $checkInterval = 1  # Check every 1 second
 $nodeScript = Join-Path $script:projectRoot "monitoring\issue-detector.js"
 $serverUrl = "http://localhost:3000"
@@ -124,6 +125,10 @@ $isInvestigating = $false  # Track if we're in investigation phase
 $investigationStartTime = $null  # When investigation started
 $investigationTimeout = if ($config.investigation -and $config.investigation.timeoutSeconds) { $config.investigation.timeoutSeconds } else { 15 }  # Seconds to investigate before pausing
 $investigationEnabled = if ($config.investigation -and $config.investigation.enabled -ne $false) { $true } else { $false }
+$isVerifyingFix = $false  # Track if we're verifying a fix
+$verificationStartTime = $null  # When verification started
+$verificationPeriod = 0  # Total verification period in seconds
+$verificationIssuePattern = $null  # Pattern to match during verification (type, source, tableId)
 $currentIssue = $null
 $monitoringActive = $true
 $lastServerCheck = Get-Date  # Track last server health check
@@ -377,6 +382,149 @@ function Get-PendingIssuesInfo {
 function Get-PendingIssuesCount {
     $info = Get-PendingIssuesInfo
     return $info.TotalIssues
+}
+
+# Function to read fix-applied.json
+function Get-FixAppliedInfo {
+    if (Test-Path $fixAppliedFile) {
+        try {
+            $content = Get-Content $fixAppliedFile -Raw | ConvertFrom-Json
+            return $content
+        } catch {
+            return $null
+        }
+    }
+    return $null
+}
+
+# Function to calculate verification period based on issue severity, restarts, and type
+function Calculate-VerificationPeriod {
+    param(
+        [string]$severity,
+        [array]$requiredRestarts,
+        [string]$issueType
+    )
+    
+    # Base time by severity
+    $baseTime = switch ($severity) {
+        "critical" { 90 }
+        "high" { 60 }
+        "medium" { 45 }
+        default { 30 }
+    }
+    
+    # Add time for each restart (15 seconds per restart)
+    $restartTime = $requiredRestarts.Count * 15
+    
+    # Add time for game logic issues (wait for hand/game cycle)
+    $gameLogicTime = 0
+    if ($issueType -match "pot|chips|bet|award|calculation") {
+        $gameLogicTime = 30
+    }
+    
+    # Add time for network issues (wait for reconnection)
+    $networkTime = 0
+    if ($issueType -match "connection|network|socket|websocket") {
+        $networkTime = 20
+    }
+    
+    $total = $baseTime + $restartTime + $gameLogicTime + $networkTime
+    return $total
+}
+
+# Function to check if services are ready (for verification)
+function Test-ServicesReady {
+    param(
+        [array]$requiredRestarts
+    )
+    
+    $allReady = $true
+    $notReady = @()
+    
+    # Check server
+    if ($requiredRestarts -contains "server" -or $requiredRestarts.Count -eq 0) {
+        try {
+            $healthResponse = Invoke-WebRequest -Uri "$serverUrl/health" -TimeoutSec 2 -ErrorAction Stop
+            if ($healthResponse.StatusCode -ne 200) {
+                $allReady = $false
+                $notReady += "server"
+            }
+        } catch {
+            $allReady = $false
+            $notReady += "server"
+        }
+    }
+    
+    # Check database
+    if ($requiredRestarts -contains "database") {
+        try {
+            $healthResponse = Invoke-WebRequest -Uri "$serverUrl/health" -TimeoutSec 2 -ErrorAction Stop
+            $health = $healthResponse.Content | ConvertFrom-Json
+            if ($health.database -ne $true) {
+                $allReady = $false
+                $notReady += "database"
+            }
+        } catch {
+            $allReady = $false
+            $notReady += "database"
+        }
+    }
+    
+    # Check Unity
+    if ($requiredRestarts -contains "unity") {
+        $unityProcess = Get-Process -Name "Unity" -ErrorAction SilentlyContinue
+        if (-not $unityProcess) {
+            $allReady = $false
+            $notReady += "unity"
+        } else {
+            # Check if Unity is connected
+            try {
+                $healthResponse = Invoke-WebRequest -Uri "$serverUrl/health" -TimeoutSec 2 -ErrorAction Stop
+                $health = $healthResponse.Content | ConvertFrom-Json
+                if ($health.onlinePlayers -eq 0) {
+                    $allReady = $false
+                    $notReady += "unity (not connected)"
+                }
+            } catch {
+                $allReady = $false
+                $notReady += "unity (connection check failed)"
+            }
+        }
+    }
+    
+    return @{
+        Ready = $allReady
+        NotReady = $notReady
+    }
+}
+
+# Function to check if an issue matches the verification pattern (exact match)
+function Test-IssueMatchesVerificationPattern {
+    param(
+        $issue,
+        $verificationPattern
+    )
+    
+    if (-not $verificationPattern) {
+        return $false
+    }
+    
+    # Must match type, source, and tableId (if specified)
+    $typeMatch = $issue.type -eq $verificationPattern.type
+    $sourceMatch = $issue.source -eq $verificationPattern.source
+    
+    $tableIdMatch = $true
+    if ($verificationPattern.tableId) {
+        $issueTableId = $null
+        if ($issue.tableId) {
+            $issueTableId = $issue.tableId
+        } elseif ($issue.message -match 'tableId.*?"([^"]+)"') {
+            $issueTableId = $matches[1]
+        }
+        $tableIdMatch = $issueTableId -eq $verificationPattern.tableId
+    }
+    
+    return ($typeMatch -and $sourceMatch -and $tableIdMatch)
 }
 
 # Helper function to safely set cursor position (handles invalid console handle errors)
@@ -1012,8 +1160,8 @@ function Show-Statistics {
     Write-Host ("=" * $consoleWidth) -ForegroundColor Cyan
     
     # Top status bar - single row across full width
-    $statusText = if ($isInvestigating) { "INVESTIGATING" } elseif ($isPaused) { "PAUSED (Fix Required)" } else { "ACTIVE" }
-    $statusColor = if ($isInvestigating) { "Yellow" } elseif ($isPaused) { "Red" } else { "Green" }
+    $statusText = if ($isVerifyingFix) { "VERIFYING FIX" } elseif ($isInvestigating) { "INVESTIGATING" } elseif ($isPaused) { "PAUSED (Fix Required)" } else { "ACTIVE" }
+    $statusColor = if ($isVerifyingFix) { "Cyan" } elseif ($isInvestigating) { "Yellow" } elseif ($isPaused) { "Red" } else { "Green" }
     $serverStatusText = if ($stats.ServerStatus -eq "Online") { "ONLINE" } else { "OFFLINE" }
     $serverStatusColor = if ($stats.ServerStatus -eq "Online") { "Green" } else { "Red" }
     $pipeSeparator = [char]124
@@ -1110,8 +1258,8 @@ function Show-Statistics {
         $col3Lines += "Pending: " + $pendingInfo.TotalIssues
     }
     
-    # Add current issue preview if paused or investigating
-    if (($isPaused -or $isInvestigating) -and $currentIssue) {
+    # Add current issue preview if paused, investigating, or verifying
+    if (($isPaused -or $isInvestigating -or $isVerifyingFix) -and $currentIssue) {
         $col3Lines += ""
         $col3Lines += "CURRENT ISSUE"
         $col3Lines += ("-" * ($colWidth - 2))
@@ -1961,6 +2109,72 @@ while ($monitoringActive) {
                     continue
                 }
                 
+                # During verification, check if issue reappears BEFORE normal detection
+                if ($isVerifyingFix -and $verificationIssuePattern) {
+                    $issue = Invoke-IssueDetector $line
+                    if ($issue -and (Test-IssueMatchesVerificationPattern -issue $issue -verificationPattern $verificationIssuePattern)) {
+                        # Issue reappeared during verification - fix failed
+                        $fixApplied = Get-FixAppliedInfo
+                        $pendingInfo = Get-PendingIssuesInfo
+                        
+                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] VERIFICATION FAILED: Issue reappeared" -ForegroundColor "Red"
+                        Write-ConsoleOutput -Message "  Issue: $($issue.type) ($($issue.severity)) from $($issue.source)" -ForegroundColor "White"
+                        Write-ConsoleOutput -Message "  Fix did not resolve the issue" -ForegroundColor "Yellow"
+                        
+                        # Record fix attempt as failed
+                        if ($fixApplied -and $pendingInfo.GroupId) {
+                            $fixAttempt = @{
+                                fixDescription = $fixApplied.fixDescription
+                                requiredRestarts = $fixApplied.requiredRestarts
+                                restartsCompleted = $fixApplied.requiredRestarts
+                                verificationPeriod = $verificationPeriod
+                                result = "failed"
+                                failureReason = "Issue reappeared during verification"
+                                newLogs = @($line)
+                                insights = "Fix did not address root cause - issue pattern still occurring"
+                            }
+                            
+                            # Write fix attempt to temp file to avoid PowerShell argument escaping issues
+                            $tempFixAttemptFile = Join-Path $env:TEMP "fix-attempt-$(Get-Date -Format 'yyyyMMddHHmmss').json"
+                            $fixAttempt | ConvertTo-Json -Depth 10 | Out-File -FilePath $tempFixAttemptFile -Encoding UTF8 -Force
+                            
+                            try {
+                                $recordResult = & node $nodeScript --record-fix-attempt --groupId $pendingInfo.GroupId --fix-attempt-file $tempFixAttemptFile 2>&1
+                                if ($LASTEXITCODE -eq 0) {
+                                    Write-ConsoleOutput -Message "  Fix attempt recorded in investigation" -ForegroundColor "Cyan"
+                                } else {
+                                    Write-ConsoleOutput -Message "  WARNING: Failed to record fix attempt: $recordResult" -ForegroundColor "Yellow"
+                                }
+                            } catch {
+                                Write-ConsoleOutput -Message "  WARNING: Failed to record fix attempt: $_" -ForegroundColor "Yellow"
+                            } finally {
+                                # Clean up temp file
+                                if (Test-Path $tempFixAttemptFile) {
+                                    Remove-Item $tempFixAttemptFile -Force -ErrorAction SilentlyContinue
+                                }
+                            }
+                            
+                            Write-ConsoleOutput -Message "  Re-entering investigation mode" -ForegroundColor "Yellow"
+                        }
+                        
+                        # Clear fix-applied.json
+                        if (Test-Path $fixAppliedFile) {
+                            Remove-Item $fixAppliedFile -Force -ErrorAction SilentlyContinue
+                        }
+                        
+                        # Reset verification state and re-enter investigation
+                        $isVerifyingFix = $false
+                        $verificationStartTime = $null
+                        $verificationPeriod = 0
+                        $verificationIssuePattern = $null
+                        $isInvestigating = $true
+                        $investigationStartTime = Get-Date
+                        $isPaused = $false  # Don't pause yet, let investigation complete first
+                        
+                        # Continue to normal issue detection below
+                    }
+                }
+                
                 # Check for issues using Node.js detector
                 $issue = Invoke-IssueDetector $line
                 
@@ -2291,30 +2505,130 @@ while ($monitoringActive) {
             $lastLogPosition = $currentSize
         }
         
-        # Check if issues have been fixed (pending-issues.json is empty or cleared)
-        # When user confirms fix is working, Monitor moves to next investigation
-        if ($isPaused -or $isInvestigating) {
+        # Check for fix-applied.json and start verification phase
+        $fixApplied = Get-FixAppliedInfo
+        if ($fixApplied -and -not $isVerifyingFix) {
+            # Fix was applied - start verification phase
             $pendingInfo = Get-PendingIssuesInfo
-            if ($pendingInfo.TotalIssues -eq 0 -and -not $pendingInfo.InFocusMode) {
-                # All issues fixed - user confirmed fix is working
-                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] FIX CONFIRMED: All issues resolved" -ForegroundColor "Green"
+            if ($pendingInfo.InFocusMode -and $pendingInfo.GroupId -eq $fixApplied.groupId) {
+                # Start verification phase
+                $isVerifyingFix = $true
+                $isPaused = $false  # No longer paused, we're verifying
+                $isInvestigating = $false  # Investigation complete, now verifying
                 
-                # Check if there are queued issues to investigate next
-                if ($pendingInfo.QueuedIssuesCount -gt 0) {
-                    Write-ConsoleOutput -Message "  Next investigation: $($pendingInfo.QueuedIssuesCount) queued issue(s) waiting" -ForegroundColor "Cyan"
-                    Write-ConsoleOutput -Message "  Monitor will start next investigation automatically" -ForegroundColor "Gray"
-                } else {
-                    Write-ConsoleOutput -Message "  No queued issues - Monitor ready for next issue" -ForegroundColor "Cyan"
+                $rootIssue = $pendingInfo.RootIssue
+                $requiredRestarts = if ($fixApplied.requiredRestarts) { $fixApplied.requiredRestarts } else { @() }
+                
+                # Calculate verification period
+                $verificationPeriod = Calculate-VerificationPeriod -severity $rootIssue.severity -requiredRestarts $requiredRestarts -issueType $rootIssue.type
+                
+                # Store verification pattern (exact match: type, source, tableId)
+                $verificationIssuePattern = @{
+                    type = $rootIssue.type
+                    source = $rootIssue.source
+                    tableId = $rootIssue.tableId
                 }
                 
-                # Reset state for next investigation
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] VERIFICATION: Fix applied, starting verification phase" -ForegroundColor "Cyan"
+                Write-ConsoleOutput -Message "  Fix: $($fixApplied.fixDescription)" -ForegroundColor "White"
+                Write-ConsoleOutput -Message "  Required Restarts: $(if ($requiredRestarts.Count -gt 0) { $requiredRestarts -join ', ' } else { 'None' })" -ForegroundColor "Cyan"
+                Write-ConsoleOutput -Message "  Verification Period: $verificationPeriod seconds" -ForegroundColor "Cyan"
+                
+                # Perform required restarts
+                if ($requiredRestarts.Count -gt 0) {
+                    Write-ConsoleOutput -Message "  Restarting services..." -ForegroundColor "Yellow"
+                    $restartOrder = @("database", "server", "unity")
+                    foreach ($service in $restartOrder) {
+                        if ($requiredRestarts -contains $service) {
+                            Write-ConsoleOutput -Message "    Restarting $service..." -ForegroundColor "Gray"
+                            switch ($service) {
+                                "database" { Restart-DatabaseIfNeeded | Out-Null }
+                                "server" { 
+                                    $serverProcess = Get-Process -Name "node" -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -like "*poker*" -or $_.Path -like "*poker-server*" } | Select-Object -First 1
+                                    if ($serverProcess) {
+                                        Stop-Process -Id $serverProcess.Id -Force -ErrorAction SilentlyContinue
+                                        Start-Sleep -Seconds 2
+                                    }
+                                    Start-ServerIfNeeded | Out-Null
+                                }
+                                "unity" { Restart-UnityIfNeeded | Out-Null }
+                            }
+                        }
+                    }
+                }
+                
+                # Wait for services to be ready (with timeout)
+                Write-ConsoleOutput -Message "  Waiting for services to be ready..." -ForegroundColor "Yellow"
+                $servicesReady = $false
+                $readyTimeout = 60  # Max 60 seconds to wait for services
+                $readyStartTime = Get-Date
+                while (-not $servicesReady -and ((Get-Date) - $readyStartTime).TotalSeconds -lt $readyTimeout) {
+                    $readyCheck = Test-ServicesReady -requiredRestarts $requiredRestarts
+                    if ($readyCheck.Ready) {
+                        $servicesReady = $true
+                    } else {
+                        Start-Sleep -Seconds 2
+                    }
+                }
+                
+                if ($servicesReady) {
+                    Write-ConsoleOutput -Message "  Services ready - starting verification timer" -ForegroundColor "Green"
+                    $verificationStartTime = Get-Date
+                } else {
+                    Write-ConsoleOutput -Message "  WARNING: Services not ready after timeout, starting verification anyway" -ForegroundColor "Yellow"
+                    $verificationStartTime = Get-Date
+                }
+            }
+        }
+        
+        # Verification phase: Monitor logs for issue pattern
+        if ($isVerifyingFix -and $verificationStartTime) {
+            $verificationElapsed = (Get-Date) - $verificationStartTime
+            
+            # Check if verification period has elapsed
+            if ($verificationElapsed.TotalSeconds -ge $verificationPeriod) {
+                # Verification complete - no issue reappeared
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] VERIFICATION PASSED: Issue did not reappear" -ForegroundColor "Green"
+                Write-ConsoleOutput -Message "  Fix confirmed - issue resolved" -ForegroundColor "Green"
+                
+                # Clear fix-applied.json
+                if (Test-Path $fixAppliedFile) {
+                    Remove-Item $fixAppliedFile -Force -ErrorAction SilentlyContinue
+                }
+                
+                # Clear pending-issues.json (this will move to next queued issue if any)
+                $clearResult = & node $nodeScript --clear-pending
+                if ($clearResult -match '"success":\s*true') {
+                    $pendingInfo = Get-PendingIssuesInfo
+                    if ($pendingInfo.QueuedIssuesCount -gt 0) {
+                        Write-ConsoleOutput -Message "  Next investigation: $($pendingInfo.QueuedIssuesCount) queued issue(s) waiting" -ForegroundColor "Cyan"
+                    } else {
+                        Write-ConsoleOutput -Message "  No queued issues - Monitor ready for next issue" -ForegroundColor "Cyan"
+                    }
+                }
+                
+                # Reset verification state
+                $isVerifyingFix = $false
+                $verificationStartTime = $null
+                $verificationPeriod = 0
+                $verificationIssuePattern = $null
                 $isPaused = $false
                 $isInvestigating = $false
                 $investigationStartTime = $null
                 $currentIssue = $null
-                
-                Write-ConsoleOutput -Message "  Continue in debugger when ready" -ForegroundColor "Gray"
+            } else {
+                # Still verifying - show countdown every 10 seconds
+                $remaining = [Math]::Max(0, $verificationPeriod - $verificationElapsed.TotalSeconds)
+                if ($remaining -gt 0 -and ($remaining % 10 -lt 1)) {
+                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] VERIFYING: $([Math]::Floor($remaining))s remaining..." -ForegroundColor "Gray"
+                }
             }
+        }
+        
+        # During verification, check if issue reappears in new logs
+        if ($isVerifyingFix -and $verificationIssuePattern -and $currentSize -gt $lastLogPosition) {
+            # We're reading new log lines - check if issue pattern matches
+            # This is handled in the log reading loop below
         }
         
         # Check Unity actual status continuously (every 5 seconds) and restart if needed

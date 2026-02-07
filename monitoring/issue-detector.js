@@ -834,6 +834,49 @@ class IssueDetector {
     }
     
     /**
+     * Record a fix attempt in the focused group
+     */
+    recordFixAttempt(groupId, fixAttempt) {
+        try {
+            const data = this.readPendingIssuesFile();
+            
+            if (!data.focusedGroup || data.focusedGroup.id !== groupId) {
+                return { success: false, reason: 'group_not_found' };
+            }
+            
+            // Initialize fixAttempts array if it doesn't exist
+            if (!data.focusedGroup.fixAttempts) {
+                data.focusedGroup.fixAttempts = [];
+            }
+            
+            // Add attempt number
+            fixAttempt.attemptNumber = data.focusedGroup.fixAttempts.length + 1;
+            fixAttempt.timestamp = new Date().toISOString();
+            
+            // Add the fix attempt
+            data.focusedGroup.fixAttempts.push(fixAttempt);
+            data.focusedGroup.lastUpdated = new Date().toISOString();
+            
+            fs.writeFileSync(this.pendingIssuesFile, JSON.stringify(data, null, 2));
+            
+            gameLogger.info('MONITORING', '[FIX_ATTEMPT_RECORDED]', {
+                groupId: groupId,
+                attemptNumber: fixAttempt.attemptNumber,
+                result: fixAttempt.result,
+                requiredRestarts: fixAttempt.requiredRestarts || []
+            });
+            
+            return { success: true, attemptNumber: fixAttempt.attemptNumber };
+        } catch (error) {
+            gameLogger.error('MONITORING', '[FIX_ATTEMPT_RECORD_ERROR]', {
+                error: error.message,
+                stack: error.stack
+            });
+            return { success: false, reason: 'error', error: error.message };
+        }
+    }
+    
+    /**
      * Clear pending issues and exit focus mode (after fix)
      */
     clearPendingIssues() {
@@ -1125,8 +1168,83 @@ if (require.main === module) {
         const result = detector.exitFocusMode();
         console.log(JSON.stringify(result));
         process.exit(result.success ? 0 : 1);
+    } else if (args[0] === '--record-fix-attempt') {
+        // Record a fix attempt in the focused group
+        try {
+            let groupId = null;
+            let fixAttempt = null;
+            
+            // Parse arguments
+            for (let i = 1; i < args.length; i++) {
+                if (args[i] === '--groupId' && args[i + 1]) {
+                    groupId = args[i + 1];
+                    i++;
+                } else if (args[i] === '--fix-attempt' && args[i + 1]) {
+                    try {
+                        fixAttempt = JSON.parse(args[i + 1]);
+                    } catch (parseError) {
+                        console.log(JSON.stringify({ 
+                            success: false, 
+                            reason: 'error', 
+                            error: 'Failed to parse fix-attempt JSON: ' + parseError.message 
+                        }));
+                        process.exit(1);
+                    }
+                    i++;
+                } else if (args[i] === '--fix-attempt-file' && args[i + 1]) {
+                    // Read fix attempt from file (avoids PowerShell argument escaping issues)
+                    const filePath = args[i + 1];
+                    if (!fs.existsSync(filePath)) {
+                        console.log(JSON.stringify({ 
+                            success: false, 
+                            reason: 'error', 
+                            error: 'File not found: ' + filePath 
+                        }));
+                        process.exit(1);
+                    }
+                    try {
+                        const fileBuffer = fs.readFileSync(filePath);
+                        let jsonContent = fileBuffer.toString('utf8');
+                        // Remove BOM if present
+                        if (jsonContent.length > 0 && jsonContent.charCodeAt(0) === 0xFEFF) {
+                            jsonContent = jsonContent.substring(1);
+                        }
+                        jsonContent = jsonContent.trim();
+                        fixAttempt = JSON.parse(jsonContent);
+                    } catch (parseError) {
+                        console.log(JSON.stringify({ 
+                            success: false, 
+                            reason: 'error', 
+                            error: 'Failed to parse fix-attempt file: ' + parseError.message 
+                        }));
+                        process.exit(1);
+                    }
+                    i++;
+                }
+            }
+            
+            if (!groupId || !fixAttempt) {
+                console.log(JSON.stringify({ 
+                    success: false, 
+                    reason: 'error', 
+                    error: 'Missing required arguments: --groupId and (--fix-attempt or --fix-attempt-file)' 
+                }));
+                process.exit(1);
+            }
+            
+            const result = detector.recordFixAttempt(groupId, fixAttempt);
+            console.log(JSON.stringify(result));
+            process.exit(result.success ? 0 : 1);
+        } catch (error) {
+            console.log(JSON.stringify({ 
+                success: false, 
+                reason: 'error', 
+                error: error.message 
+            }));
+            process.exit(1);
+        }
     } else {
-        console.error('Usage: node issue-detector.js --check <logLine> | --add-issue <json> | --add-issue-file <file> | --get-pending | --clear | --exit-focus');
+        console.error('Usage: node issue-detector.js --check <logLine> | --add-issue <json> | --add-issue-file <file> | --get-pending | --clear | --exit-focus | --record-fix-attempt --groupId <id> (--fix-attempt <json> | --fix-attempt-file <file>)');
         process.exit(1);
     }
 }
