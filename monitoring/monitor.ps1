@@ -416,12 +416,13 @@ function Get-UnityActualStatus {
         }
         
         # Check 2: Is Unity connected to server?
+        $healthData = $null
         try {
             $healthCheck = Invoke-WebRequest -Uri "$serverUrl/health" -TimeoutSec 2 -ErrorAction Stop
-            $health = $healthCheck.Content | ConvertFrom-Json
-            $status.ConnectedToServer = $health.onlinePlayers -gt 0
+            $healthData = $healthCheck.Content | ConvertFrom-Json
+            $status.ConnectedToServer = $healthData.onlinePlayers -gt 0
             if ($status.ConnectedToServer) {
-                $status.Details += "Server Connection: Connected ($($health.onlinePlayers) players online)"
+                $status.Details += "Server Connection: Connected ($($healthData.onlinePlayers) players online)"
                 $status.LastConnectionActivity = Get-Date
             } else {
                 $status.Details += "Server Connection: NOT connected (0 players online)"
@@ -432,6 +433,12 @@ function Get-UnityActualStatus {
         }
         
         # Check 3: Is Unity in a game scene (not MainMenuScene)?
+        # If there are online players AND active simulations, Unity is likely in TableScene
+        $hasActiveGame = $false
+        if ($healthData -and $healthData.onlinePlayers -gt 0 -and $healthData.activeSimulations -gt 0) {
+            $hasActiveGame = $true
+            $status.Details += "Game Activity: Active simulation with $($healthData.onlinePlayers) players online"
+        }
         if (Test-Path $logFile) {
             $recentLines = Get-Content $logFile -Tail 500 -ErrorAction SilentlyContinue
             $now = Get-Date
@@ -461,7 +468,8 @@ function Get-UnityActualStatus {
                         # - join_table from actual client (not bot)
                         # - action events from Unity client
                         # - login events
-                        if ($line -match '\[SYSTEM\].*\[SOCKET\].*CLIENT_CONNECTED|REPORT_UNITY_LOG|\[UNITY\]|join_table.*success|action.*from.*client|login.*success|Unity.*connected|client.*connected.*socket') {
+                        # Check for Unity client events OR game activity indicators
+                        if ($line -match '\[SYSTEM\].*\[SOCKET\].*CLIENT_CONNECTED|REPORT_UNITY_LOG|\[UNITY\]|join_table.*success|action.*from.*client|login.*success|Unity.*connected|client.*connected.*socket|table_state|player_action|phase.*preflop|phase.*flop|phase.*turn|phase.*river|phase.*showdown') {
                             $gameActivityFound = $true
                             if (-not $status.LastGameActivity -or $lineTime -gt $status.LastGameActivity) {
                                 $status.LastGameActivity = $lineTime
@@ -480,8 +488,9 @@ function Get-UnityActualStatus {
                 }
             }
             
-            $status.InGameScene = $gameActivityFound
-            $status.ReceivingGameUpdates = $gameActivityFound
+            # Unity is in game scene if we found game activity OR if there's an active simulation with players
+            $status.InGameScene = $gameActivityFound -or $hasActiveGame
+            $status.ReceivingGameUpdates = $gameActivityFound -or $hasActiveGame
             
             if ($gameActivityFound) {
                 $status.Details += "Game Activity: Active (last seen: $($status.LastGameActivity.ToString('HH:mm:ss')))"
