@@ -779,7 +779,11 @@ function Update-MonitorStatus {
     
     try {
         # Safely get variable values (handle case where they might not exist yet)
-        $statsStartTime = if ($stats -and $stats.StartTime) { $stats.StartTime } else { Get-Date }
+        $statsStartTime = if ($stats -and $stats.StartTime) { 
+            if ($stats.StartTime -is [DateTime]) { $stats.StartTime } else { Get-Date }
+        } else { 
+            Get-Date 
+        }
         $statsServerStatus = if ($stats -and $stats.ServerStatus) { $stats.ServerStatus } else { "Unknown" }
         $statsUnityRunning = if ($stats -and $stats.UnityRunning) { $stats.UnityRunning } else { $false }
         $statsUnityConnected = if ($stats -and $stats.UnityConnected) { $stats.UnityConnected } else { $false }
@@ -794,19 +798,62 @@ function Update-MonitorStatus {
         
         $unityActualStatus = try { (Get-UnityActualStatus).Status } catch { "Unknown" }
         $isInvestigatingValue = if (Get-Variable -Name "isInvestigating" -ErrorAction SilentlyContinue) { $isInvestigating } else { $false }
-        $investigationStartTimeValue = if (Get-Variable -Name "investigationStartTime" -ErrorAction SilentlyContinue) { $investigationStartTime } else { $null }
+        $investigationStartTimeValue = if (Get-Variable -Name "investigationStartTime" -ErrorAction SilentlyContinue) { 
+            if ($investigationStartTime -is [DateTime]) { $investigationStartTime } else { $null }
+        } else { 
+            $null 
+        }
         $investigationTimeoutValue = if (Get-Variable -Name "investigationTimeout" -ErrorAction SilentlyContinue) { $investigationTimeout } else { 15 }
         $isVerifyingFixValue = if (Get-Variable -Name "isVerifyingFix" -ErrorAction SilentlyContinue) { $isVerifyingFix } else { $false }
-        $verificationStartTimeValue = if (Get-Variable -Name "verificationStartTime" -ErrorAction SilentlyContinue) { $verificationStartTime } else { $null }
+        $verificationStartTimeValue = if (Get-Variable -Name "verificationStartTime" -ErrorAction SilentlyContinue) { 
+            if ($verificationStartTime -is [DateTime]) { $verificationStartTime } else { $null }
+        } else { 
+            $null 
+        }
         $verificationPeriodValue = if (Get-Variable -Name "verificationPeriod" -ErrorAction SilentlyContinue) { $verificationPeriod } else { 0 }
         $isPausedValue = if (Get-Variable -Name "isPaused" -ErrorAction SilentlyContinue) { $isPaused } else { $false }
         $currentIssueValue = if (Get-Variable -Name "currentIssue" -ErrorAction SilentlyContinue) { $currentIssue } else { $null }
+        
+        # Calculate uptime safely
+        $uptimeValue = 0
+        try {
+            $now = Get-Date
+            if ($statsStartTime -is [DateTime]) {
+                $uptimeValue = ($now - $statsStartTime).TotalSeconds
+            }
+        } catch {
+            $uptimeValue = 0
+        }
+        
+        # Calculate investigation time remaining safely
+        $investigationTimeRemaining = $null
+        if ($isInvestigatingValue -and $investigationStartTimeValue -is [DateTime]) {
+            try {
+                $now = Get-Date
+                $elapsed = ($now - $investigationStartTimeValue).TotalSeconds
+                $investigationTimeRemaining = [Math]::Max(0, $investigationTimeoutValue - $elapsed)
+            } catch {
+                $investigationTimeRemaining = $null
+            }
+        }
+        
+        # Calculate verification time remaining safely
+        $verificationTimeRemaining = $null
+        if ($isVerifyingFixValue -and $verificationStartTimeValue -is [DateTime]) {
+            try {
+                $now = Get-Date
+                $elapsed = ($now - $verificationStartTimeValue).TotalSeconds
+                $verificationTimeRemaining = [Math]::Max(0, $verificationPeriodValue - $elapsed)
+            } catch {
+                $verificationTimeRemaining = $null
+            }
+        }
         
         $status = @{
             timestamp = (Get-Date).ToUniversalTime().ToString("o")
             monitorRunning = $true
             monitorStartTime = $statsStartTime.ToString("o")
-            uptime = ((Get-Date) - $statsStartTime).TotalSeconds
+            uptime = $uptimeValue
             serverStatus = $statsServerStatus
             unityStatus = @{
                 running = $statsUnityRunning
@@ -815,15 +862,15 @@ function Update-MonitorStatus {
             }
             investigation = @{
                 active = $isInvestigatingValue
-                startTime = if ($investigationStartTimeValue) { $investigationStartTimeValue.ToString("o") } else { $null }
+                startTime = if ($investigationStartTimeValue -is [DateTime]) { $investigationStartTimeValue.ToString("o") } else { $null }
                 timeout = $investigationTimeoutValue
-                timeRemaining = if ($isInvestigatingValue -and $investigationStartTimeValue) { [Math]::Max(0, $investigationTimeoutValue - ((Get-Date) - $investigationStartTimeValue).TotalSeconds) } else { $null }
+                timeRemaining = $investigationTimeRemaining
             }
             verification = @{
                 active = $isVerifyingFixValue
-                startTime = if ($verificationStartTimeValue) { $verificationStartTimeValue.ToString("o") } else { $null }
+                startTime = if ($verificationStartTimeValue -is [DateTime]) { $verificationStartTimeValue.ToString("o") } else { $null }
                 period = $verificationPeriodValue
-                timeRemaining = if ($isVerifyingFixValue -and $verificationStartTimeValue) { [Math]::Max(0, $verificationPeriodValue - ((Get-Date) - $verificationStartTimeValue).TotalSeconds) } else { $null }
+                timeRemaining = $verificationTimeRemaining
             }
             paused = $isPausedValue
             currentIssue = $currentIssueValue
