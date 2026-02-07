@@ -2759,10 +2759,24 @@ while ($monitoringActive) {
         # IMPORTANT: This check runs every loop iteration to ensure investigation completes on time
         if ($script:isInvestigating -and $script:investigationStartTime) {
             try {
+                # Ensure investigationStartTime is a DateTime object
+                if ($script:investigationStartTime -isnot [DateTime]) {
+                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ERROR: investigationStartTime is not a DateTime object, resetting investigation" -ForegroundColor "Red"
+                    $script:isInvestigating = $false
+                    $script:investigationStartTime = $null
+                    continue
+                }
+                
                 $investigationElapsed = (Get-Date) - $script:investigationStartTime
                 # Force complete if elapsed time exceeds timeout (with 1 second buffer for timing)
                 # Also force complete if investigation has been running for more than 2x timeout (safety check)
                 $shouldComplete = ($investigationElapsed.TotalSeconds -ge ($investigationTimeout - 1)) -or ($investigationElapsed.TotalSeconds -ge ($investigationTimeout * 2))
+                
+                # DEBUG: Log if investigation should complete but isn't
+                if ($investigationElapsed.TotalSeconds -ge ($investigationTimeout * 2)) {
+                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] DEBUG: Investigation elapsed: $([Math]::Round($investigationElapsed.TotalSeconds, 1))s, timeout: $investigationTimeout, shouldComplete: $shouldComplete" -ForegroundColor "Yellow"
+                }
+                
                 if ($shouldComplete) {
                     # Investigation complete - pause debugger now
                     $script:isInvestigating = $false
