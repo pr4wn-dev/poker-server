@@ -2110,20 +2110,24 @@ while ($monitoringActive) {
                 
                 # If there's an orphaned simulation, stop it before restarting Unity
                 if ($logWatcherStatus.ActiveSimulations -gt 0) {
-                    # Step 1: Kill processes on port 3000 FIRST (before trying API)
-                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🛑 Killing processes on port 3000 before stopping orphaned simulation..." -ForegroundColor "Cyan"
-                    Kill-Port3000Processes
-                    
-                    # Step 2: Try to stop via API (if server is still running)
+                    # Step 1: Try to stop via API FIRST (while server is still running)
+                    $apiStopSucceeded = $false
                     try {
-                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🛑 Stopping orphaned simulation(s) via API..." -ForegroundColor "Cyan"
+                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🛑 Stopping orphaned simulation(s) via API (while server is running)..." -ForegroundColor "Cyan"
                         $stopResponse = Invoke-WebRequest -Uri "$serverUrl/api/simulations/stop-all" -Method POST -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
                         $stopResult = $stopResponse.Content | ConvertFrom-Json
                         if ($stopResult.success -and $stopResult.stopped -gt 0) {
-                            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ✅ Stopped $($stopResult.stopped) orphaned simulation(s)" -ForegroundColor "Green"
+                            $apiStopSucceeded = $true
+                            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ✅ Stopped $($stopResult.stopped) orphaned simulation(s) via API" -ForegroundColor "Green"
                         }
                     } catch {
-                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  Could not stop orphaned simulation via API (server may be dead): $_" -ForegroundColor "Yellow"
+                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  Could not stop orphaned simulation via API: $_" -ForegroundColor "Yellow"
+                    }
+                    
+                    # Step 2: If API failed, kill processes and restart server
+                    if (-not $apiStopSucceeded) {
+                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🛑 API stop failed - killing processes on port 3000 and restarting server..." -ForegroundColor "Cyan"
+                        Kill-Port3000Processes
                         
                         # If server is dead, restart it before restarting Unity
                         # Note: Start-ServerIfNeeded will kill port 3000 processes again (redundant but safe),
