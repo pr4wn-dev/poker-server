@@ -1276,8 +1276,17 @@ function Restart-UnityIfNeeded {
             
             # Clean up Unity backup files before starting to prevent dialog prompts
             $unityTempPath = Join-Path $config.unity.projectPath "Temp"
+            $recoveryPath = Join-Path $config.unity.projectPath "Assets\_Recovery"
             if (Test-Path $unityTempPath) {
-                Get-ChildItem $unityTempPath -Filter "*Backup*" -Recurse -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+                Get-ChildItem -Path $unityTempPath -Filter "*Backup*" -Recurse -ErrorAction SilentlyContinue | Remove-Item -Force -Recurse -ErrorAction SilentlyContinue
+                # Also remove __Backupscenes directory if it exists
+                $backupScenesPath = Join-Path $unityTempPath "__Backupscenes"
+                if (Test-Path $backupScenesPath) {
+                    Remove-Item -Path $backupScenesPath -Force -Recurse -ErrorAction SilentlyContinue
+                }
+            }
+            if (Test-Path $recoveryPath) {
+                Get-ChildItem -Path $recoveryPath -Filter "*Backup*" -Recurse -ErrorAction SilentlyContinue | Remove-Item -Force -Recurse -ErrorAction SilentlyContinue
             }
             
             # Start Unity in normal window (visible, not headless) with debugger support
