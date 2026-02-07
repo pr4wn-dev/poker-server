@@ -37,7 +37,7 @@ $pendingIssuesFile = Join-Path $script:projectRoot "logs\pending-issues.json"
 $checkInterval = 1  # Check every 1 second
 $nodeScript = Join-Path $script:projectRoot "monitoring\issue-detector.js"
 $serverUrl = "http://localhost:3000"
-$statsUpdateInterval = 10  # Update stats display every 10 seconds (reduced frequency to prevent flickering)
+$statsUpdateInterval = 5  # Update stats display every 5 seconds (more responsive)
 $configFile = Join-Path $script:projectRoot "monitoring\monitor-config.json"
 
 # Load configuration
@@ -2429,10 +2429,11 @@ while ($monitoringActive) {
         }
         
         # Update statistics display periodically
+        # Update every 5 seconds (reduced from 10 for more responsive display)
         # BUT: Don't update if we just wrote console output (prevents flashing)
-        # Only update if console output line hasn't changed recently (increased to 3 seconds for stability)
+        # Only update if console output line hasn't changed recently (reduced to 1 second for faster updates)
         $timeSinceLastConsoleOutput = if ($script:lastConsoleOutputTime) { ($now - $script:lastConsoleOutputTime).TotalSeconds } else { 999 }
-        if (($now - $lastStatsUpdate).TotalSeconds -ge $statsUpdateInterval -and $timeSinceLastConsoleOutput -gt 3) {
+        if (($now - $lastStatsUpdate).TotalSeconds -ge 5 -and $timeSinceLastConsoleOutput -gt 1) {
             Show-Statistics
             $lastStatsUpdate = $now
         }
