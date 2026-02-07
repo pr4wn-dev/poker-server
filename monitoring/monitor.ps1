@@ -1930,15 +1930,18 @@ while ($monitoringActive) {
                     }
                 }
                 
-                # Only check Unity restart if server wasn't just restarted
-                if (-not $serverJustRestarted) {
-                    $shouldRestart = $false
-                    $restartReason = ""
-                    
-                    if (-not $unityActualStatus.ProcessRunning) {
-                        $shouldRestart = $true
-                        $restartReason = "Unity process not running"
-                    } elseif (-not $unityActualStatus.ConnectedToServer) {
+                # Check Unity restart - but allow starting Unity if it's not running at all (even during cooldown)
+                # Only block restart if Unity is running but not connected (during cooldown)
+                $shouldRestart = $false
+                $restartReason = ""
+                
+                if (-not $unityActualStatus.ProcessRunning) {
+                    # Unity is not running at all - always start it, even during server cooldown
+                    $shouldRestart = $true
+                    $restartReason = "Unity process not running"
+                } elseif (-not $serverJustRestarted) {
+                    # Unity is running - only check connection/restart if server wasn't just restarted
+                    if (-not $unityActualStatus.ConnectedToServer) {
                         # Check if Unity is actually trying to connect (recent connection attempts in logs)
                         # If Unity just started and is trying to connect, give it more time
                         $recentConnectionAttempt = $false
@@ -1962,16 +1965,16 @@ while ($monitoringActive) {
                         $shouldRestart = $true
                         $restartReason = "Unity connected but not in game scene (simulation mode requires active gameplay)"
                     }
-                    
-                    if ($shouldRestart) {
-                        $unityRestartMsg = "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Restarting - $restartReason"
-                        Write-ConsoleOutput -Message $unityRestartMsg -ForegroundColor "Cyan"
-                        Restart-UnityIfNeeded | Out-Null
-                    }
                 } else {
-                    # Server was just restarted - give Unity time to connect before restarting it
+                    # Server was just restarted and Unity is running - give Unity time to connect before restarting it
                     # This prevents the restart loop
                     # No need to calculate time remaining - we're already in the cooldown period
+                }
+                
+                if ($shouldRestart) {
+                    $unityRestartMsg = "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Restarting - $restartReason"
+                    Write-ConsoleOutput -Message $unityRestartMsg -ForegroundColor "Cyan"
+                    Restart-UnityIfNeeded | Out-Null
                 }
             }
             
