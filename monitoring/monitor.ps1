@@ -2544,8 +2544,11 @@ while ($monitoringActive) {
                 $timestamp = Get-Date -Format 'HH:mm:ss'
                 $oldSimMsg = "[$timestamp] SIMULATION: Old simulation ended (was running when monitor started) - continuing to monitor"
                 Write-ConsoleOutput -Message $oldSimMsg -ForegroundColor "Gray"
+                # Don't restart Unity for old simulations - just continue monitoring
+                return
             }
             
+            # Only restart Unity if we actually tracked this simulation from the start
             # In simulation mode, if simulation ended and Unity is running but idle, restart it to start a new simulation
             if ($config.simulation.enabled -and $config.automation.autoRestartUnity -and $stats.UnityRunning) {
                 $simCompleteRestartMsg = "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Simulation completed - restarting Unity to start new simulation..."
