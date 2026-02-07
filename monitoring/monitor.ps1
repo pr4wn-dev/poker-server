@@ -2820,6 +2820,27 @@ while ($monitoringActive) {
                 } else {
                     # Still investigating - no console spam, all info is in statistics
                     # Statistics will show the countdown and progress
+                    # BUT: If investigation has been running way too long, force complete it
+                    if ($investigationElapsed.TotalSeconds -gt 60) {
+                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] WARNING: Investigation has been running for $([Math]::Round($investigationElapsed.TotalSeconds, 1))s (timeout: $investigationTimeout) - FORCING COMPLETION" -ForegroundColor "Red"
+                        # Force complete investigation
+                        $script:isInvestigating = $false
+                        $script:investigationStartTime = $null
+                        $pendingInfo = Get-PendingIssuesInfo
+                        if ($pendingInfo -and $pendingInfo.InFocusMode -and $pendingInfo.RootIssue) {
+                            $rootIssue = $pendingInfo.RootIssue
+                            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] INVESTIGATION FORCE COMPLETE: Pausing debugger" -ForegroundColor "Yellow"
+                            Write-ConsoleOutput -Message "  Root Issue: $($rootIssue.type) ($($rootIssue.severity))" -ForegroundColor "White"
+                            $tableId = if ($rootIssue.tableId) { $rootIssue.tableId } else { $null }
+                            if (-not $isPaused -and $config.unity.pauseDebuggerOnIssue) {
+                                $pauseSuccess = Invoke-DebuggerBreakWithVerification -tableId $tableId -reason "$($rootIssue.type) - $($rootIssue.severity) severity (Investigation force complete)" -message "Investigation force complete after timeout"
+                                if (-not $pauseSuccess) {
+                                    Write-ConsoleOutput -Message "  WARNING: Debugger break may not have reached Unity" -ForegroundColor "Yellow"
+                                }
+                                $isPaused = $true
+                            }
+                        }
+                    }
                 }
             } catch {
                 Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ERROR: Investigation completion check failed: $_" -ForegroundColor "Red"
