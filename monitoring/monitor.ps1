@@ -2010,11 +2010,53 @@ while ($monitoringActive) {
                     } else {
                         # Issue detected but not pausing (medium/low severity or already paused)
                         if ($issue.severity -eq 'medium' -or $issue.severity -eq 'low') {
-                            $notPausingMsg = "[$(Get-Date -Format 'HH:mm:ss')] ISSUE (NOT PAUSING): $($issue.type) ($($issue.severity)) - Only critical/high severity issues pause Unity"
-                            Write-ConsoleOutput -Message $notPausingMsg -ForegroundColor "Gray"
+                            # Throttle "NOT PAUSING" messages - only show once per 10 seconds per issue pattern
+                            $issueKey = "$($issue.type)_$($issue.severity)_$($issue.source)"
+                            $throttleKey = "notpausing_$issueKey"
+                            
+                            if (-not $script:issueThrottle) {
+                                $script:issueThrottle = @{}
+                            }
+                            
+                            $lastShown = $script:issueThrottle[$throttleKey]
+                            $shouldShow = $true
+                            
+                            if ($lastShown) {
+                                $timeSinceLastShown = (Get-Date) - $lastShown
+                                if ($timeSinceLastShown.TotalSeconds -lt 10) {
+                                    $shouldShow = $false
+                                }
+                            }
+                            
+                            if ($shouldShow) {
+                                $script:issueThrottle[$throttleKey] = Get-Date
+                                $notPausingMsg = "[$(Get-Date -Format 'HH:mm:ss')] ISSUE (NOT PAUSING): $($issue.type) ($($issue.severity)) - Only critical/high severity issues pause Unity"
+                                Write-ConsoleOutput -Message $notPausingMsg -ForegroundColor "Gray"
+                            }
                         } elseif ($isPaused) {
-                            $alreadyPausedMsg = "[$(Get-Date -Format 'HH:mm:ss')] ISSUE (ALREADY PAUSED): $($issue.type) ($($issue.severity)) - Unity already paused, issue queued"
-                            Write-ConsoleOutput -Message $alreadyPausedMsg -ForegroundColor "Gray"
+                            # Throttle "ALREADY PAUSED" messages - only show once per 10 seconds per issue pattern
+                            $issueKey = "$($issue.type)_$($issue.severity)_$($issue.source)"
+                            $throttleKey = "paused_$issueKey"
+                            
+                            if (-not $script:issueThrottle) {
+                                $script:issueThrottle = @{}
+                            }
+                            
+                            $lastShown = $script:issueThrottle[$throttleKey]
+                            $shouldShow = $true
+                            
+                            if ($lastShown) {
+                                $timeSinceLastShown = (Get-Date) - $lastShown
+                                if ($timeSinceLastShown.TotalSeconds -lt 10) {
+                                    $shouldShow = $false
+                                }
+                            }
+                            
+                            if ($shouldShow) {
+                                $script:issueThrottle[$throttleKey] = Get-Date
+                                $alreadyPausedMsg = "[$(Get-Date -Format 'HH:mm:ss')] ISSUE (ALREADY PAUSED): $($issue.type) ($($issue.severity)) - Unity already paused, issue queued"
+                                Write-ConsoleOutput -Message $alreadyPausedMsg -ForegroundColor "Gray"
+                            }
                         }
                     }
                 }
