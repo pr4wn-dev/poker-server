@@ -1001,7 +1001,8 @@ function Start-ServerIfNeeded {
                         $processId = [int]$matches[1]
                         try {
                             $process = Get-Process -Id $processId -ErrorAction SilentlyContinue
-                            if ($process) {
+                            if ($process -and $process.ProcessName -eq 'node') {
+                                # Only kill node.exe processes, not PowerShell or other clients
                                 $port3000Processes += $process
                             }
                         } catch {
