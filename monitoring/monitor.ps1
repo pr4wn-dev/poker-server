@@ -492,14 +492,22 @@ function Get-UnityActualStatus {
             $status.InGameScene = $gameActivityFound -or $hasActiveGame
             $status.ReceivingGameUpdates = $gameActivityFound -or $hasActiveGame
             
-            if ($gameActivityFound) {
-                $status.Details += "Game Activity: Active (last seen: $($status.LastGameActivity.ToString('HH:mm:ss')))"
+            if ($gameActivityFound -and $status.LastGameActivity -and $status.LastGameActivity -is [DateTime]) {
+                try {
+                    $status.Details += "Game Activity: Active (last seen: $($status.LastGameActivity.ToString('HH:mm:ss')))"
+                } catch {
+                    $status.Details += "Game Activity: Active"
+                }
             } else {
                 $status.Details += "Game Activity: NONE (Unity may be in MainMenuScene or idle)"
             }
             
-            if ($connectionActivityFound) {
-                $status.Details += "Connection Activity: Recent (last seen: $($status.LastConnectionActivity.ToString('HH:mm:ss')))"
+            if ($connectionActivityFound -and $status.LastConnectionActivity -and $status.LastConnectionActivity -is [DateTime]) {
+                try {
+                    $status.Details += "Connection Activity: Recent (last seen: $($status.LastConnectionActivity.ToString('HH:mm:ss')))"
+                } catch {
+                    $status.Details += "Connection Activity: Recent"
+                }
             } else {
                 $status.Details += "Connection Activity: NONE (no recent connection events)"
             }
