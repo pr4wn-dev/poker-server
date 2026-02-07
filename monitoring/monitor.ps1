@@ -2027,55 +2027,54 @@ while ($monitoringActive) {
                     if ($serverActualCount -eq 0) {
                         Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ✅ Server reports 0 simulations - log watcher count was stale, no action needed" -ForegroundColor "Green"
                         $script:lastOrphanedSimStopAttempt = Get-Date
-                        continue
-                    }
-                    
-                    # Step 1: Try to stop via API FIRST (while server is still running)
-                    $apiStopSucceeded = $false
-                    try {
-                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🛑 Stopping orphaned simulation(s) via API (while server is running)..." -ForegroundColor "Cyan"
-                        $stopResponse = Invoke-WebRequest -Uri "$serverUrl/api/simulations/stop-all" -Method POST -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
-                        $stopResult = $stopResponse.Content | ConvertFrom-Json
-                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🔍 DIAGNOSTIC: API response - success: $($stopResult.success), stopped: $($stopResult.stopped), failed: $($stopResult.failed)" -ForegroundColor "Cyan"
-                        if ($stopResult.success) {
-                            if ($stopResult.stopped -gt 0) {
-                                $apiStopSucceeded = $true
-                                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ✅ Stopped $($stopResult.stopped) orphaned simulation(s) via API" -ForegroundColor "Green"
+                    } else {
+                        # Step 1: Try to stop via API FIRST (while server is still running)
+                        $apiStopSucceeded = $false
+                        try {
+                            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🛑 Stopping orphaned simulation(s) via API (while server is running)..." -ForegroundColor "Cyan"
+                            $stopResponse = Invoke-WebRequest -Uri "$serverUrl/api/simulations/stop-all" -Method POST -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
+                            $stopResult = $stopResponse.Content | ConvertFrom-Json
+                            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🔍 DIAGNOSTIC: API response - success: $($stopResult.success), stopped: $($stopResult.stopped), failed: $($stopResult.failed)" -ForegroundColor "Cyan"
+                            if ($stopResult.success) {
+                                if ($stopResult.stopped -gt 0) {
+                                    $apiStopSucceeded = $true
+                                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ✅ Stopped $($stopResult.stopped) orphaned simulation(s) via API" -ForegroundColor "Green"
+                                } else {
+                                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  API returned success but stopped 0 simulations - server may have already cleaned up" -ForegroundColor "Yellow"
+                                    $apiStopSucceeded = $true  # Treat as success since there's nothing to stop
+                                }
+                                if ($stopResult.failed -gt 0) {
+                                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  Failed to stop $($stopResult.failed) simulation(s)" -ForegroundColor "Yellow"
+                                }
                             } else {
-                                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  API returned success but stopped 0 simulations - server may have already cleaned up" -ForegroundColor "Yellow"
-                                $apiStopSucceeded = $true  # Treat as success since there's nothing to stop
+                                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  API returned success=false: $($stopResult.error)" -ForegroundColor "Yellow"
                             }
-                            if ($stopResult.failed -gt 0) {
-                                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  Failed to stop $($stopResult.failed) simulation(s)" -ForegroundColor "Yellow"
-                            }
-                        } else {
-                            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  API returned success=false: $($stopResult.error)" -ForegroundColor "Yellow"
+                            $script:lastOrphanedSimStopAttempt = Get-Date
+                        } catch {
+                            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  Could not stop orphaned simulations via API: $_" -ForegroundColor "Yellow"
+                            $script:lastOrphanedSimStopAttempt = Get-Date
                         }
-                        $script:lastOrphanedSimStopAttempt = Get-Date
-                    } catch {
-                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  Could not stop orphaned simulations via API: $_" -ForegroundColor "Yellow"
-                        $script:lastOrphanedSimStopAttempt = Get-Date
-                    }
-                    
-                    # Step 2: If API failed, kill processes and restart server
-                    if (-not $apiStopSucceeded) {
-                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🛑 API stop failed - killing processes on port 3000 and restarting server..." -ForegroundColor "Cyan"
-                        Kill-Port3000Processes
                         
-                        # After killing processes, the server is likely dead - always restart it
-                        # Note: Start-ServerIfNeeded will:
-                        # 1. Kill port 3000 processes again (redundant but safe)
-                        # 2. Verify port is free
-                        # 3. Start server
-                        # 4. WAIT for server to be ready (blocks up to 30 seconds)
-                        # 5. Only then return, allowing other code to continue
-                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🔄 Server likely dead after killing processes - restarting and waiting for server to be ready..." -ForegroundColor "Cyan"
-                        $serverRestartResult = Start-ServerIfNeeded
-                        if ($serverRestartResult) {
-                            $script:lastServerRestart = Get-Date  # Track server restart time to prevent restart loops
-                            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ✅ Server restarted and is ready - continuing with monitoring (cooldown: 60s)" -ForegroundColor "Green"
-                        } else {
-                            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  Server restart may have failed - will retry on next check" -ForegroundColor "Yellow"
+                        # Step 2: If API failed, kill processes and restart server
+                        if (-not $apiStopSucceeded) {
+                            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🛑 API stop failed - killing processes on port 3000 and restarting server..." -ForegroundColor "Cyan"
+                            Kill-Port3000Processes
+                            
+                            # After killing processes, the server is likely dead - always restart it
+                            # Note: Start-ServerIfNeeded will:
+                            # 1. Kill port 3000 processes again (redundant but safe)
+                            # 2. Verify port is free
+                            # 3. Start server
+                            # 4. WAIT for server to be ready (blocks up to 30 seconds)
+                            # 5. Only then return, allowing other code to continue
+                            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🔄 Server likely dead after killing processes - restarting and waiting for server to be ready..." -ForegroundColor "Cyan"
+                            $serverRestartResult = Start-ServerIfNeeded
+                            if ($serverRestartResult) {
+                                $script:lastServerRestart = Get-Date  # Track server restart time to prevent restart loops
+                                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ✅ Server restarted and is ready - continuing with monitoring (cooldown: 60s)" -ForegroundColor "Green"
+                            } else {
+                                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  Server restart may have failed - will retry on next check" -ForegroundColor "Yellow"
+                            }
                         }
                     }
                 }
