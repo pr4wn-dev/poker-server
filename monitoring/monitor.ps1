@@ -1964,10 +1964,12 @@ while ($monitoringActive) {
         
         # FIRST: Get server's ACTUAL simulation count (not stale log data)
         $serverActualCount = 0
+        $serverHealthCheckSucceeded = $false
         try {
             $healthResponse = Invoke-WebRequest -Uri "$serverUrl/health" -Method GET -UseBasicParsing -TimeoutSec 3 -ErrorAction Stop
             $healthData = $healthResponse.Content | ConvertFrom-Json
             $serverActualCount = $healthData.activeSimulations
+            $serverHealthCheckSucceeded = $true
         } catch {
             # Health check failed - log the error but default to 0
             $healthErrorDetails = $_.Exception.Message
@@ -1976,13 +1978,16 @@ while ($monitoringActive) {
             }
             # Don't spam errors - only log once per minute
             if (-not $script:lastHealthCheckError -or ((Get-Date) - $script:lastHealthCheckError).TotalSeconds -gt 60) {
-                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] WARNING: Health check failed - $healthErrorDetails" -ForegroundColor "Yellow"
+                $healthErrorMsg = "[$(Get-Date -Format 'HH:mm:ss')] WARNING: Health check failed - $healthErrorDetails"
+                Write-ConsoleOutput -Message $healthErrorMsg -ForegroundColor "Yellow"
                 $script:lastHealthCheckError = Get-Date
             }
             $serverActualCount = 0
+            $serverHealthCheckSucceeded = $false
         }
         
-        # Update logWatcherStatus with server's actual count for display
+        # ALWAYS use server's actual count - never use stale log watcher count
+        # If server check failed, we defaulted to 0, which is correct (no server = no simulations)
         $logWatcherStatus.ActiveSimulations = $serverActualCount
         
         # Also check logs directly for simulation completion (10/10 games)
