@@ -1209,19 +1209,24 @@ function Show-Statistics {
     # Column 1: System Status & Automation
     $col1Lines += "SYSTEM STATUS"
     $col1Lines += ("-" * ($colWidth - 2))
-    $col1Lines += "Log Watcher: " + $(if($logWatcherStatus.Active){"ACTIVE"}else{"INACTIVE"})
+    $logWatcherStatusText = $(if($logWatcherStatus.Active){"ACTIVE"}else{"INACTIVE"})
+    $col1Lines += "Log Watcher: " + $logWatcherStatusText
     if ($logWatcherStatus.PausedTables -gt 0) {
         $col1Lines += "  Paused: " + $logWatcherStatus.PausedTables
     }
     $col1Lines += "Simulations: " + $logWatcherStatus.ActiveSimulations
-    $col1Lines += "Database: " + $(if($stats.ServerStatus -eq "Online"){"CONNECTED"}else{"UNKNOWN"})
+    $dbStatus = $(if($stats.ServerStatus -eq "Online"){"CONNECTED"}else{"UNKNOWN"})
+    $col1Lines += "Database: " + $dbStatus
     $col1Lines += ""
     $col1Lines += "AUTOMATION"
     $col1Lines += ("-" * ($colWidth - 2))
     $col1Lines += "Mode: " + $config.mode.ToUpper()
-    $col1Lines += "Auto-Restart Server: " + $(if($config.automation.autoRestartServer){"ENABLED"}else{"DISABLED"})
-    $col1Lines += "Auto-Restart Unity: " + $(if($config.automation.autoRestartUnity){"ENABLED"}else{"DISABLED"})
-    $col1Lines += "Auto-Restart DB: " + $(if($config.automation.autoRestartDatabase){"ENABLED"}else{"DISABLED"})
+    $serverRestart = $(if($config.automation.autoRestartServer){"ENABLED"}else{"DISABLED"})
+    $col1Lines += "Auto-Restart Server: " + $serverRestart
+    $unityRestart = $(if($config.automation.autoRestartUnity){"ENABLED"}else{"DISABLED"})
+    $col1Lines += "Auto-Restart Unity: " + $unityRestart
+    $dbRestart = $(if($config.automation.autoRestartDatabase){"ENABLED"}else{"DISABLED"})
+    $col1Lines += "Auto-Restart DB: " + $dbRestart
     
     # Column 2: Detection & Issues
     $col2Lines += "DETECTION STATS"
@@ -1273,8 +1278,8 @@ function Show-Statistics {
             if ($rootIssue.source) {
                 $sourceText = "Source: " + $rootIssue.source
                 if ($rootIssue.tableId) {
-                    $tableShort = if ($rootIssue.tableId.Length -gt 12) { $rootIssue.tableId.Substring(0, 12) + "..." } else { $rootIssue.tableId }
-                    $sourceText += " (table: $tableShort)"
+                    $tableShort = if ($rootIssue.tableId.Length -gt 10) { $rootIssue.tableId.Substring(0, 10) + ".." } else { $rootIssue.tableId }
+                    $sourceText += " (t:$tableShort)"
                 }
                 if ($sourceText.Length -gt ($colWidth - 2)) {
                     $sourceText = $sourceText.Substring(0, ($colWidth - 5)) + "..."
@@ -1288,8 +1293,9 @@ function Show-Statistics {
                 # Remove timestamps and brackets for cleaner display
                 $msgPreview = $msgPreview -replace '\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+\]', ''
                 $msgPreview = $msgPreview.Trim()
-                if ($msgPreview.Length -gt ($colWidth - 2)) {
-                    $msgPreview = $msgPreview.Substring(0, ($colWidth - 5)) + "..."
+                $maxMsgLen = $colWidth - 7  # "Msg: " prefix
+                if ($msgPreview.Length -gt $maxMsgLen) {
+                    $msgPreview = $msgPreview.Substring(0, $maxMsgLen - 3) + "..."
                 }
                 $col3Lines += "Msg: " + $msgPreview
             }
@@ -1312,7 +1318,7 @@ function Show-Statistics {
                 # Show up to 3 most common related issue types
                 $relatedSorted = $relatedTypes.GetEnumerator() | Sort-Object Value -Descending | Select-Object -First 3
                 foreach ($typeEntry in $relatedSorted) {
-                    $typeText = "  - " + $typeEntry.Key + ": " + $typeEntry.Value
+                    $typeText = "  " + $typeEntry.Key + ": " + $typeEntry.Value
                     if ($typeText.Length -gt ($colWidth - 2)) {
                         $typeText = $typeText.Substring(0, ($colWidth - 5)) + "..."
                     }
@@ -1385,10 +1391,11 @@ function Show-Statistics {
         if ($verificationIssuePattern) {
             $patternText = "$($verificationIssuePattern.type) from $($verificationIssuePattern.source)"
             if ($verificationIssuePattern.tableId) {
-                $patternText += " (table: $($verificationIssuePattern.tableId.Substring(0,8))...)"
+                $tableShort = if ($verificationIssuePattern.tableId.Length -gt 8) { $verificationIssuePattern.tableId.Substring(0, 8) + ".." } else { $verificationIssuePattern.tableId }
+                $patternText += " (t:$tableShort)"
             }
-            if ($patternText.Length -gt ($colWidth - 2)) {
-                $patternText = $patternText.Substring(0, ($colWidth - 5)) + "..."
+            if ($patternText.Length -gt ($colWidth - 11)) {  # "Watching: " prefix
+                $patternText = $patternText.Substring(0, ($colWidth - 14)) + "..."
             }
             $col3Lines += "Watching: " + $patternText
         }
@@ -1398,8 +1405,8 @@ function Show-Statistics {
         if ($fixApplied) {
             if ($fixApplied.requiredRestarts -and $fixApplied.requiredRestarts.Count -gt 0) {
                 $restartsText = ($fixApplied.requiredRestarts -join ", ")
-                if ($restartsText.Length -gt ($colWidth - 2)) {
-                    $restartsText = $restartsText.Substring(0, ($colWidth - 5)) + "..."
+                if ($restartsText.Length -gt ($colWidth - 11)) {  # "Restarts: " prefix
+                    $restartsText = $restartsText.Substring(0, ($colWidth - 14)) + "..."
                 }
                 $col3Lines += "Restarts: " + $restartsText
             }
@@ -1411,9 +1418,9 @@ function Show-Statistics {
         $col3Lines += ""
         $col3Lines += "CURRENT ISSUE"
         $col3Lines += ("-" * ($colWidth - 2))
-        $issuePreview = $currentIssue.Substring(0, [Math]::Min(($colWidth - 2), $currentIssue.Length))
-        if ($currentIssue.Length -gt ($colWidth - 2)) {
-            $issuePreview += "..."
+        $issuePreview = $currentIssue
+        if ($issuePreview.Length -gt ($colWidth - 2)) {
+            $issuePreview = $issuePreview.Substring(0, ($colWidth - 5)) + "..."
         }
         $col3Lines += $issuePreview
     }
