@@ -801,8 +801,8 @@ function Show-Statistics {
         $healthData = $healthResponse.Content | ConvertFrom-Json
         $serverActualSimCount = $healthData.activeSimulations
     } catch {
-        # If we can't check server, use log watcher count as fallback
-        $serverActualSimCount = $logWatcherStatus.ActiveSimulations
+        # If we can't check server, default to 0 (don't use stale log watcher count)
+        $serverActualSimCount = 0
     }
     # Override log watcher count with server's actual count for display
     $logWatcherStatus.ActiveSimulations = $serverActualSimCount
@@ -1960,8 +1960,8 @@ while ($monitoringActive) {
             $healthData = $healthResponse.Content | ConvertFrom-Json
             $serverActualCount = $healthData.activeSimulations
         } catch {
-            # If we can't check server, use log watcher count as fallback
-            $serverActualCount = $logWatcherStatus.ActiveSimulations
+            # If we can't check server, default to 0 (don't use stale log watcher count)
+            $serverActualCount = 0
         }
         
         # Update logWatcherStatus with server's actual count for display
