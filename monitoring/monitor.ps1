@@ -282,51 +282,112 @@ function Add-PendingIssue {
             return $null
         }
         
-        try {
-            $result = node $nodeScript --add-issue-file $tempFile 2>&1 | Out-String
-        if ($LASTEXITCODE -eq 0 -and $result) {
-                # Remove any non-JSON output (like warnings or errors)
-                $jsonLines = $result -split "`n" | Where-Object { $_ -match '^\s*\{' -or $_ -match '^\s*\[' }
-                $cleanResult = $jsonLines -join "`n"
-                
-                if ($cleanResult) {
-                    $jsonResult = $cleanResult | ConvertFrom-Json -ErrorAction SilentlyContinue
-                    if ($jsonResult) {
-            return $jsonResult
-                    }
-                }
-            }
-            
-            # If we get here, something failed - log the actual error
-            $errorDetails = $result
-            if (-not $errorDetails) {
-                $errorDetails = "Node.js script returned no output (exit code: $LASTEXITCODE)"
-            }
-            
-            # Try to parse error from result if it's JSON
+        # Automatic retry logic for issue detector
+        $maxRetries = 3
+        $retryCount = 0
+        $lastError = $null
+        
+        while ($retryCount -lt $maxRetries) {
             try {
-                $errorJson = $result | ConvertFrom-Json -ErrorAction SilentlyContinue
-                if ($errorJson) {
-                    $errorMsg = $errorJson.error
-                    if ($errorJson.contentLength) {
-                        $errorMsg += " (length: $($errorJson.contentLength))"
+                $result = node $nodeScript --add-issue-file $tempFile 2>&1 | Out-String
+                if ($LASTEXITCODE -eq 0 -and $result) {
+                    # Remove any non-JSON output (like warnings or errors)
+                    $jsonLines = $result -split "`n" | Where-Object { $_ -match '^\s*\{' -or $_ -match '^\s*\[' }
+                    $cleanResult = $jsonLines -join "`n"
+                    
+                    if ($cleanResult) {
+                        $jsonResult = $cleanResult | ConvertFrom-Json -ErrorAction SilentlyContinue
+                        if ($jsonResult -and $jsonResult.success) {
+                            # Success - return result
+                            return $jsonResult
+                        } elseif ($jsonResult -and -not $jsonResult.success) {
+                            # JSON error response - check if retryable
+                            $lastError = $jsonResult
+                            if ($jsonResult.reason -eq "file_locked" -or $jsonResult.reason -eq "json_parse_error") {
+                                # Retryable error
+                                $retryCount++
+                                if ($retryCount -lt $maxRetries) {
+                                    Write-ConsoleOutput -Message "  Retry $retryCount/$maxRetries: $($jsonResult.error)" -ForegroundColor "Yellow"
+                                    Start-Sleep -Milliseconds 500
+                                    continue
+                                }
+                            } else {
+                                # Non-retryable error
+                                break
+                            }
+                        }
                     }
-                    if ($errorJson.firstChars) {
-                        $errorMsg += " | First chars: $($errorJson.firstChars)"
-                    }
-                    if ($errorJson.reason) {
-                        $errorMsg += " | Reason: $($errorJson.reason)"
-                    }
-                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ISSUE DETECTOR ERROR: $errorMsg" -ForegroundColor "Red"
-                    return @{ success = $false; error = $errorJson.error; reason = $errorJson.reason }
                 }
+                
+                # If we get here, something failed
+                $errorDetails = $result
+                if (-not $errorDetails) {
+                    $errorDetails = "Node.js script returned no output (exit code: $LASTEXITCODE)"
+                }
+                
+                # Try to parse error from result if it's JSON
+                try {
+                    $errorJson = $result | ConvertFrom-Json -ErrorAction SilentlyContinue
+                    if ($errorJson) {
+                        $lastError = $errorJson
+                        $errorMsg = $errorJson.error
+                        if ($errorJson.contentLength) {
+                            $errorMsg += " (length: $($errorJson.contentLength))"
+                        }
+                        if ($errorJson.firstChars) {
+                            $errorMsg += " | First chars: $($errorJson.firstChars)"
+                        }
+                        if ($errorJson.reason) {
+                            $errorMsg += " | Reason: $($errorJson.reason)"
+                        }
+                        
+                        # Check if retryable
+                        if ($errorJson.reason -eq "file_locked" -or $errorJson.reason -eq "json_parse_error") {
+                            $retryCount++
+                            if ($retryCount -lt $maxRetries) {
+                                Write-ConsoleOutput -Message "  Retry $retryCount/$maxRetries: $errorMsg" -ForegroundColor "Yellow"
+                                Start-Sleep -Milliseconds 500
+                                continue
+                            }
+                        }
+                        
+                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ISSUE DETECTOR ERROR: $errorMsg" -ForegroundColor "Red"
+                        return @{ success = $false; error = $errorJson.error; reason = $errorJson.reason }
+                    }
+                } catch {
+                    # Not JSON, try retry
+                    $retryCount++
+                    if ($retryCount -lt $maxRetries) {
+                        Write-ConsoleOutput -Message "  Retry $retryCount/$maxRetries: Parse error, retrying..." -ForegroundColor "Yellow"
+                        Start-Sleep -Milliseconds 500
+                        continue
+                    }
+                }
+                
+                # Final failure after retries
+                if ($retryCount -ge $maxRetries) {
+                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ISSUE DETECTOR FAILED after $maxRetries attempts: $errorDetails" -ForegroundColor "Red"
+                    Write-ConsoleOutput -Message "  Monitor will continue - issue may be logged on next attempt" -ForegroundColor "Yellow"
+                } else {
+                    $retryCount++
+                    if ($retryCount -lt $maxRetries) {
+                        Start-Sleep -Milliseconds 500
+                        continue
+                    }
+                }
+                break
             } catch {
-                # Not JSON, return generic error
+                $retryCount++
+                if ($retryCount -lt $maxRetries) {
+                    Write-ConsoleOutput -Message "  Retry $retryCount/$maxRetries: Exception - $($_.Exception.Message)" -ForegroundColor "Yellow"
+                    Start-Sleep -Milliseconds 500
+                    continue
+                } else {
+                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ISSUE DETECTOR EXCEPTION after $maxRetries attempts: $_" -ForegroundColor "Red"
+                    break
+                }
             }
-            
-            # Log full error details for debugging
-            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ISSUE DETECTOR FAILED: $errorDetails" -ForegroundColor "Red"
-            Write-ConsoleOutput -Message "  Check: Node.js is installed, issue-detector.js exists, Node.js script syntax is valid" -ForegroundColor "Yellow"
+        }
         } finally {
             # Clean up temp file
             if (Test-Path $tempFile) {
@@ -696,6 +757,122 @@ function Test-ServerRunning {
             return $false
         }
     }
+}
+
+# Function to automatically trigger debugger break with verification and retry
+function Invoke-DebuggerBreakWithVerification {
+    param(
+        [string]$tableId = $null,
+        [string]$reason = "Monitor detected critical issue",
+        [string]$message = "Pausing debugger for issue inspection"
+    )
+    
+    # Step 1: Verify Unity is ready before attempting break
+    $unityStatus = Get-UnityActualStatus
+    if (-not $unityStatus.ProcessRunning) {
+        Write-ConsoleOutput -Message "  ERROR: Unity process not running - cannot pause debugger" -ForegroundColor "Red"
+        Write-ConsoleOutput -Message "    Monitor will automatically restart Unity" -ForegroundColor "Yellow"
+        return $false
+    }
+    
+    if (-not $unityStatus.ConnectedToServer) {
+        Write-ConsoleOutput -Message "  WARNING: Unity not connected to server - waiting for connection..." -ForegroundColor "Yellow"
+        # Wait up to 10 seconds for Unity to connect
+        $waitCount = 0
+        while ($waitCount -lt 10 -and -not $unityStatus.ConnectedToServer) {
+            Start-Sleep -Seconds 1
+            $unityStatus = Get-UnityActualStatus
+            $waitCount++
+        }
+        if (-not $unityStatus.ConnectedToServer) {
+            Write-ConsoleOutput -Message "  ERROR: Unity still not connected after 10 seconds" -ForegroundColor "Red"
+            Write-ConsoleOutput -Message "    Monitor will automatically restart Unity" -ForegroundColor "Yellow"
+            return $false
+        }
+    }
+    
+    # Step 2: If no tableId provided, automatically find active simulation table
+    if (-not $tableId) {
+        try {
+            $healthResponse = Invoke-WebRequest -Uri "$serverUrl/health" -TimeoutSec 2 -ErrorAction Stop
+            $health = $healthResponse.Content | ConvertFrom-Json
+            if ($health.activeSimulations -gt 0) {
+                $tablesResponse = Invoke-WebRequest -Uri "$serverUrl/api/tables" -TimeoutSec 2 -ErrorAction Stop
+                if ($tablesResponse.StatusCode -eq 200) {
+                    $tables = $tablesResponse.Content | ConvertFrom-Json
+                    $simTable = $tables | Where-Object { $_.isSimulation -eq $true -and $_.activePlayers -gt 0 } | Select-Object -First 1
+                    if ($simTable -and $simTable.id) {
+                        $tableId = $simTable.id
+                        Write-ConsoleOutput -Message "  Auto-detected table: $tableId" -ForegroundColor "Cyan"
+                    }
+                }
+            }
+        } catch {
+            # Failed to get table - will emit to all simulations
+        }
+    }
+    
+    # Step 3: Send debugger break with automatic retry
+    $maxRetries = 3
+    $retryCount = 0
+    $success = $false
+    
+    while ($retryCount -lt $maxRetries -and -not $success) {
+        try {
+            $body = @{
+                tableId = $tableId
+                reason = $reason
+                message = $message
+            } | ConvertTo-Json
+            
+            $response = Invoke-WebRequest -Uri "$serverUrl/api/debugger/break" -Method POST -Body $body -ContentType "application/json" -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
+            
+            if ($response.StatusCode -eq 200) {
+                $result = $response.Content | ConvertFrom-Json
+                if ($result.success -and $result.emittedCount -gt 0) {
+                    $stats.PauseMarkersWritten++
+                    Write-ConsoleOutput -Message "  Debugger break triggered - Unity paused" -ForegroundColor "Green"
+                    if ($result.emittedTables) {
+                        Write-ConsoleOutput -Message "  Emitted to $($result.emittedCount) table(s): $($result.emittedTables -join ', ')" -ForegroundColor "Cyan"
+                    } else {
+                        Write-ConsoleOutput -Message "  Emitted to $($result.emittedCount) table(s)" -ForegroundColor "Cyan"
+                    }
+                    $success = $true
+                } elseif ($result.success -and $result.emittedCount -eq 0) {
+                    # No tables received event - retry after checking Unity status
+                    $retryCount++
+                    if ($retryCount -lt $maxRetries) {
+                        Write-ConsoleOutput -Message "  Retry $retryCount/$maxRetries: No tables received event, verifying Unity status..." -ForegroundColor "Yellow"
+                        Start-Sleep -Seconds 2
+                        $unityStatus = Get-UnityActualStatus
+                        if (-not $unityStatus.ConnectedToServer) {
+                            Write-ConsoleOutput -Message "    Unity disconnected - will restart Unity automatically" -ForegroundColor "Yellow"
+                            Restart-UnityIfNeeded | Out-Null
+                            Start-Sleep -Seconds 5  # Wait for Unity to reconnect
+                        }
+                    } else {
+                        Write-ConsoleOutput -Message "  ERROR: Failed after $maxRetries attempts - Unity may not be in a table room" -ForegroundColor "Red"
+                        Write-ConsoleOutput -Message "    Monitor will continue monitoring - Unity will pause when it joins a table" -ForegroundColor "Yellow"
+                    }
+                } else {
+                    throw "API returned success=false: $($result.error)"
+                }
+            } else {
+                throw "API returned status code $($response.StatusCode)"
+            }
+        } catch {
+            $retryCount++
+            if ($retryCount -lt $maxRetries) {
+                Write-ConsoleOutput -Message "  Retry $retryCount/$maxRetries: Error - $($_.Exception.Message)" -ForegroundColor "Yellow"
+                Start-Sleep -Seconds 2
+            } else {
+                $stats.PauseMarkerErrors++
+                Write-ConsoleOutput -Message "  ERROR: Failed to trigger debugger break after $maxRetries attempts: $_" -ForegroundColor "Red"
+            }
+        }
+    }
+    
+    return $success
 }
 
 # Function to verify Unity is actually connected and playing (not just that a simulation table exists)
@@ -2271,49 +2448,11 @@ while ($monitoringActive) {
                         $tableId = $rootIssue.tableId
                     }
                     
-                    # Pause debugger
+                    # Pause debugger (with automatic verification and retry)
                     if ($config.unity.pauseDebuggerOnIssue) {
-                        try {
-                            $reason = "$($rootIssue.type) - $($rootIssue.severity) severity (Investigation complete)"
-                            $message = "Investigation complete. Root issue: $($rootIssue.type). Related issues: $relatedCount"
-                            
-                            $body = @{
-                                tableId = $tableId
-                                reason = $reason
-                                message = $message
-                            } | ConvertTo-Json
-                            
-                            $response = Invoke-WebRequest -Uri "$serverUrl/api/debugger/break" -Method POST -Body $body -ContentType "application/json" -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
-                            
-                            if ($response.StatusCode -eq 200) {
-                                $result = $response.Content | ConvertFrom-Json
-                                if ($result.success -and $result.emittedCount -gt 0) {
-                                    $stats.PauseMarkersWritten++
-                                    Write-ConsoleOutput -Message "  Debugger break triggered - Unity paused" -ForegroundColor "Green"
-                                    if ($result.emittedTables) {
-                                        Write-ConsoleOutput -Message "  Emitted to $($result.emittedCount) table(s): $($result.emittedTables -join ', ')" -ForegroundColor "Cyan"
-                                    } else {
-                                        Write-ConsoleOutput -Message "  Emitted to $($result.emittedCount) table(s)" -ForegroundColor "Cyan"
-                                    }
-                                    Write-ConsoleOutput -Message "  Unity should call Debug.Break() if debugger is attached" -ForegroundColor "Cyan"
-                                } elseif ($result.success -and $result.emittedCount -eq 0) {
-                                    $stats.PauseMarkerErrors++
-                                    Write-ConsoleOutput -Message "  WARNING: API returned success but no tables received event" -ForegroundColor "Yellow"
-                                    Write-ConsoleOutput -Message "    Possible causes:" -ForegroundColor "Yellow"
-                                    Write-ConsoleOutput -Message "    - Unity not connected to server" -ForegroundColor "Yellow"
-                                    Write-ConsoleOutput -Message "    - Unity not in a table room" -ForegroundColor "Yellow"
-                                    Write-ConsoleOutput -Message "    - No active simulation tables" -ForegroundColor "Yellow"
-                                    Write-ConsoleOutput -Message "    - Unity not listening for debugger_break event" -ForegroundColor "Yellow"
-                                } else {
-                                    $stats.PauseMarkerErrors++
-                                    Write-ConsoleOutput -Message "  ERROR: API returned success=false: $($result.error)" -ForegroundColor "Red"
-                                }
-                            } else {
-                                throw "API returned status code $($response.StatusCode)"
-                            }
-                        } catch {
-                            $stats.PauseMarkerErrors++
-                            Write-ConsoleOutput -Message "  ERROR: Failed to trigger debugger break: $_" -ForegroundColor "Red"
+                        $pauseSuccess = Invoke-DebuggerBreakWithVerification -tableId $tableId -reason "$($rootIssue.type) - $($rootIssue.severity) severity (Investigation complete)" -message "Investigation complete. Root issue: $($rootIssue.type). Related issues: $relatedCount"
+                        if (-not $pauseSuccess) {
+                            Write-ConsoleOutput -Message "  WARNING: Debugger break may not have reached Unity - will retry automatically" -ForegroundColor "Yellow"
                         }
                     }
                     
@@ -2588,41 +2727,13 @@ while ($monitoringActive) {
                                 # Investigation disabled or timeout is 0 - pause immediately
                                 # OR this is a related issue added during investigation - don't restart investigation
                                 if (-not $isInvestigating) {
-                                    # Pause debugger immediately
+                                    # Pause debugger immediately (with automatic verification)
                                     if ($config.unity.pauseDebuggerOnIssue) {
-                                        try {
-                            $escapedMessage = $line.Replace('"','\"').Replace("`n"," ").Replace("`r"," ").Substring(0,[Math]::Min(200,$line.Length))
-                                            $reason = "$($issue.type) - $($issue.severity) severity"
-                                            
-                                            $body = @{
-                                                tableId = $tableId
-                                                reason = $reason
-                                                message = $escapedMessage
-                                            } | ConvertTo-Json
-                                            
-                                            $response = Invoke-WebRequest -Uri "$serverUrl/api/debugger/break" -Method POST -Body $body -ContentType "application/json" -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
-                                            
-                                            if ($response.StatusCode -eq 200) {
-                                                $result = $response.Content | ConvertFrom-Json
-                                                if ($result.success -and $result.emittedCount -gt 0) {
-                                $stats.PauseMarkersWritten++
-                                                    Write-ConsoleOutput -Message "  Debugger break triggered via API" -ForegroundColor "Green"
-                                                    if ($result.emittedTables) {
-                                                        Write-ConsoleOutput -Message "  Emitted to $($result.emittedCount) table(s): $($result.emittedTables -join ', ')" -ForegroundColor "Cyan"
-                                                    } else {
-                                                        Write-ConsoleOutput -Message "  Emitted to $($result.emittedCount) table(s)" -ForegroundColor "Cyan"
-                                                    }
-                                                    Write-ConsoleOutput -Message "  Unity will call Debug.Break() when debugger is attached" -ForegroundColor "Cyan"
-                                                } else {
-                                                    throw "API returned success but no tables received event (emittedCount: $($result.emittedCount), success: $($result.success))"
-                                                }
-                                            } else {
-                                                throw "API returned status code $($response.StatusCode)"
-                                            }
-                            } catch {
-                                $stats.PauseMarkerErrors++
-                                            Write-ConsoleOutput -Message "  ERROR: Failed to trigger debugger break via API: $_" -ForegroundColor "Red"
-                                            Write-ConsoleOutput -Message "    Check: Server is running, API endpoint is accessible" -ForegroundColor "Yellow"
+                                        $escapedMessage = $line.Replace('"','\"').Replace("`n"," ").Replace("`r"," ").Substring(0,[Math]::Min(200,$line.Length))
+                                        $reason = "$($issue.type) - $($issue.severity) severity"
+                                        $pauseSuccess = Invoke-DebuggerBreakWithVerification -tableId $tableId -reason $reason -message $escapedMessage
+                                        if (-not $pauseSuccess) {
+                                            Write-ConsoleOutput -Message "  Monitor will automatically retry when Unity is ready" -ForegroundColor "Yellow"
                                         }
                                     }
                             $isPaused = $true
