@@ -1351,28 +1351,56 @@ function Show-Statistics {
         $col3Lines += "Pending: " + $pendingInfo.TotalIssues
     }
     
-    # Add investigation progress if investigating
+    # Add investigation section if investigating (prominent display)
     if ($isInvestigating -and $investigationStartTime) {
         $col3Lines += ""
-        $col3Lines += "INVESTIGATION"
-        $col3Lines += ("-" * ($colWidth - 2))
+        $col3Lines += "INVESTIGATION PHASE"
+        $col3Lines += ("=" * ($colWidth - 2))
         $investigationElapsed = (Get-Date) - $investigationStartTime
         $remaining = [Math]::Max(0, $investigationTimeout - $investigationElapsed.TotalSeconds)
-        $col3Lines += "Time Left: " + ("{0:N0}s" -f $remaining)
+        $elapsed = [Math]::Min($investigationTimeout, $investigationElapsed.TotalSeconds)
+        $progressPercent = [Math]::Round(($elapsed / $investigationTimeout) * 100)
+        
+        # Progress bar visualization (text-based)
+        $progressBarWidth = $colWidth - 12
+        $filled = [Math]::Round(($elapsed / $investigationTimeout) * $progressBarWidth)
+        $empty = $progressBarWidth - $filled
+        $progressBar = "[" + ("#" * $filled) + ("-" * $empty) + "]"
+        $col3Lines += "Progress: $progressBar $progressPercent%"
+        $col3Lines += "Time Left: " + ("{0:N0}s" -f $remaining) + " / " + ("{0:N0}s" -f $investigationTimeout)
         
         # Show what's being investigated
         if ($pendingInfo.RootIssue) {
-            $rootType = $pendingInfo.RootIssue.type
-            $rootSource = if ($pendingInfo.RootIssue.source) { $pendingInfo.RootIssue.source } else { "unknown" }
-            $col3Lines += "Investigating: " + $rootType
-            $col3Lines += "From: " + $rootSource
+            $rootIssue = $pendingInfo.RootIssue
+            $col3Lines += ""
+            $col3Lines += "Root Issue: " + $rootIssue.type
+            $col3Lines += "Severity: " + $rootIssue.severity.ToUpper()
+            if ($rootIssue.source) {
+                $col3Lines += "Source: " + $rootIssue.source
+            }
         }
         
         # Show related issues found so far
+        $col3Lines += ""
         if ($pendingInfo.RelatedIssuesCount -gt 0) {
-            $col3Lines += "Found: " + $pendingInfo.RelatedIssuesCount + " related"
+            $col3Lines += "Related Found: " + $pendingInfo.RelatedIssuesCount
+            # Show breakdown if available
+            if ($pendingInfo.RelatedIssues -and $pendingInfo.RelatedIssues.Count -gt 0) {
+                $relatedTypes = @{}
+                foreach ($related in $pendingInfo.RelatedIssues) {
+                    $type = if ($related.type) { $related.type } else { "unknown" }
+                    if (-not $relatedTypes.ContainsKey($type)) {
+                        $relatedTypes[$type] = 0
+                    }
+                    $relatedTypes[$type]++
+                }
+                $relatedSorted = $relatedTypes.GetEnumerator() | Sort-Object Value -Descending | Select-Object -First 2
+                foreach ($typeEntry in $relatedSorted) {
+                    $col3Lines += "  - " + $typeEntry.Key + ": " + $typeEntry.Value
+                }
+            }
         } else {
-            $col3Lines += "Gathering related issues..."
+            $col3Lines += "Status: Gathering related issues..."
         }
     }
     
@@ -2247,13 +2275,8 @@ while ($monitoringActive) {
                     $isPaused = $true
                 }
             } else {
-                # Still investigating - show countdown every 5 seconds
-                $remaining = [Math]::Max(0, $investigationTimeout - $investigationElapsed.TotalSeconds)
-                $remainingInt = [Math]::Floor($remaining)
-                # Show countdown every 5 seconds or when less than 5 seconds remain
-                if ($remainingInt -lt 5 -or ($remainingInt % 5 -eq 0 -and $remainingInt -ne $investigationTimeout)) {
-                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] INVESTIGATING: $remainingInt s remaining..." -ForegroundColor "Gray"
-                }
+                # Still investigating - no console spam, all info is in statistics
+                # Statistics will show the countdown and progress
             }
         }
         
@@ -2514,9 +2537,7 @@ while ($monitoringActive) {
                                 # New issue detected - start investigation phase
                                 $isInvestigating = $true
                                 $investigationStartTime = Get-Date
-                                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] INVESTIGATION: Starting investigation phase ($investigationTimeout seconds)" -ForegroundColor "Cyan"
-                                Write-ConsoleOutput -Message "  Gathering related issues before pausing debugger..." -ForegroundColor "Gray"
-                                Write-ConsoleOutput -Message "  Monitor will pause debugger when investigation completes" -ForegroundColor "Gray"
+                                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] INVESTIGATION: Starting ($investigationTimeout seconds) - see statistics for details" -ForegroundColor "Cyan"
                                 $currentIssue = $line
                             } else {
                                 # Investigation disabled or timeout is 0 - pause immediately
