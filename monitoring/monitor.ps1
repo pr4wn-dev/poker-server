@@ -1945,12 +1945,16 @@ while ($monitoringActive) {
                         $script:lastOrphanedSimStopAttempt = Get-Date
                         
                         # After killing processes, the server is likely dead - always restart it
-                        # Note: Start-ServerIfNeeded will check if server is running first, and will kill port 3000 processes again (redundant but safe),
-                        # then verify port is free, then start server and wait for it to be ready
-                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🔄 Server likely dead after killing processes - restarting..." -ForegroundColor "Cyan"
+                        # Note: Start-ServerIfNeeded will:
+                        # 1. Kill port 3000 processes again (redundant but safe)
+                        # 2. Verify port is free
+                        # 3. Start server
+                        # 4. WAIT for server to be ready (blocks up to 30 seconds)
+                        # 5. Only then return, allowing other code to continue
+                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🔄 Server likely dead after killing processes - restarting and waiting for server to be ready..." -ForegroundColor "Cyan"
                         $serverRestartResult = Start-ServerIfNeeded
                         if ($serverRestartResult) {
-                            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ✅ Server restarted successfully" -ForegroundColor "Green"
+                            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ✅ Server restarted and is ready - continuing with monitoring" -ForegroundColor "Green"
                         } else {
                             Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  Server restart may have failed - will retry on next check" -ForegroundColor "Yellow"
                         }
