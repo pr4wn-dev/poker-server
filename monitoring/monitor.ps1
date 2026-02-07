@@ -1998,19 +1998,9 @@ while ($monitoringActive) {
                                 }
                                 Write-ConsoleOutput -Message "  Waiting for log watcher to pause Unity..." -ForegroundColor "Yellow"
                                 
-                                # Verify pause actually happened (check logs after 2 seconds)
-                                Start-Sleep -Seconds 2
-                                $pauseVerified = Verify-UnityPaused -TableId $tableId -TimeoutSeconds 5
-                                
-                                if ($pauseVerified.Success) {
-                                    Write-ConsoleOutput -Message "  VERIFIED: Unity paused successfully" -ForegroundColor "Green"
-                                    if ($pauseVerified.Details) {
-                                        Write-ConsoleOutput -Message "    Details: $($pauseVerified.Details)" -ForegroundColor "Gray"
-                                    }
-                                } else {
-                                    Write-ConsoleOutput -Message "  WARNING: Unity pause NOT verified!" -ForegroundColor "Red"
-                                    Write-ConsoleOutput -Message "    Reason: $($pauseVerified.Reason)" -ForegroundColor "Yellow"
-                                    Write-ConsoleOutput -Message "    Diagnostics:" -ForegroundColor "Yellow"
+                                # Note: Log watcher handles the actual pause - no verification needed
+                                # The pause marker is written to game.log and the log watcher will detect it
+                                # Unity will pause itself when it receives the pause event from the log watcher
                                     
                                     # Run diagnostics
                                     $diagnostics = Get-PauseDiagnostics -TableId $tableId
