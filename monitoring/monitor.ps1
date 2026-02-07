@@ -2750,7 +2750,9 @@ while ($monitoringActive) {
                     $investigationStartTime = $null
                     $pendingInfo = Get-PendingIssuesInfo
                     
-                    if ($pendingInfo.InFocusMode -and $pendingInfo.RootIssue) {
+                    # Always complete investigation after timeout, even if pending info is missing
+                    # This prevents investigation from getting stuck
+                    if ($pendingInfo -and $pendingInfo.InFocusMode -and $pendingInfo.RootIssue) {
                         $rootIssue = $pendingInfo.RootIssue
                         $relatedCount = $pendingInfo.RelatedIssuesCount
                         
