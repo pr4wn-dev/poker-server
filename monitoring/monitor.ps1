@@ -3417,6 +3417,10 @@ while ($monitoringActive) {
                     # Unity is not running at all - always start it, even during server cooldown
                     $shouldRestart = $true
                     $restartReason = "Unity process not running"
+                } elseif ($unityActualStatus.Status -eq "CRASHED") {
+                    # Unity process is running but not responding (crashed/hung) - restart immediately
+                    $shouldRestart = $true
+                    $restartReason = "Unity process crashed/hung (not responding)"
                 } elseif (-not $serverJustRestarted) {
                     # Unity is running - only check connection/restart if server wasn't just restarted
                     if (-not $unityActualStatus.ConnectedToServer) {
