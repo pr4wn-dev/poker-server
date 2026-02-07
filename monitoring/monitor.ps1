@@ -1949,23 +1949,47 @@ while ($monitoringActive) {
                 } elseif (-not $serverJustRestarted) {
                     # Unity is running - only check connection/restart if server wasn't just restarted
                     if (-not $unityActualStatus.ConnectedToServer) {
-                        # Check if Unity is actually trying to connect (recent connection attempts in logs)
-                        # If Unity just started and is trying to connect, give it more time
-                        $recentConnectionAttempt = $false
-                        if ($unityActualStatus.LastConnectionActivity) {
-                            $timeSinceConnectionAttempt = (Get-Date) - $unityActualStatus.LastConnectionActivity
-                            if ($timeSinceConnectionAttempt.TotalSeconds -lt 30) {
-                                $recentConnectionAttempt = $true
+                        # Check if Unity process was just started (give it time to initialize and connect)
+                        # Unity needs time to: start, enter play mode, initialize, connect, login
+                        $unityJustStarted = $false
+                        $unityProcess = Get-Process -Name "Unity" -ErrorAction SilentlyContinue | Select-Object -First 1
+                        if ($unityProcess) {
+                            try {
+                                $timeSinceUnityStart = (Get-Date) - $unityProcess.StartTime
+                                # Give Unity 45 seconds to start, enter play mode, and connect
+                                if ($timeSinceUnityStart.TotalSeconds -lt 45) {
+                                    $unityJustStarted = $true
+                                }
+                            } catch {
+                                # If we can't get start time, assume Unity wasn't just started
                             }
                         }
                         
-                        if (-not $recentConnectionAttempt) {
-                            $shouldRestart = $true
-                            $restartReason = "Unity not connected to server (no recent connection attempts)"
+                        if ($unityJustStarted) {
+                            # Unity was just started - give it time to connect
+                            $timeRemaining = 45 - $timeSinceUnityStart.TotalSeconds
+                            if ($timeRemaining -gt 0) {
+                                $waitingMsg = "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Waiting for connection (started $([Math]::Round($timeSinceUnityStart.TotalSeconds))s ago, $([Math]::Round($timeRemaining))s remaining)"
+                                Write-ConsoleOutput -Message $waitingMsg -ForegroundColor "Gray"
+                            }
                         } else {
-                            # Unity is trying to connect - log but don't restart yet
-                            $connectingMsg = "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Connecting to server (last attempt: $([Math]::Round((Get-Date - $unityActualStatus.LastConnectionActivity).TotalSeconds))s ago)"
-                            Write-ConsoleOutput -Message $connectingMsg -ForegroundColor "Yellow"
+                            # Check if Unity is actually trying to connect (recent connection attempts in logs)
+                            $recentConnectionAttempt = $false
+                            if ($unityActualStatus.LastConnectionActivity) {
+                                $timeSinceConnectionAttempt = (Get-Date) - $unityActualStatus.LastConnectionActivity
+                                if ($timeSinceConnectionAttempt.TotalSeconds -lt 30) {
+                                    $recentConnectionAttempt = $true
+                                }
+                            }
+                            
+                            if (-not $recentConnectionAttempt) {
+                                $shouldRestart = $true
+                                $restartReason = "Unity not connected to server (no recent connection attempts)"
+                            } else {
+                                # Unity is trying to connect - log but don't restart yet
+                                $connectingMsg = "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Connecting to server (last attempt: $([Math]::Round((Get-Date - $unityActualStatus.LastConnectionActivity).TotalSeconds))s ago)"
+                                Write-ConsoleOutput -Message $connectingMsg -ForegroundColor "Yellow"
+                            }
                         }
                     } elseif ($config.simulation.enabled -and -not $unityActualStatus.InGameScene) {
                         # In simulation mode, if Unity is idle (not in game scene), restart it
