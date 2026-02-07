@@ -3193,6 +3193,11 @@ while ($monitoringActive) {
                                     $script:investigationStartTime = Get-Date
                                     $script:investigationCheckLogged = $false  # Reset for new investigation
                                     Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] INVESTIGATION: Starting ($investigationTimeout seconds) - see statistics for details" -ForegroundColor "Cyan"
+                                    # DIAGNOSTIC: Verify variables were set correctly
+                                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] Investigation variables set: isInvestigating=$($script:isInvestigating), startTime=$($script:investigationStartTime), type=$($script:investigationStartTime.GetType().Name)" -ForegroundColor "Green"
+                                    # CRITICAL: Force immediate status update so investigation shows as active
+                                    Update-MonitorStatus
+                                    $lastStatusUpdate = Get-Date  # Reset timer so next update happens in 5 seconds
                                     $currentIssue = $line
                                 } else {
                                     Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] INVESTIGATION: Already in progress - new issue will be added to existing investigation" -ForegroundColor "Gray"
