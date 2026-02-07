@@ -667,7 +667,8 @@ function Kill-Port3000Processes {
                 $processId = [int]$matches[1]
                 try {
                     $process = Get-Process -Id $processId -ErrorAction SilentlyContinue
-                    if ($process) {
+                    if ($process -and $process.ProcessName -eq 'node') {
+                        # Only kill node.exe processes, not PowerShell or other clients
                         $port3000Processes += $process
                     }
                 } catch {
@@ -1469,18 +1470,20 @@ try {
         Write-Info "Could not stop simulations (server may not be running): $_"
     }
     
-    # Step 1: Find and kill processes using port 3000
+    # Step 1: Find and kill processes using port 3000 (only node.exe, not PowerShell clients)
     Write-Info "Checking for processes using port 3000..."
     $port3000Processes = @()
     try {
         # Use netstat to find processes using port 3000
-        $netstatOutput = netstat -ano | Select-String ":3000"
+        $portPattern = ':3000'
+        $netstatOutput = netstat -ano | Select-String $portPattern
         foreach ($line in $netstatOutput) {
             if ($line -match '\s+(\d+)\s*$') {
                 $processId = [int]$matches[1]
                 try {
                     $process = Get-Process -Id $processId -ErrorAction SilentlyContinue
-                    if ($process) {
+                    if ($process -and $process.ProcessName -eq 'node') {
+                        # Only kill node.exe processes, not PowerShell or other clients
                         $port3000Processes += $process
                     }
                 } catch {
