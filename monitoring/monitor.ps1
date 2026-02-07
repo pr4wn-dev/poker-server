@@ -1876,12 +1876,10 @@ while ($monitoringActive) {
             if ($serverHasSimulation -and $unityIsInGame) {
                 # Both server and Unity agree: simulation is active
                 $stats.SimulationRunning = $true
-            } elseif ($serverHasSimulation) {
-                $unityNotInGame = -not $unityIsInGame
-                if ($unityNotInGame) {
-                    # Server has simulation but Unity isn't connected to it - treat as inactive
-                    # This means there's an orphaned simulation (bots playing without Unity)
-                    $stats.SimulationRunning = $false
+            } elseif ($serverHasSimulation -and -not $unityIsInGame) {
+                # Server has simulation but Unity isn't connected to it - treat as inactive
+                # This means there's an orphaned simulation (bots playing without Unity)
+                $stats.SimulationRunning = $false
                 
                 # Track last time we tried to stop orphaned simulations (prevent spam)
                 if (-not $script:lastOrphanedSimStopAttempt) {
@@ -1948,7 +1946,6 @@ while ($monitoringActive) {
                         Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  SIMULATION: Orphaned simulation detected (throttled - will stop in $([math]::Round(10 - $timeSinceLastStop.TotalSeconds))s)" -ForegroundColor "Yellow"
                     }
                 }
-                } # End if ($unityNotInGame)
             } else {
                 # No simulation on server
                 $stats.SimulationRunning = $false
