@@ -176,13 +176,45 @@ function Add-PendingIssue {
     param($issueData)
     
     try {
-        $jsonData = $issueData | ConvertTo-Json -Compress
-        $result = node $nodeScript --add-issue $jsonData 2>&1
+        # Convert to JSON and write to temp file to avoid PowerShell/Node.js argument parsing issues
+        $jsonData = $issueData | ConvertTo-Json -Compress -Depth 10
+        $tempFile = Join-Path $env:TEMP "monitor-issue-$(Get-Date -Format 'yyyyMMddHHmmss')-$(Get-Random).json"
+        
+        # Write JSON without BOM (UTF8NoBOM) and ensure no trailing newlines
+        [System.IO.File]::WriteAllText($tempFile, $jsonData, [System.Text.UTF8Encoding]::new($false))
+        
+        # Small delay to ensure file is fully written
+        Start-Sleep -Milliseconds 50
+        
+        # Verify file was written correctly
+        if (-not (Test-Path $tempFile)) {
+            Write-Warning "Temp file was not created: $tempFile"
+            return $null
+        }
+        
+        $fileContent = Get-Content $tempFile -Raw
+        if ([string]::IsNullOrWhiteSpace($fileContent)) {
+            Write-Warning "Temp file is empty: $tempFile"
+            return $null
+        }
+        
+        try {
+            $result = node $nodeScript --add-issue-file $tempFile 2>&1
         if ($LASTEXITCODE -eq 0 -and $result) {
             $jsonResult = $result | ConvertFrom-Json -ErrorAction SilentlyContinue
             return $jsonResult
+            } else {
+                # Log the error for debugging
+                Write-Warning "Issue detector failed: $result"
+            }
+        } finally {
+            # Clean up temp file
+            if (Test-Path $tempFile) {
+                Remove-Item $tempFile -Force -ErrorAction SilentlyContinue
+            }
         }
     } catch {
+        Write-Warning "Add-PendingIssue error: $_"
         return $null
     }
     return $null
