@@ -140,6 +140,96 @@ app.post('/api/simulations/:tableId/resume', (req, res) => {
     }
 });
 
+// API endpoint to trigger debugger break in Unity (called by Monitor)
+app.post('/api/debugger/break', (req, res) => {
+    if (!socketHandler || !socketHandler.io) {
+        return res.status(503).json({ success: false, error: 'Socket handler not initialized' });
+    }
+    
+    const { tableId, reason, message } = req.body || {};
+    const gameLogger = require('./utils/GameLogger');
+    
+    let emittedCount = 0;
+    const emittedTables = [];
+    
+    if (tableId) {
+        // Emit to specific table
+        const table = gameManager.getTable(tableId);
+        if (table) {
+            const tableRoom = `table:${tableId}`;
+            const spectatorRoom = `spectator:${tableId}`;
+            
+            socketHandler.io.to(tableRoom).emit('debugger_break', {
+                tableId: tableId,
+                reason: reason || 'Monitor detected critical issue',
+                message: message || 'Pausing debugger for issue inspection'
+            });
+            
+            socketHandler.io.to(spectatorRoom).emit('debugger_break', {
+                tableId: tableId,
+                reason: reason || 'Monitor detected critical issue',
+                message: message || 'Pausing debugger for issue inspection'
+            });
+            
+            emittedCount = 1;
+            emittedTables.push(tableId);
+            
+            gameLogger.gameEvent('SERVER', `[DEBUGGER_BREAK] EMITTED_TO_TABLE`, {
+                tableId,
+                reason: reason || 'Monitor detected critical issue',
+                message: message || 'Pausing debugger for issue inspection'
+            });
+        } else {
+            return res.status(404).json({ success: false, error: 'Table not found', tableId });
+        }
+    } else {
+        // Emit to all active simulation tables
+        for (const [id, table] of gameManager.tables) {
+            if (table.isSimulation) {
+                const tableRoom = `table:${id}`;
+                const spectatorRoom = `spectator:${id}`;
+                
+                socketHandler.io.to(tableRoom).emit('debugger_break', {
+                    tableId: id,
+                    reason: reason || 'Monitor detected critical issue',
+                    message: message || 'Pausing debugger for issue inspection'
+                });
+                
+                socketHandler.io.to(spectatorRoom).emit('debugger_break', {
+                    tableId: id,
+                    reason: reason || 'Monitor detected critical issue',
+                    message: message || 'Pausing debugger for issue inspection'
+                });
+                
+                emittedCount++;
+                emittedTables.push(id);
+            }
+        }
+        
+        gameLogger.gameEvent('SERVER', `[DEBUGGER_BREAK] EMITTED_TO_ALL_SIMULATIONS`, {
+            count: emittedCount,
+            tableIds: emittedTables,
+            reason: reason || 'Monitor detected critical issue',
+            message: message || 'Pausing debugger for issue inspection'
+        });
+    }
+    
+    if (emittedCount === 0) {
+        return res.status(404).json({ 
+            success: false, 
+            error: 'No simulation tables found',
+            tableId: tableId || null
+        });
+    }
+    
+    res.json({ 
+        success: true, 
+        message: `Debugger break emitted to ${emittedCount} table(s)`,
+        emittedCount,
+        tableIds: emittedTables
+    });
+});
+
 // API endpoint to resume ALL paused simulations
 app.post('/api/simulations/resume-all', (req, res) => {
     if (!socketHandler) {

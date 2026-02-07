@@ -2038,36 +2038,37 @@ while ($monitoringActive) {
                                 Write-ConsoleOutput -Message "  Table ID: Not found - will pause all active simulations" -ForegroundColor "Yellow"
                             }
                             
-                            # CRITICAL: Write a special log entry that the log watcher will detect to pause Unity
-                            # This ensures Unity pauses immediately when monitor detects an issue
-                            $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
-                            $escapedMessage = $line.Replace('"','\"').Replace("`n"," ").Replace("`r"," ").Substring(0,[Math]::Min(200,$line.Length))
-                            $debuggerPause = if ($config.unity.pauseDebuggerOnIssue) { "true" } else { "false" }
-                            # Always include tableId as a string (even if null) so log watcher can parse it
-                            $tableIdStr = if ($tableId) { "`"$tableId`"" } else { "null" }
-                            $pauseMarker = "[$timestamp] [GAME] [MONITOR] [CRITICAL_ISSUE_DETECTED] Issue detected by monitor - pausing Unity | Data: {`"issueId`":`"$($addResult.issueId)`",`"severity`":`"$($issue.severity)`",`"type`":`"$($issue.type)`",`"source`":`"$($issue.source)`",`"tableId`":$tableIdStr,`"message`":`"$escapedMessage`",`"pauseDebugger`":$debuggerPause}"
-                            
-                            # Write pause marker to log file (with retry and file sharing)
-                            try {
-                                $writeSuccess = Write-ToLogFile -FilePath $logFile -Content $pauseMarker
-                                if (-not $writeSuccess) {
-                                    throw "Write-ToLogFile returned false"
+                            # CRITICAL: Call API directly to trigger debugger break in Unity
+                            # This is simpler and more reliable than writing to log file and having watcher read it
+                            if ($config.unity.pauseDebuggerOnIssue) {
+                                try {
+                                    $escapedMessage = $line.Replace('"','\"').Replace("`n"," ").Replace("`r"," ").Substring(0,[Math]::Min(200,$line.Length))
+                                    $reason = "$($issue.type) - $($issue.severity) severity"
+                                    
+                                    $body = @{
+                                        tableId = $tableId
+                                        reason = $reason
+                                        message = $escapedMessage
+                                    } | ConvertTo-Json
+                                    
+                                    $response = Invoke-WebRequest -Uri "$serverUrl/api/debugger/break" -Method POST -Body $body -ContentType "application/json" -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
+                                    
+                                    if ($response.StatusCode -eq 200) {
+                                        $result = $response.Content | ConvertFrom-Json
+                                        $stats.PauseMarkersWritten++
+                                        Write-ConsoleOutput -Message "  Debugger break triggered via API" -ForegroundColor "Green"
+                                        Write-ConsoleOutput -Message "  Emitted to $($result.emittedCount) table(s): $($result.tableIds -join ', ')" -ForegroundColor "Cyan"
+                                        Write-ConsoleOutput -Message "  Unity will call Debug.Break() when debugger is attached" -ForegroundColor "Cyan"
+                                    } else {
+                                        throw "API returned status code $($response.StatusCode)"
+                                    }
+                                } catch {
+                                    $stats.PauseMarkerErrors++
+                                    Write-ConsoleOutput -Message "  ERROR: Failed to trigger debugger break via API: $_" -ForegroundColor "Red"
+                                    Write-ConsoleOutput -Message "    Check: Server is running, API endpoint is accessible" -ForegroundColor "Yellow"
                                 }
-                                $stats.PauseMarkersWritten++
-                                Write-ConsoleOutput -Message "  Pause marker written to game.log" -ForegroundColor "Green"
-                                if ($config.unity.pauseDebuggerOnIssue) {
-                                    Write-ConsoleOutput -Message "  Debugger pause enabled - Unity will call Debug.Break()" -ForegroundColor "Cyan"
-                                }
-                                Write-ConsoleOutput -Message "  Waiting for log watcher to pause Unity..." -ForegroundColor "Yellow"
-                                
-                                # Note: Log watcher handles the actual pause - no verification needed
-                                # The pause marker is written to game.log and the log watcher will detect it
-                                # Unity will pause itself when it receives the pause event from the log watcher
-                            } catch {
-                                # If writing fails, log it but continue
-                                $stats.PauseMarkerErrors++
-                                Write-ConsoleOutput -Message "  ERROR: Failed to write pause marker: $_" -ForegroundColor "Red"
-                                Write-ConsoleOutput -Message "    Check: Log file permissions, disk space, file locks" -ForegroundColor "Yellow"
+                            } else {
+                                Write-ConsoleOutput -Message "  Debugger pause disabled in config (pauseDebuggerOnIssue = false)" -ForegroundColor "Gray"
                             }
                             
                             $isPaused = $true
@@ -2082,15 +2083,23 @@ while ($monitoringActive) {
                                 # Write-Info "Duplicate issue detected (already logged)"
                                 # CRITICAL: Even for duplicates, if Unity isn't paused yet, we should pause it
                                 # This ensures Unity stops logging and gives user time to report the issue
-                                if (-not $isPaused) {
-                                    # Don't write to console - update stats display instead
-                                    # Write-Warning "Unity not paused yet - triggering pause for duplicate issue"
-                                    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
-                                    $escapedMessage = $line.Replace('"','\"').Replace("`n"," ").Replace("`r"," ").Substring(0,[Math]::Min(200,$line.Length))
-                                    $pauseMarker = "[$timestamp] [GAME] [MONITOR] [CRITICAL_ISSUE_DETECTED] Duplicate issue - pausing Unity to stop logging | Data: {`"issueId`":`"duplicate`",`"severity`":`"$($issue.severity)`",`"type`":`"$($issue.type)`",`"source`":`"$($issue.source)`",`"tableId`":$(if($tableId){`"$tableId`"}else{'null'}),`"message`":`"$escapedMessage`",`"pauseDebugger`":$debuggerPause}"
-                                    Write-ToLogFile -FilePath $logFile -Content $pauseMarker | Out-Null
-                                    $isPaused = $true
-                                    $currentIssue = $line
+                                if (-not $isPaused -and $config.unity.pauseDebuggerOnIssue) {
+                                    try {
+                                        $escapedMessage = $line.Replace('"','\"').Replace("`n"," ").Replace("`r"," ").Substring(0,[Math]::Min(200,$line.Length))
+                                        $reason = "Duplicate issue: $($issue.type) - $($issue.severity) severity"
+                                        
+                                        $body = @{
+                                            tableId = $tableId
+                                            reason = $reason
+                                            message = $escapedMessage
+                                        } | ConvertTo-Json
+                                        
+                                        Invoke-WebRequest -Uri "$serverUrl/api/debugger/break" -Method POST -Body $body -ContentType "application/json" -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop | Out-Null
+                                        $isPaused = $true
+                                        $currentIssue = $line
+                                    } catch {
+                                        # API call failed - continue anyway
+                                    }
                                 }
                             } else {
                                 $errorMsg = if ($addResult -and $addResult.error) { $addResult.error } else { "Unknown error - check Node.js script output" }
@@ -2102,24 +2111,29 @@ while ($monitoringActive) {
                                 Write-ConsoleOutput -Message "    - Check if pending-issues.json is writable" -ForegroundColor "Gray"
                                 Write-ConsoleOutput -Message "    - Check Node.js error output for details" -ForegroundColor "Gray"
                                 
-                                # CRITICAL: Still write pause marker even if issue logging failed
+                                # CRITICAL: Still trigger debugger break even if issue logging failed
                                 # Unity should still pause when critical issues are detected
-                                $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
-                                $escapedMessage = $line.Replace('"','\"').Replace("`n"," ").Replace("`r"," ").Substring(0,[Math]::Min(200,$line.Length))
-                                $debuggerPause = if ($config.unity.pauseDebuggerOnIssue) { "true" } else { "false" }
-                                $pauseMarker = "[$timestamp] [GAME] [MONITOR] [CRITICAL_ISSUE_DETECTED] Issue detected by monitor - pausing Unity (logging failed) | Data: {`"issueId`":`"failed_to_log`",`"severity`":`"$($issue.severity)`",`"type`":`"$($issue.type)`",`"source`":`"$($issue.source)`",`"tableId`":$(if($tableId){`"$tableId`"}else{'null'}),`"message`":`"$escapedMessage`",`"pauseDebugger`":$debuggerPause}"
-                                
-                                try {
-                                    $writeSuccess = Write-ToLogFile -FilePath $logFile -Content $pauseMarker
-                                    if (-not $writeSuccess) {
-                                        throw "Write-ToLogFile returned false"
+                                if ($config.unity.pauseDebuggerOnIssue) {
+                                    try {
+                                        $escapedMessage = $line.Replace('"','\"').Replace("`n"," ").Replace("`r"," ").Substring(0,[Math]::Min(200,$line.Length))
+                                        $reason = "$($issue.type) - $($issue.severity) severity (logging failed)"
+                                        
+                                        $body = @{
+                                            tableId = $tableId
+                                            reason = $reason
+                                            message = $escapedMessage
+                                        } | ConvertTo-Json
+                                        
+                                        $response = Invoke-WebRequest -Uri "$serverUrl/api/debugger/break" -Method POST -Body $body -ContentType "application/json" -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
+                                        
+                                        if ($response.StatusCode -eq 200) {
+                                            $stats.PauseMarkersWritten++
+                                            Write-ConsoleOutput -Message "  Debugger break triggered via API (despite logging failure)" -ForegroundColor "Yellow"
+                                        }
+                                    } catch {
+                                        Write-ConsoleOutput -Message "  ERROR: Failed to trigger debugger break: $_" -ForegroundColor "Red"
                                     }
-                                    $stats.PauseMarkersWritten++
-                                    Write-ConsoleOutput -Message "  Pause marker written to game.log (despite logging failure)" -ForegroundColor "Yellow"
-                                    if ($config.unity.pauseDebuggerOnIssue) {
-                                        Write-ConsoleOutput -Message "  Debugger pause enabled - Unity will call Debug.Break()" -ForegroundColor "Cyan"
-                                    }
-                                    Write-ConsoleOutput -Message "  Waiting for log watcher to pause Unity..." -ForegroundColor "Yellow"
+                                }
                                     
                                     # Set paused state even though logging failed
                                     $isPaused = $true
