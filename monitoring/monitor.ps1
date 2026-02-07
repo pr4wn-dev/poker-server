@@ -2522,9 +2522,18 @@ while ($monitoringActive) {
             $simStartMsg = "[$timestamp] SIMULATION: Started - $activeCount active"
             Write-ConsoleOutput -Message $simStartMsg -ForegroundColor "Green"
         } elseif (-not $stats.SimulationRunning -and $wasSimulationRunning) {
-            $timestamp = Get-Date -Format 'HH:mm:ss'
-            $completedMsg = "[$timestamp] SIMULATION: Completed - 10/10 games - Unity is now idle"
-            Write-ConsoleOutput -Message $completedMsg -ForegroundColor "Yellow"
+            # Only show completion message if we actually tracked this simulation from the start
+            # This prevents showing completion for old simulations that were running when monitor started
+            if ($script:simulationEndTime -ne $null) {
+                $timestamp = Get-Date -Format 'HH:mm:ss'
+                $completedMsg = "[$timestamp] SIMULATION: Completed - 10/10 games - Unity is now idle"
+                Write-ConsoleOutput -Message $completedMsg -ForegroundColor "Yellow"
+            } else {
+                # This was an old simulation - don't show completion, just continue
+                $timestamp = Get-Date -Format 'HH:mm:ss'
+                $oldSimMsg = "[$timestamp] SIMULATION: Old simulation ended (was running when monitor started) - continuing to monitor"
+                Write-ConsoleOutput -Message $oldSimMsg -ForegroundColor "Gray"
+            }
             
             # In simulation mode, if simulation ended and Unity is running but idle, restart it to start a new simulation
             if ($config.simulation.enabled -and $config.automation.autoRestartUnity -and $stats.UnityRunning) {
