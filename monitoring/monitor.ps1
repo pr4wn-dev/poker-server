@@ -1254,6 +1254,9 @@ function Restart-UnityIfNeeded {
             # Enable debug mode so debugger can attach
             $unityArgs += "-debugCodeOptimization"
             
+            # Automatically enter play mode using Editor script
+            $unityArgs += "-executeMethod", "AutoPlayMode.StartPlayMode"
+            
             # Pass auto-mode to Unity (simulation or normal)
             if ($config.simulation.enabled) {
                 $unityArgs += "-autoMode", "simulation"
@@ -1275,6 +1278,7 @@ function Restart-UnityIfNeeded {
             }
             
             # Start Unity in normal window (visible, not headless) with debugger support
+            # Unity will automatically enter play mode via -executeMethod
             Start-Process -FilePath $config.unity.executablePath -ArgumentList $unityArgs -WindowStyle Normal
             Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Unity started, waiting for connection..." -ForegroundColor "Cyan"
             
