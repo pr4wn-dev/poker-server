@@ -3344,11 +3344,16 @@ while ($monitoringActive) {
                                     Write-ConsoleOutput -Message "  Group ID: $($addResult.groupId)" -ForegroundColor "Cyan"
                                     
                                     # Start investigation phase even if Unity is already paused
+                                    # BUT: Don't restart investigation if one is already in progress
                                     if ($investigationEnabled -and $investigationTimeout -gt 0) {
-                                        $isInvestigating = $true
-                                        $investigationStartTime = Get-Date
-                                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] INVESTIGATION: Starting ($investigationTimeout seconds) - see statistics for details" -ForegroundColor "Cyan"
-                                        $currentIssue = $line
+                                        if (-not $isInvestigating) {
+                                            $isInvestigating = $true
+                                            $investigationStartTime = Get-Date
+                                            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] INVESTIGATION: Starting ($investigationTimeout seconds) - see statistics for details" -ForegroundColor "Cyan"
+                                            $currentIssue = $line
+                                        } else {
+                                            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] INVESTIGATION: Already in progress - new issue will be added to existing investigation" -ForegroundColor "Gray"
+                                        }
                                     }
                                 } elseif ($addResult.reason -eq 'added_to_group') {
                                     # Related issue added to focused group
