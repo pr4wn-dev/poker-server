@@ -199,13 +199,35 @@ function Add-PendingIssue {
         }
         
         try {
-            $result = node $nodeScript --add-issue-file $tempFile 2>&1
-        if ($LASTEXITCODE -eq 0 -and $result) {
-            $jsonResult = $result | ConvertFrom-Json -ErrorAction SilentlyContinue
-            return $jsonResult
-            } else {
-                # Log the error for debugging
-                Write-Warning "Issue detector failed: $result"
+            $result = node $nodeScript --add-issue-file $tempFile 2>&1 | Out-String
+            if ($LASTEXITCODE -eq 0 -and $result) {
+                # Remove any non-JSON output (like warnings or errors)
+                $jsonLines = $result -split "`n" | Where-Object { $_ -match '^\s*\{' -or $_ -match '^\s*\[' }
+                $cleanResult = $jsonLines -join "`n"
+                
+                if ($cleanResult) {
+                    $jsonResult = $cleanResult | ConvertFrom-Json -ErrorAction SilentlyContinue
+                    if ($jsonResult) {
+                        return $jsonResult
+                    }
+                }
+            }
+            
+            # If we get here, something failed - log the actual error
+            $errorDetails = $result
+            if (-not $errorDetails) {
+                $errorDetails = "Node.js script returned no output (exit code: $LASTEXITCODE)"
+            }
+            Write-Warning "Issue detector failed: $errorDetails"
+            
+            # Try to parse error from result if it's JSON
+            try {
+                $errorJson = $result | ConvertFrom-Json -ErrorAction SilentlyContinue
+                if ($errorJson -and $errorJson.error) {
+                    return @{ success = $false; error = $errorJson.error; reason = $errorJson.reason }
+                }
+            } catch {
+                # Not JSON, return generic error
             }
         } finally {
             # Clean up temp file
@@ -1804,8 +1826,17 @@ while ($monitoringActive) {
                         }
                         
                         # Add issue to pending-issues.json via Node.js
+                        # Truncate and escape the message to prevent JSON issues
+                        $maxMessageLength = 1000
+                        $safeMessage = $line
+                        if ($safeMessage.Length -gt $maxMessageLength) {
+                            $safeMessage = $safeMessage.Substring(0, $maxMessageLength) + "... (truncated)"
+                        }
+                        # Remove null bytes and other problematic characters
+                        $safeMessage = $safeMessage -replace "`0", "" -replace "`r", " " -replace "`n", " "
+                        
                         $issueData = @{
-                            message = $line
+                            message = $safeMessage
                             source = $issue.source
                             severity = $issue.severity
                             type = $issue.type
