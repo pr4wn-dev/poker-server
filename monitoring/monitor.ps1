@@ -2803,15 +2803,10 @@ while ($monitoringActive) {
                     $script:investigationCheckLogged = $true
                 }
                 
-                # Ensure investigationStartTime is a DateTime object
-                if ($script:investigationStartTime -isnot [DateTime]) {
-                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] ERROR: investigationStartTime is not a DateTime object (type: $($script:investigationStartTime.GetType().Name)), resetting investigation" -ForegroundColor "Red"
-                    $script:isInvestigating = $false
-                    $script:investigationStartTime = $null
-                    # Don't use continue here - it skips the rest of the loop! Just skip the rest of this check
-                } else {
-                    $investigationElapsed = (Get-Date) - $script:investigationStartTime
-                    $elapsedSeconds = $investigationElapsed.TotalSeconds
+                # At this point, we know investigationStartTime is a valid DateTime (validated above)
+                # Calculate elapsed time and check if investigation should complete
+                $investigationElapsed = (Get-Date) - $script:investigationStartTime
+                $elapsedSeconds = $investigationElapsed.TotalSeconds
                     
                     # CRITICAL FIX: Ensure investigationTimeout is accessible (use script scope if needed)
                     $timeoutValue = if ($investigationTimeout) { $investigationTimeout } else { 15 }
