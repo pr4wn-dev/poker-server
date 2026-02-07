@@ -3634,6 +3634,14 @@ while ($monitoringActive) {
                             }
                         } else {
                             # Check if Unity is actually trying to connect (recent connection attempts in logs)
+                            # BUT: If server is down, Unity can't connect - restart Unity anyway
+                            $serverIsDown = $false
+                            try {
+                                $serverCheck = Invoke-WebRequest -Uri "$serverUrl/health" -TimeoutSec 2 -ErrorAction Stop
+                            } catch {
+                                $serverIsDown = $true
+                            }
+                            
                             $recentConnectionAttempt = $false
                             if ($unityActualStatus.LastConnectionActivity -and $unityActualStatus.LastConnectionActivity -is [DateTime]) {
                                 try {
@@ -3647,9 +3655,15 @@ while ($monitoringActive) {
                                 }
                             }
                             
-                            if (-not $recentConnectionAttempt) {
+                            # If server is down, restart Unity (it can't connect anyway)
+                            # If server is up but Unity isn't connecting, also restart
+                            if ($serverIsDown -or -not $recentConnectionAttempt) {
                                 $shouldRestart = $true
-                                $restartReason = "Unity not connected to server (no recent connection attempts)"
+                                if ($serverIsDown) {
+                                    $restartReason = "Unity not connected - server is down (restarting Unity to wait for server)"
+                                } else {
+                                    $restartReason = "Unity not connected to server (no recent connection attempts)"
+                                }
                             } else {
                                 # Unity is trying to connect - log but don't restart yet
                                 try {
