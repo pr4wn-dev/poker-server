@@ -1127,7 +1127,45 @@ function Get-UnityActualStatus {
         $unityProcess = Get-Process -Name "Unity" -ErrorAction SilentlyContinue
         $status.ProcessRunning = $null -ne $unityProcess
         if ($status.ProcessRunning) {
+            # Bring Unity to foreground first to ensure we can check if it's responding
+            # Unity may appear "not responding" if it's in background, so bring it forward
+            try {
+                $unityWindow = $unityProcess.MainWindowHandle
+                if ($unityWindow -ne [IntPtr]::Zero) {
+                    # Load Windows API functions if not already loaded
+                    if (-not ([System.Management.Automation.PSTypeName]'Win32Unity').Type) {
+                        Add-Type @"
+                            using System;
+                            using System.Runtime.InteropServices;
+                            public class Win32Unity {
+                                [DllImport("user32.dll")]
+                                public static extern bool SetForegroundWindow(IntPtr hWnd);
+                                [DllImport("user32.dll")]
+                                public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+                                [DllImport("user32.dll")]
+                                public static extern bool IsIconic(IntPtr hWnd);
+                                public const int SW_RESTORE = 9;
+                                public const int SW_SHOW = 5;
+                            }
+"@
+                    }
+                    
+                    # Check if window is minimized
+                    if ([Win32Unity]::IsIconic($unityWindow)) {
+                        [Win32Unity]::ShowWindow($unityWindow, [Win32Unity]::SW_RESTORE)
+                        Start-Sleep -Milliseconds 200
+                    }
+                    # Bring to foreground
+                    [Win32Unity]::SetForegroundWindow($unityWindow)
+                    Start-Sleep -Milliseconds 300  # Give Unity time to come to foreground
+                }
+            } catch {
+                # Failed to bring to foreground - continue anyway
+            }
+            
             # Check if Unity process is actually responding (not hung/crashed)
+            # Wait a moment after bringing to foreground to check response
+            Start-Sleep -Milliseconds 200
             $isResponding = $false
             try {
                 $isResponding = $unityProcess.Responding
