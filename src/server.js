@@ -76,12 +76,17 @@ app.get('/', (req, res) => {
 });
 
 app.get('/health', (req, res) => {
+    const activeSimulations = socketHandler && socketHandler.simulationManager 
+        ? socketHandler.simulationManager.activeSimulations.size 
+        : 0;
+    
     res.json({ 
         status: db.isConnected ? 'ok' : 'database_offline',
         database: db.isConnected,
         timestamp: Date.now(),
         activeTables: gameManager.getActiveTableCount(),
-        onlinePlayers: gameManager.getOnlinePlayerCount()
+        onlinePlayers: gameManager.getOnlinePlayerCount(),
+        activeSimulations: activeSimulations
     });
 });
 
