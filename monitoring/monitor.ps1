@@ -2041,12 +2041,13 @@ while ($monitoringActive) {
                                     Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ✅ Stopped $($stopResult.stopped) orphaned simulation(s) via API" -ForegroundColor "Green"
                                 } else {
                                     Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  API returned success but stopped 0 simulations - server may have already cleaned up" -ForegroundColor "Yellow"
-                                    $apiStopSucceeded = $true  # Treat as success since there's nothing to stop
+                                    $apiStopSucceeded = $true
                                 }
                                 if ($stopResult.failed -gt 0) {
                                     Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  Failed to stop $($stopResult.failed) simulation(s)" -ForegroundColor "Yellow"
                                 }
-                            } else {
+                            }
+                            if (-not $stopResult.success) {
                                 Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  API returned success=false: $($stopResult.error)" -ForegroundColor "Yellow"
                             }
                             $script:lastOrphanedSimStopAttempt = Get-Date
