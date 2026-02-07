@@ -1872,11 +1872,16 @@ while ($monitoringActive) {
             $serverHasSimulation = $logWatcherStatus.ActiveSimulations -gt 0
             $unityActualStatus = Get-UnityActualStatus
             $unityIsInGame = $unityActualStatus.InGameScene -and $unityActualStatus.ReceivingGameUpdates
+            
+            # Check if simulation is active (both server and Unity agree)
             if ($serverHasSimulation -and $unityIsInGame) {
-                # Both server and Unity agree: simulation is active
                 $stats.SimulationRunning = $true
             }
-            if ($serverHasSimulation -and -not $unityIsInGame) {
+            
+            # Check for orphaned simulation (server has it but Unity doesn't)
+            if ($serverHasSimulation) {
+                $unityNotInGame = -not $unityIsInGame
+                if ($unityNotInGame) {
                 # Server has simulation but Unity isn't connected to it - treat as inactive
                 # This means there's an orphaned simulation (bots playing without Unity)
                 $stats.SimulationRunning = $false
@@ -1933,10 +1938,12 @@ while ($monitoringActive) {
                             Write-ConsoleOutput -Message "  Error message: $errorMessage" -ForegroundColor "Gray"
                             $script:lastOrphanedSimStopAttempt = Get-Date
                         }
-                    } elseif ($healthCheckSuccess -and $serverActiveSims -eq 0) {
+                    }
+                    if ($healthCheckSuccess -and $serverActiveSims -eq 0) {
                         Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ℹ️  Log watcher reports simulation, but server health check shows 0 active simulations (stale log data)" -ForegroundColor "Gray"
                         $script:lastOrphanedSimStopAttempt = Get-Date
-                    } else {
+                    }
+                    if (-not $healthCheckSuccess) {
                         Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  Cannot verify orphaned simulation - health check failed" -ForegroundColor "Yellow"
                     }
                 } else {
@@ -1947,8 +1954,10 @@ while ($monitoringActive) {
                     }
                 }
             }
+            }
+            
+            # No simulation on server
             if (-not $serverHasSimulation) {
-                # No simulation on server
                 $stats.SimulationRunning = $false
             }
         }
