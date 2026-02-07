@@ -1892,26 +1892,44 @@ while ($monitoringActive) {
                 if ($timeSinceLastStop.TotalSeconds -ge 10) {
                     Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  SIMULATION: Server has active simulation but Unity is NOT connected to it (orphaned simulation)" -ForegroundColor "Yellow"
                     
+                    # First, verify server actually has active simulations by checking /health endpoint
+                    $serverActiveSims = 0
                     try {
-                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🛑 Stopping orphaned simulation(s)..." -ForegroundColor "Cyan"
-                        $stopResponse = Invoke-WebRequest -Uri "$serverUrl/api/simulations/stop-all" -Method POST -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
-                        $stopResult = $stopResponse.Content | ConvertFrom-Json
-                        if ($stopResult.success) {
-                            if ($stopResult.stopped -gt 0) {
-                                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ✅ Stopped $($stopResult.stopped) orphaned simulation(s)" -ForegroundColor "Green"
-                            } else {
-                                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ℹ️  No simulations to stop (may have been stopped already)" -ForegroundColor "Gray"
-                            }
-                            if ($stopResult.failed -gt 0) {
-                                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  Failed to stop $($stopResult.failed) simulation(s): $($stopResult.failedTables | ConvertTo-Json -Compress)" -ForegroundColor "Yellow"
-                            }
-                        } else {
-                            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ❌ Stop request failed: $($stopResult.error)" -ForegroundColor "Red"
-                        }
-                        $script:lastOrphanedSimStopAttempt = Get-Date
+                        $healthResponse = Invoke-WebRequest -Uri "$serverUrl/health" -UseBasicParsing -TimeoutSec 3 -ErrorAction Stop
+                        $health = $healthResponse.Content | ConvertFrom-Json
+                        $serverActiveSims = if ($health.activeSimulations) { $health.activeSimulations } else { 0 }
+                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ℹ️  Server reports $serverActiveSims active simulation(s)" -ForegroundColor "Gray"
                     } catch {
-                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ❌ Failed to stop orphaned simulations: $_" -ForegroundColor "Red"
-                        Write-ConsoleOutput -Message "  Error details: $($_.Exception.Message)" -ForegroundColor "Gray"
+                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  Could not check server health: $_" -ForegroundColor "Yellow"
+                    }
+                    
+                    # Only try to stop if server actually has simulations
+                    if ($serverActiveSims -gt 0) {
+                        try {
+                            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🛑 Stopping $serverActiveSims orphaned simulation(s)..." -ForegroundColor "Cyan"
+                            $stopResponse = Invoke-WebRequest -Uri "$serverUrl/api/simulations/stop-all" -Method POST -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
+                            $stopResult = $stopResponse.Content | ConvertFrom-Json
+                            if ($stopResult.success) {
+                                if ($stopResult.stopped -gt 0) {
+                                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ✅ Stopped $($stopResult.stopped) orphaned simulation(s)" -ForegroundColor "Green"
+                                } else {
+                                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ℹ️  No simulations to stop (may have been stopped already)" -ForegroundColor "Gray"
+                                }
+                                if ($stopResult.failed -gt 0) {
+                                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  Failed to stop $($stopResult.failed) simulation(s): $($stopResult.failedTables | ConvertTo-Json -Compress)" -ForegroundColor "Yellow"
+                                }
+                            } else {
+                                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ❌ Stop request failed: $($stopResult.error)" -ForegroundColor "Red"
+                            }
+                            $script:lastOrphanedSimStopAttempt = Get-Date
+                        } catch {
+                            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ❌ Failed to stop orphaned simulations: $_" -ForegroundColor "Red"
+                            Write-ConsoleOutput -Message "  Error details: $($_.Exception.Message)" -ForegroundColor "Gray"
+                            Write-ConsoleOutput -Message "  Full error: $($_.Exception | ConvertTo-Json -Compress)" -ForegroundColor "Gray"
+                            $script:lastOrphanedSimStopAttempt = Get-Date
+                        }
+                    } else {
+                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ℹ️  Server reports no active simulations - may be stale log data" -ForegroundColor "Gray"
                         $script:lastOrphanedSimStopAttempt = Get-Date
                     }
                 }
