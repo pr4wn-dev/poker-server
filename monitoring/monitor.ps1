@@ -2517,13 +2517,10 @@ while ($monitoringActive) {
                                         Write-ConsoleOutput -Message "  ERROR: Failed to trigger debugger break: $_" -ForegroundColor "Red"
                                     }
                                 }
-                                    
-                                    # Set paused state even though logging failed
-                                    $isPaused = $true
-                                    $currentIssue = $line
-                                } catch {
-                                    Write-ConsoleOutput -Message "  ERROR: Failed to write pause marker: $_" -ForegroundColor "Red"
-                                }
+                                
+                                # Set paused state even though logging failed
+                                $isPaused = $true
+                                $currentIssue = $line
                             }
                         }
                     } else {
