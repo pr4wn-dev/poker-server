@@ -1942,17 +1942,15 @@ while ($monitoringActive) {
                         Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  Could not stop orphaned simulations via API (server may be dead): $_" -ForegroundColor "Yellow"
                         $script:lastOrphanedSimStopAttempt = Get-Date
                         
-                        # If server is dead, restart it
-                        # Note: Start-ServerIfNeeded will kill port 3000 processes again (redundant but safe),
+                        # After killing processes, the server is likely dead - always restart it
+                        # Note: Start-ServerIfNeeded will check if server is running first, and will kill port 3000 processes again (redundant but safe),
                         # then verify port is free, then start server and wait for it to be ready
-                        if (-not (Test-ServerRunning)) {
-                            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🔄 Server appears dead after killing processes - restarting..." -ForegroundColor "Cyan"
-                            $serverRestartResult = Start-ServerIfNeeded
-                            if ($serverRestartResult) {
-                                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ✅ Server restarted successfully" -ForegroundColor "Green"
-                            } else {
-                                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  Server restart may have failed - will retry on next check" -ForegroundColor "Yellow"
-                            }
+                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🔄 Server likely dead after killing processes - restarting..." -ForegroundColor "Cyan"
+                        $serverRestartResult = Start-ServerIfNeeded
+                        if ($serverRestartResult) {
+                            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ✅ Server restarted successfully" -ForegroundColor "Green"
+                        } else {
+                            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  Server restart may have failed - will retry on next check" -ForegroundColor "Yellow"
                         }
                     }
                 }
