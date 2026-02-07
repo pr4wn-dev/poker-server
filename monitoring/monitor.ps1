@@ -993,7 +993,45 @@ function Invoke-DebuggerBreakWithVerification {
         }
     }
     
-    # Step 3: Send debugger break with automatic retry
+    # Step 3: Bring Unity window to foreground (required for debugger to work)
+    try {
+        $unityProcess = Get-Process -Name "Unity" -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($unityProcess) {
+            # Bring Unity window to foreground using Windows API
+            Add-Type @"
+                using System;
+                using System.Runtime.InteropServices;
+                public class Win32 {
+                    [DllImport("user32.dll")]
+                    public static extern bool SetForegroundWindow(IntPtr hWnd);
+                    [DllImport("user32.dll")]
+                    public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+                    [DllImport("user32.dll")]
+                    public static extern bool IsIconic(IntPtr hWnd);
+                    public const int SW_RESTORE = 9;
+                    public const int SW_SHOW = 5;
+                }
+"@
+            $unityWindow = $unityProcess.MainWindowHandle
+            if ($unityWindow -ne [IntPtr]::Zero) {
+                # Check if window is minimized
+                if ([Win32]::IsIconic($unityWindow)) {
+                    [Win32]::ShowWindow($unityWindow, [Win32]::SW_RESTORE)
+                    Start-Sleep -Milliseconds 200
+                }
+                # Bring to foreground
+                [Win32]::SetForegroundWindow($unityWindow)
+                Write-ConsoleOutput -Message "  Unity window brought to foreground" -ForegroundColor "Cyan"
+                Start-Sleep -Milliseconds 300  # Give Unity time to come to foreground
+            } else {
+                Write-ConsoleOutput -Message "  WARNING: Could not get Unity window handle - debugger may not pause if Unity is in background" -ForegroundColor "Yellow"
+            }
+        }
+    } catch {
+        Write-ConsoleOutput -Message "  WARNING: Failed to bring Unity to foreground: $_ - debugger may not pause if Unity is in background" -ForegroundColor "Yellow"
+    }
+    
+    # Step 4: Send debugger break with automatic retry
     $maxRetries = 3
     $retryCount = 0
     $success = $false
@@ -2136,8 +2174,8 @@ function Restart-UnityIfNeeded {
         if ($unityProcess) {
             try {
                 $timeSinceUnityStart = (Get-Date) - $unityProcess.StartTime
-                # Give Unity 45 seconds to start, enter play mode, initialize, connect, login
-                if ($timeSinceUnityStart.TotalSeconds -lt 45) {
+                # Give Unity 20 seconds to start, enter play mode, initialize, connect, login (reduced from 45s)
+                if ($timeSinceUnityStart.TotalSeconds -lt 20) {
                     $unityJustStarted = $true
                 }
             } catch {
@@ -2212,7 +2250,7 @@ function Restart-UnityIfNeeded {
             # Start Unity in normal window (visible, not headless) with debugger support
             # Unity will automatically enter play mode via InitializeOnLoad
             Start-Process -FilePath $config.unity.executablePath -ArgumentList $unityArgs -WindowStyle Normal
-            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Unity started, will check connection status (45s grace period)" -ForegroundColor "Cyan"
+            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Unity started, will check connection status (20s grace period)" -ForegroundColor "Cyan"
             # Don't wait here - let the main loop check connection status with grace period
             return $true
         }
@@ -3374,8 +3412,8 @@ while ($monitoringActive) {
                         if ($unityProcess) {
                             try {
                                 $timeSinceUnityStart = (Get-Date) - $unityProcess.StartTime
-                                # Give Unity 45 seconds to start, enter play mode, and connect
-                                if ($timeSinceUnityStart.TotalSeconds -lt 45) {
+                                # Give Unity 20 seconds to start, enter play mode, and connect (reduced from 45s)
+                                if ($timeSinceUnityStart.TotalSeconds -lt 20) {
                                     $unityJustStarted = $true
                                 }
                             } catch {
@@ -3385,7 +3423,7 @@ while ($monitoringActive) {
                         
                         if ($unityJustStarted) {
                             # Unity was just started - give it time to connect
-                            $timeRemaining = 45 - $timeSinceUnityStart.TotalSeconds
+                            $timeRemaining = 20 - $timeSinceUnityStart.TotalSeconds
                             if ($timeRemaining -gt 0) {
                                 $waitingMsg = "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Waiting for connection (started $([Math]::Round($timeSinceUnityStart.TotalSeconds))s ago, $([Math]::Round($timeRemaining))s remaining)"
                                 Write-ConsoleOutput -Message $waitingMsg -ForegroundColor "Gray"
