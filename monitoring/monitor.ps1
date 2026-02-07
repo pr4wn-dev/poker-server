@@ -1274,8 +1274,14 @@ function Restart-UnityIfNeeded {
                 }
             }
             
+            # Clean up Unity backup files before starting to prevent dialog prompts
+            $unityTempPath = Join-Path $config.unity.projectPath "Temp"
+            if (Test-Path $unityTempPath) {
+                Get-ChildItem $unityTempPath -Filter "*Backup*" -Recurse -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+            }
+            
             # Start Unity in normal window (visible, not headless) with debugger support
-            # Unity will automatically enter play mode via -executeMethod
+            # Unity will automatically enter play mode via InitializeOnLoad
             Start-Process -FilePath $config.unity.executablePath -ArgumentList $unityArgs -WindowStyle Normal
             Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Unity started, waiting for connection..." -ForegroundColor "Cyan"
             
