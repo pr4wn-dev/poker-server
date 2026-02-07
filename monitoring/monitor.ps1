@@ -1915,12 +1915,27 @@ while ($monitoringActive) {
             if ($serverHasSimulation -and -not $unityIsInGame) {
                 $stats.SimulationRunning = $false
                 
-                # Throttle: only try to stop once per 10 seconds
+                # Don't check for orphaned simulations if server was just restarted (within last 60 seconds)
+                # This prevents restart loops where we kill the server, restart it, then immediately kill it again
+                $serverJustRestarted = $false
+                if ($script:lastServerRestart) {
+                    $timeSinceServerRestart = (Get-Date) - $script:lastServerRestart
+                    if ($timeSinceServerRestart.TotalSeconds -lt 60) {
+                        $serverJustRestarted = $true
+                    }
+                }
+                
+                # Throttle: only try to stop once per 10 seconds, and don't if server was just restarted
                 if (-not $script:lastOrphanedSimStopAttempt) {
                     $script:lastOrphanedSimStopAttempt = (Get-Date).AddSeconds(-15)
                 }
                 $timeSinceLastStop = (Get-Date) - $script:lastOrphanedSimStopAttempt
-                $shouldStop = $timeSinceLastStop.TotalSeconds -ge 10
+                $shouldStop = $timeSinceLastStop.TotalSeconds -ge 10 -and -not $serverJustRestarted
+                
+                if ($serverJustRestarted) {
+                    # Silently skip - server was just restarted, give it time to stabilize
+                    continue
+                }
                 
                 if ($shouldStop) {
                     Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  SIMULATION: Server has active simulation but Unity is NOT connected to it (orphaned simulation)" -ForegroundColor "Yellow"
