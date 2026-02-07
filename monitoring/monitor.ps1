@@ -2939,7 +2939,13 @@ while ($monitoringActive) {
         
         # CRITICAL FIX: If there's a focused group but no active investigation, start one
         # This handles the case where a focus group exists but investigation never started
-        if (-not $script:isInvestigating) {
+        # Only check every 5 seconds to avoid spam
+        if (-not $script:lastFocusedGroupCheck) {
+            $script:lastFocusedGroupCheck = Get-Date
+        }
+        $timeSinceLastCheck = ((Get-Date) - $script:lastFocusedGroupCheck).TotalSeconds
+        
+        if (-not $script:isInvestigating -and $timeSinceLastCheck -ge 5) {
             $pendingInfo = Get-PendingIssuesInfo
             if ($pendingInfo -and $pendingInfo.InFocusMode -and $pendingInfo.RootIssue -and $investigationEnabled -and $investigationTimeout -gt 0) {
                 # There's a focused group but no investigation - start one now
@@ -2953,6 +2959,7 @@ while ($monitoringActive) {
                 Update-MonitorStatus
                 $lastStatusUpdate = Get-Date
             }
+            $script:lastFocusedGroupCheck = Get-Date
         }
         
         # Check if log file exists
