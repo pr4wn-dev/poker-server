@@ -171,6 +171,37 @@ function Invoke-IssueDetector {
     return $null
 }
 
+# Function to write to log file with proper file sharing (handles file locks)
+function Write-ToLogFile {
+    param(
+        [string]$FilePath,
+        [string]$Content
+    )
+    
+    $maxRetries = 5
+    $retryDelay = 200  # milliseconds
+    
+    for ($attempt = 1; $attempt -le $maxRetries; $attempt++) {
+        try {
+            # Use FileStream with ReadWrite sharing to allow concurrent access
+            $fileStream = [System.IO.File]::Open($FilePath, [System.IO.FileMode]::Append, [System.IO.FileAccess]::Write, [System.IO.FileShare]::ReadWrite)
+            $writer = New-Object System.IO.StreamWriter($fileStream)
+            $writer.WriteLine($Content)
+            $writer.Close()
+            $fileStream.Close()
+            return $true
+        } catch {
+            if ($attempt -lt $maxRetries) {
+                Start-Sleep -Milliseconds $retryDelay
+                $retryDelay = $retryDelay * 2  # Exponential backoff
+            } else {
+                throw "Failed to write to log file after $maxRetries attempts: $_"
+            }
+        }
+    }
+    return $false
+}
+
 # Function to add issue via Node.js
 function Add-PendingIssue {
     param($issueData)
@@ -1952,9 +1983,12 @@ while ($monitoringActive) {
                             $debuggerPause = if ($config.unity.pauseDebuggerOnIssue) { "true" } else { "false" }
                             $pauseMarker = "[$timestamp] [GAME] [MONITOR] [CRITICAL_ISSUE_DETECTED] Issue detected by monitor - pausing Unity | Data: {`"issueId`":`"$($addResult.issueId)`",`"severity`":`"$($issue.severity)`",`"type`":`"$($issue.type)`",`"source`":`"$($issue.source)`",`"tableId`":$(if($tableId){`"$tableId`"}else{'null'}),`"message`":`"$escapedMessage`",`"pauseDebugger`":$debuggerPause}"
                             
-                            # Write pause marker to log file
+                            # Write pause marker to log file (with retry and file sharing)
                             try {
-                                Add-Content -Path $logFile -Value $pauseMarker -ErrorAction Stop
+                                $writeSuccess = Write-ToLogFile -FilePath $logFile -Content $pauseMarker
+                                if (-not $writeSuccess) {
+                                    throw "Write-ToLogFile returned false"
+                                }
                                 $stats.PauseMarkersWritten++
                                 Write-ConsoleOutput -Message "  Pause marker written to game.log" -ForegroundColor "Green"
                                 if ($config.unity.pauseDebuggerOnIssue) {
@@ -2007,8 +2041,8 @@ while ($monitoringActive) {
                                     # Write-Warning "Unity not paused yet - triggering pause for duplicate issue"
                                     $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
                                     $escapedMessage = $line.Replace('"','\"').Replace("`n"," ").Replace("`r"," ").Substring(0,[Math]::Min(200,$line.Length))
-                                    $pauseMarker = "[$timestamp] [GAME] [MONITOR] [CRITICAL_ISSUE_DETECTED] Duplicate issue - pausing Unity to stop logging | Data: {`"issueId`":`"duplicate`",`"severity`":`"$($issue.severity)`",`"type`":`"$($issue.type)`",`"source`":`"$($issue.source)`",`"tableId`":$(if($tableId){`"$tableId`"}else{'null'}),`"message`":`"$escapedMessage`"}"
-                                    Add-Content -Path $logFile -Value $pauseMarker -ErrorAction SilentlyContinue
+                                    $pauseMarker = "[$timestamp] [GAME] [MONITOR] [CRITICAL_ISSUE_DETECTED] Duplicate issue - pausing Unity to stop logging | Data: {`"issueId`":`"duplicate`",`"severity`":`"$($issue.severity)`",`"type`":`"$($issue.type)`",`"source`":`"$($issue.source)`",`"tableId`":$(if($tableId){`"$tableId`"}else{'null'}),`"message`":`"$escapedMessage`",`"pauseDebugger`":$debuggerPause}"
+                                    Write-ToLogFile -FilePath $logFile -Content $pauseMarker | Out-Null
                                     $isPaused = $true
                                     $currentIssue = $line
                                 }
@@ -2030,7 +2064,10 @@ while ($monitoringActive) {
                                 $pauseMarker = "[$timestamp] [GAME] [MONITOR] [CRITICAL_ISSUE_DETECTED] Issue detected by monitor - pausing Unity (logging failed) | Data: {`"issueId`":`"failed_to_log`",`"severity`":`"$($issue.severity)`",`"type`":`"$($issue.type)`",`"source`":`"$($issue.source)`",`"tableId`":$(if($tableId){`"$tableId`"}else{'null'}),`"message`":`"$escapedMessage`",`"pauseDebugger`":$debuggerPause}"
                                 
                                 try {
-                                    Add-Content -Path $logFile -Value $pauseMarker -ErrorAction Stop
+                                    $writeSuccess = Write-ToLogFile -FilePath $logFile -Content $pauseMarker
+                                    if (-not $writeSuccess) {
+                                        throw "Write-ToLogFile returned false"
+                                    }
                                     $stats.PauseMarkersWritten++
                                     Write-ConsoleOutput -Message "  Pause marker written to game.log (despite logging failure)" -ForegroundColor "Yellow"
                                     if ($config.unity.pauseDebuggerOnIssue) {
