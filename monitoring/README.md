@@ -238,6 +238,7 @@ Monitor uses `monitoring/monitor-config.json` for all settings. Edit this file t
    - Unity must listen for this event and call `Debug.Break()` to pause execution in the debugger
    - Requires debugger to be attached to Unity for the breakpoint to work
    - Set to `false` to disable debugger pause (Unity will still pause via `Time.timeScale = 0`)
+   - **KNOWN ISSUE (2026-02-07)**: Unity debugger pause is not working correctly. The `debugger_break` event is being emitted by the server, but Unity may not be receiving it or `Debug.Break()` may not be triggering. Investigation needed.
 
 ---
 
