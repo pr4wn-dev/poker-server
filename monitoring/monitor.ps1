@@ -1250,12 +1250,75 @@ function Show-Statistics {
         $col3Lines += "Mode: FOCUS MODE"
         if ($pendingInfo.RootIssue) {
             $col3Lines += "Root: " + $pendingInfo.RootIssue.type
+            $col3Lines += "Severity: " + $pendingInfo.RootIssue.severity.ToUpper()
             $col3Lines += "Related: " + $pendingInfo.RelatedIssuesCount
             $col3Lines += "Queued: " + $pendingInfo.QueuedIssuesCount
+            
+            # Show fix attempts count if available
+            try {
+                if (Test-Path $pendingIssuesFile) {
+                    $pendingContent = Get-Content $pendingIssuesFile -Raw | ConvertFrom-Json
+                    if ($pendingContent.focusedGroup -and $pendingContent.focusedGroup.fixAttempts) {
+                        $fixAttemptsCount = $pendingContent.focusedGroup.fixAttempts.Count
+                        if ($fixAttemptsCount -gt 0) {
+                            $col3Lines += "Fix Attempts: " + $fixAttemptsCount
+                        }
+                    }
+                }
+            } catch {
+                # Ignore errors reading fix attempts
+            }
         }
     } else {
         $col3Lines += "Mode: NORMAL"
         $col3Lines += "Pending: " + $pendingInfo.TotalIssues
+    }
+    
+    # Add investigation progress if investigating
+    if ($isInvestigating -and $investigationStartTime) {
+        $col3Lines += ""
+        $col3Lines += "INVESTIGATION"
+        $col3Lines += ("-" * ($colWidth - 2))
+        $investigationElapsed = (Get-Date) - $investigationStartTime
+        $remaining = [Math]::Max(0, $investigationTimeout - $investigationElapsed.TotalSeconds)
+        $col3Lines += "Time Left: " + ("{0:N0}s" -f $remaining)
+        $col3Lines += "Gathering related issues..."
+    }
+    
+    # Add verification progress if verifying
+    if ($isVerifyingFix -and $verificationStartTime) {
+        $col3Lines += ""
+        $col3Lines += "VERIFICATION"
+        $col3Lines += ("-" * ($colWidth - 2))
+        $verificationElapsed = (Get-Date) - $verificationStartTime
+        $remaining = [Math]::Max(0, $verificationPeriod - $verificationElapsed.TotalSeconds)
+        $elapsed = [Math]::Min($verificationPeriod, $verificationElapsed.TotalSeconds)
+        $col3Lines += "Progress: " + ("{0:N0}s" -f $elapsed) + " / " + ("{0:N0}s" -f $verificationPeriod)
+        $col3Lines += "Time Left: " + ("{0:N0}s" -f $remaining)
+        
+        # Show what's being verified
+        if ($verificationIssuePattern) {
+            $patternText = "$($verificationIssuePattern.type) from $($verificationIssuePattern.source)"
+            if ($verificationIssuePattern.tableId) {
+                $patternText += " (table: $($verificationIssuePattern.tableId.Substring(0,8))...)"
+            }
+            if ($patternText.Length -gt ($colWidth - 2)) {
+                $patternText = $patternText.Substring(0, ($colWidth - 5)) + "..."
+            }
+            $col3Lines += "Watching: " + $patternText
+        }
+        
+        # Show fix-applied info if available
+        $fixApplied = Get-FixAppliedInfo
+        if ($fixApplied) {
+            if ($fixApplied.requiredRestarts -and $fixApplied.requiredRestarts.Count -gt 0) {
+                $restartsText = ($fixApplied.requiredRestarts -join ", ")
+                if ($restartsText.Length -gt ($colWidth - 2)) {
+                    $restartsText = $restartsText.Substring(0, ($colWidth - 5)) + "..."
+                }
+                $col3Lines += "Restarts: " + $restartsText
+            }
+        }
     }
     
     # Add current issue preview if paused, investigating, or verifying
