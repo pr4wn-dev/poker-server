@@ -2730,6 +2730,7 @@ $script:monitorStartTime = Get-Date  # Track when monitor started to ignore old 
 $script:investigationCheckLogged = $false  # Track if we've logged the investigation check diagnostic message
 $script:lastInvestigationStateLog = $null  # Track last investigation state log time
 $script:investigationNullStartTimeLogged = $false  # Track if we've logged the null startTime warning (to avoid spam)
+$script:lastFocusedGroupCheck = $null  # Track last time we checked for focused group without investigation
 
 while ($monitoringActive) {
     try {
