@@ -1449,8 +1449,13 @@ Set-MinimumWindowSize
 # Always restart server on startup (kill existing node processes and start fresh)
 Write-Info "Restarting server on monitor startup..."
 try {
-    # Step 0: Stop all active simulations before killing server (if server is running)
-    Write-Info "Stopping all active simulations..."
+    # Step 0: Kill processes on port 3000 FIRST (before trying API or starting server)
+    # This ensures port 3000 is free before we start the server
+    Write-Info "Killing processes on port 3000..."
+    Kill-Port3000Processes
+    
+    # Step 1: Try to stop all active simulations via API (if server is still running)
+    Write-Info "Stopping all active simulations via API..."
     try {
         $stopResponse = Invoke-WebRequest -Uri "$serverUrl/api/simulations/stop-all" -Method POST -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
         $stopResult = $stopResponse.Content | ConvertFrom-Json
@@ -1461,11 +1466,43 @@ try {
             }
         }
     } catch {
-        # Server might not be running or endpoint might not exist yet - that's okay
-        Write-Info "Could not stop simulations (server may not be running): $_"
+        # Server might not be running or endpoint might not exist yet - that's okay, we already killed processes
+        Write-Info "Could not stop simulations via API (server may not be running): $_"
     }
     
-    # Step 1: Find and kill processes using port 3000 (only node.exe, not PowerShell clients)
+    # Step 2: Verify port 3000 is free (Kill-Port3000Processes should have handled this, but double-check)
+    Start-Sleep -Seconds 1  # Give processes time to fully terminate
+    $portStillInUse = $false
+    try {
+        $portPattern = ':3000'
+        $netstatOutput = netstat -ano | Select-String $portPattern
+        if ($netstatOutput) {
+            # Check if any node processes are still using the port
+            foreach ($line in $netstatOutput) {
+                if ($line -match '\s+(\d+)\s*$') {
+                    $processId = [int]$matches[1]
+                    try {
+                        $process = Get-Process -Id $processId -ErrorAction SilentlyContinue
+                        if ($process -and $process.ProcessName -eq 'node') {
+                            $portStillInUse = $true
+                            Write-Warning "Port 3000 still in use by node process (PID: $processId) - killing it..."
+                            Stop-Process -Id $processId -Force -ErrorAction Stop
+                        }
+                    } catch {
+                        # Process might have already terminated
+                    }
+                }
+            }
+        }
+    } catch {
+        # If we can't check, assume it's free
+    }
+    
+    if ($portStillInUse) {
+        Start-Sleep -Seconds 2  # Wait a bit more if we had to kill something
+    }
+    
+    # Step 3: Find and kill any remaining node processes (cleanup)
     Write-Info "Checking for processes using port 3000..."
     $port3000Processes = @()
     try {
