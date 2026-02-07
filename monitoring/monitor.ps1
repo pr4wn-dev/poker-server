@@ -1878,9 +1878,9 @@ while ($monitoringActive) {
             } elseif ($serverHasSimulation) {
                 $unityNotInGame = -not $unityIsInGame
                 if ($unityNotInGame) {
-                # Server has simulation but Unity isn't connected to it - treat as inactive
-                # This means there's an orphaned simulation (bots playing without Unity)
-                $stats.SimulationRunning = $false
+                    # Server has simulation but Unity isn't connected to it - treat as inactive
+                    # This means there's an orphaned simulation (bots playing without Unity)
+                    $stats.SimulationRunning = $false
                 
                 # Track last time we tried to stop orphaned simulations (prevent spam)
                 if (-not $script:lastOrphanedSimStopAttempt) {
