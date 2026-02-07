@@ -979,7 +979,11 @@ function Start-ServerIfNeeded {
         # Don't write to console - update stats display instead
         # Write-Warning "Server is not running. Starting server..."
         try {
-            # Step 0: Stop all active simulations before killing server (if server is running)
+            # Step 0: Kill processes on port 3000 FIRST (before trying API or starting server)
+            # This ensures port 3000 is free before we start the server
+            Kill-Port3000Processes
+            
+            # Step 1: Try to stop all active simulations via API (if server is still running)
             try {
                 $stopResponse = Invoke-WebRequest -Uri "$serverUrl/api/simulations/stop-all" -Method POST -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
                 $stopResult = $stopResponse.Content | ConvertFrom-Json
@@ -988,10 +992,10 @@ function Start-ServerIfNeeded {
                     # Write-Info "Stopped $($stopResult.stopped) active simulation(s) before restart"
                 }
             } catch {
-                # Server might not be running - that's okay
+                # Server might not be running - that's okay, we already killed processes
             }
             
-            # Kill processes using port 3000 first (more reliable than just killing node processes)
+            # Step 2: Double-check port 3000 is free and kill any remaining node processes
             $port3000Processes = @()
             try {
                 $portPattern = ':3000'
