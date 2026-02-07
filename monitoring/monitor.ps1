@@ -2618,10 +2618,21 @@ $script:monitorStartTime = Get-Date  # Track when monitor started to ignore old 
 while ($monitoringActive) {
     try {
         # Update monitor status file periodically (every 5 seconds)
-        $timeSinceStatusUpdate = (Get-Date) - $lastStatusUpdate
-        if (-not $lastStatusUpdate -or $timeSinceStatusUpdate.TotalSeconds -ge 5) {
+        if (-not $lastStatusUpdate) {
             Update-MonitorStatus
             $lastStatusUpdate = Get-Date
+        } else {
+            try {
+                $timeSinceStatusUpdate = (Get-Date) - $lastStatusUpdate
+                if ($timeSinceStatusUpdate.TotalSeconds -ge 5) {
+                    Update-MonitorStatus
+                    $lastStatusUpdate = Get-Date
+                }
+            } catch {
+                # If date subtraction fails, just update anyway
+                Update-MonitorStatus
+                $lastStatusUpdate = Get-Date
+            }
         }
         
         # Periodic service maintenance (every 30 seconds)
