@@ -2056,6 +2056,12 @@ try {
 # Initial service maintenance check
 Maintain-Services
 
+# Clean up any stale fix-applied.json from previous session
+if (Test-Path $fixAppliedFile) {
+    Write-Info "Cleaning up stale fix-applied.json from previous session"
+    Remove-Item $fixAppliedFile -Force -ErrorAction SilentlyContinue
+}
+
 # Initial display
 Show-Statistics
 
