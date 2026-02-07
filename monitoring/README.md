@@ -99,6 +99,347 @@ fix-attempts.txt             # Fix attempt statistics (root level)
 
 ---
 
+## 🤖 AI Model Integration - Complete Workflow Documentation
+
+**CRITICAL FOR AI MODELS**: This section explains how the User, Monitor, and AI Model interact to detect, diagnose, and fix issues automatically. **Read this section first** when starting a new session or when the user reports monitor problems.
+
+### Monitor Status File (`logs/monitor-status.json`)
+
+The monitor automatically writes a comprehensive status file that updates every 5 seconds. This file is **the single source of truth** for understanding what the monitor is doing.
+
+**Location**: `logs/monitor-status.json`
+
+**When AI Should Read This File**:
+- ✅ User reports "monitor having a problem"
+- ✅ User says "monitor not working" or "monitor crashed"
+- ✅ User says "debugger not pausing" or "Unity not pausing"
+- ✅ User says "issue detector failed"
+- ✅ You need to understand current monitor state
+- ✅ You need to diagnose why something isn't working
+- ✅ **ANY time you need to understand monitor state**
+
+**How to Read**:
+```powershell
+# Read the status file
+$status = Get-Content logs/monitor-status.json -Raw | ConvertFrom-Json
+
+# Check key fields
+$status.debuggerBreakStatus      # Current debugger break state
+$status.lastError                 # Most recent error
+$status.unityStatus.actualStatus  # Unity real status
+$status.investigation.active      # Is investigation running?
+$status.verification.active       # Is verification running?
+```
+
+**What It Contains** (Complete Structure):
+```json
+{
+  "timestamp": "2026-02-07T12:34:56.789Z",
+  "monitorRunning": true,
+  "monitorStartTime": "2026-02-07T12:00:00.000Z",
+  "uptime": 2096.5,
+  "serverStatus": "Online",
+  "unityStatus": {
+    "running": true,
+    "connected": true,
+    "actualStatus": "ACTIVE"
+  },
+  "investigation": {
+    "active": true,
+    "startTime": "2026-02-07T12:34:45.000Z",
+    "timeout": 15,
+    "timeRemaining": 8.5
+  },
+  "verification": {
+    "active": false,
+    "startTime": null,
+    "period": 0,
+    "timeRemaining": null
+  },
+  "paused": false,
+  "currentIssue": "Error message preview...",
+  "pendingIssues": {
+    "total": 5,
+    "inFocusMode": true,
+    "queued": 2,
+    "rootIssue": {
+      "type": "error",
+      "severity": "critical",
+      "source": "server",
+      "tableId": "table_123"
+    },
+    "fixAttempts": 1,
+    "failedAttempts": 0
+  },
+  "statistics": {
+    "linesProcessed": 12345,
+    "issuesDetected": 42,
+    "lastIssueTime": "2026-02-07T12:34:50.000Z"
+  },
+  "debuggerBreaks": {
+    "successful": 3,
+    "failed": 1
+  },
+  "lastDebuggerBreakAttempt": "2026-02-07T12:34:55.000Z",
+  "debuggerBreakStatus": "success",
+  "lastError": null,
+  "lastErrorTime": null,
+  "issueDetectorStatus": "ok",
+  "lastIssueDetectorError": null,
+  "lastIssueDetectorErrorTime": null
+}
+```
+
+**Key Fields for AI Models to Check**:
+
+1. **`debuggerBreakStatus`** - Why debugger didn't pause:
+   - `"success"` - Debugger break worked, Unity should be paused
+   - `"verifying_unity"` - Monitor is checking Unity status (wait)
+   - `"failed_unity_not_running"` - Unity not running (Monitor will auto-restart)
+   - `"failed_no_tables"` - Unity not in table room (Monitor will wait)
+   - `"failed_exception"` - API call failed (check server status)
+
+2. **`unityStatus.actualStatus`** - Real Unity state:
+   - `"ACTIVE"` - Unity connected and actively playing
+   - `"CONNECTED"` - Unity connected but not in game scene
+   - `"IDLE"` - Unity running but not connected to server
+   - `"STOPPED"` - Unity process not running
+
+3. **`issueDetectorStatus`** - Issue detector health:
+   - `"ok"` - Issue detector working normally
+   - `"failed"` - Check `lastIssueDetectorError` for details
+   - `"exception"` - Check `lastIssueDetectorError` for exception details
+
+4. **`investigation.active`** / **`investigation.timeRemaining`** - Investigation phase:
+   - If `active: true` - Monitor is gathering related issues
+   - Check `timeRemaining` to see how long until pause
+
+5. **`verification.active`** / **`verification.timeRemaining`** - Verification phase:
+   - If `active: true` - Monitor is verifying a fix
+   - Check `timeRemaining` to see verification progress
+
+6. **`lastError`** / **`lastErrorTime`** - Most recent error:
+   - Always check this first when user reports problems
+   - Contains detailed error message and timestamp
+
+7. **`pendingIssues.rootIssue`** - Current issue being investigated:
+   - Type, severity, source, tableId
+   - Use this to understand what needs fixing
+
+8. **`pendingIssues.fixAttempts`** / **`failedAttempts`** - Fix history:
+   - See what was tried before
+   - Avoid repeating failed methods
+
+### Complete Workflow: User → Monitor → AI Model
+
+#### Phase 1: Issue Detection (Automatic - Monitor)
+
+1. **Monitor continuously reads `game.log`**
+2. **Monitor detects issue** using `issue-detector.js` patterns
+3. **Monitor enters Investigation Phase** (15 seconds default)
+   - Gathers related issues
+   - Groups by pattern, tableId, stack trace, keywords
+   - Queues unrelated issues
+4. **Monitor writes to `pending-issues.json`**:
+   ```json
+   {
+     "focusedGroup": {
+       "id": "group_123",
+       "rootIssue": { "type": "error", "severity": "critical", ... },
+       "relatedIssues": [...],
+       "fixAttempts": []
+     },
+     "queuedIssues": [...]
+   }
+   ```
+5. **Investigation completes** → Monitor pauses Unity debugger
+   - Calls `/api/debugger/break` API
+   - Server emits `debugger_break` event to Unity
+   - Unity calls `Debug.Break()` (if debugger attached)
+6. **Monitor updates `monitor-status.json`** with current state
+
+#### Phase 2: User Notification (Manual - User)
+
+**User sees**:
+- Monitor console shows "PAUSED (Fix Required)" status
+- Statistics dashboard shows investigation details
+- Unity debugger is paused (if attached)
+
+**User tells AI**: "monitor found an issue" or "fix the issue"
+
+#### Phase 3: AI Model Diagnosis (Automatic - AI Model)
+
+**AI Model MUST**:
+1. **Read `logs/monitor-status.json` FIRST** to understand current state
+2. **Read `logs/pending-issues.json`** to see the issue details
+3. **Check `debuggerBreakStatus`** in status file:
+   - If `failed_unity_not_running`: Unity needs restart (Monitor will auto-handle)
+   - If `failed_no_tables`: Unity not in table room (Monitor will wait)
+   - If `failed_exception`: API call failed (check server status)
+   - If `success`: Debugger break worked, Unity should be paused
+4. **Check `unityStatus.actualStatus`**:
+   - `ACTIVE`: Unity is connected and playing (ready)
+   - `CONNECTED`: Unity connected but not in game (may need to join table)
+   - `IDLE`: Unity running but not connected (Monitor will auto-restart)
+   - `STOPPED`: Unity not running (Monitor will auto-start)
+5. **Check `issueDetectorStatus`** in status file:
+   - If `failed`: Issue detector had errors
+   - Check `lastIssueDetectorError` for details
+   - Monitor will auto-retry, but you can fix root cause
+6. **Analyze the issue** from `pending-issues.json`:
+   - Root issue type, severity, source
+   - Related issues (what else is broken)
+   - Fix attempts (what was tried before)
+   - Failure reasons (why previous attempts failed)
+
+**AI Model SHOULD NOT**:
+- ❌ Ask user to check things manually
+- ❌ Ask user to describe what happened
+- ❌ Ask user to check Unity status
+- ❌ Ask user to check server status
+- ❌ Ask user to check if debugger is attached
+
+**AI Model SHOULD**:
+- ✅ Read status file to see everything automatically
+- ✅ Use status file information to diagnose
+- ✅ Fix issues automatically based on status file
+- ✅ Explain what it found in status file
+
+#### Phase 4: AI Model Fix (Automatic - AI Model)
+
+**AI Model MUST**:
+1. **Fix the root issue** in code
+2. **Check fix attempts** to avoid repeating failed methods
+3. **Write `logs/fix-applied.json`**:
+   ```json
+   {
+     "groupId": "group_123",
+     "fixDescription": "Fixed chip calculation in pot distribution",
+     "requiredRestarts": ["server"],
+     "timestamp": "2026-02-07T12:35:00.000Z"
+   }
+   ```
+4. **Commit and push changes** (automatic)
+
+**Required Restarts**:
+- `["server"]` - Server needs restart for fix to take effect
+- `["unity"]` - Unity needs restart for fix to take effect
+- `["database"]` - Database needs restart for fix to take effect
+- `["server", "unity"]` - Both need restart
+- `[]` - No restarts needed (fix takes effect immediately)
+
+#### Phase 5: Verification (Automatic - Monitor)
+
+1. **Monitor detects `fix-applied.json`**
+2. **Monitor starts Verification Phase**:
+   - Calculates verification period (based on severity, restarts, issue type)
+   - Performs required service restarts (database, server, Unity)
+   - Waits for services to be ready
+   - Monitors logs for issue pattern reappearance
+3. **Monitor updates `monitor-status.json`** with verification progress
+4. **If issue doesn't reappear**:
+   - Mark fix as `confirmed` in `pending-issues.json`
+   - Clear `fix-applied.json`
+   - Move to next queued issue (if any)
+5. **If issue reappears**:
+   - Mark fix as `failed` in `pending-issues.json`
+   - Record failure details and insights
+   - Stay focused on same issue (don't move to next)
+   - Update `monitor-status.json` with failure
+
+#### Phase 6: Next Issue (Automatic - Monitor)
+
+1. **Monitor promotes next queued issue** to `focusedGroup`
+2. **Starts new Investigation Phase**
+3. **Process repeats**
+
+### AI Model Best Practices
+
+#### When User Reports "Monitor Problem"
+
+**ALWAYS do this first**:
+```powershell
+# 1. Read monitor status file
+$status = Get-Content logs/monitor-status.json -Raw | ConvertFrom-Json
+
+# 2. Check for errors
+if ($status.lastError) {
+    Write-Host "Last Error: $($status.lastError) at $($status.lastErrorTime)"
+}
+
+# 3. Check debugger break status
+Write-Host "Debugger Break Status: $($status.debuggerBreakStatus)"
+
+# 4. Check Unity status
+Write-Host "Unity Status: $($status.unityStatus.actualStatus)"
+
+# 5. Check issue detector status
+Write-Host "Issue Detector Status: $($status.issueDetectorStatus)"
+```
+
+**Diagnose automatically**:
+- If `debuggerBreakStatus = "failed_unity_not_running"`: Monitor will auto-restart Unity, but you can verify Unity path in config
+- If `debuggerBreakStatus = "failed_no_tables"`: Unity not in table room - Monitor will wait, but you can check if Unity should join table
+- If `issueDetectorStatus = "failed"`: Check `lastIssueDetectorError` - fix the root cause (file permissions, Node.js, etc.)
+- If `investigation.active = true` but stuck: Check `investigation.timeRemaining` - should complete automatically
+
+**Fix automatically**:
+- Don't ask user to check things
+- Use status file information to fix directly
+- Status file shows exactly what's wrong
+
+#### When User Says "Fix the Issue"
+
+**ALWAYS do this**:
+1. Read `logs/pending-issues.json` to see the issue
+2. Read `logs/monitor-status.json` to see current state
+3. Check `pendingIssues.fixAttempts` to see what was tried
+4. Fix the root issue in code
+5. Write `logs/fix-applied.json` with required restarts
+6. Monitor automatically verifies the fix
+
+#### When Debugger Doesn't Pause
+
+**Check status file**:
+1. Read `logs/monitor-status.json`
+2. Check `debuggerBreakStatus`:
+   - `verifying_unity`: Monitor is checking (wait)
+   - `failed_unity_not_running`: Monitor will auto-restart Unity
+   - `failed_no_tables`: Unity not in table room (Monitor will wait)
+   - `failed_exception`: API call failed (check server)
+   - `success`: Debugger break worked (Unity should be paused)
+3. Check `unityStatus.actualStatus`:
+   - `STOPPED`: Monitor will auto-restart Unity
+   - `IDLE`: Monitor will wait for connection
+   - `ACTIVE`: Unity is ready, debugger break should work
+4. Fix automatically based on status file information
+
+#### When Issue Detector Fails
+
+**Check status file**:
+1. Read `logs/monitor-status.json`
+2. Check `issueDetectorStatus`:
+   - `ok`: Issue detector is working
+   - `failed`: Check `lastIssueDetectorError`
+   - `exception`: Check `lastIssueDetectorError`
+3. Check `lastIssueDetectorError` for details
+4. Fix automatically:
+   - If file locked: Monitor will retry automatically
+   - If JSON parse error: Check `pending-issues.json` format
+   - If Node.js error: Check Node.js installation
+
+### Key Principles for AI Models
+
+1. **Always read `monitor-status.json` first** when user reports problems
+2. **Never ask user to check things manually** - status file has everything
+3. **Use status file to diagnose automatically** - don't ask user to describe
+4. **Fix issues automatically** based on status file information
+5. **Monitor handles retries and restarts automatically** - you just need to fix root causes
+6. **Status file updates every 5 seconds** - always current
+7. **Status file persists** - you can read it anytime, even in new sessions
+
+---
+
 ## 🚀 Quick Start
 
 ### 1. Kill Any Existing Node Processes
