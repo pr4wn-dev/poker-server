@@ -1884,10 +1884,7 @@ while ($monitoringActive) {
                 } else {
                     # Server was just restarted - give Unity time to connect before restarting it
                     # This prevents the restart loop
-                    $timeRemaining = 60 - [math]::Round((Get-Date - $script:lastServerRestart).TotalSeconds)
-                    if ($timeRemaining % 10 -eq 0 -or $timeRemaining -lt 10) {
-                        # Only log occasionally to avoid spam
-                    }
+                    # No need to calculate time remaining - we're already in the cooldown period
                 }
             }
             
@@ -1953,10 +1950,15 @@ while ($monitoringActive) {
                 # Don't check for orphaned simulations if server was just restarted (within last 60 seconds)
                 # This prevents restart loops where we kill the server, restart it, then immediately kill it again
                 $serverJustRestarted = $false
-                if ($script:lastServerRestart) {
-                    $timeSinceServerRestart = (Get-Date) - $script:lastServerRestart
-                    if ($timeSinceServerRestart.TotalSeconds -lt 60) {
-                        $serverJustRestarted = $true
+                if ($script:lastServerRestart -and $script:lastServerRestart -is [DateTime]) {
+                    try {
+                        $timeSinceServerRestart = (Get-Date) - $script:lastServerRestart
+                        if ($timeSinceServerRestart.TotalSeconds -lt 60) {
+                            $serverJustRestarted = $true
+                        }
+                    } catch {
+                        # If date arithmetic fails, assume server wasn't just restarted
+                        $serverJustRestarted = $false
                     }
                 }
                 
