@@ -2919,12 +2919,30 @@ while ($monitoringActive) {
                     $stats.IssuesBySource[$issue.source]++
                     $stats.LastIssueTime = Get-Date
                     
+                    # Track recent issues (for status file) - ALL issues, including duplicates
+                    if (-not $script:recentIssues) {
+                        $script:recentIssues = @()
+                    }
+                    $issueInfo = @{
+                        timestamp = (Get-Date).ToUniversalTime().ToString("o")
+                        type = $issue.type
+                        severity = $issue.severity
+                        source = $issue.source
+                        message = $line.Substring(0, [Math]::Min(200, $line.Length))
+                    }
+                    $script:recentIssues += $issueInfo
+                    # Keep only last 50 issues
+                    if ($script:recentIssues.Count -gt 50) {
+                        $script:recentIssues = $script:recentIssues | Select-Object -Last 50
+                    }
+                    
                     # Update monitor status file immediately when issue is detected
                     Update-MonitorStatus -statusUpdate @{
                         lastIssueDetected = (Get-Date).ToUniversalTime().ToString("o")
                         lastIssueType = $issue.type
                         lastIssueSeverity = $issue.severity
                         lastIssueSource = $issue.source
+                        totalIssuesDetected = $stats.IssuesDetected
                     } -ErrorAction SilentlyContinue
                     
                     # Track unique patterns
