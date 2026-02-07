@@ -3345,9 +3345,10 @@ while ($monitoringActive) {
                                     Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ISSUE QUEUED: Unrelated to focused issue (Unity already paused)" -ForegroundColor "Gray"
                                 }
                             } elseif ($addResult -and ($addResult.reason -eq 'duplicate' -or $addResult.reason -eq 'duplicate_in_group')) {
-                                # Throttle "ALREADY PAUSED" messages - only show once per 10 seconds per issue pattern
+                                # Duplicate issue - already logged, just ignore it silently
+                                # Throttle duplicate messages - only show once per 30 seconds per issue pattern to reduce noise
                                 $issueKey = "$($issue.type)_$($issue.severity)_$($issue.source)"
-                                $throttleKey = "paused_$issueKey"
+                                $throttleKey = "paused_duplicate_$issueKey"
                                 
                                 if (-not $script:issueThrottle) {
                                     $script:issueThrottle = @{}
@@ -3358,15 +3359,15 @@ while ($monitoringActive) {
                                 
                                 if ($lastShown) {
                                     $timeSinceLastShown = (Get-Date) - $lastShown
-                                    if ($timeSinceLastShown.TotalSeconds -lt 10) {
+                                    if ($timeSinceLastShown.TotalSeconds -lt 30) {
                                         $shouldShow = $false
                                     }
                                 }
                                 
                                 if ($shouldShow) {
                                     $script:issueThrottle[$throttleKey] = Get-Date
-                                    $alreadyPausedMsg = "[$(Get-Date -Format 'HH:mm:ss')] ISSUE (ALREADY PAUSED): $($issue.type) ($($issue.severity)) - Unity already paused, issue queued"
-                                    Write-ConsoleOutput -Message $alreadyPausedMsg -ForegroundColor "Gray"
+                                    # Don't show message for duplicates - they're already logged, just being ignored
+                                    # This reduces console noise when the same issue repeats
                                 }
                             }
                         }
