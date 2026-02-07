@@ -2761,7 +2761,9 @@ while ($monitoringActive) {
             try {
                 $investigationElapsed = (Get-Date) - $script:investigationStartTime
                 # Force complete if elapsed time exceeds timeout (with 1 second buffer for timing)
-                if ($investigationElapsed.TotalSeconds -ge ($investigationTimeout - 1)) {
+                # Also force complete if investigation has been running for more than 2x timeout (safety check)
+                $shouldComplete = ($investigationElapsed.TotalSeconds -ge ($investigationTimeout - 1)) -or ($investigationElapsed.TotalSeconds -ge ($investigationTimeout * 2))
+                if ($shouldComplete) {
                     # Investigation complete - pause debugger now
                     $script:isInvestigating = $false
                     $script:investigationStartTime = $null
