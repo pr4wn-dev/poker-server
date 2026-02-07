@@ -1832,8 +1832,9 @@ while ($monitoringActive) {
                         if ($safeMessage.Length -gt $maxMessageLength) {
                             $safeMessage = $safeMessage.Substring(0, $maxMessageLength) + "... (truncated)"
                         }
-                        # Remove null bytes and other problematic characters
-                        $safeMessage = $safeMessage -replace "`0", "" -replace "`r", " " -replace "`n", " "
+                        # Remove null bytes, control characters, and normalize line breaks
+                        # Replace backticks first (PowerShell escape sequences) before other replacements
+                        $safeMessage = $safeMessage -replace "``", "'" -replace "`0", "" -replace "`r`n", " " -replace "`r", " " -replace "`n", " " -replace "`t", " "
                         
                         $issueData = @{
                             message = $safeMessage
