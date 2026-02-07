@@ -2729,7 +2729,7 @@ $script:simulationStartTime = $null  # Track when we first detected a simulation
 $script:monitorStartTime = Get-Date  # Track when monitor started to ignore old simulations
 $script:investigationCheckLogged = $false  # Track if we've logged the investigation check diagnostic message
 $script:lastInvestigationStateLog = $null  # Track last investigation state log time
-$script:investigationNullStartTime = $null  # Track when we first detected null startTime (for timing check)
+$script:investigationNullStartTimeLogged = $false  # Track if we've logged the null startTime warning (to avoid spam)
 
 while ($monitoringActive) {
     try {
@@ -2792,8 +2792,8 @@ while ($monitoringActive) {
                 if ($script:investigationStartTime -is [DateTime]) {
                     $shouldCheckInvestigation = $true
                     $investigationStartTimeValid = $true
-                    # Reset the null startTime timer if it was set
-                    $script:investigationNullStartTime = $null
+                    # Reset the null startTime warning flag if it was set
+                    $script:investigationNullStartTimeLogged = $false
                 } else {
                     # StartTime exists but is wrong type - log and reset
                     Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] ERROR: investigationStartTime is not DateTime (type: $($script:investigationStartTime.GetType().Name)) - resetting investigation" -ForegroundColor "Red"
@@ -2803,10 +2803,15 @@ while ($monitoringActive) {
                     $script:investigationNullStartTime = $null
                 }
             } else {
-                # Investigation flag is true but startTime is null - invalid state, reset
-                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] ERROR: isInvestigating=true but investigationStartTime is null - resetting" -ForegroundColor "Red"
-                $script:isInvestigating = $false
-                $script:investigationCheckLogged = $false
+                # Investigation flag is true but startTime is null
+                # CRITICAL: Don't reset immediately - this might be a timing issue where startTime hasn't been set yet in the same loop iteration
+                # The investigation starts later in the loop (line 3224), so the check here might run before it's set
+                # Only log a warning, don't reset - let the next loop iteration handle it
+                if (-not $script:investigationNullStartTimeLogged) {
+                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] WARNING: isInvestigating=true but investigationStartTime is null (may be timing issue - will check next iteration)" -ForegroundColor "Yellow"
+                    $script:investigationNullStartTimeLogged = $true
+                }
+                # Don't reset - allow investigation to start properly
             }
         }
         
