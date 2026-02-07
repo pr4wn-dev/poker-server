@@ -3668,9 +3668,24 @@ while ($monitoringActive) {
                                 # Unity is trying to connect - log but don't restart yet
                                 try {
                                     if ($unityActualStatus.LastConnectionActivity -and $unityActualStatus.LastConnectionActivity -is [DateTime]) {
-                                        $timeSinceAttempt = [Math]::Round(((Get-Date) - $unityActualStatus.LastConnectionActivity).TotalSeconds)
-                                        $connectingMsg = "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Connecting to server (last attempt: ${timeSinceAttempt}s ago)"
-                                        Write-ConsoleOutput -Message $connectingMsg -ForegroundColor "Yellow"
+                                        $now = Get-Date
+                                        $lastAttempt = $unityActualStatus.LastConnectionActivity
+                                        # Ensure both are DateTime objects and in same timezone
+                                        if ($lastAttempt -is [DateTime]) {
+                                            $timeSinceAttempt = [Math]::Round(($now - $lastAttempt).TotalSeconds)
+                                            # Only show time if it's positive (in the past)
+                                            if ($timeSinceAttempt -ge 0) {
+                                                $connectingMsg = "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Connecting to server (last attempt: ${timeSinceAttempt}s ago)"
+                                                Write-ConsoleOutput -Message $connectingMsg -ForegroundColor "Yellow"
+                                            } else {
+                                                # Negative time means date parsing issue - just log without time
+                                                $connectingMsg = "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Connecting to server"
+                                                Write-ConsoleOutput -Message $connectingMsg -ForegroundColor "Yellow"
+                                            }
+                                        } else {
+                                            $connectingMsg = "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Connecting to server"
+                                            Write-ConsoleOutput -Message $connectingMsg -ForegroundColor "Yellow"
+                                        }
                                     } else {
                                         $connectingMsg = "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Connecting to server"
                                         Write-ConsoleOutput -Message $connectingMsg -ForegroundColor "Yellow"
