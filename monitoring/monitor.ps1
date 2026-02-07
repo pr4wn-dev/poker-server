@@ -1024,7 +1024,7 @@ function Kill-Port3000Processes {
                 Write-ConsoleOutput -Message $killFailMsg -ForegroundColor "Yellow"
             }
         }
-        Start-Sleep -Seconds 2
+        Start-Sleep -Milliseconds 500  # Reduced from 2 seconds
         $msg = "[$(Get-Date -Format 'HH:mm:ss')] Killed all processes using port 3000"
         Write-ConsoleOutput -Message $msg -ForegroundColor "Green"
     } else {
@@ -1059,8 +1059,7 @@ function Show-Statistics {
         # Write-Warning "Server is offline. Attempting to start..."
         $restartResult = Start-ServerIfNeeded
         if ($restartResult) {
-            # Re-check status after restart attempt
-            Start-Sleep -Seconds 2
+            # Re-check status after restart attempt (non-blocking - will check in next update)
             $stats.ServerStatus = if (Test-ServerRunning) { "Online" } else { "Offline" }
         }
     }
@@ -1541,7 +1540,7 @@ function Start-ServerIfNeeded {
             
             # Step 1: Try to stop all active simulations via API (if server is still running)
             try {
-                $stopResponse = Invoke-WebRequest -Uri "$serverUrl/api/simulations/stop-all" -Method POST -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
+                $stopResponse = Invoke-WebRequest -Uri "$serverUrl/api/simulations/stop-all" -Method POST -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop  # Reduced from 5 to 2 seconds
                 $stopResult = $stopResponse.Content | ConvertFrom-Json
                 if ($stopResult.success -and $stopResult.stopped -gt 0) {
                     # Don't write to console - update stats display instead
@@ -1611,16 +1610,16 @@ function Start-ServerIfNeeded {
             $maxWait = 30
             $waited = 0
             while ($waited -lt $maxWait) {
-                Start-Sleep -Seconds 2
-                $waited += 2
+                Start-Sleep -Seconds 1  # Check every 1 second instead of 2
+                $waited += 1
                 if (Test-ServerRunning) {
                     $serverReadyMsg = "[$(Get-Date -Format 'HH:mm:ss')] Server is now online and ready!"
                     Write-ConsoleOutput -Message $serverReadyMsg -ForegroundColor "Green"
                     $script:lastServerRestart = Get-Date  # Track server restart time to prevent killing it too early
                     return $true
                 }
-                # Log progress every 6 seconds
-                if ($waited % 6 -eq 0) {
+                # Log progress every 5 seconds
+                if ($waited % 5 -eq 0) {
                     $waitingMsg = "[$(Get-Date -Format 'HH:mm:ss')] Still waiting for server... ($waited/$maxWait seconds)"
                     Write-ConsoleOutput -Message $waitingMsg -ForegroundColor "Gray"
                 }
@@ -2176,8 +2175,17 @@ try {
     Write-Error "Failed to restart server: $_"
 }
 
-# Initial service maintenance check
-Maintain-Services
+# Initial service maintenance check (quick check only - don't wait for slow operations)
+# Check if services are already running first, skip maintenance if they are
+$quickServerCheck = Test-ServerRunning
+$quickUnityCheck = (Get-Process -Name "Unity" -ErrorAction SilentlyContinue) -ne $null
+if (-not $quickServerCheck -or -not $quickUnityCheck) {
+    # Only do full maintenance if services aren't running
+    Maintain-Services
+} else {
+    # Services are running - just update stats, don't wait
+    Write-Info "Services already running - skipping initial maintenance"
+}
 
 # Clean up any stale fix-applied.json from previous session
 if (Test-Path $fixAppliedFile) {
