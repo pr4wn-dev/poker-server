@@ -1974,8 +1974,39 @@ while ($monitoringActive) {
                             $messagePreview = "  Message: $($line.Substring(0, [Math]::Min(100, $line.Length)))"
                             Write-ConsoleOutput -Message $messagePreview -ForegroundColor "Gray"
                             
+                            # If tableId is null, try to get it from active simulation tables
+                            if (-not $tableId) {
+                                try {
+                                    $healthResponse = Invoke-WebRequest -Uri "http://localhost:3000/health" -TimeoutSec 2 -ErrorAction Stop
+                                    if ($healthResponse.StatusCode -eq 200) {
+                                        $health = $healthResponse.Content | ConvertFrom-Json
+                                        if ($health.activeSimulations -gt 0 -and $gameManager) {
+                                            # Try to get the first active simulation table ID
+                                            # We'll need to query the server for active tables
+                                            try {
+                                                $tablesResponse = Invoke-WebRequest -Uri "http://localhost:3000/api/tables" -TimeoutSec 2 -ErrorAction Stop
+                                                if ($tablesResponse.StatusCode -eq 200) {
+                                                    $tables = $tablesResponse.Content | ConvertFrom-Json
+                                                    $simTable = $tables | Where-Object { $_.isSimulation -eq $true -and $_.activePlayers -gt 0 } | Select-Object -First 1
+                                                    if ($simTable -and $simTable.id) {
+                                                        $tableId = $simTable.id
+                                                        Write-ConsoleOutput -Message "  Table ID: $tableId (extracted from active simulation)" -ForegroundColor "Cyan"
+                                                    }
+                                                }
+                                            } catch {
+                                                # Failed to get tables - continue with null tableId
+                                            }
+                                        }
+                                    }
+                                } catch {
+                                    # Health check failed - continue with null tableId
+                                }
+                            }
+                            
                             if ($tableId) {
                                 Write-ConsoleOutput -Message "  Table ID: $tableId" -ForegroundColor "Cyan"
+                            } else {
+                                Write-ConsoleOutput -Message "  Table ID: Not found - will pause all active simulations" -ForegroundColor "Yellow"
                             }
                             
                             # CRITICAL: Write a special log entry that the log watcher will detect to pause Unity
@@ -1983,7 +2014,9 @@ while ($monitoringActive) {
                             $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
                             $escapedMessage = $line.Replace('"','\"').Replace("`n"," ").Replace("`r"," ").Substring(0,[Math]::Min(200,$line.Length))
                             $debuggerPause = if ($config.unity.pauseDebuggerOnIssue) { "true" } else { "false" }
-                            $pauseMarker = "[$timestamp] [GAME] [MONITOR] [CRITICAL_ISSUE_DETECTED] Issue detected by monitor - pausing Unity | Data: {`"issueId`":`"$($addResult.issueId)`",`"severity`":`"$($issue.severity)`",`"type`":`"$($issue.type)`",`"source`":`"$($issue.source)`",`"tableId`":$(if($tableId){`"$tableId`"}else{'null'}),`"message`":`"$escapedMessage`",`"pauseDebugger`":$debuggerPause}"
+                            # Always include tableId as a string (even if null) so log watcher can parse it
+                            $tableIdStr = if ($tableId) { "`"$tableId`"" } else { "null" }
+                            $pauseMarker = "[$timestamp] [GAME] [MONITOR] [CRITICAL_ISSUE_DETECTED] Issue detected by monitor - pausing Unity | Data: {`"issueId`":`"$($addResult.issueId)`",`"severity`":`"$($issue.severity)`",`"type`":`"$($issue.type)`",`"source`":`"$($issue.source)`",`"tableId`":$tableIdStr,`"message`":`"$escapedMessage`",`"pauseDebugger`":$debuggerPause}"
                             
                             # Write pause marker to log file (with retry and file sharing)
                             try {

@@ -450,12 +450,31 @@ function detectIssue(logLine) {
                 }
             }
             
-            // Monitor marker found but no tableId - still pause if we can extract it
+            // Monitor marker found but no tableId - pause all active simulation tables
             gameLogger.gameEvent('LOG_WATCHER', `[DETECT_ISSUE] MONITOR_PAUSE_MARKER_NO_TABLEID`, {
                 linePreview: logLine.substring(0, 150),
                 pauseDebugger: pauseDebugger,
-                action: 'Monitor pause marker found but no tableId - will try to extract from table name' + (pauseDebugger ? ' (with debugger break)' : '')
+                action: 'Monitor pause marker found but no tableId - will pause all active simulation tables' + (pauseDebugger ? ' (with debugger break)' : '')
             });
+            
+            // Pause all active simulation tables when tableId is null
+            const simTables = getActiveSimulationTables();
+            if (simTables.length > 0) {
+                gameLogger.gameEvent('LOG_WATCHER', `[DETECT_ISSUE] PAUSING_ALL_SIMULATIONS`, {
+                    count: simTables.length,
+                    tableIds: simTables.map(t => t.id),
+                    pauseDebugger: pauseDebugger
+                });
+                
+                for (const table of simTables) {
+                    pauseSimulation(table.id, `Monitor detected issue - pausing all simulations: ${logLine.substring(0, 100)}`, pauseDebugger);
+                }
+            } else {
+                gameLogger.gameEvent('LOG_WATCHER', `[DETECT_ISSUE] NO_ACTIVE_SIMULATIONS_TO_PAUSE`, {
+                    action: 'Monitor pause marker found but no active simulation tables to pause'
+                });
+            }
+            
             return { severity: 'critical', type: 'monitor_detected', message: logLine, pauseDebugger: pauseDebugger };
         }
     }
