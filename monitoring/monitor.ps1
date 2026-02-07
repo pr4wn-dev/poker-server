@@ -801,7 +801,16 @@ function Show-Statistics {
         $healthData = $healthResponse.Content | ConvertFrom-Json
         $serverActualSimCount = $healthData.activeSimulations
     } catch {
-        # If we can't check server, default to 0 (don't use stale log watcher count)
+        # Health check failed - log the error but default to 0
+        $healthErrorDetails = $_.Exception.Message
+        if ($_.Exception.Response) {
+            $healthErrorDetails += " (Status: $($_.Exception.Response.StatusCode))"
+        }
+        # Don't spam errors - only log once per minute
+        if (-not $script:lastHealthCheckError -or ((Get-Date) - $script:lastHealthCheckError).TotalSeconds -gt 60) {
+            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] WARNING: Health check failed - $healthErrorDetails" -ForegroundColor "Yellow"
+            $script:lastHealthCheckError = Get-Date
+        }
         $serverActualSimCount = 0
     }
     # Override log watcher count with server's actual count for display
@@ -1960,7 +1969,16 @@ while ($monitoringActive) {
             $healthData = $healthResponse.Content | ConvertFrom-Json
             $serverActualCount = $healthData.activeSimulations
         } catch {
-            # If we can't check server, default to 0 (don't use stale log watcher count)
+            # Health check failed - log the error but default to 0
+            $healthErrorDetails = $_.Exception.Message
+            if ($_.Exception.Response) {
+                $healthErrorDetails += " (Status: $($_.Exception.Response.StatusCode))"
+            }
+            # Don't spam errors - only log once per minute
+            if (-not $script:lastHealthCheckError -or ((Get-Date) - $script:lastHealthCheckError).TotalSeconds -gt 60) {
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] WARNING: Health check failed - $healthErrorDetails" -ForegroundColor "Yellow"
+                $script:lastHealthCheckError = Get-Date
+            }
             $serverActualCount = 0
         }
         
