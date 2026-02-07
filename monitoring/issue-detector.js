@@ -408,6 +408,39 @@ class IssueDetector {
     }
     
     /**
+     * Safely read pending issues file, handling missing/empty/corrupted files
+     */
+    readPendingIssuesFile() {
+        const defaultData = { 
+            issues: [], 
+            groups: [],
+            lastUpdated: null,
+            focusedGroup: null,
+            fixCriteria: null
+        };
+        
+        if (!fs.existsSync(this.pendingIssuesFile)) {
+            return defaultData;
+        }
+        
+        try {
+            const fileContent = fs.readFileSync(this.pendingIssuesFile, 'utf8').trim();
+            if (!fileContent) {
+                return defaultData;
+            }
+            const data = JSON.parse(fileContent);
+            // Ensure all required fields exist
+            if (!data.issues) data.issues = [];
+            if (!data.groups) data.groups = [];
+            return data;
+        } catch (parseError) {
+            // File is corrupted - return default structure
+            console.error(`Failed to parse ${this.pendingIssuesFile}: ${parseError.message}. Using default structure.`);
+            return defaultData;
+        }
+    }
+    
+    /**
      * Ensure pending issues file exists
      */
     ensurePendingIssuesFile() {
@@ -418,6 +451,7 @@ class IssueDetector {
             }
             fs.writeFileSync(this.pendingIssuesFile, JSON.stringify({ 
                 issues: [], 
+                groups: [],
                 lastUpdated: null,
                 focusedGroup: null,
                 fixCriteria: null
@@ -425,7 +459,7 @@ class IssueDetector {
         } else {
             // Load existing focus state
             try {
-                const data = JSON.parse(fs.readFileSync(this.pendingIssuesFile, 'utf8'));
+                const data = this.readPendingIssuesFile();
                 this.focusedIssueGroup = data.focusedGroup || null;
             } catch (e) {
                 // If file is corrupted, reset
@@ -564,7 +598,8 @@ class IssueDetector {
      */
     addPendingIssue(issue) {
         try {
-            const data = JSON.parse(fs.readFileSync(this.pendingIssuesFile, 'utf8'));
+            // Read and parse pending issues file, handling missing/empty/corrupted files
+            const data = this.readPendingIssuesFile();
             
             // If we're in focus mode, check if this issue is related to the focused group
             if (this.focusedIssueGroup && data.focusedGroup) {
@@ -703,7 +738,7 @@ class IssueDetector {
      */
     getPendingIssues() {
         try {
-            const data = JSON.parse(fs.readFileSync(this.pendingIssuesFile, 'utf8'));
+            const data = this.readPendingIssuesFile();
             
             // If in focus mode, return the focused group
             if (data.focusedGroup) {
@@ -729,7 +764,7 @@ class IssueDetector {
      */
     exitFocusMode() {
         try {
-            const data = JSON.parse(fs.readFileSync(this.pendingIssuesFile, 'utf8'));
+            const data = this.readPendingIssuesFile();
             
             if (!data.focusedGroup) {
                 return { success: false, reason: 'not_in_focus_mode' };
@@ -798,7 +833,7 @@ class IssueDetector {
      */
     clearPendingIssues() {
         try {
-            const data = JSON.parse(fs.readFileSync(this.pendingIssuesFile, 'utf8'));
+            const data = this.readPendingIssuesFile();
             
             // If there are queued issues, promote the first one to focus mode
             if (data.queuedIssues && data.queuedIssues.length > 0) {
@@ -858,7 +893,7 @@ class IssueDetector {
      */
     setFixCriteria(criteria) {
         try {
-            const data = JSON.parse(fs.readFileSync(this.pendingIssuesFile, 'utf8'));
+            const data = this.readPendingIssuesFile();
             data.fixCriteria = {
                 ...criteria,
                 setAt: new Date().toISOString()
@@ -884,7 +919,7 @@ class IssueDetector {
      */
     checkFixConfirmation() {
         try {
-            const data = JSON.parse(fs.readFileSync(this.pendingIssuesFile, 'utf8'));
+            const data = this.readPendingIssuesFile();
             
             if (!data.fixCriteria) {
                 return { confirmed: false, reason: 'no_criteria' };
@@ -917,7 +952,7 @@ class IssueDetector {
      */
     markNeedsManualFix(issueId) {
         try {
-            const data = JSON.parse(fs.readFileSync(this.pendingIssuesFile, 'utf8'));
+            const data = this.readPendingIssuesFile();
             const issue = data.issues.find(i => i.id === issueId);
             if (issue) {
                 issue.needsManualFix = true;
