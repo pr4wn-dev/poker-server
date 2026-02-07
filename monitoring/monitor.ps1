@@ -68,6 +68,7 @@ $config = @{
         smallBlind = 50
         bigBlind = 100
         autoStartSimulation = $true
+        itemAnteEnabled = $false  # Default to false, can be overridden in config file
     }
 }
 
