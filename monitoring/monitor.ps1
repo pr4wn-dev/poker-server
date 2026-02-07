@@ -1608,12 +1608,16 @@ try {
         $waited += 2
         if (Test-ServerRunning) {
             Write-Success "Server is now online!"
+            $script:lastServerRestart = Get-Date  # Track server restart time to prevent killing it during startup
             break
         }
     }
     
     if (-not (Test-ServerRunning)) {
         Write-Warning "Server failed to start within $maxWait seconds"
+    } else {
+        # Even if we didn't break early, if server is running now, set the cooldown
+        $script:lastServerRestart = Get-Date
     }
 } catch {
     Write-Error "Failed to restart server: $_"
@@ -2246,7 +2250,20 @@ while ($monitoringActive) {
                     }
                     
                     # Step 2: If API failed, kill processes and restart server
-                    if (-not $apiStopSucceeded) {
+                    # BUT: Don't kill if server was just restarted (within last 60 seconds)
+                    $serverJustRestarted = $false
+                    if ($script:lastServerRestart -and $script:lastServerRestart -is [DateTime]) {
+                        try {
+                            $timeSinceServerRestart = (Get-Date) - $script:lastServerRestart
+                            if ($timeSinceServerRestart.TotalSeconds -lt 60) {
+                                $serverJustRestarted = $true
+                            }
+                        } catch {
+                            $serverJustRestarted = $false
+                        }
+                    }
+                    
+                    if (-not $apiStopSucceeded -and -not $serverJustRestarted) {
                         $apiStopFailMsg = "[$(Get-Date -Format 'HH:mm:ss')] API stop failed - killing processes on port 3000 and restarting server..."
                         Write-ConsoleOutput -Message $apiStopFailMsg -ForegroundColor "Cyan"
                         Kill-Port3000Processes
@@ -2267,6 +2284,9 @@ while ($monitoringActive) {
                                 Write-ConsoleOutput -Message $serverRestartFailMsg -ForegroundColor "Yellow"
                             }
                         }
+                    } elseif ($serverJustRestarted) {
+                        $cooldownMsg = "[$(Get-Date -Format 'HH:mm:ss')] Skipping server kill/restart - server was just restarted (cooldown active)"
+                        Write-ConsoleOutput -Message $cooldownMsg -ForegroundColor "Gray"
                     }
                 }
                 
