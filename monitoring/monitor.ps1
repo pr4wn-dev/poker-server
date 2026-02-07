@@ -2763,11 +2763,21 @@ while ($monitoringActive) {
         
         # ALWAYS log investigation state (every 10 seconds) to diagnose why check isn't running
         if (-not $script:lastInvestigationStateLog -or ((Get-Date) - $script:lastInvestigationStateLog).TotalSeconds -ge 10) {
-            $startTimeType = if ($script:investigationStartTime) { $script:investigationStartTime.GetType().Name } else { "null" }
-            $startTimeValue = if ($script:investigationStartTime) { $script:investigationStartTime.ToString() } else { "null" }
-            $stateMsg = "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] Investigation state: isInvestigating=$($script:isInvestigating), startTime=$startTimeValue, type=$startTimeType"
-            Write-ConsoleOutput -Message $stateMsg -ForegroundColor "Gray"
-            $script:lastInvestigationStateLog = Get-Date
+            try {
+                $startTimeType = if ($script:investigationStartTime) { 
+                    try { $script:investigationStartTime.GetType().Name } catch { "unknown" }
+                } else { "null" }
+                $startTimeValue = if ($script:investigationStartTime) { 
+                    try { $script:investigationStartTime.ToString() } catch { "error" }
+                } else { "null" }
+                $stateMsg = "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] Investigation state: isInvestigating=$($script:isInvestigating), startTime=$startTimeValue, type=$startTimeType"
+                Write-ConsoleOutput -Message $stateMsg -ForegroundColor "Gray"
+                $script:lastInvestigationStateLog = Get-Date
+            } catch {
+                # Don't let diagnostic logging crash the monitor
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] Error logging investigation state: $_" -ForegroundColor "Yellow"
+                $script:lastInvestigationStateLog = Get-Date
+            }
         }
         
         # CRITICAL FIX: Check investigation state more robustly
