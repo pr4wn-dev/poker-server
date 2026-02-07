@@ -3431,8 +3431,10 @@ while ($monitoringActive) {
                 elseif ($pendingInfo.GroupId -eq $fixApplied.groupId) {
                     # GroupId matches - start verification
                     # Start verification phase
+                    # NOTE: Keep $isPaused = true during verification - Unity stays paused until verification completes
+                    # Unity's Debug.Break() pause will remain until user resumes debugger or verification completes
                     $isVerifyingFix = $true
-                    $isPaused = $false  # No longer paused, we're verifying
+                    # $isPaused stays true - Unity remains paused during verification
                     $script:isInvestigating = $false  # Investigation complete, now verifying
                     
                     $rootIssue = $pendingInfo.RootIssue
