@@ -16,8 +16,8 @@
   },
   "login": {
     "username": "monitor_user",
-    "password": "",
-    "comment": "Password should be set via environment variable MONITOR_PASSWORD for security"
+    "password": "monitor_pass",
+    "comment": "Password can be set via environment variable MONITOR_PASSWORD for security (overrides this value)"
   },
   "simulation": {
     "enabled": true,
