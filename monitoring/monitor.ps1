@@ -2765,33 +2765,32 @@ while ($monitoringActive) {
                     Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] ERROR: investigationStartTime is not a DateTime object (type: $($script:investigationStartTime.GetType().Name)), resetting investigation" -ForegroundColor "Red"
                     $script:isInvestigating = $false
                     $script:investigationStartTime = $null
-                    # Don't use continue here - it skips the rest of the loop! Just break out of the if block
+                    # Don't use continue here - it skips the rest of the loop! Just skip the rest of this check
                 } else {
-                
-                $investigationElapsed = (Get-Date) - $script:investigationStartTime
-                $elapsedSeconds = $investigationElapsed.TotalSeconds
-                
-                # Force complete if elapsed time exceeds timeout (with 1 second buffer for timing)
-                # Also force complete if investigation has been running for more than 2x timeout (safety check)
-                $shouldComplete = ($elapsedSeconds -ge ($investigationTimeout - 1)) -or ($elapsedSeconds -ge ($investigationTimeout * 2))
-                
-                # SELF-DIAGNOSTIC: If investigation is running too long, report detailed diagnostic info
-                if ($elapsedSeconds -ge ($investigationTimeout * 2)) {
-                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] INVESTIGATION STUCK - Diagnostic Report:" -ForegroundColor "Red"
-                    Write-ConsoleOutput -Message "  - Elapsed: $([Math]::Round($elapsedSeconds, 1))s" -ForegroundColor "White"
-                    Write-ConsoleOutput -Message "  - Timeout: $investigationTimeout s" -ForegroundColor "White"
-                    Write-ConsoleOutput -Message "  - Should Complete: $shouldComplete" -ForegroundColor "White"
-                    Write-ConsoleOutput -Message "  - isInvestigating: $script:isInvestigating" -ForegroundColor "White"
-                    Write-ConsoleOutput -Message "  - investigationStartTime: $($script:investigationStartTime.ToString('yyyy-MM-dd HH:mm:ss'))" -ForegroundColor "White"
-                    Write-ConsoleOutput -Message "  - Current Time: $((Get-Date).ToString('yyyy-MM-dd HH:mm:ss'))" -ForegroundColor "White"
-                    Write-ConsoleOutput -Message "  - Condition Check: elapsed >= (timeout-1) OR elapsed >= (timeout*2)" -ForegroundColor "White"
-                    Write-ConsoleOutput -Message "  - Condition Result: $($elapsedSeconds -ge ($investigationTimeout - 1)) OR $($elapsedSeconds -ge ($investigationTimeout * 2))" -ForegroundColor "White"
-                    Write-ConsoleOutput -Message "  - FORCING COMPLETION NOW" -ForegroundColor "Yellow"
-                    # Force complete immediately
-                    $shouldComplete = $true
-                }
-                
-                if ($shouldComplete) {
+                    $investigationElapsed = (Get-Date) - $script:investigationStartTime
+                    $elapsedSeconds = $investigationElapsed.TotalSeconds
+                    
+                    # Force complete if elapsed time exceeds timeout (with 1 second buffer for timing)
+                    # Also force complete if investigation has been running for more than 2x timeout (safety check)
+                    $shouldComplete = ($elapsedSeconds -ge ($investigationTimeout - 1)) -or ($elapsedSeconds -ge ($investigationTimeout * 2))
+                    
+                    # SELF-DIAGNOSTIC: If investigation is running too long, report detailed diagnostic info
+                    if ($elapsedSeconds -ge ($investigationTimeout * 2)) {
+                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] INVESTIGATION STUCK - Diagnostic Report:" -ForegroundColor "Red"
+                        Write-ConsoleOutput -Message "  - Elapsed: $([Math]::Round($elapsedSeconds, 1))s" -ForegroundColor "White"
+                        Write-ConsoleOutput -Message "  - Timeout: $investigationTimeout s" -ForegroundColor "White"
+                        Write-ConsoleOutput -Message "  - Should Complete: $shouldComplete" -ForegroundColor "White"
+                        Write-ConsoleOutput -Message "  - isInvestigating: $script:isInvestigating" -ForegroundColor "White"
+                        Write-ConsoleOutput -Message "  - investigationStartTime: $($script:investigationStartTime.ToString('yyyy-MM-dd HH:mm:ss'))" -ForegroundColor "White"
+                        Write-ConsoleOutput -Message "  - Current Time: $((Get-Date).ToString('yyyy-MM-dd HH:mm:ss'))" -ForegroundColor "White"
+                        Write-ConsoleOutput -Message "  - Condition Check: elapsed >= (timeout-1) OR elapsed >= (timeout*2)" -ForegroundColor "White"
+                        Write-ConsoleOutput -Message "  - Condition Result: $($elapsedSeconds -ge ($investigationTimeout - 1)) OR $($elapsedSeconds -ge ($investigationTimeout * 2))" -ForegroundColor "White"
+                        Write-ConsoleOutput -Message "  - FORCING COMPLETION NOW" -ForegroundColor "Yellow"
+                        # Force complete immediately
+                        $shouldComplete = $true
+                    }
+                    
+                    if ($shouldComplete) {
                     # Investigation complete - pause debugger now
                     $script:isInvestigating = $false
                     $script:investigationStartTime = $null
