@@ -150,9 +150,25 @@ function pauseSimulation(tableId, reason, pauseDebugger = false) {
     
     // Broadcast table_state with isPaused=true so Unity can pause itself
     // Unity reads state.isPaused from table_state and pauses via Time.timeScale = 0
+    // Also emit debugger_break event if pauseDebugger is true
     let broadcastSent = false;
     if (socketHandler && socketHandler.io) {
         try {
+            // Emit debugger_break event if pauseDebugger is enabled
+            if (pauseDebugger) {
+                const tableRoom = `table:${tableId}`;
+                socketHandler.io.to(tableRoom).emit('debugger_break', {
+                    tableId: tableId,
+                    reason: reason,
+                    message: 'Monitor detected critical issue - pausing debugger'
+                });
+                gameLogger.gameEvent('LOG_WATCHER', `[PAUSE] DEBUGGER_BREAK_EMITTED`, {
+                    tableId,
+                    tableName: table.name,
+                    reason: reason
+                });
+            }
+            
             // Broadcast table_state to all sockets in table room so Unity sees isPaused=true
             const tableRoom = `table:${tableId}`;
             const spectatorRoom = `spectator:${tableId}`;
@@ -1105,7 +1121,8 @@ function processLogLine(line) {
         });
         
         // Pause Unity immediately - this stops all game activity and logging
-        pauseSimulation(tableId, `Auto-paused: ${issue.type} - ${issue.message.substring(0, 100)}`);
+        const pauseDebugger = issue.pauseDebugger === true;
+        pauseSimulation(tableId, `Auto-paused: ${issue.type} - ${issue.message.substring(0, 100)}`, pauseDebugger);
         
         // Wait a moment for pause to take effect (synchronous wait)
         const startWait = Date.now();
