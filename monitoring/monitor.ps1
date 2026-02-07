@@ -1781,14 +1781,11 @@ function Restart-UnityIfNeeded {
                         $itemAnteEnabled = $config.simulation.itemAnteEnabled
                     }
                 }
-                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Checking itemAnteEnabled - hasProperty: $hasProperty, value: $itemAnteEnabled, type: $($itemAnteEnabled.GetType().Name)" -ForegroundColor "Yellow"
                 if ($itemAnteEnabled -eq $true -or $itemAnteEnabled -eq "true") {
                     $unityArgs += "-itemAnteEnabled", "true"
-                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Item ante enabled via config" -ForegroundColor "Cyan"
-                } else {
-                    $itemAnteValue = if ($null -eq $itemAnteEnabled) { "not set" } else { $itemAnteEnabled.ToString() }
-                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Item ante disabled (config value: $itemAnteValue)" -ForegroundColor "Gray"
+                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Item ante enabled" -ForegroundColor "Cyan"
                 }
+                # Don't log when disabled - reduces console noise
             } else {
                 $unityArgs += "-autoMode", "normal"
             }
@@ -1806,20 +1803,23 @@ function Restart-UnityIfNeeded {
                 }
             }
             
-            # Clean up Unity backup files before starting to prevent dialog prompts
+            # Clean up Unity backup files before starting (async - don't wait for completion)
+            # This prevents dialog prompts but doesn't block startup
             $unityTempPath = Join-Path $config.unity.projectPath "Temp"
             $recoveryPath = Join-Path $config.unity.projectPath "Assets\_Recovery"
-            if (Test-Path $unityTempPath) {
-                Get-ChildItem -Path $unityTempPath -Filter "*Backup*" -Recurse -ErrorAction SilentlyContinue | Remove-Item -Force -Recurse -ErrorAction SilentlyContinue
-                # Also remove __Backupscenes directory if it exists
-                $backupScenesPath = Join-Path $unityTempPath "__Backupscenes"
-                if (Test-Path $backupScenesPath) {
-                    Remove-Item -Path $backupScenesPath -Force -Recurse -ErrorAction SilentlyContinue
+            Start-Job -ScriptBlock {
+                param($tempPath, $recPath)
+                if (Test-Path $tempPath) {
+                    Get-ChildItem -Path $tempPath -Filter "*Backup*" -Recurse -ErrorAction SilentlyContinue | Remove-Item -Force -Recurse -ErrorAction SilentlyContinue
+                    $backupScenesPath = Join-Path $tempPath "__Backupscenes"
+                    if (Test-Path $backupScenesPath) {
+                        Remove-Item -Path $backupScenesPath -Force -Recurse -ErrorAction SilentlyContinue
+                    }
                 }
-            }
-            if (Test-Path $recoveryPath) {
-                Get-ChildItem -Path $recoveryPath -Filter "*Backup*" -Recurse -ErrorAction SilentlyContinue | Remove-Item -Force -Recurse -ErrorAction SilentlyContinue
-            }
+                if (Test-Path $recPath) {
+                    Get-ChildItem -Path $recPath -Filter "*Backup*" -Recurse -ErrorAction SilentlyContinue | Remove-Item -Force -Recurse -ErrorAction SilentlyContinue
+                }
+            } -ArgumentList $unityTempPath, $recoveryPath | Out-Null
             
             # Start Unity in normal window (visible, not headless) with debugger support
             # Unity will automatically enter play mode via InitializeOnLoad
@@ -2178,13 +2178,27 @@ try {
 # Initial service maintenance check (quick check only - don't wait for slow operations)
 # Check if services are already running first, skip maintenance if they are
 $quickServerCheck = Test-ServerRunning
-$quickUnityCheck = (Get-Process -Name "Unity" -ErrorAction SilentlyContinue) -ne $null
-if (-not $quickServerCheck -or -not $quickUnityCheck) {
-    # Only do full maintenance if services aren't running
+$quickUnityCheck = $false
+$quickUnityConnected = $false
+try {
+    $unityProc = Get-Process -Name "Unity" -ErrorAction SilentlyContinue
+    $quickUnityCheck = $null -ne $unityProc
+    if ($quickUnityCheck -and $quickServerCheck) {
+        # Check if Unity is already connected
+        $healthCheck = Invoke-WebRequest -Uri "$serverUrl/health" -TimeoutSec 1 -ErrorAction Stop
+        $health = $healthCheck.Content | ConvertFrom-Json
+        $quickUnityConnected = $health.onlinePlayers -gt 0
+    }
+} catch {
+    # Unity check failed - will do full maintenance
+}
+
+if (-not $quickServerCheck -or (-not $quickUnityCheck) -or (-not $quickUnityConnected)) {
+    # Only do full maintenance if services aren't running or not connected
     Maintain-Services
 } else {
-    # Services are running - just update stats, don't wait
-    Write-Info "Services already running - skipping initial maintenance"
+    # Services are running and connected - just update stats, don't wait
+    Write-Info "Services already running and connected - skipping initial maintenance"
 }
 
 # Clean up any stale fix-applied.json from previous session
