@@ -1883,7 +1883,7 @@ while ($monitoringActive) {
                 
                 # Track last time we tried to stop orphaned simulations (prevent spam)
                 if (-not $script:lastOrphanedSimStopAttempt) {
-                    $script:lastOrphanedSimStopAttempt = Get-Date
+                    $script:lastOrphanedSimStopAttempt = (Get-Date).AddSeconds(-15)  # Initialize to allow immediate first attempt
                 }
                 
                 $timeSinceLastStop = (Get-Date) - $script:lastOrphanedSimStopAttempt
@@ -1925,12 +1925,24 @@ while ($monitoringActive) {
                         } catch {
                             Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ❌ Failed to stop orphaned simulations: $_" -ForegroundColor "Red"
                             Write-ConsoleOutput -Message "  Error details: $($_.Exception.Message)" -ForegroundColor "Gray"
-                            Write-ConsoleOutput -Message "  Full error: $($_.Exception | ConvertTo-Json -Compress)" -ForegroundColor "Gray"
+                            if ($_.Exception.Response) {
+                                try {
+                                    $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
+                                    $responseBody = $reader.ReadToEnd()
+                                    Write-ConsoleOutput -Message "  Response: $responseBody" -ForegroundColor "Gray"
+                                } catch {}
+                            }
                             $script:lastOrphanedSimStopAttempt = Get-Date
                         }
                     } else {
                         Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ℹ️  Server reports no active simulations - may be stale log data" -ForegroundColor "Gray"
                         $script:lastOrphanedSimStopAttempt = Get-Date
+                    }
+                } else {
+                    # Throttled - don't spam, but log once that we're waiting
+                    if ($timeSinceLastStop.TotalSeconds -lt 2) {
+                        # Only log on first detection, not every second
+                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  SIMULATION: Orphaned simulation detected (throttled - will stop in $([math]::Round(10 - $timeSinceLastStop.TotalSeconds))s)" -ForegroundColor "Yellow"
                     }
                 }
             } else {
