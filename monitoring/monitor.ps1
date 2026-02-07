@@ -3095,10 +3095,15 @@ while ($monitoringActive) {
                             # Only start investigation if issue was successfully logged AND it's a new focus group
                             if ($addResult -and $addResult.reason -eq 'new_focus_group' -and $investigationEnabled -and $investigationTimeout -gt 0) {
                                 # New issue detected - start investigation phase
-                                $isInvestigating = $true
-                                $investigationStartTime = Get-Date
-                                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] INVESTIGATION: Starting ($investigationTimeout seconds) - see statistics for details" -ForegroundColor "Cyan"
-                                $currentIssue = $line
+                                # BUT: Don't restart investigation if one is already in progress
+                                if (-not $isInvestigating) {
+                                    $isInvestigating = $true
+                                    $investigationStartTime = Get-Date
+                                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] INVESTIGATION: Starting ($investigationTimeout seconds) - see statistics for details" -ForegroundColor "Cyan"
+                                    $currentIssue = $line
+                                } else {
+                                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] INVESTIGATION: Already in progress - new issue will be added to existing investigation" -ForegroundColor "Gray"
+                                }
                             } else {
                                 # Investigation disabled or timeout is 0 - pause immediately
                                 # OR this is a related issue added during investigation - don't restart investigation
@@ -3282,12 +3287,17 @@ while ($monitoringActive) {
                                     
                                     # Start investigation phase for medium/low issues too
                                     # Only if issue was successfully logged
+                                    # BUT: Don't restart investigation if one is already in progress
                                     if ($addResult -and $addResult.success -and $investigationEnabled -and $investigationTimeout -gt 0) {
-                                        $isInvestigating = $true
-                                        $investigationStartTime = Get-Date
-                                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] INVESTIGATION: Starting investigation phase ($investigationTimeout seconds)" -ForegroundColor "Cyan"
-                                        Write-ConsoleOutput -Message "  Gathering related issues..." -ForegroundColor "Gray"
-                                        $currentIssue = $line
+                                        if (-not $isInvestigating) {
+                                            $isInvestigating = $true
+                                            $investigationStartTime = Get-Date
+                                            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] INVESTIGATION: Starting investigation phase ($investigationTimeout seconds)" -ForegroundColor "Cyan"
+                                            Write-ConsoleOutput -Message "  Gathering related issues..." -ForegroundColor "Gray"
+                                            $currentIssue = $line
+                                        } else {
+                                            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] INVESTIGATION: Already in progress - new issue will be added to existing investigation" -ForegroundColor "Gray"
+                                        }
                                     }
                                 } elseif ($addResult.reason -eq 'added_to_group') {
                                     Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] RELATED ISSUE: Added to focus group" -ForegroundColor "Yellow"
