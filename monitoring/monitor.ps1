@@ -1926,18 +1926,11 @@ while ($monitoringActive) {
                             }
                             $script:lastOrphanedSimStopAttempt = Get-Date
                         } catch {
+                            $errorType = $_.Exception.GetType().Name
+                            $errorMessage = $_.Exception.Message
                             Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ❌ Failed to stop orphaned simulations: $_" -ForegroundColor "Red"
-                            Write-ConsoleOutput -Message "  Error type: $($_.Exception.GetType().Name)" -ForegroundColor "Gray"
-                            Write-ConsoleOutput -Message "  Error message: $($_.Exception.Message)" -ForegroundColor "Gray"
-                            if ($_.Exception.Response) {
-                                try {
-                                    $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
-                                    $responseBody = $reader.ReadToEnd()
-                                    Write-ConsoleOutput -Message "  HTTP Response: $responseBody" -ForegroundColor "Gray"
-                                } catch {
-                                    Write-ConsoleOutput -Message "  Could not read HTTP response: $_" -ForegroundColor "Gray"
-                                }
-                            }
+                            Write-ConsoleOutput -Message "  Error type: $errorType" -ForegroundColor "Gray"
+                            Write-ConsoleOutput -Message "  Error message: $errorMessage" -ForegroundColor "Gray"
                             $script:lastOrphanedSimStopAttempt = Get-Date
                         }
                     } elseif ($healthCheckSuccess -and $serverActiveSims -eq 0) {
