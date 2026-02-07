@@ -2756,10 +2756,12 @@ while ($monitoringActive) {
         }
         
         # Check if investigation phase is complete
+        # IMPORTANT: This check runs every loop iteration to ensure investigation completes on time
         if ($script:isInvestigating -and $script:investigationStartTime) {
             try {
                 $investigationElapsed = (Get-Date) - $script:investigationStartTime
-                if ($investigationElapsed.TotalSeconds -ge $investigationTimeout) {
+                # Force complete if elapsed time exceeds timeout (with 1 second buffer for timing)
+                if ($investigationElapsed.TotalSeconds -ge ($investigationTimeout - 1)) {
                     # Investigation complete - pause debugger now
                     $script:isInvestigating = $false
                     $script:investigationStartTime = $null
