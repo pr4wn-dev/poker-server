@@ -656,10 +656,12 @@ function Get-LogWatcherStatus {
 
 # Function to kill processes using port 3000
 function Kill-Port3000Processes {
-    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🔪 Killing processes using port 3000..." -ForegroundColor "Cyan"
+    $msg = "[$(Get-Date -Format 'HH:mm:ss')] Killing processes using port 3000..."
+    Write-ConsoleOutput -Message $msg -ForegroundColor "Cyan"
     $port3000Processes = @()
     try {
-        $netstatOutput = netstat -ano | Select-String ':3000'
+        $portPattern = ':3000'
+        $netstatOutput = netstat -ano | Select-String $portPattern
         foreach ($line in $netstatOutput) {
             if ($line -match '\s+(\d+)\s*$') {
                 $processId = [int]$matches[1]
@@ -688,7 +690,8 @@ function Kill-Port3000Processes {
     }
     
     if ($allProcessesToKill.Count -gt 0) {
-        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🔪 Killing $($allProcessesToKill.Count) process(es) using port 3000..." -ForegroundColor "Cyan"
+        $msg = "[$(Get-Date -Format 'HH:mm:ss')] Killing $($allProcessesToKill.Count) process(es) using port 3000..."
+        Write-ConsoleOutput -Message $msg -ForegroundColor "Cyan"
         foreach ($proc in $allProcessesToKill.Values) {
             try {
                 Stop-Process -Id $proc.Id -Force -ErrorAction Stop
@@ -698,9 +701,11 @@ function Kill-Port3000Processes {
             }
         }
         Start-Sleep -Seconds 2
-        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ✅ Killed all processes using port 3000" -ForegroundColor "Green"
+        $msg = "[$(Get-Date -Format 'HH:mm:ss')] Killed all processes using port 3000"
+        Write-ConsoleOutput -Message $msg -ForegroundColor "Green"
     } else {
-        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ℹ️  No processes found using port 3000" -ForegroundColor "Gray"
+        $msg = "[$(Get-Date -Format 'HH:mm:ss')] No processes found using port 3000"
+        Write-ConsoleOutput -Message $msg -ForegroundColor "Gray"
     }
 }
 
@@ -988,7 +993,8 @@ function Start-ServerIfNeeded {
             # Kill processes using port 3000 first (more reliable than just killing node processes)
             $port3000Processes = @()
             try {
-                $netstatOutput = netstat -ano | Select-String ':3000'
+                $portPattern = ':3000'
+        $netstatOutput = netstat -ano | Select-String $portPattern
                 foreach ($line in $netstatOutput) {
                     if ($line -match '\s+(\d+)\s*$') {
                         $processId = [int]$matches[1]
@@ -1260,7 +1266,6 @@ function Maintain-Services {
         Restart-UnityIfNeeded | Out-Null
     }
 }
-}
 
 # Initialize Windows API for window size control (only once)
 if (-not ([System.Management.Automation.PSTypeName]'WindowSizeAPI').Type) {
@@ -1519,7 +1524,8 @@ try {
         $portCheckWaited = 0
         while ($portStillInUse -and $portCheckWaited -lt $maxPortCheckWait) {
             try {
-                $netstatOutput = netstat -ano | Select-String ':3000'
+                $portPattern = ':3000'
+        $netstatOutput = netstat -ano | Select-String $portPattern
                 if (-not $netstatOutput) {
                     $portStillInUse = $false
                     Write-Success "Port 3000 is now free"
