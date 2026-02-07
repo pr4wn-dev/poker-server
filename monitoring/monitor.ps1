@@ -1242,7 +1242,7 @@ function Restart-UnityIfNeeded {
                 Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Unity running but not connected, restarting..." -ForegroundColor "Yellow"
                 Stop-Process -Name "Unity" -Force -ErrorAction SilentlyContinue
                 Start-Sleep -Seconds 2
-            } else {
+    } else {
                 Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Unity not running, starting..." -ForegroundColor "Yellow"
             }
             
@@ -1601,16 +1601,16 @@ try {
     }
     
     # Step 4: Start server in background (port 3000 should now be free, all node processes killed)
-    $serverProcess = Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$PWD'; npm start" -WindowStyle Minimized -PassThru
+            $serverProcess = Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$PWD'; npm start" -WindowStyle Minimized -PassThru
     Write-Info "Server starting (PID: $($serverProcess.Id)). Waiting for server to be ready..."
-    
-    # Wait up to 30 seconds for server to start
-    $maxWait = 30
-    $waited = 0
-    while ($waited -lt $maxWait) {
-        Start-Sleep -Seconds 2
-        $waited += 2
-        if (Test-ServerRunning) {
+            
+            # Wait up to 30 seconds for server to start
+            $maxWait = 30
+            $waited = 0
+            while ($waited -lt $maxWait) {
+                Start-Sleep -Seconds 2
+                $waited += 2
+                if (Test-ServerRunning) {
             Write-Success "Server is now online!"
             $script:lastServerRestart = Get-Date  # Track server restart time to prevent killing it during startup
             break
@@ -1623,7 +1623,7 @@ try {
         # Even if we didn't break early, if server is running now, set the cooldown
         $script:lastServerRestart = Get-Date
     }
-} catch {
+        } catch {
     Write-Error "Failed to restart server: $_"
 }
 
@@ -2353,21 +2353,21 @@ while ($monitoringActive) {
         # BUT: Skip check if server was just restarted (within cooldown period)
         if (($now - $lastServerCheck).TotalSeconds -ge $serverCheckInterval) {
             if (-not $serverJustRestarted) {
-                if (-not (Test-ServerRunning)) {
+            if (-not (Test-ServerRunning)) {
+                # Don't write to console - update stats display instead
+                # Write-Warning "Server is offline. Attempting to restart..."
+                $restartResult = Start-ServerIfNeeded
+                if (-not $restartResult) {
                     # Don't write to console - update stats display instead
-                    # Write-Warning "Server is offline. Attempting to restart..."
-                    $restartResult = Start-ServerIfNeeded
-                    if (-not $restartResult) {
+                    # Write-Error "Failed to restart server. Will retry in $serverCheckInterval seconds..."
+                } else {
+                    # Re-check after restart attempt
+                    Start-Sleep -Seconds 2
+                    if (Test-ServerRunning) {
                         # Don't write to console - update stats display instead
-                        # Write-Error "Failed to restart server. Will retry in $serverCheckInterval seconds..."
-                    } else {
-                        # Re-check after restart attempt
-                        Start-Sleep -Seconds 2
-                        if (Test-ServerRunning) {
-                            # Don't write to console - update stats display instead
-                            # Write-Success "Server restarted successfully!"
-                        }
+                        # Write-Success "Server restarted successfully!"
                     }
+                }
                 }
             } else {
                 # Server was just restarted - skip health check during cooldown
