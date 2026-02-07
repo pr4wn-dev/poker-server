@@ -964,7 +964,7 @@ function Show-Statistics {
     Write-Host ("=" * $consoleWidth) -ForegroundColor Cyan
     
     # Top status bar - single row across full width
-    $statusText = if ($isPaused) { "PAUSED" } else { "ACTIVE" }
+    $statusText = if ($isPaused) { "PAUSED (Issue Detected)" } else { "ACTIVE" }
     $statusColor = if ($isPaused) { "Red" } else { "Green" }
     $serverStatusText = if ($stats.ServerStatus -eq "Online") { "ONLINE" } else { "OFFLINE" }
     $serverStatusColor = if ($stats.ServerStatus -eq "Online") { "Green" } else { "Red" }
@@ -1060,6 +1060,18 @@ function Show-Statistics {
     } else {
         $col3Lines += "Mode: NORMAL"
         $col3Lines += "Pending: " + $pendingInfo.TotalIssues
+    }
+    
+    # Add current issue preview if paused
+    if ($isPaused -and $currentIssue) {
+        $col3Lines += ""
+        $col3Lines += "CURRENT ISSUE"
+        $col3Lines += ("-" * ($colWidth - 2))
+        $issuePreview = $currentIssue.Substring(0, [Math]::Min(($colWidth - 2), $currentIssue.Length))
+        if ($currentIssue.Length -gt ($colWidth - 2)) {
+            $issuePreview += "..."
+        }
+        $col3Lines += $issuePreview
     }
     
     # Display columns side by side

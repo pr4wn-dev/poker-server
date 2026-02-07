@@ -199,7 +199,9 @@ Monitor uses `monitoring/monitor-config.json` for all settings. Edit this file t
     "executablePath": "C:\\Program Files\\Unity\\Hub\\Editor\\6000.3.4f1\\Editor\\Unity.exe",
     "projectPath": "C:\\Projects\\poker-client-unity",
     "autoConnectOnStartup": true,
-    "serverUrl": "http://localhost:3000"
+    "serverUrl": "http://localhost:3000",
+    "pauseDebuggerOnIssue": true,
+    "comment": "pauseDebuggerOnIssue: If true, Unity will receive debugger_break socket event and should call Debug.Break() to pause debugger when critical issues are detected"
   },
   "login": {
     "username": "monitor_user",
@@ -229,6 +231,13 @@ Monitor uses `monitoring/monitor-config.json` for all settings. Edit this file t
    - For security, you can set `MONITOR_PASSWORD` environment variable instead of storing password in config
 
 3. **Server URL**: Use `http://localhost:3000` for local development, or your server's IP address for remote connections.
+
+4. **Debugger Pause on Issue** (`pauseDebuggerOnIssue`):
+   - Default: `true`
+   - If enabled, Unity will receive a `debugger_break` socket event when critical issues are detected
+   - Unity must listen for this event and call `Debug.Break()` to pause execution in the debugger
+   - Requires debugger to be attached to Unity for the breakpoint to work
+   - Set to `false` to disable debugger pause (Unity will still pause via `Time.timeScale = 0`)
 
 ---
 
@@ -316,6 +325,16 @@ if (autoMode == "normal") {
     // Auto-connect and auto-login, but wait for user to create table
     // User creates table manually, then plays normally
 }
+```
+
+**7. Debugger Break Handler (Optional - if pauseDebuggerOnIssue is enabled):**
+```csharp
+// Listen for debugger_break event from monitor
+_socket.On("debugger_break", (data) => {
+    Debug.Log("[MONITOR] Debugger break requested - pausing execution");
+    Debug.Break(); // Pauses execution in debugger if attached
+    // Unity will also pause via Time.timeScale = 0 from table_state.isPaused
+});
 ```
 
 ### Benefits of This Approach
@@ -800,6 +819,7 @@ When fixes require restarts, here's what happens:
 - ✅ **Auto-Mode**: Unity receives `-autoMode simulation` or `-autoMode normal` for automation
 - ✅ **Scene Backup Cleanup**: Monitor automatically removes Unity backup files to prevent dialog prompts
 - ✅ **Debugger Support**: Unity starts with `-debugCodeOptimization` flag for debugger attachment
+- ✅ **Debugger Pause on Issue**: Monitor can trigger `Debug.Break()` in Unity when critical issues are detected (configurable via `pauseDebuggerOnIssue`)
 
 **Grace Periods and Cooldowns:**
 - ✅ **Unity Startup Grace Period**: 45 seconds after Unity starts before checking for connections (allows time for play mode, initialization, connection, login)
