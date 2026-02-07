@@ -91,7 +91,8 @@ scripts/
 logs/
 ├── game.log                 # ALL logs go here (server + Unity)
 ├── pending-issues.json      # Issues waiting for assistant to fix (includes focused groups and fix attempts)
-└── fix-applied.json         # Fix applied marker (written by assistant, read by Monitor for verification)
+├── fix-applied.json         # Fix applied marker (written by assistant, read by Monitor for verification)
+└── monitor-status.json      # Persistent monitor status (updated every 5 seconds) - READ BY AI MODEL
 
 fix-attempts.txt             # Fix attempt statistics (root level)
 ```
