@@ -2948,8 +2948,19 @@ while ($monitoringActive) {
         
         if (-not $script:isInvestigating -and $timeSinceLastCheck -ge 5) {
             $pendingInfo = Get-PendingIssuesInfo
-            if ($pendingInfo -and $pendingInfo.InFocusMode -and $pendingInfo.RootIssue -and $investigationEnabled -and $investigationTimeout -gt 0) {
-                # There's a focused group but no investigation - start one now
+            # DIAGNOSTIC: Log why investigation isn't starting
+            if (-not $pendingInfo) {
+                # No pending info - skip
+            } elseif (-not $pendingInfo.InFocusMode) {
+                # Not in focus mode - skip
+            } elseif (-not $pendingInfo.RootIssue) {
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] Focused group exists but no root issue" -ForegroundColor "Yellow"
+            } elseif (-not $investigationEnabled) {
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] Investigation disabled in config" -ForegroundColor "Yellow"
+            } elseif (-not $investigationTimeout -or $investigationTimeout -le 0) {
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] Investigation timeout invalid: $investigationTimeout" -ForegroundColor "Yellow"
+            } else {
+                # All conditions met - start investigation
                 $script:isInvestigating = $true
                 $script:investigationStartTime = Get-Date
                 $script:investigationCheckLogged = $false
