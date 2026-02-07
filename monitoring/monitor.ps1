@@ -1028,24 +1028,26 @@ function Start-ServerIfNeeded {
             }
             
             # Step 3: Start server in background (port 3000 should now be free)
+            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🚀 Starting Node.js server..." -ForegroundColor "Cyan"
             $serverProcess = Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$PWD'; npm start" -WindowStyle Minimized -PassThru
-            # Don't write to console - update stats display instead
-            # Write-Info "Server starting (PID: $($serverProcess.Id)). Waiting for server to be ready..."
+            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⏳ Server process started (PID: $($serverProcess.Id)). Waiting for server to be ready..." -ForegroundColor "Cyan"
             
-            # Wait up to 30 seconds for server to start
+            # Wait up to 30 seconds for server to start - THIS BLOCKS UNTIL SERVER IS READY
             $maxWait = 30
             $waited = 0
             while ($waited -lt $maxWait) {
                 Start-Sleep -Seconds 2
                 $waited += 2
                 if (Test-ServerRunning) {
-                    # Don't write to console - update stats display instead
-                    # Write-Success "Server is now online!"
+                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ✅ Server is now online and ready!" -ForegroundColor "Green"
                     return $true
                 }
+                # Log progress every 6 seconds
+                if ($waited % 6 -eq 0) {
+                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⏳ Still waiting for server... ($waited/$maxWait seconds)" -ForegroundColor "Gray"
+                }
             }
-            # Don't write to console - update stats display instead
-            # Write-Error "Server failed to start within $maxWait seconds"
+            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ❌ Server failed to start within $maxWait seconds" -ForegroundColor "Red"
             return $false
         } catch {
             # Don't write to console - update stats display instead
