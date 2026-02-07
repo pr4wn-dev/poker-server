@@ -389,8 +389,20 @@ function Get-FixAppliedInfo {
     if (Test-Path $fixAppliedFile) {
         try {
             $content = Get-Content $fixAppliedFile -Raw | ConvertFrom-Json
+            # Validate required fields
+            if (-not $content.groupId) {
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] WARNING: fix-applied.json missing groupId - ignoring" -ForegroundColor "Yellow"
+                return $null
+            }
+            if (-not $content.fixDescription) {
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] WARNING: fix-applied.json missing fixDescription - ignoring" -ForegroundColor "Yellow"
+                return $null
+            }
             return $content
         } catch {
+            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] WARNING: Failed to parse fix-applied.json: $_ - cleaning up" -ForegroundColor "Yellow"
+            # Clean up corrupted file
+            Remove-Item $fixAppliedFile -Force -ErrorAction SilentlyContinue
             return $null
         }
     }
@@ -2614,74 +2626,129 @@ while ($monitoringActive) {
         if ($fixApplied -and -not $isVerifyingFix) {
             # Fix was applied - start verification phase
             $pendingInfo = Get-PendingIssuesInfo
-            if ($pendingInfo.InFocusMode -and $pendingInfo.GroupId -eq $fixApplied.groupId) {
-                # Start verification phase
-                $isVerifyingFix = $true
-                $isPaused = $false  # No longer paused, we're verifying
-                $isInvestigating = $false  # Investigation complete, now verifying
-                
-                $rootIssue = $pendingInfo.RootIssue
-                $requiredRestarts = if ($fixApplied.requiredRestarts) { $fixApplied.requiredRestarts } else { @() }
-                
-                # Calculate verification period
-                $verificationPeriod = Calculate-VerificationPeriod -severity $rootIssue.severity -requiredRestarts $requiredRestarts -issueType $rootIssue.type
-                
-                # Store verification pattern (exact match: type, source, tableId)
-                $verificationIssuePattern = @{
-                    type = $rootIssue.type
-                    source = $rootIssue.source
-                    tableId = $rootIssue.tableId
-                }
-                
-                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] VERIFICATION: Fix applied, starting verification phase" -ForegroundColor "Cyan"
-                Write-ConsoleOutput -Message "  Fix: $($fixApplied.fixDescription)" -ForegroundColor "White"
-                Write-ConsoleOutput -Message "  Required Restarts: $(if ($requiredRestarts.Count -gt 0) { $requiredRestarts -join ', ' } else { 'None' })" -ForegroundColor "Cyan"
-                Write-ConsoleOutput -Message "  Verification Period: $verificationPeriod seconds" -ForegroundColor "Cyan"
-                
-                # Perform required restarts
-                if ($requiredRestarts.Count -gt 0) {
-                    Write-ConsoleOutput -Message "  Restarting services..." -ForegroundColor "Yellow"
-                    $restartOrder = @("database", "server", "unity")
-                    foreach ($service in $restartOrder) {
-                        if ($requiredRestarts -contains $service) {
-                            Write-ConsoleOutput -Message "    Restarting $service..." -ForegroundColor "Gray"
-                            switch ($service) {
-                                "database" { Restart-DatabaseIfNeeded | Out-Null }
-                                "server" { 
-                                    $serverProcess = Get-Process -Name "node" -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -like "*poker*" -or $_.Path -like "*poker-server*" } | Select-Object -First 1
-                                    if ($serverProcess) {
-                                        Stop-Process -Id $serverProcess.Id -Force -ErrorAction SilentlyContinue
-                                        Start-Sleep -Seconds 2
-                                    }
-                                    Start-ServerIfNeeded | Out-Null
+            
+            # Check if investigation is still in progress
+            if ($isInvestigating) {
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] WARNING: fix-applied.json detected but investigation still in progress - waiting for investigation to complete" -ForegroundColor "Yellow"
+                # Don't start verification yet - wait for investigation to complete
+            }
+            elseif ($pendingInfo.InFocusMode) {
+                # Check if groupId matches
+                if ($pendingInfo.GroupId -ne $fixApplied.groupId) {
+                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] WARNING: fix-applied.json groupId mismatch" -ForegroundColor "Yellow"
+                    Write-ConsoleOutput -Message "  Expected: $($pendingInfo.GroupId)" -ForegroundColor "White"
+                    Write-ConsoleOutput -Message "  Got: $($fixApplied.groupId)" -ForegroundColor "White"
+                    Write-ConsoleOutput -Message "  Cleaning up stale fix-applied.json" -ForegroundColor "Gray"
+                    Remove-Item $fixAppliedFile -Force -ErrorAction SilentlyContinue
+                } elseif ($pendingInfo.GroupId -eq $fixApplied.groupId) {
+                    # GroupId matches - start verification
+                    # Start verification phase
+                    $isVerifyingFix = $true
+                    $isPaused = $false  # No longer paused, we're verifying
+                    $isInvestigating = $false  # Investigation complete, now verifying
+                    
+                    $rootIssue = $pendingInfo.RootIssue
+                    $requiredRestarts = if ($fixApplied.requiredRestarts) { $fixApplied.requiredRestarts } else { @() }
+                    
+                    # Calculate verification period
+                    $verificationPeriod = Calculate-VerificationPeriod -severity $rootIssue.severity -requiredRestarts $requiredRestarts -issueType $rootIssue.type
+                    
+                    # Store verification pattern (exact match: type, source, tableId)
+                    $verificationIssuePattern = @{
+                        type = $rootIssue.type
+                        source = $rootIssue.source
+                        tableId = $rootIssue.tableId
+                    }
+                    
+                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] VERIFICATION: Fix applied, starting verification phase" -ForegroundColor "Cyan"
+                    Write-ConsoleOutput -Message "  Fix: $($fixApplied.fixDescription)" -ForegroundColor "White"
+                    Write-ConsoleOutput -Message "  Required Restarts: $(if ($requiredRestarts.Count -gt 0) { $requiredRestarts -join ', ' } else { 'None' })" -ForegroundColor "Cyan"
+                    Write-ConsoleOutput -Message "  Verification Period: $verificationPeriod seconds" -ForegroundColor "Cyan"
+                    
+                    # Check for multiple failed attempts and show warning
+                    try {
+                        if (Test-Path $pendingIssuesFile) {
+                            $pendingContent = Get-Content $pendingIssuesFile -Raw | ConvertFrom-Json
+                            if ($pendingContent.focusedGroup -and $pendingContent.focusedGroup.fixAttempts) {
+                                $failedAttempts = ($pendingContent.focusedGroup.fixAttempts | Where-Object { $_.result -eq "failed" }).Count
+                                if ($failedAttempts -ge 5) {
+                                    Write-ConsoleOutput -Message "  WARNING: $failedAttempts failed fix attempts - consider different approach" -ForegroundColor "Yellow"
                                 }
-                                "unity" { Restart-UnityIfNeeded | Out-Null }
                             }
                         }
+                    } catch {
+                        # Ignore errors reading fix attempts
                     }
-                }
-                
-                # Wait for services to be ready (with timeout)
-                Write-ConsoleOutput -Message "  Waiting for services to be ready..." -ForegroundColor "Yellow"
-                $servicesReady = $false
-                $readyTimeout = 60  # Max 60 seconds to wait for services
-                $readyStartTime = Get-Date
-                while (-not $servicesReady -and ((Get-Date) - $readyStartTime).TotalSeconds -lt $readyTimeout) {
-                    $readyCheck = Test-ServicesReady -requiredRestarts $requiredRestarts
-                    if ($readyCheck.Ready) {
-                        $servicesReady = $true
+                    
+                    # Perform required restarts
+                    if ($requiredRestarts.Count -gt 0) {
+                        Write-ConsoleOutput -Message "  Restarting services..." -ForegroundColor "Yellow"
+                        $restartOrder = @("database", "server", "unity")
+                        $restartFailures = @()
+                        foreach ($service in $restartOrder) {
+                            if ($requiredRestarts -contains $service) {
+                                Write-ConsoleOutput -Message "    Restarting $service..." -ForegroundColor "Gray"
+                                $restartSuccess = $false
+                                switch ($service) {
+                                    "database" { 
+                                        $result = Restart-DatabaseIfNeeded
+                                        $restartSuccess = $result
+                                    }
+                                    "server" { 
+                                        try {
+                                            $serverProcess = Get-Process -Name "node" -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -like "*poker*" -or $_.Path -like "*poker-server*" } | Select-Object -First 1
+                                            if ($serverProcess) {
+                                                Stop-Process -Id $serverProcess.Id -Force -ErrorAction SilentlyContinue
+                                                Start-Sleep -Seconds 2
+                                            }
+                                            Start-ServerIfNeeded | Out-Null
+                                            $restartSuccess = $true
+                                        } catch {
+                                            $restartSuccess = $false
+                                        }
+                                    }
+                                    "unity" { 
+                                        $result = Restart-UnityIfNeeded
+                                        $restartSuccess = $result
+                                    }
+                                }
+                                if (-not $restartSuccess) {
+                                    $restartFailures += $service
+                                    Write-ConsoleOutput -Message "    WARNING: Failed to restart $service" -ForegroundColor "Yellow"
+                                }
+                            }
+                        }
+                        if ($restartFailures.Count -gt 0) {
+                            Write-ConsoleOutput -Message "  WARNING: Some services failed to restart: $($restartFailures -join ', ')" -ForegroundColor "Yellow"
+                        }
+                    }
+                    
+                    # Wait for services to be ready (with timeout)
+                    Write-ConsoleOutput -Message "  Waiting for services to be ready..." -ForegroundColor "Yellow"
+                    $servicesReady = $false
+                    $readyTimeout = 60  # Max 60 seconds to wait for services
+                    $readyStartTime = Get-Date
+                    while (-not $servicesReady -and ((Get-Date) - $readyStartTime).TotalSeconds -lt $readyTimeout) {
+                        $readyCheck = Test-ServicesReady -requiredRestarts $requiredRestarts
+                        if ($readyCheck.Ready) {
+                            $servicesReady = $true
+                        } else {
+                            Start-Sleep -Seconds 2
+                        }
+                    }
+                    
+                    if ($servicesReady) {
+                        Write-ConsoleOutput -Message "  Services ready - starting verification timer" -ForegroundColor "Green"
+                        $verificationStartTime = Get-Date
                     } else {
-                        Start-Sleep -Seconds 2
+                        Write-ConsoleOutput -Message "  WARNING: Services not ready after timeout, starting verification anyway" -ForegroundColor "Yellow"
+                        $verificationStartTime = Get-Date
                     }
                 }
-                
-                if ($servicesReady) {
-                    Write-ConsoleOutput -Message "  Services ready - starting verification timer" -ForegroundColor "Green"
-                    $verificationStartTime = Get-Date
-                } else {
-                    Write-ConsoleOutput -Message "  WARNING: Services not ready after timeout, starting verification anyway" -ForegroundColor "Yellow"
-                    $verificationStartTime = Get-Date
-                }
+            } elseif (-not $pendingInfo.InFocusMode) {
+                # No focused group - clean up stale fix-applied.json
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] WARNING: fix-applied.json found but no focused group - cleaning up stale file" -ForegroundColor "Yellow"
+                Remove-Item $fixAppliedFile -Force -ErrorAction SilentlyContinue
             }
         }
         
