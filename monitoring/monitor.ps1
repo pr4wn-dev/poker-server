@@ -2094,7 +2094,9 @@ while ($monitoringActive) {
             $simStartMsg = "[$timestamp] 🎲 SIMULATION: Started - $activeCount active"
             Write-ConsoleOutput -Message $simStartMsg -ForegroundColor "Green"
         } elseif (-not $stats.SimulationRunning -and $wasSimulationRunning) {
-            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🎲 SIMULATION: Completed (10/10 games) - Unity is now idle" -ForegroundColor "Yellow"
+            $timestamp = Get-Date -Format 'HH:mm:ss'
+            $completedMsg = "[$timestamp] 🎲 SIMULATION: Completed - 10/10 games - Unity is now idle"
+            Write-ConsoleOutput -Message $completedMsg -ForegroundColor "Yellow"
             
             # In simulation mode, if simulation ended and Unity is running but idle, restart it to start a new simulation
             if ($config.simulation.enabled -and $config.automation.autoRestartUnity -and $stats.UnityRunning) {
