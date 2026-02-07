@@ -1954,8 +1954,14 @@ while ($monitoringActive) {
                 
                 if ($shouldStop) {
                     Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  SIMULATION: Server has active simulation but Unity is NOT connected to it (orphaned simulation)" -ForegroundColor "Yellow"
+                    
+                    # Step 1: Kill processes using port 3000 FIRST (before trying API)
+                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🛑 Killing processes on port 3000 before stopping orphaned simulation..." -ForegroundColor "Cyan"
+                    Kill-Port3000Processes
+                    
+                    # Step 2: Try to stop via API (if server is still running)
                     try {
-                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🛑 Stopping orphaned simulation(s)..." -ForegroundColor "Cyan"
+                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🛑 Stopping orphaned simulation(s) via API..." -ForegroundColor "Cyan"
                         $stopResponse = Invoke-WebRequest -Uri "$serverUrl/api/simulations/stop-all" -Method POST -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
                         $stopResult = $stopResponse.Content | ConvertFrom-Json
                         if ($stopResult.success) {
@@ -1966,12 +1972,15 @@ while ($monitoringActive) {
                         }
                         $script:lastOrphanedSimStopAttempt = Get-Date
                     } catch {
-                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ❌ Failed to stop orphaned simulations via API: $_" -ForegroundColor "Red"
+                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  Could not stop orphaned simulations via API (server may be dead): $_" -ForegroundColor "Yellow"
                         $script:lastOrphanedSimStopAttempt = Get-Date
+                        
+                        # If server is dead, restart it
+                        if (-not (Test-ServerRunning)) {
+                            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🔄 Server appears dead after killing processes - restarting..." -ForegroundColor "Cyan"
+                            Start-ServerIfNeeded | Out-Null
+                        }
                     }
-                    
-                    # Kill processes using port 3000 (where simulations are running)
-                    Kill-Port3000Processes
                 }
             }
             
