@@ -2760,6 +2760,12 @@ while ($monitoringActive) {
         # SELF-DIAGNOSTIC: Monitor must be able to diagnose its own problems
         if ($script:isInvestigating -and $script:investigationStartTime) {
             try {
+                # SELF-DIAGNOSTIC: Log if investigation check is running (only once per investigation to avoid spam)
+                if (-not $script:investigationCheckLogged) {
+                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] Investigation check is running (isInvestigating: $($script:isInvestigating), startTime: $($script:investigationStartTime))" -ForegroundColor "Cyan"
+                    $script:investigationCheckLogged = $true
+                }
+                
                 # Ensure investigationStartTime is a DateTime object
                 if ($script:investigationStartTime -isnot [DateTime]) {
                     Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] ERROR: investigationStartTime is not a DateTime object (type: $($script:investigationStartTime.GetType().Name)), resetting investigation" -ForegroundColor "Red"
@@ -2770,21 +2776,34 @@ while ($monitoringActive) {
                     $investigationElapsed = (Get-Date) - $script:investigationStartTime
                     $elapsedSeconds = $investigationElapsed.TotalSeconds
                     
+                    # CRITICAL FIX: Ensure investigationTimeout is accessible (use script scope if needed)
+                    $timeoutValue = if ($investigationTimeout) { $investigationTimeout } else { 15 }
+                    
+                    # SELF-DIAGNOSTIC: Log if timeout is invalid
+                    if (-not $investigationTimeout -or $investigationTimeout -eq 0) {
+                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] WARNING: investigationTimeout is null or 0, using default 15s" -ForegroundColor "Yellow"
+                    }
+                    
                     # Force complete if elapsed time exceeds timeout (with 1 second buffer for timing)
                     # Also force complete if investigation has been running for more than 2x timeout (safety check)
-                    $shouldComplete = ($elapsedSeconds -ge ($investigationTimeout - 1)) -or ($elapsedSeconds -ge ($investigationTimeout * 2))
+                    $shouldComplete = ($elapsedSeconds -ge ($timeoutValue - 1)) -or ($elapsedSeconds -ge ($timeoutValue * 2))
+                    
+                    # SELF-DIAGNOSTIC: Log every 5 seconds if investigation is running longer than expected
+                    if ($elapsedSeconds -gt $timeoutValue -and ([Math]::Floor($elapsedSeconds) % 5 -eq 0)) {
+                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] Investigation running: $([Math]::Round($elapsedSeconds, 1))s (timeout: $timeoutValue s, shouldComplete: $shouldComplete)" -ForegroundColor "Yellow"
+                    }
                     
                     # SELF-DIAGNOSTIC: If investigation is running too long, report detailed diagnostic info
-                    if ($elapsedSeconds -ge ($investigationTimeout * 2)) {
+                    if ($elapsedSeconds -ge ($timeoutValue * 2)) {
                         Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] INVESTIGATION STUCK - Diagnostic Report:" -ForegroundColor "Red"
                         Write-ConsoleOutput -Message "  - Elapsed: $([Math]::Round($elapsedSeconds, 1))s" -ForegroundColor "White"
-                        Write-ConsoleOutput -Message "  - Timeout: $investigationTimeout s" -ForegroundColor "White"
+                        Write-ConsoleOutput -Message "  - Timeout: $timeoutValue s (raw: $investigationTimeout)" -ForegroundColor "White"
                         Write-ConsoleOutput -Message "  - Should Complete: $shouldComplete" -ForegroundColor "White"
                         Write-ConsoleOutput -Message "  - isInvestigating: $script:isInvestigating" -ForegroundColor "White"
                         Write-ConsoleOutput -Message "  - investigationStartTime: $($script:investigationStartTime.ToString('yyyy-MM-dd HH:mm:ss'))" -ForegroundColor "White"
                         Write-ConsoleOutput -Message "  - Current Time: $((Get-Date).ToString('yyyy-MM-dd HH:mm:ss'))" -ForegroundColor "White"
                         Write-ConsoleOutput -Message "  - Condition Check: elapsed >= (timeout-1) OR elapsed >= (timeout*2)" -ForegroundColor "White"
-                        Write-ConsoleOutput -Message "  - Condition Result: $($elapsedSeconds -ge ($investigationTimeout - 1)) OR $($elapsedSeconds -ge ($investigationTimeout * 2))" -ForegroundColor "White"
+                        Write-ConsoleOutput -Message "  - Condition Result: $($elapsedSeconds -ge ($timeoutValue - 1)) OR $($elapsedSeconds -ge ($timeoutValue * 2))" -ForegroundColor "White"
                         Write-ConsoleOutput -Message "  - FORCING COMPLETION NOW" -ForegroundColor "Yellow"
                         # Force complete immediately
                         $shouldComplete = $true
@@ -2794,6 +2813,7 @@ while ($monitoringActive) {
                         # Investigation complete - pause debugger now
                         $script:isInvestigating = $false
                         $script:investigationStartTime = $null
+                        $script:investigationCheckLogged = $false  # Reset for next investigation
                         $pendingInfo = Get-PendingIssuesInfo
                         
                         # Always complete investigation after timeout, even if pending info is missing
@@ -2835,7 +2855,7 @@ while ($monitoringActive) {
                         # Statistics will show the countdown and progress
                         # BUT: If investigation has been running way too long, force complete it
                         if ($investigationElapsed.TotalSeconds -gt 60) {
-                            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] WARNING: Investigation has been running for $([Math]::Round($investigationElapsed.TotalSeconds, 1))s (timeout: $investigationTimeout) - FORCING COMPLETION" -ForegroundColor "Red"
+                            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] WARNING: Investigation has been running for $([Math]::Round($investigationElapsed.TotalSeconds, 1))s (timeout: $timeoutValue) - FORCING COMPLETION" -ForegroundColor "Red"
                             # Force complete investigation
                             $script:isInvestigating = $false
                             $script:investigationStartTime = $null
@@ -2861,7 +2881,13 @@ while ($monitoringActive) {
                 # Force complete investigation on error to prevent getting stuck
                 $script:isInvestigating = $false
                 $script:investigationStartTime = $null
+                $script:investigationCheckLogged = $false  # Reset for next investigation
             }
+        } elseif ($script:isInvestigating -and -not $script:investigationStartTime) {
+            # SELF-DIAGNOSTIC: Investigation flag is true but startTime is null - this is invalid
+            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] ERROR: isInvestigating=true but investigationStartTime is null - resetting" -ForegroundColor "Red"
+            $script:isInvestigating = $false
+            $script:investigationCheckLogged = $false
         }
         
         # Check if log file exists
