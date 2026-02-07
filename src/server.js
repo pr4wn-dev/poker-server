@@ -250,11 +250,33 @@ async function start() {
     }
 
     // Initialize socket handler with database access
-    socketHandler = new SocketHandler(io, gameManager);
-    socketHandler.initialize();
+    try {
+        socketHandler = new SocketHandler(io, gameManager);
+        socketHandler.initialize();
+        console.log('[Server] Socket handler initialized');
+    } catch (err) {
+        const gameLogger = require('./utils/GameLogger');
+        gameLogger.error('SERVER', '[STARTUP] SOCKET_HANDLER_INIT_FAILED', { 
+            error: err.message, 
+            stack: err.stack 
+        });
+        console.error('[Server] ERROR: Failed to initialize socket handler:', err.message);
+        throw err; // Re-throw to prevent server from starting in broken state
+    }
     
     // Initialize log watcher for automatic issue detection and fixing
-    logWatcher.initialize(gameManager, socketHandler.simulationManager, socketHandler);
+    try {
+        logWatcher.initialize(gameManager, socketHandler.simulationManager, socketHandler);
+        console.log('[Server] Log watcher initialized');
+    } catch (err) {
+        const gameLogger = require('./utils/GameLogger');
+        gameLogger.error('SERVER', '[STARTUP] LOG_WATCHER_INIT_FAILED', { 
+            error: err.message, 
+            stack: err.stack 
+        });
+        console.error('[Server] WARNING: Failed to initialize log watcher:', err.message);
+        // Don't throw - log watcher is optional, server can run without it
+    }
     
     // Auto-resume any paused simulations on server start
     // This ensures simulations don't stay paused after server restart
@@ -273,6 +295,9 @@ async function start() {
     server.listen(PORT, '0.0.0.0', () => {
         const gameLogger = require('./utils/GameLogger');
         const localIP = getLocalIP();
+        console.log(`[Server] Server is now running on port ${PORT}`);
+        console.log(`[Server] Local URL: http://localhost:${PORT}`);
+        console.log(`[Server] Network URL: http://${localIP}:${PORT}`);
         gameLogger.gameEvent('SERVER', '[STARTUP] SERVER_RUNNING', {
             port: PORT,
             localUrl: `http://localhost:${PORT}`,
@@ -281,6 +306,21 @@ async function start() {
             databaseConnected: dbConnected,
             message: 'SERVER STARTED SUCCESSFULLY'
         });
+    });
+    
+    // Handle server listen errors
+    server.on('error', (err) => {
+        const gameLogger = require('./utils/GameLogger');
+        gameLogger.error('SERVER', '[STARTUP] SERVER_LISTEN_ERROR', { 
+            error: err.message, 
+            code: err.code,
+            port: PORT
+        });
+        console.error(`[Server] ERROR: Failed to start server on port ${PORT}:`, err.message);
+        if (err.code === 'EADDRINUSE') {
+            console.error(`[Server] Port ${PORT} is already in use. Kill the process using it and try again.`);
+        }
+        process.exit(1);
     });
 }
 
