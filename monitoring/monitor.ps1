@@ -1123,11 +1123,26 @@ function Get-UnityActualStatus {
             Details = @()
         }
         
-        # Check 1: Is Unity process running?
+        # Check 1: Is Unity process running AND responding?
         $unityProcess = Get-Process -Name "Unity" -ErrorAction SilentlyContinue
         $status.ProcessRunning = $null -ne $unityProcess
         if ($status.ProcessRunning) {
-            $status.Details += "Process: Running (PID: $($unityProcess.Id))"
+            # Check if Unity process is actually responding (not hung/crashed)
+            $isResponding = $false
+            try {
+                $isResponding = $unityProcess.Responding
+            } catch {
+                # If we can't check Responding property, assume it's not responding
+                $isResponding = $false
+            }
+            
+            if (-not $isResponding) {
+                $status.Details += "Process: Running but NOT responding (likely crashed/hung)"
+                $status.Status = "CRASHED"
+                return $status
+            }
+            
+            $status.Details += "Process: Running and responding (PID: $($unityProcess.Id))"
         } else {
             $status.Details += "Process: NOT running"
             $status.Status = "STOPPED"
