@@ -2511,28 +2511,69 @@ while ($monitoringActive) {
                     } else {
                         # Issue detected but not pausing (medium/low severity or already paused)
                         if ($issue.severity -eq 'medium' -or $issue.severity -eq 'low') {
-                            # Throttle "NOT PAUSING" messages - only show once per 10 seconds per issue pattern
-                            $issueKey = "$($issue.type)_$($issue.severity)_$($issue.source)"
-                            $throttleKey = "notpausing_$issueKey"
-                            
-                            if (-not $script:issueThrottle) {
-                                $script:issueThrottle = @{}
+                            # Medium/low severity issues still enter focus mode, just don't pause debugger
+                            # Extract table ID if available
+                            $tableId = $null
+                            if ($line -match 'tableId.*?"([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})"') {
+                                $tableId = $matches[1]
+                            }
+                            elseif ($line -match 'tableId.*?([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})') {
+                                $tableId = $matches[1]
+                            }
+                            elseif ($line -match 'tableId.*?"([^"]+)"') {
+                                $tableId = $matches[1]
+                            }
+                            elseif ($line -match 'tableId.*?(\w{8,})') {
+                                $tableId = $matches[1]
                             }
                             
-                            $lastShown = $script:issueThrottle[$throttleKey]
-                            $shouldShow = $true
+                            # Add issue to pending-issues.json (enters focus mode, but no pause)
+                            $maxMessageLength = 1000
+                            $safeMessage = $line
+                            if ($safeMessage.Length -gt $maxMessageLength) {
+                                $safeMessage = $safeMessage.Substring(0, $maxMessageLength) + "... (truncated)"
+                            }
+                            $safeMessage = $safeMessage -replace "``", "'" -replace "`0", "" -replace "`r`n", " " -replace "`r", " " -replace "`n", " " -replace "`t", " "
                             
-                            if ($lastShown) {
-                                $timeSinceLastShown = (Get-Date) - $lastShown
-                                if ($timeSinceLastShown.TotalSeconds -lt 10) {
-                                    $shouldShow = $false
+                            $issueData = @{
+                                message = $safeMessage
+                                source = $issue.source
+                                severity = $issue.severity
+                                type = $issue.type
+                                tableId = $tableId
+                            }
+                            
+                            $addResult = Add-PendingIssue $issueData
+                            
+                            if ($addResult -and $addResult.success) {
+                                $stats.LastIssueLogged = Get-Date
+                                
+                                # Check if this started a new focus group or was added to existing
+                                if ($addResult.reason -eq 'new_focus_group') {
+                                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] FOCUS MODE: New issue detected - entering focus mode (no pause)" -ForegroundColor "Yellow"
+                                    Write-ConsoleOutput -Message "  Root Issue: $($issue.type) ($($issue.severity))" -ForegroundColor "White"
+                                    Write-ConsoleOutput -Message "  Group ID: $($addResult.groupId)" -ForegroundColor "Cyan"
+                                    Write-ConsoleOutput -Message "  Note: Medium/low severity issues don't pause debugger" -ForegroundColor "Gray"
+                                    
+                                    # Start investigation phase for medium/low issues too
+                                    if ($investigationEnabled -and $investigationTimeout -gt 0) {
+                                        $isInvestigating = $true
+                                        $investigationStartTime = Get-Date
+                                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] INVESTIGATION: Starting investigation phase ($investigationTimeout seconds)" -ForegroundColor "Cyan"
+                                        Write-ConsoleOutput -Message "  Gathering related issues..." -ForegroundColor "Gray"
+                                        $currentIssue = $line
+                                    }
+                                } elseif ($addResult.reason -eq 'added_to_group') {
+                                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] RELATED ISSUE: Added to focus group" -ForegroundColor "Yellow"
+                                    Write-ConsoleOutput -Message "  Issue: $($issue.type) ($($issue.severity))" -ForegroundColor "White"
+                                    Write-ConsoleOutput -Message "  Group ID: $($addResult.groupId)" -ForegroundColor "Cyan"
+                                } else {
+                                    $issueMessage = "[$(Get-Date -Format 'HH:mm:ss')] ISSUE DETECTED: $($issue.type) ($($issue.severity))"
+                                    Write-ConsoleOutput -Message $issueMessage -ForegroundColor "Yellow"
                                 }
-                            }
-                            
-                            if ($shouldShow) {
-                                $script:issueThrottle[$throttleKey] = Get-Date
-                                $notPausingMsg = "[$(Get-Date -Format 'HH:mm:ss')] ISSUE (NOT PAUSING): $($issue.type) ($($issue.severity)) - Only critical/high severity issues pause Unity"
-                                Write-ConsoleOutput -Message $notPausingMsg -ForegroundColor "Gray"
+                                
+                                $messagePreview = "  Message: $($line.Substring(0, [Math]::Min(100, $line.Length)))"
+                                Write-ConsoleOutput -Message $messagePreview -ForegroundColor "Gray"
                             }
                         } elseif ($isPaused) {
                             # Throttle "ALREADY PAUSED" messages - only show once per 10 seconds per issue pattern
