@@ -840,8 +840,10 @@ When fixes require restarts, here's what happens:
 **Unity Restart:**
 - ✅ Server state is **preserved** (tables, players, chips)
 - ✅ Unity **reconnects automatically** when restarted
+- ✅ Unity **automatically enters play mode** via InitializeOnLoad Editor script
+- ✅ Unity **auto-connects and auto-logs in** using command-line arguments
 - ⚠️ Simulation remains **paused** until resume marker is written
-- ⚠️ You must manually restart Unity in debug mode
+- ✅ Monitor automatically restarts Unity if not running or disconnected (no manual intervention needed)
 
 **Database Restart:**
 - ✅ Server detects database offline and logs errors
