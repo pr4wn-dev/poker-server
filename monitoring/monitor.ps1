@@ -699,8 +699,7 @@ function Kill-Port3000Processes {
         }
         Start-Sleep -Seconds 2
         Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ✅ Killed all processes using port 3000" -ForegroundColor "Green"
-    }
-    else {
+    } else {
         Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ℹ️  No processes found using port 3000" -ForegroundColor "Gray"
     }
 }
@@ -1260,6 +1259,7 @@ function Maintain-Services {
     if ($config.automation.autoRestartUnity) {
         Restart-UnityIfNeeded | Out-Null
     }
+}
 }
 
 # Initialize Windows API for window size control (only once)
