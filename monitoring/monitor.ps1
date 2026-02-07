@@ -1696,6 +1696,12 @@ function Restart-UnityIfNeeded {
             }
         }
         
+        # On first check, if Unity is already running and connected, use it
+        if ($isUnityRunning -and $isConnected -and -not $wasUnityRunning) {
+            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Detected existing Unity instance (PID: $($unityProcess.Id)) - using it" -ForegroundColor "Green"
+            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Already connected to server - no restart needed" -ForegroundColor "Green"
+        }
+        
         # Log Unity startup when process first appears
         if ($isUnityRunning -and -not $wasUnityRunning) {
             Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Game process started (PID: $($unityProcess.Id))" -ForegroundColor "Green"
@@ -2216,12 +2222,18 @@ while ($monitoringActive) {
                             
                             if ($response.StatusCode -eq 200) {
                                 $result = $response.Content | ConvertFrom-Json
-                                $stats.PauseMarkersWritten++
-                                Write-ConsoleOutput -Message "  Debugger break triggered - Unity paused" -ForegroundColor "Green"
-                                if ($result.emittedTables) {
-                                    Write-ConsoleOutput -Message "  Emitted to $($result.emittedCount) table(s): $($result.emittedTables -join ', ')" -ForegroundColor "Cyan"
+                                if ($result.success -and $result.emittedCount -gt 0) {
+                                    $stats.PauseMarkersWritten++
+                                    Write-ConsoleOutput -Message "  Debugger break triggered - Unity paused" -ForegroundColor "Green"
+                                    if ($result.emittedTables) {
+                                        Write-ConsoleOutput -Message "  Emitted to $($result.emittedCount) table(s): $($result.emittedTables -join ', ')" -ForegroundColor "Cyan"
+                                    } else {
+                                        Write-ConsoleOutput -Message "  Emitted to $($result.emittedCount) table(s)" -ForegroundColor "Cyan"
+                                    }
                                 } else {
-                                    Write-ConsoleOutput -Message "  Emitted to $($result.emittedCount) table(s)" -ForegroundColor "Cyan"
+                                    $stats.PauseMarkerErrors++
+                                    Write-ConsoleOutput -Message "  WARNING: API returned success but no tables received event (emittedCount: $($result.emittedCount))" -ForegroundColor "Yellow"
+                                    Write-ConsoleOutput -Message "    Unity may not be connected or listening for debugger_break event" -ForegroundColor "Yellow"
                                 }
                             } else {
                                 throw "API returned status code $($response.StatusCode)"
@@ -2235,10 +2247,12 @@ while ($monitoringActive) {
                     $isPaused = $true
                 }
             } else {
-                # Still investigating - show countdown
+                # Still investigating - show countdown every 5 seconds
                 $remaining = [Math]::Max(0, $investigationTimeout - $investigationElapsed.TotalSeconds)
-                if ($remaining -gt 0 -and ($remaining % 5 -lt 1)) {  # Show every ~5 seconds
-                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] INVESTIGATING: $([Math]::Floor($remaining))s remaining..." -ForegroundColor "Gray"
+                $remainingInt = [Math]::Floor($remaining)
+                # Show countdown every 5 seconds or when less than 5 seconds remain
+                if ($remainingInt -lt 5 -or ($remainingInt % 5 -eq 0 -and $remainingInt -ne $investigationTimeout)) {
+                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] INVESTIGATING: $remainingInt s remaining..." -ForegroundColor "Gray"
                 }
             }
         }
@@ -2524,14 +2538,18 @@ while ($monitoringActive) {
                                             
                                             if ($response.StatusCode -eq 200) {
                                                 $result = $response.Content | ConvertFrom-Json
-                                                $stats.PauseMarkersWritten++
-                                                Write-ConsoleOutput -Message "  Debugger break triggered via API" -ForegroundColor "Green"
-                                                if ($result.emittedTables) {
-                                                    Write-ConsoleOutput -Message "  Emitted to $($result.emittedCount) table(s): $($result.emittedTables -join ', ')" -ForegroundColor "Cyan"
+                                                if ($result.success -and $result.emittedCount -gt 0) {
+                                                    $stats.PauseMarkersWritten++
+                                                    Write-ConsoleOutput -Message "  Debugger break triggered via API" -ForegroundColor "Green"
+                                                    if ($result.emittedTables) {
+                                                        Write-ConsoleOutput -Message "  Emitted to $($result.emittedCount) table(s): $($result.emittedTables -join ', ')" -ForegroundColor "Cyan"
+                                                    } else {
+                                                        Write-ConsoleOutput -Message "  Emitted to $($result.emittedCount) table(s)" -ForegroundColor "Cyan"
+                                                    }
+                                                    Write-ConsoleOutput -Message "  Unity will call Debug.Break() when debugger is attached" -ForegroundColor "Cyan"
                                                 } else {
-                                                    Write-ConsoleOutput -Message "  Emitted to $($result.emittedCount) table(s)" -ForegroundColor "Cyan"
+                                                    throw "API returned success but no tables received event (emittedCount: $($result.emittedCount), success: $($result.success))"
                                                 }
-                                                Write-ConsoleOutput -Message "  Unity will call Debug.Break() when debugger is attached" -ForegroundColor "Cyan"
                                             } else {
                                                 throw "API returned status code $($response.StatusCode)"
                                             }
