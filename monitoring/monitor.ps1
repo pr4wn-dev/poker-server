@@ -81,6 +81,7 @@ if (Test-Path $configFile) {
         if ($fileConfig.unity) { $config.unity = $fileConfig.unity }
         if ($fileConfig.login) { $config.login = $fileConfig.login }
         if ($fileConfig.simulation) { $config.simulation = $fileConfig.simulation }
+        if ($fileConfig.investigation) { $config.investigation = $fileConfig.investigation }
         
         # Override mode from command line if provided
         if ($Mode -ne "normal") {
@@ -119,6 +120,10 @@ Write-Info "Simulation Mode: $($config.simulation.enabled)"
 # Initialize lastLogPosition to END of file so we only read NEW entries (not old ones from previous runs)
 $lastLogPosition = if (Test-Path $logFile) { (Get-Item $logFile).Length } else { 0 }
 $isPaused = $false
+$isInvestigating = $false  # Track if we're in investigation phase
+$investigationStartTime = $null  # When investigation started
+$investigationTimeout = if ($config.investigation -and $config.investigation.timeoutSeconds) { $config.investigation.timeoutSeconds } else { 15 }  # Seconds to investigate before pausing
+$investigationEnabled = if ($config.investigation -and $config.investigation.enabled -ne $false) { $true } else { $false }
 $currentIssue = $null
 $monitoringActive = $true
 $lastServerCheck = Get-Date  # Track last server health check
@@ -1007,8 +1012,8 @@ function Show-Statistics {
     Write-Host ("=" * $consoleWidth) -ForegroundColor Cyan
     
     # Top status bar - single row across full width
-    $statusText = if ($isPaused) { "PAUSED (Issue Detected)" } else { "ACTIVE" }
-    $statusColor = if ($isPaused) { "Red" } else { "Green" }
+    $statusText = if ($isInvestigating) { "INVESTIGATING" } elseif ($isPaused) { "PAUSED (Fix Required)" } else { "ACTIVE" }
+    $statusColor = if ($isInvestigating) { "Yellow" } elseif ($isPaused) { "Red" } else { "Green" }
     $serverStatusText = if ($stats.ServerStatus -eq "Online") { "ONLINE" } else { "OFFLINE" }
     $serverStatusColor = if ($stats.ServerStatus -eq "Online") { "Green" } else { "Red" }
     $pipeSeparator = [char]124
@@ -1105,8 +1110,8 @@ function Show-Statistics {
         $col3Lines += "Pending: " + $pendingInfo.TotalIssues
     }
     
-    # Add current issue preview if paused
-    if ($isPaused -and $currentIssue) {
+    # Add current issue preview if paused or investigating
+    if (($isPaused -or $isInvestigating) -and $currentIssue) {
         $col3Lines += ""
         $col3Lines += "CURRENT ISSUE"
         $col3Lines += ("-" * ($colWidth - 2))
@@ -1852,6 +1857,74 @@ while ($monitoringActive) {
             $lastServiceCheck = Get-Date
         }
         
+        # Check if investigation phase is complete
+        if ($isInvestigating -and $investigationStartTime) {
+            $investigationElapsed = (Get-Date) - $investigationStartTime
+            if ($investigationElapsed.TotalSeconds -ge $investigationTimeout) {
+                # Investigation complete - pause debugger now
+                $isInvestigating = $false
+                $pendingInfo = Get-PendingIssuesInfo
+                
+                if ($pendingInfo.InFocusMode -and $pendingInfo.RootIssue) {
+                    $rootIssue = $pendingInfo.RootIssue
+                    $relatedCount = $pendingInfo.RelatedIssuesCount
+                    
+                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] INVESTIGATION COMPLETE: Pausing debugger" -ForegroundColor "Yellow"
+                    Write-ConsoleOutput -Message "  Root Issue: $($rootIssue.type) ($($rootIssue.severity))" -ForegroundColor "White"
+                    if ($relatedCount -gt 0) {
+                        Write-ConsoleOutput -Message "  Related Issues Found: $relatedCount" -ForegroundColor "Cyan"
+                    }
+                    Write-ConsoleOutput -Message "  Please review and fix the issue(s)" -ForegroundColor "Cyan"
+                    
+                    # Extract tableId from root issue
+                    $tableId = $null
+                    if ($rootIssue.tableId) {
+                        $tableId = $rootIssue.tableId
+                    }
+                    
+                    # Pause debugger
+                    if ($config.unity.pauseDebuggerOnIssue) {
+                        try {
+                            $reason = "$($rootIssue.type) - $($rootIssue.severity) severity (Investigation complete)"
+                            $message = "Investigation complete. Root issue: $($rootIssue.type). Related issues: $relatedCount"
+                            
+                            $body = @{
+                                tableId = $tableId
+                                reason = $reason
+                                message = $message
+                            } | ConvertTo-Json
+                            
+                            $response = Invoke-WebRequest -Uri "$serverUrl/api/debugger/break" -Method POST -Body $body -ContentType "application/json" -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
+                            
+                            if ($response.StatusCode -eq 200) {
+                                $result = $response.Content | ConvertFrom-Json
+                                $stats.PauseMarkersWritten++
+                                Write-ConsoleOutput -Message "  Debugger break triggered - Unity paused" -ForegroundColor "Green"
+                                if ($result.emittedTables) {
+                                    Write-ConsoleOutput -Message "  Emitted to $($result.emittedCount) table(s): $($result.emittedTables -join ', ')" -ForegroundColor "Cyan"
+                                } else {
+                                    Write-ConsoleOutput -Message "  Emitted to $($result.emittedCount) table(s)" -ForegroundColor "Cyan"
+                                }
+                            } else {
+                                throw "API returned status code $($response.StatusCode)"
+                            }
+                        } catch {
+                            $stats.PauseMarkerErrors++
+                            Write-ConsoleOutput -Message "  ERROR: Failed to trigger debugger break: $_" -ForegroundColor "Red"
+                        }
+                    }
+                    
+                    $isPaused = $true
+                }
+            } else {
+                # Still investigating - show countdown
+                $remaining = [Math]::Max(0, $investigationTimeout - $investigationElapsed.TotalSeconds)
+                if ($remaining -gt 0 -and ($remaining % 5 -lt 1)) {  # Show every ~5 seconds
+                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] INVESTIGATING: $([Math]::Floor($remaining))s remaining..." -ForegroundColor "Gray"
+                }
+            }
+        }
+        
         # Check if log file exists
         if (-not (Test-Path $logFile)) {
             Start-Sleep -Seconds $checkInterval
@@ -2038,41 +2111,56 @@ while ($monitoringActive) {
                                 Write-ConsoleOutput -Message "  Table ID: Not found - will pause all active simulations" -ForegroundColor "Yellow"
                             }
                             
-                            # CRITICAL: Call API directly to trigger debugger break in Unity
-                            # This is simpler and more reliable than writing to log file and having watcher read it
-                            if ($config.unity.pauseDebuggerOnIssue) {
-                                try {
-                                    $escapedMessage = $line.Replace('"','\"').Replace("`n"," ").Replace("`r"," ").Substring(0,[Math]::Min(200,$line.Length))
-                                    $reason = "$($issue.type) - $($issue.severity) severity"
-                                    
-                                    $body = @{
-                                        tableId = $tableId
-                                        reason = $reason
-                                        message = $escapedMessage
-                                    } | ConvertTo-Json
-                                    
-                                    $response = Invoke-WebRequest -Uri "$serverUrl/api/debugger/break" -Method POST -Body $body -ContentType "application/json" -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
-                                    
-                                    if ($response.StatusCode -eq 200) {
-                                        $result = $response.Content | ConvertFrom-Json
-                                        $stats.PauseMarkersWritten++
-                                        Write-ConsoleOutput -Message "  Debugger break triggered via API" -ForegroundColor "Green"
-                                        Write-ConsoleOutput -Message "  Emitted to $($result.emittedCount) table(s): $($result.tableIds -join ', ')" -ForegroundColor "Cyan"
-                                        Write-ConsoleOutput -Message "  Unity will call Debug.Break() when debugger is attached" -ForegroundColor "Cyan"
-                                    } else {
-                                        throw "API returned status code $($response.StatusCode)"
-                                    }
-                                } catch {
-                                    $stats.PauseMarkerErrors++
-                                    Write-ConsoleOutput -Message "  ERROR: Failed to trigger debugger break via API: $_" -ForegroundColor "Red"
-                                    Write-ConsoleOutput -Message "    Check: Server is running, API endpoint is accessible" -ForegroundColor "Yellow"
-                                }
+                            # Start investigation phase (gather related issues before pausing)
+                            if ($addResult.reason -eq 'new_focus_group' -and $investigationEnabled -and $investigationTimeout -gt 0) {
+                                # New issue detected - start investigation phase
+                                $isInvestigating = $true
+                                $investigationStartTime = Get-Date
+                                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] INVESTIGATION: Starting investigation phase ($investigationTimeout seconds)" -ForegroundColor "Cyan"
+                                Write-ConsoleOutput -Message "  Gathering related issues before pausing debugger..." -ForegroundColor "Gray"
+                                Write-ConsoleOutput -Message "  Monitor will pause debugger when investigation completes" -ForegroundColor "Gray"
+                                $currentIssue = $line
                             } else {
-                                Write-ConsoleOutput -Message "  Debugger pause disabled in config (pauseDebuggerOnIssue = false)" -ForegroundColor "Gray"
+                                # Investigation disabled or timeout is 0 - pause immediately
+                                # OR this is a related issue added during investigation - don't restart investigation
+                                if (-not $isInvestigating) {
+                                    # Pause debugger immediately
+                                    if ($config.unity.pauseDebuggerOnIssue) {
+                                        try {
+                                            $escapedMessage = $line.Replace('"','\"').Replace("`n"," ").Replace("`r"," ").Substring(0,[Math]::Min(200,$line.Length))
+                                            $reason = "$($issue.type) - $($issue.severity) severity"
+                                            
+                                            $body = @{
+                                                tableId = $tableId
+                                                reason = $reason
+                                                message = $escapedMessage
+                                            } | ConvertTo-Json
+                                            
+                                            $response = Invoke-WebRequest -Uri "$serverUrl/api/debugger/break" -Method POST -Body $body -ContentType "application/json" -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
+                                            
+                                            if ($response.StatusCode -eq 200) {
+                                                $result = $response.Content | ConvertFrom-Json
+                                                $stats.PauseMarkersWritten++
+                                                Write-ConsoleOutput -Message "  Debugger break triggered via API" -ForegroundColor "Green"
+                                                if ($result.emittedTables) {
+                                                    Write-ConsoleOutput -Message "  Emitted to $($result.emittedCount) table(s): $($result.emittedTables -join ', ')" -ForegroundColor "Cyan"
+                                                } else {
+                                                    Write-ConsoleOutput -Message "  Emitted to $($result.emittedCount) table(s)" -ForegroundColor "Cyan"
+                                                }
+                                                Write-ConsoleOutput -Message "  Unity will call Debug.Break() when debugger is attached" -ForegroundColor "Cyan"
+                                            } else {
+                                                throw "API returned status code $($response.StatusCode)"
+                                            }
+                                        } catch {
+                                            $stats.PauseMarkerErrors++
+                                            Write-ConsoleOutput -Message "  ERROR: Failed to trigger debugger break via API: $_" -ForegroundColor "Red"
+                                            Write-ConsoleOutput -Message "    Check: Server is running, API endpoint is accessible" -ForegroundColor "Yellow"
+                                        }
+                                    }
+                                    $isPaused = $true
+                                    $currentIssue = $line
+                                }
                             }
-                            
-                            $isPaused = $true
-                            $currentIssue = $line
                         } else {
                             # Handle different failure reasons
                             if ($addResult -and $addResult.reason -eq 'queued') {
@@ -2203,17 +2291,29 @@ while ($monitoringActive) {
             $lastLogPosition = $currentSize
         }
         
-        # Check if issues have been fixed (pending-issues.json is empty)
-        # Note: We don't need resume markers anymore - debugger pause (Debug.Break()) doesn't need resume
-        # You just continue in the debugger when ready
-        if ($isPaused) {
+        # Check if issues have been fixed (pending-issues.json is empty or cleared)
+        # When user confirms fix is working, Monitor moves to next investigation
+        if ($isPaused -or $isInvestigating) {
             $pendingInfo = Get-PendingIssuesInfo
             if ($pendingInfo.TotalIssues -eq 0 -and -not $pendingInfo.InFocusMode) {
-                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ISSUES FIXED: All issues resolved" -ForegroundColor "Green"
-                Write-ConsoleOutput -Message "  Continue in debugger when ready (no resume needed)" -ForegroundColor "Cyan"
+                # All issues fixed - user confirmed fix is working
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] FIX CONFIRMED: All issues resolved" -ForegroundColor "Green"
                 
+                # Check if there are queued issues to investigate next
+                if ($pendingInfo.QueuedIssuesCount -gt 0) {
+                    Write-ConsoleOutput -Message "  Next investigation: $($pendingInfo.QueuedIssuesCount) queued issue(s) waiting" -ForegroundColor "Cyan"
+                    Write-ConsoleOutput -Message "  Monitor will start next investigation automatically" -ForegroundColor "Gray"
+                } else {
+                    Write-ConsoleOutput -Message "  No queued issues - Monitor ready for next issue" -ForegroundColor "Cyan"
+                }
+                
+                # Reset state for next investigation
                 $isPaused = $false
+                $isInvestigating = $false
+                $investigationStartTime = $null
                 $currentIssue = $null
+                
+                Write-ConsoleOutput -Message "  Continue in debugger when ready" -ForegroundColor "Gray"
             }
         }
         

@@ -16,6 +16,11 @@
     "pauseDebuggerOnIssue": true,
     "comment": "pauseDebuggerOnIssue: If true, Unity will call Debug.Break() when critical issues are detected (requires debugger attached)"
   },
+  "investigation": {
+    "enabled": true,
+    "timeoutSeconds": 15,
+    "comment": "Investigation phase: Monitor waits this many seconds to gather related issues before pausing debugger. Set to 0 to pause immediately."
+  },
   "login": {
     "username": "monitor_user",
     "password": "monitor_pass",
