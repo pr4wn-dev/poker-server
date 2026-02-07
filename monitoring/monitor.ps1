@@ -1811,6 +1811,8 @@ $lastUnityWarning = Get-Date
 $serviceCheckInterval = 30  # Check services every 30 seconds
 $script:simulationEndTime = $null  # Track when simulation ended for idle detection
 $script:lastServerRestart = $null  # Track when server was last restarted (to prevent restart loops)
+$script:simulationStartTime = $null  # Track when we first detected a simulation starting (after monitor started)
+$script:monitorStartTime = Get-Date  # Track when monitor started to ignore old simulations
 
 while ($monitoringActive) {
     try {
@@ -2383,6 +2385,20 @@ while ($monitoringActive) {
             # Check if simulation is active (both server and Unity agree)
             if ($serverHasSimulation -and $unityIsInGame) {
                 $stats.SimulationRunning = $true
+                
+                # Track when we first detect a simulation starting (after monitor started)
+                # This helps us distinguish between old simulations (running when monitor started) and new ones
+                if ($script:simulationStartTime -eq $null) {
+                    $script:simulationStartTime = Get-Date
+                    $simStartTrackMsg = "[$(Get-Date -Format 'HH:mm:ss')] SIMULATION: Tracking new simulation (started after monitor)"
+                    Write-ConsoleOutput -Message $simStartTrackMsg -ForegroundColor "Cyan"
+                }
+            } else {
+                # Simulation not active - reset start time if it was set
+                # This allows us to track the next simulation that starts
+                if ($script:simulationStartTime -ne $null -and -not $stats.SimulationRunning) {
+                    $script:simulationStartTime = $null
+                }
             }
             
             # Check for orphaned simulation (server has it but Unity doesn't)
