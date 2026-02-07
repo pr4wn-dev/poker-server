@@ -1996,10 +1996,15 @@ while ($monitoringActive) {
                         } else {
                             # Check if Unity is actually trying to connect (recent connection attempts in logs)
                             $recentConnectionAttempt = $false
-                            if ($unityActualStatus.LastConnectionActivity) {
-                                $timeSinceConnectionAttempt = (Get-Date) - $unityActualStatus.LastConnectionActivity
-                                if ($timeSinceConnectionAttempt.TotalSeconds -lt 30) {
-                                    $recentConnectionAttempt = $true
+                            if ($unityActualStatus.LastConnectionActivity -and $unityActualStatus.LastConnectionActivity -is [DateTime]) {
+                                try {
+                                    $timeSinceConnectionAttempt = (Get-Date) - $unityActualStatus.LastConnectionActivity
+                                    if ($timeSinceConnectionAttempt.TotalSeconds -lt 30) {
+                                        $recentConnectionAttempt = $true
+                                    }
+                                } catch {
+                                    # Date arithmetic failed - treat as no recent connection
+                                    $recentConnectionAttempt = $false
                                 }
                             }
                             
@@ -2008,8 +2013,20 @@ while ($monitoringActive) {
                                 $restartReason = "Unity not connected to server (no recent connection attempts)"
                             } else {
                                 # Unity is trying to connect - log but don't restart yet
-                                $connectingMsg = "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Connecting to server (last attempt: $([Math]::Round((Get-Date - $unityActualStatus.LastConnectionActivity).TotalSeconds))s ago)"
-                                Write-ConsoleOutput -Message $connectingMsg -ForegroundColor "Yellow"
+                                try {
+                                    if ($unityActualStatus.LastConnectionActivity -and $unityActualStatus.LastConnectionActivity -is [DateTime]) {
+                                        $timeSinceAttempt = [Math]::Round(((Get-Date) - $unityActualStatus.LastConnectionActivity).TotalSeconds)
+                                        $connectingMsg = "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Connecting to server (last attempt: ${timeSinceAttempt}s ago)"
+                                        Write-ConsoleOutput -Message $connectingMsg -ForegroundColor "Yellow"
+                                    } else {
+                                        $connectingMsg = "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Connecting to server"
+                                        Write-ConsoleOutput -Message $connectingMsg -ForegroundColor "Yellow"
+                                    }
+                                } catch {
+                                    # Date arithmetic failed - just log without time
+                                    $connectingMsg = "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Connecting to server"
+                                    Write-ConsoleOutput -Message $connectingMsg -ForegroundColor "Yellow"
+                                }
                             }
                         }
                     } elseif ($config.simulation.enabled -and -not $unityActualStatus.InGameScene) {
