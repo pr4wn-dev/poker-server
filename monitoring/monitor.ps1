@@ -1001,7 +1001,8 @@ function Start-ServerIfNeeded {
         } else {
             # Server was just restarted but not responding yet - wait a bit more
             # Don't kill processes yet, give it more time
-            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⏳ Server was just restarted (cooldown active) - waiting for it to become ready..." -ForegroundColor "Gray"
+            $cooldownMsg = "[$(Get-Date -Format 'HH:mm:ss')] Server was just restarted (cooldown active) - waiting for it to become ready..."
+            Write-ConsoleOutput -Message $cooldownMsg -ForegroundColor "Gray"
             return $false
         }
     }
@@ -1076,9 +1077,11 @@ function Start-ServerIfNeeded {
             }
             
             # Step 4: Start server in background (port 3000 should now be free, all node processes killed)
-            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🚀 Starting Node.js server..." -ForegroundColor "Cyan"
+            $startServerMsg = "[$(Get-Date -Format 'HH:mm:ss')] Starting Node.js server..."
+            Write-ConsoleOutput -Message $startServerMsg -ForegroundColor "Cyan"
             $serverProcess = Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$PWD'; npm start" -WindowStyle Minimized -PassThru
-            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⏳ Server process started (PID: $($serverProcess.Id)). Waiting for server to be ready..." -ForegroundColor "Cyan"
+            $serverStartedMsg = "[$(Get-Date -Format 'HH:mm:ss')] Server process started (PID: $($serverProcess.Id)). Waiting for server to be ready..."
+            Write-ConsoleOutput -Message $serverStartedMsg -ForegroundColor "Cyan"
             
             # Wait up to 30 seconds for server to start - THIS BLOCKS UNTIL SERVER IS READY
             $maxWait = 30
@@ -1087,16 +1090,19 @@ function Start-ServerIfNeeded {
                 Start-Sleep -Seconds 2
                 $waited += 2
                 if (Test-ServerRunning) {
-                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ✅ Server is now online and ready!" -ForegroundColor "Green"
+                    $serverReadyMsg = "[$(Get-Date -Format 'HH:mm:ss')] Server is now online and ready!"
+                    Write-ConsoleOutput -Message $serverReadyMsg -ForegroundColor "Green"
                     $script:lastServerRestart = Get-Date  # Track server restart time to prevent killing it too early
                     return $true
                 }
                 # Log progress every 6 seconds
                 if ($waited % 6 -eq 0) {
-                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⏳ Still waiting for server... ($waited/$maxWait seconds)" -ForegroundColor "Gray"
+                    $waitingMsg = "[$(Get-Date -Format 'HH:mm:ss')] Still waiting for server... ($waited/$maxWait seconds)"
+                    Write-ConsoleOutput -Message $waitingMsg -ForegroundColor "Gray"
                 }
             }
-            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ❌ Server failed to start within $maxWait seconds" -ForegroundColor "Red"
+            $serverFailMsg = "[$(Get-Date -Format 'HH:mm:ss')] Server failed to start within $maxWait seconds"
+            Write-ConsoleOutput -Message $serverFailMsg -ForegroundColor "Red"
             return $false
         } catch {
             # Don't write to console - update stats display instead
@@ -1750,20 +1756,20 @@ while ($monitoringActive) {
                             try {
                                 Add-Content -Path $logFile -Value $pauseMarker -ErrorAction Stop
                                 $stats.PauseMarkersWritten++
-                                Write-ConsoleOutput -Message "  ✅ Pause marker written to game.log" -ForegroundColor "Green"
-                                Write-ConsoleOutput -Message "  ⏳ Waiting for log watcher to pause Unity..." -ForegroundColor "Yellow"
+                                Write-ConsoleOutput -Message "  Pause marker written to game.log" -ForegroundColor "Green"
+                                Write-ConsoleOutput -Message "  Waiting for log watcher to pause Unity..." -ForegroundColor "Yellow"
                                 
                                 # Verify pause actually happened (check logs after 2 seconds)
                                 Start-Sleep -Seconds 2
                                 $pauseVerified = Verify-UnityPaused -TableId $tableId -TimeoutSeconds 5
                                 
                                 if ($pauseVerified.Success) {
-                                    Write-ConsoleOutput -Message "  ✅ VERIFIED: Unity paused successfully" -ForegroundColor "Green"
+                                    Write-ConsoleOutput -Message "  VERIFIED: Unity paused successfully" -ForegroundColor "Green"
                                     if ($pauseVerified.Details) {
                                         Write-ConsoleOutput -Message "    Details: $($pauseVerified.Details)" -ForegroundColor "Gray"
                                     }
                                 } else {
-                                    Write-ConsoleOutput -Message "  ⚠️  WARNING: Unity pause NOT verified!" -ForegroundColor "Red"
+                                    Write-ConsoleOutput -Message "  WARNING: Unity pause NOT verified!" -ForegroundColor "Red"
                                     Write-ConsoleOutput -Message "    Reason: $($pauseVerified.Reason)" -ForegroundColor "Yellow"
                                     Write-ConsoleOutput -Message "    Diagnostics:" -ForegroundColor "Yellow"
                                     
@@ -1777,7 +1783,7 @@ while ($monitoringActive) {
                             } catch {
                                 # If writing fails, log it but continue
                                 $stats.PauseMarkerErrors++
-                                Write-ConsoleOutput -Message "  ❌ ERROR: Failed to write pause marker: $_" -ForegroundColor "Red"
+                                Write-ConsoleOutput -Message "  ERROR: Failed to write pause marker: $_" -ForegroundColor "Red"
                                 Write-ConsoleOutput -Message "    Check: Log file permissions, disk space, file locks" -ForegroundColor "Yellow"
                             }
                             
@@ -1805,7 +1811,8 @@ while ($monitoringActive) {
                                 }
                             } else {
                                 $errorMsg = if ($addResult -and $addResult.error) { $addResult.error } else { "Unknown error - check Node.js script output" }
-                                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ❌ FAILED TO LOG ISSUE: $errorMsg" -ForegroundColor "Red"
+                                $logFailMsg = "[$(Get-Date -Format 'HH:mm:ss')] FAILED TO LOG ISSUE: $errorMsg"
+                                Write-ConsoleOutput -Message $logFailMsg -ForegroundColor "Red"
                                 Write-ConsoleOutput -Message "  Issue detected but NOT logged to pending-issues.json" -ForegroundColor "Yellow"
                                 Write-ConsoleOutput -Message "  Diagnostics:" -ForegroundColor "Yellow"
                                 Write-ConsoleOutput -Message "    - Check if issue-detector.js is working: node monitoring/issue-detector.js --test" -ForegroundColor "Gray"
@@ -1816,9 +1823,11 @@ while ($monitoringActive) {
                     } else {
                         # Issue detected but not pausing (medium/low severity or already paused)
                         if ($issue.severity -eq 'medium' -or $issue.severity -eq 'low') {
-                            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  ISSUE (NOT PAUSING): $($issue.type) ($($issue.severity)) - Only critical/high severity issues pause Unity" -ForegroundColor "Gray"
+                            $notPausingMsg = "[$(Get-Date -Format 'HH:mm:ss')] ISSUE (NOT PAUSING): $($issue.type) ($($issue.severity)) - Only critical/high severity issues pause Unity"
+                            Write-ConsoleOutput -Message $notPausingMsg -ForegroundColor "Gray"
                         } elseif ($isPaused) {
-                            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  ISSUE (ALREADY PAUSED): $($issue.type) ($($issue.severity)) - Unity already paused, issue queued" -ForegroundColor "Gray"
+                            $alreadyPausedMsg = "[$(Get-Date -Format 'HH:mm:ss')] ISSUE (ALREADY PAUSED): $($issue.type) ($($issue.severity)) - Unity already paused, issue queued"
+                            Write-ConsoleOutput -Message $alreadyPausedMsg -ForegroundColor "Gray"
                         }
                     }
                 }
@@ -1876,7 +1885,8 @@ while ($monitoringActive) {
             # Warn if Unity is not actually playing (connected but idle)
             if ($unityActualStatus.ProcessRunning -and $unityActualStatus.ConnectedToServer -and -not $unityActualStatus.InGameScene) {
                 if (-not $wasUnityActive -or ($now - $lastUnityWarning).TotalSeconds -gt 60) {
-                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  UNITY: Connected but NOT in game scene (likely in MainMenuScene)" -ForegroundColor "Yellow"
+                    $unityNotInGameMsg = "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Connected but NOT in game scene (likely in MainMenuScene)"
+                    Write-ConsoleOutput -Message $unityNotInGameMsg -ForegroundColor "Yellow"
                     Write-ConsoleOutput -Message "  Details: $($unityActualStatus.Details -join '; ')" -ForegroundColor "Gray"
                     $lastUnityWarning = $now
                 }
@@ -1912,7 +1922,8 @@ while ($monitoringActive) {
                     }
                     
                     if ($shouldRestart) {
-                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🔄 UNITY: Restarting - $restartReason" -ForegroundColor "Cyan"
+                        $unityRestartMsg = "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Restarting - $restartReason"
+                        Write-ConsoleOutput -Message $unityRestartMsg -ForegroundColor "Cyan"
                         Restart-UnityIfNeeded | Out-Null
                     }
                 } else {
@@ -2015,7 +2026,8 @@ while ($monitoringActive) {
                 }
                 
                 if ($shouldStop) {
-                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  SIMULATION: Server has active simulation but Unity is NOT connected to it (orphaned simulation)" -ForegroundColor "Yellow"
+                    $orphanMsg = "[$(Get-Date -Format 'HH:mm:ss')] SIMULATION: Server has active simulation but Unity is NOT connected to it (orphaned simulation)"
+                    Write-ConsoleOutput -Message $orphanMsg -ForegroundColor "Yellow"
                     
                     # DIAGNOSTIC: Check server's actual simulation count via /health endpoint
                     $serverActualCount = -1
@@ -2084,13 +2096,16 @@ while ($monitoringActive) {
                             # 3. Start server
                             # 4. WAIT for server to be ready (blocks up to 30 seconds)
                             # 5. Only then return, allowing other code to continue
-                            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🔄 Server likely dead after killing processes - restarting and waiting for server to be ready..." -ForegroundColor "Cyan"
+                            $serverDeadMsg = "[$(Get-Date -Format 'HH:mm:ss')] Server likely dead after killing processes - restarting and waiting for server to be ready..."
+                            Write-ConsoleOutput -Message $serverDeadMsg -ForegroundColor "Cyan"
                             $serverRestartResult = Start-ServerIfNeeded
                             if ($serverRestartResult) {
                                 $script:lastServerRestart = Get-Date  # Track server restart time to prevent restart loops
-                                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ✅ Server restarted and is ready - continuing with monitoring (cooldown: 60s)" -ForegroundColor "Green"
+                                $serverRestartedMsg = "[$(Get-Date -Format 'HH:mm:ss')] Server restarted and is ready - continuing with monitoring (cooldown: 60s)"
+                                Write-ConsoleOutput -Message $serverRestartedMsg -ForegroundColor "Green"
                             } else {
-                                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  Server restart may have failed - will retry on next check" -ForegroundColor "Yellow"
+                                $restartFailMsg = "[$(Get-Date -Format 'HH:mm:ss')] Server restart may have failed - will retry on next check"
+                                Write-ConsoleOutput -Message $restartFailMsg -ForegroundColor "Yellow"
                             }
                         }
                     }
@@ -2116,20 +2131,25 @@ while ($monitoringActive) {
             
             # In simulation mode, if simulation ended and Unity is running but idle, restart it to start a new simulation
             if ($config.simulation.enabled -and $config.automation.autoRestartUnity -and $stats.UnityRunning) {
-                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🔄 UNITY: Simulation completed - restarting Unity to start new simulation..." -ForegroundColor "Cyan"
+                $simCompleteRestartMsg = "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Simulation completed - restarting Unity to start new simulation..."
+                Write-ConsoleOutput -Message $simCompleteRestartMsg -ForegroundColor "Cyan"
                 $restartResult = Restart-UnityIfNeeded
                 if ($restartResult) {
-                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ✅ UNITY: Restarted - waiting for new simulation to start..." -ForegroundColor "Green"
+                    $unityRestartedMsg = "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Restarted - waiting for new simulation to start..."
+                    Write-ConsoleOutput -Message $unityRestartedMsg -ForegroundColor "Green"
                 } else {
-                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ❌ UNITY: Failed to restart after simulation completed" -ForegroundColor "Red"
+                    $unityRestartFailMsg = "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Failed to restart after simulation completed"
+                    Write-ConsoleOutput -Message $unityRestartFailMsg -ForegroundColor "Red"
                 }
             } elseif ($config.simulation.enabled -and -not $stats.UnityRunning) {
                 # Unity not running after simulation ended - restart it
-                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🔄 UNITY: Simulation completed and Unity not running - restarting..." -ForegroundColor "Cyan"
+                $unityNotRunningMsg = "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Simulation completed and Unity not running - restarting..."
+                Write-ConsoleOutput -Message $unityNotRunningMsg -ForegroundColor "Cyan"
                 Restart-UnityIfNeeded | Out-Null
             } elseif ($config.simulation.enabled) {
                 # Simulation ended but Unity restart is disabled or Unity is not running
-                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  UNITY: Simulation completed but Unity restart disabled or Unity not running" -ForegroundColor "Yellow"
+                $unityDisabledMsg = "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Simulation completed but Unity restart disabled or Unity not running"
+                Write-ConsoleOutput -Message $unityDisabledMsg -ForegroundColor "Yellow"
             }
         }
         
@@ -2160,39 +2180,48 @@ while ($monitoringActive) {
                     # Step 1: Try to stop via API FIRST (while server is still running)
                     $apiStopSucceeded = $false
                     try {
-                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🛑 Stopping orphaned simulation(s) via API (while server is running)..." -ForegroundColor "Cyan"
+                        $stopOrphanMsg = "[$(Get-Date -Format 'HH:mm:ss')] Stopping orphaned simulation(s) via API (while server is running)..."
+                        Write-ConsoleOutput -Message $stopOrphanMsg -ForegroundColor "Cyan"
                         $stopResponse = Invoke-WebRequest -Uri "$serverUrl/api/simulations/stop-all" -Method POST -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
                         $stopResult = $stopResponse.Content | ConvertFrom-Json
                         if ($stopResult.success -and $stopResult.stopped -gt 0) {
                             $apiStopSucceeded = $true
-                            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ✅ Stopped $($stopResult.stopped) orphaned simulation(s) via API" -ForegroundColor "Green"
+                            $stoppedOrphanMsg = "[$(Get-Date -Format 'HH:mm:ss')] Stopped $($stopResult.stopped) orphaned simulation(s) via API"
+                            Write-ConsoleOutput -Message $stoppedOrphanMsg -ForegroundColor "Green"
                         }
                     } catch {
-                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  Could not stop orphaned simulation via API: $_" -ForegroundColor "Yellow"
+                        $orphanApiFailMsg = "[$(Get-Date -Format 'HH:mm:ss')] Could not stop orphaned simulation via API: $_"
+                        Write-ConsoleOutput -Message $orphanApiFailMsg -ForegroundColor "Yellow"
                     }
                     
                     # Step 2: If API failed, kill processes and restart server
                     if (-not $apiStopSucceeded) {
-                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🛑 API stop failed - killing processes on port 3000 and restarting server..." -ForegroundColor "Cyan"
+                        $apiStopFailMsg = "[$(Get-Date -Format 'HH:mm:ss')] API stop failed - killing processes on port 3000 and restarting server..."
+                        Write-ConsoleOutput -Message $apiStopFailMsg -ForegroundColor "Cyan"
                         Kill-Port3000Processes
                         
                         # If server is dead, restart it before restarting Unity
                         # Note: Start-ServerIfNeeded will kill port 3000 processes again (redundant but safe),
                         # then verify port is free, then start server and wait for it to be ready (up to 30 seconds)
                         if (-not (Test-ServerRunning)) {
-                            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🔄 Server appears dead after killing processes - restarting server before Unity..." -ForegroundColor "Cyan"
+                            $serverDeadBeforeUnityMsg = "[$(Get-Date -Format 'HH:mm:ss')] Server appears dead after killing processes - restarting server before Unity..."
+                            Write-ConsoleOutput -Message $serverDeadBeforeUnityMsg -ForegroundColor "Cyan"
                             $serverRestartResult = Start-ServerIfNeeded
                             if ($serverRestartResult) {
                                 $script:lastServerRestart = Get-Date  # Track server restart time to prevent restart loops
-                                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ✅ Server restarted successfully - Unity will connect shortly (cooldown: 60s)" -ForegroundColor "Green"
+                                $serverRestartSuccessMsg = "[$(Get-Date -Format 'HH:mm:ss')] Server restarted successfully - Unity will connect shortly (cooldown: 60s)"
+                                Write-ConsoleOutput -Message $serverRestartSuccessMsg -ForegroundColor "Green"
                             } else {
-                                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  Server restart may have failed - Unity may fail to connect" -ForegroundColor "Yellow"
+                                $serverRestartFailMsg = "[$(Get-Date -Format 'HH:mm:ss')] Server restart may have failed - Unity may fail to connect"
+                                Write-ConsoleOutput -Message $serverRestartFailMsg -ForegroundColor "Yellow"
                             }
                         }
                     }
                 }
                 
-                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  UNITY: Idle for $([math]::Round($timeSinceSimEnd.TotalSeconds))s - $reason - restarting..." -ForegroundColor "Yellow"
+                $idleTime = [math]::Round($timeSinceSimEnd.TotalSeconds)
+                $unityIdleMsg = "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Idle for ${idleTime}s - $reason - restarting..."
+                Write-ConsoleOutput -Message $unityIdleMsg -ForegroundColor "Yellow"
                 $script:simulationEndTime = $null  # Reset timer
                 Restart-UnityIfNeeded | Out-Null
             }
