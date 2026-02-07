@@ -703,7 +703,10 @@ function Handle-OrphanedSimulation {
         }
     } else {
         if ($timeSinceLastStop.TotalSeconds -lt 2) {
-            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  SIMULATION: Orphaned simulation detected (throttled - will stop in $([math]::Round(10 - $timeSinceLastStop.TotalSeconds))s)" -ForegroundColor "Yellow"
+            $timeStr = Get-Date -Format 'HH:mm:ss'
+            $secondsLeft = [math]::Round(10 - $timeSinceLastStop.TotalSeconds)
+            $message = "[$timeStr] ⚠️  SIMULATION: Orphaned simulation detected - throttled - will stop in $secondsLeft seconds"
+            Write-ConsoleOutput -Message $message -ForegroundColor "Yellow"
         }
     }
 }
@@ -1968,7 +1971,9 @@ while ($monitoringActive) {
             $message = "[$timeStr] 🎲 SIMULATION: Started - $activeCount active"
             Write-ConsoleOutput -Message $message -ForegroundColor "Green"
         } elseif (-not $stats.SimulationRunning -and $wasSimulationRunning) {
-            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🎲 SIMULATION: Completed (10/10 games) - Unity is now idle" -ForegroundColor "Yellow"
+            $timeStr = Get-Date -Format 'HH:mm:ss'
+            $message = "[$timeStr] 🎲 SIMULATION: Completed - 10/10 games - Unity is now idle"
+            Write-ConsoleOutput -Message $message -ForegroundColor "Yellow"
             
             # In simulation mode, if simulation ended and Unity is running but idle, restart it to start a new simulation
             if ($config.simulation.enabled -and $config.automation.autoRestartUnity -and $stats.UnityRunning) {
