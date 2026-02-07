@@ -894,8 +894,8 @@ function Update-MonitorStatus {
         }
         
         # Add recent issue detection info (last 10 issues)
-        if (Get-Variable -Name "recentIssues" -ErrorAction SilentlyContinue) {
-            $status.recentIssues = $recentIssues | Select-Object -Last 10
+        if (Get-Variable -Name "script:recentIssues" -ErrorAction SilentlyContinue) {
+            $status.recentIssues = $script:recentIssues | Select-Object -Last 10
         }
         
         # Merge any additional status updates
