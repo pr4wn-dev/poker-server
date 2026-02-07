@@ -2345,24 +2345,35 @@ while ($monitoringActive) {
             foreach ($line in $recentLogs) {
                 # Check for simulation completion indicators
                 if ($line -match 'Reached max games|maxGames.*reached|Game\s+10\s*/\s*10|10\s*/\s*10\s+games|simulation.*complete|stopping simulation') {
-                    # Check timestamp - only if within last 30 seconds
+                    # Check timestamp - only if within last 30 seconds AND after monitor started
                     if ($line -match '\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?)\]') {
                         try {
                             $lineTime = [DateTime]::Parse($matches[1])
                             $timeDiff = ((Get-Date) - $lineTime).TotalSeconds
-                            if ($timeDiff -le 30) {
+                            # Only consider completion if:
+                            # 1. Within last 30 seconds, AND
+                            # 2. After monitor started, AND
+                            # 3. After we started tracking a simulation (if we're tracking one)
+                            $isAfterMonitorStart = $lineTime -gt $script:monitorStartTime
+                            $isAfterSimStart = if ($script:simulationStartTime -ne $null) { $lineTime -gt $script:simulationStartTime } else { $true }
+                            
+                            if ($timeDiff -le 30 -and $isAfterMonitorStart -and $isAfterSimStart) {
                                 $simulationCompleted = $true
                                 break
                             }
                         } catch {
-                            # If timestamp parsing fails, assume recent
+                            # If timestamp parsing fails, only assume recent if we're tracking a simulation
+                            if ($script:simulationStartTime -ne $null) {
+                                $simulationCompleted = $true
+                                break
+                            }
+                        }
+                    } else {
+                        # No timestamp but matches pattern - only assume recent if we're tracking a simulation
+                        if ($script:simulationStartTime -ne $null) {
                             $simulationCompleted = $true
                             break
                         }
-                    } else {
-                        # No timestamp but matches pattern - assume recent
-                        $simulationCompleted = $true
-                        break
                     }
                 }
             }
