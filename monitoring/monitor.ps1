@@ -1413,12 +1413,16 @@ function Restart-UnityIfNeeded {
             if ($config.simulation.enabled) {
                 $unityArgs += "-autoMode", "simulation"
                 # Enable item ante if configured (check both boolean true and string "true")
-                $itemAnteEnabled = $config.simulation.itemAnteEnabled
+                $itemAnteEnabled = $null
+                if ($config.simulation -and $config.simulation.PSObject.Properties['itemAnteEnabled']) {
+                    $itemAnteEnabled = $config.simulation.itemAnteEnabled
+                }
                 if ($itemAnteEnabled -eq $true -or $itemAnteEnabled -eq "true") {
                     $unityArgs += "-itemAnteEnabled", "true"
                     Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Item ante enabled via config" -ForegroundColor "Cyan"
                 } else {
-                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Item ante disabled (config value: $itemAnteEnabled)" -ForegroundColor "Gray"
+                    $itemAnteValue = if ($null -eq $itemAnteEnabled) { "not set" } else { $itemAnteEnabled.ToString() }
+                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Item ante disabled (config value: $itemAnteValue)" -ForegroundColor "Gray"
                 }
             } else {
                 $unityArgs += "-autoMode", "normal"
