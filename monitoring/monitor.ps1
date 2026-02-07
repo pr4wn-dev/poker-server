@@ -2709,7 +2709,8 @@ while ($monitoringActive) {
                 }
                 
                 # Skip FIX_ATTEMPT SUCCESS logs (these are good, not errors)
-                if ($line -match '\[FIX_ATTEMPT\].*SUCCESS') {
+                # Match both [FIX_ATTEMPT] and [FIX ATTEMPT] (with or without underscore)
+                if ($line -match '\[FIX[_\s]ATTEMPT\].*SUCCESS' -or $line -match 'FIX_ATTEMPT.*SUCCESS' -or $line -match 'FIX ATTEMPT.*SUCCESS') {
                     continue
                 }
                 
