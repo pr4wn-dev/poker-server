@@ -12,7 +12,9 @@
     "executablePath": "C:\\Program Files\\Unity\\Hub\\Editor\\6000.3.4f1\\Editor\\Unity.exe",
     "projectPath": "C:\\Projects\\poker-client-unity",
     "autoConnectOnStartup": true,
-    "serverUrl": "http://localhost:3000"
+    "serverUrl": "http://localhost:3000",
+    "pauseDebuggerOnIssue": true,
+    "comment": "pauseDebuggerOnIssue: If true, Unity will call Debug.Break() when critical issues are detected (requires debugger attached)"
   },
   "login": {
     "username": "monitor_user",

@@ -62,7 +62,7 @@ function getActiveSimulationTables() {
 /**
  * Pause a simulation table
  */
-function pauseSimulation(tableId, reason) {
+function pauseSimulation(tableId, reason, pauseDebugger = false) {
     const gameLogger = require('../src/utils/GameLogger');
     
     // ROOT TRACING: Track pause attempt
@@ -414,8 +414,11 @@ function detectIssue(logLine) {
     for (const pattern of MONITOR_PAUSE_PATTERNS) {
         if (pattern.test(logLine)) {
             // Check for monitor marker with explicit tableId in JSON
-            // Format: [MONITOR] [CRITICAL_ISSUE_DETECTED] ... | Data: {"tableId":"...",...}
+            // Format: [MONITOR] [CRITICAL_ISSUE_DETECTED] ... | Data: {"tableId":"...","pauseDebugger":true/false,...}
             const monitorMatch = logLine.match(/"tableId"\s*:\s*"([a-f0-9-]+)"/i);
+            const debuggerPauseMatch = logLine.match(/"pauseDebugger"\s*:\s*(true|false)/i);
+            const pauseDebugger = debuggerPauseMatch && debuggerPauseMatch[1] === 'true';
+            
             if (monitorMatch) {
                 const tableId = monitorMatch[1];
                 const table = gameManager ? gameManager.getTable(tableId) : null;
@@ -424,18 +427,20 @@ function detectIssue(logLine) {
                         tableId,
                         tableName: table.name,
                         linePreview: logLine.substring(0, 150),
-                        action: 'Monitor detected issue - pausing Unity'
+                        pauseDebugger: pauseDebugger,
+                        action: 'Monitor detected issue - pausing Unity' + (pauseDebugger ? ' (with debugger break)' : '')
                     });
-                    return { severity: 'critical', type: 'monitor_detected', message: logLine };
+                    return { severity: 'critical', type: 'monitor_detected', message: logLine, pauseDebugger: pauseDebugger };
                 }
             }
             
             // Monitor marker found but no tableId - still pause if we can extract it
             gameLogger.gameEvent('LOG_WATCHER', `[DETECT_ISSUE] MONITOR_PAUSE_MARKER_NO_TABLEID`, {
                 linePreview: logLine.substring(0, 150),
-                action: 'Monitor pause marker found but no tableId - will try to extract from table name'
+                pauseDebugger: pauseDebugger,
+                action: 'Monitor pause marker found but no tableId - will try to extract from table name' + (pauseDebugger ? ' (with debugger break)' : '')
             });
-            return { severity: 'critical', type: 'monitor_detected', message: logLine };
+            return { severity: 'critical', type: 'monitor_detected', message: logLine, pauseDebugger: pauseDebugger };
         }
     }
     

@@ -1937,13 +1937,17 @@ while ($monitoringActive) {
                             # This ensures Unity pauses immediately when monitor detects an issue
                             $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
                             $escapedMessage = $line.Replace('"','\"').Replace("`n"," ").Replace("`r"," ").Substring(0,[Math]::Min(200,$line.Length))
-                            $pauseMarker = "[$timestamp] [GAME] [MONITOR] [CRITICAL_ISSUE_DETECTED] Issue detected by monitor - pausing Unity | Data: {`"issueId`":`"$($addResult.issueId)`",`"severity`":`"$($issue.severity)`",`"type`":`"$($issue.type)`",`"source`":`"$($issue.source)`",`"tableId`":$(if($tableId){`"$tableId`"}else{'null'}),`"message`":`"$escapedMessage`"}"
+                            $debuggerPause = if ($config.unity.pauseDebuggerOnIssue) { "true" } else { "false" }
+                            $pauseMarker = "[$timestamp] [GAME] [MONITOR] [CRITICAL_ISSUE_DETECTED] Issue detected by monitor - pausing Unity | Data: {`"issueId`":`"$($addResult.issueId)`",`"severity`":`"$($issue.severity)`",`"type`":`"$($issue.type)`",`"source`":`"$($issue.source)`",`"tableId`":$(if($tableId){`"$tableId`"}else{'null'}),`"message`":`"$escapedMessage`",`"pauseDebugger`":$debuggerPause}"
                             
                             # Write pause marker to log file
                             try {
                                 Add-Content -Path $logFile -Value $pauseMarker -ErrorAction Stop
                                 $stats.PauseMarkersWritten++
                                 Write-ConsoleOutput -Message "  Pause marker written to game.log" -ForegroundColor "Green"
+                                if ($config.unity.pauseDebuggerOnIssue) {
+                                    Write-ConsoleOutput -Message "  Debugger pause enabled - Unity will call Debug.Break()" -ForegroundColor "Cyan"
+                                }
                                 Write-ConsoleOutput -Message "  Waiting for log watcher to pause Unity..." -ForegroundColor "Yellow"
                                 
                                 # Verify pause actually happened (check logs after 2 seconds)
@@ -2005,6 +2009,29 @@ while ($monitoringActive) {
                                 Write-ConsoleOutput -Message "    - Check if issue-detector.js is working: node monitoring/issue-detector.js --test" -ForegroundColor "Gray"
                                 Write-ConsoleOutput -Message "    - Check if pending-issues.json is writable" -ForegroundColor "Gray"
                                 Write-ConsoleOutput -Message "    - Check Node.js error output for details" -ForegroundColor "Gray"
+                                
+                                # CRITICAL: Still write pause marker even if issue logging failed
+                                # Unity should still pause when critical issues are detected
+                                $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss.fff"
+                                $escapedMessage = $line.Replace('"','\"').Replace("`n"," ").Replace("`r"," ").Substring(0,[Math]::Min(200,$line.Length))
+                                $debuggerPause = if ($config.unity.pauseDebuggerOnIssue) { "true" } else { "false" }
+                                $pauseMarker = "[$timestamp] [GAME] [MONITOR] [CRITICAL_ISSUE_DETECTED] Issue detected by monitor - pausing Unity (logging failed) | Data: {`"issueId`":`"failed_to_log`",`"severity`":`"$($issue.severity)`",`"type`":`"$($issue.type)`",`"source`":`"$($issue.source)`",`"tableId`":$(if($tableId){`"$tableId`"}else{'null'}),`"message`":`"$escapedMessage`",`"pauseDebugger`":$debuggerPause}"
+                                
+                                try {
+                                    Add-Content -Path $logFile -Value $pauseMarker -ErrorAction Stop
+                                    $stats.PauseMarkersWritten++
+                                    Write-ConsoleOutput -Message "  Pause marker written to game.log (despite logging failure)" -ForegroundColor "Yellow"
+                                    if ($config.unity.pauseDebuggerOnIssue) {
+                                        Write-ConsoleOutput -Message "  Debugger pause enabled - Unity will call Debug.Break()" -ForegroundColor "Cyan"
+                                    }
+                                    Write-ConsoleOutput -Message "  Waiting for log watcher to pause Unity..." -ForegroundColor "Yellow"
+                                    
+                                    # Set paused state even though logging failed
+                                    $isPaused = $true
+                                    $currentIssue = $line
+                                } catch {
+                                    Write-ConsoleOutput -Message "  ERROR: Failed to write pause marker: $_" -ForegroundColor "Red"
+                                }
                             }
                         }
                     } else {
