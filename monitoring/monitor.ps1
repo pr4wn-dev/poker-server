@@ -975,6 +975,34 @@ function Show-Statistics {
 
 # Function to start server if not running
 function Start-ServerIfNeeded {
+    # Check if server was just restarted (within last 60 seconds) - don't restart again during cooldown
+    $serverJustRestarted = $false
+    if ($script:lastServerRestart -and $script:lastServerRestart -is [DateTime]) {
+        try {
+            $timeSinceServerRestart = (Get-Date) - $script:lastServerRestart
+            if ($timeSinceServerRestart.TotalSeconds -lt 60) {
+                $serverJustRestarted = $true
+            }
+        } catch {
+            # If date arithmetic fails, assume server wasn't just restarted
+            $serverJustRestarted = $false
+        }
+    }
+    
+    # If server was just restarted, check if it's actually running before trying to restart again
+    if ($serverJustRestarted) {
+        # Give the server time to start - check if it's actually running
+        if (Test-ServerRunning) {
+            # Server is running, no need to restart
+            return $true
+        } else {
+            # Server was just restarted but not responding yet - wait a bit more
+            # Don't kill processes yet, give it more time
+            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⏳ Server was just restarted (cooldown active) - waiting for it to become ready..." -ForegroundColor "Gray"
+            return $false
+        }
+    }
+    
     if (-not (Test-ServerRunning)) {
         # Don't write to console - update stats display instead
         # Write-Warning "Server is not running. Starting server..."
