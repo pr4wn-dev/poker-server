@@ -2741,42 +2741,55 @@ while ($monitoringActive) {
         
         # Check if investigation phase is complete
         if ($isInvestigating -and $investigationStartTime) {
-            $investigationElapsed = (Get-Date) - $investigationStartTime
-            if ($investigationElapsed.TotalSeconds -ge $investigationTimeout) {
-                # Investigation complete - pause debugger now
-                $isInvestigating = $false
-                $pendingInfo = Get-PendingIssuesInfo
-                
-                if ($pendingInfo.InFocusMode -and $pendingInfo.RootIssue) {
-                    $rootIssue = $pendingInfo.RootIssue
-                    $relatedCount = $pendingInfo.RelatedIssuesCount
+            try {
+                $investigationElapsed = (Get-Date) - $investigationStartTime
+                if ($investigationElapsed.TotalSeconds -ge $investigationTimeout) {
+                    # Investigation complete - pause debugger now
+                    $isInvestigating = $false
+                    $investigationStartTime = $null
+                    $pendingInfo = Get-PendingIssuesInfo
                     
-                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] INVESTIGATION COMPLETE: Pausing debugger" -ForegroundColor "Yellow"
-                    Write-ConsoleOutput -Message "  Root Issue: $($rootIssue.type) ($($rootIssue.severity))" -ForegroundColor "White"
-                    if ($relatedCount -gt 0) {
-                        Write-ConsoleOutput -Message "  Related Issues Found: $relatedCount" -ForegroundColor "Cyan"
-                    }
-                    Write-ConsoleOutput -Message "  Please review and fix the issue(s)" -ForegroundColor "Cyan"
-                    
-                    # Extract tableId from root issue
-                    $tableId = $null
-                    if ($rootIssue.tableId) {
-                        $tableId = $rootIssue.tableId
-                    }
-                    
-                    # Pause debugger (with automatic verification and retry)
-                    if ($config.unity.pauseDebuggerOnIssue) {
-                        $pauseSuccess = Invoke-DebuggerBreakWithVerification -tableId $tableId -reason "$($rootIssue.type) - $($rootIssue.severity) severity (Investigation complete)" -message "Investigation complete. Root issue: $($rootIssue.type). Related issues: $relatedCount"
-                        if (-not $pauseSuccess) {
-                            Write-ConsoleOutput -Message "  WARNING: Debugger break may not have reached Unity - will retry automatically" -ForegroundColor "Yellow"
+                    if ($pendingInfo.InFocusMode -and $pendingInfo.RootIssue) {
+                        $rootIssue = $pendingInfo.RootIssue
+                        $relatedCount = $pendingInfo.RelatedIssuesCount
+                        
+                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] INVESTIGATION COMPLETE: Pausing debugger" -ForegroundColor "Yellow"
+                        Write-ConsoleOutput -Message "  Root Issue: $($rootIssue.type) ($($rootIssue.severity))" -ForegroundColor "White"
+                        if ($relatedCount -gt 0) {
+                            Write-ConsoleOutput -Message "  Related Issues Found: $relatedCount" -ForegroundColor "Cyan"
                         }
+                        Write-ConsoleOutput -Message "  Please review and fix the issue(s)" -ForegroundColor "Cyan"
+                        
+                        # Extract tableId from root issue
+                        $tableId = $null
+                        if ($rootIssue.tableId) {
+                            $tableId = $rootIssue.tableId
+                        }
+                        
+                        # Pause debugger (with automatic verification and retry)
+                        # Only pause if not already paused (avoid duplicate pauses)
+                        if (-not $isPaused -and $config.unity.pauseDebuggerOnIssue) {
+                            $pauseSuccess = Invoke-DebuggerBreakWithVerification -tableId $tableId -reason "$($rootIssue.type) - $($rootIssue.severity) severity (Investigation complete)" -message "Investigation complete. Root issue: $($rootIssue.type). Related issues: $relatedCount"
+                            if (-not $pauseSuccess) {
+                                Write-ConsoleOutput -Message "  WARNING: Debugger break may not have reached Unity - will retry automatically" -ForegroundColor "Yellow"
+                            }
+                            $isPaused = $true
+                        } elseif ($isPaused) {
+                            Write-ConsoleOutput -Message "  Unity already paused - investigation complete" -ForegroundColor "Cyan"
+                        }
+                    } else {
+                        # No pending info or root issue - investigation complete anyway
+                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] INVESTIGATION COMPLETE: No pending issues found" -ForegroundColor "Yellow"
                     }
-                    
-                    $isPaused = $true
+                } else {
+                    # Still investigating - no console spam, all info is in statistics
+                    # Statistics will show the countdown and progress
                 }
-            } else {
-                # Still investigating - no console spam, all info is in statistics
-                # Statistics will show the countdown and progress
+            } catch {
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ERROR: Investigation completion check failed: $_" -ForegroundColor "Red"
+                # Force complete investigation on error to prevent getting stuck
+                $isInvestigating = $false
+                $investigationStartTime = $null
             }
         }
         
