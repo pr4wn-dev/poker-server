@@ -3077,7 +3077,8 @@ while ($monitoringActive) {
                             }
                             
                             # Start investigation phase (gather related issues before pausing)
-                            if ($addResult.reason -eq 'new_focus_group' -and $investigationEnabled -and $investigationTimeout -gt 0) {
+                            # Only start investigation if issue was successfully logged AND it's a new focus group
+                            if ($addResult -and $addResult.reason -eq 'new_focus_group' -and $investigationEnabled -and $investigationTimeout -gt 0) {
                                 # New issue detected - start investigation phase
                                 $isInvestigating = $true
                                 $investigationStartTime = Get-Date
@@ -3086,6 +3087,7 @@ while ($monitoringActive) {
                             } else {
                                 # Investigation disabled or timeout is 0 - pause immediately
                                 # OR this is a related issue added during investigation - don't restart investigation
+                                # OR issue detector failed - don't start investigation
                                 if (-not $isInvestigating) {
                                     # Pause debugger immediately (with automatic verification)
                                     if ($config.unity.pauseDebuggerOnIssue) {
@@ -3096,12 +3098,61 @@ while ($monitoringActive) {
                                             Write-ConsoleOutput -Message "  Monitor will automatically retry when Unity is ready" -ForegroundColor "Yellow"
                                         }
                                     }
-                            $isPaused = $true
-                            $currentIssue = $line
+                                    $isPaused = $true
+                                    $currentIssue = $line
+                                }
+                            }
+                        } elseif (-not $addResult) {
+                            # Add-PendingIssue returned null (complete failure)
+                            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ISSUE DETECTOR FAILED: Complete failure - issue NOT logged" -ForegroundColor "Red"
+                            Write-ConsoleOutput -Message "  Issue: $($issue.type) ($($issue.severity))" -ForegroundColor "Yellow"
+                            Write-ConsoleOutput -Message "  Diagnostics:" -ForegroundColor "Yellow"
+                            Write-ConsoleOutput -Message "    - Check if issue-detector.js is working: node monitoring/issue-detector.js --check 'test'" -ForegroundColor "Gray"
+                            Write-ConsoleOutput -Message "    - Check if pending-issues.json is writable" -ForegroundColor "Gray"
+                            Write-ConsoleOutput -Message "    - Check Node.js error output for details" -ForegroundColor "Gray"
+                            
+                            # Don't start investigation if issue detector completely failed
+                            # Still pause Unity if it's a critical/high severity issue
+                            if (-not $isPaused -and $config.unity.pauseDebuggerOnIssue -and ($issue.severity -eq 'critical' -or $issue.severity -eq 'high')) {
+                                try {
+                                    $escapedMessage = $line.Replace('"','\"').Replace("`n"," ").Replace("`r"," ").Substring(0,[Math]::Min(200,$line.Length))
+                                    $reason = "$($issue.type) - $($issue.severity) severity (issue detector failed)"
+                                    $pauseSuccess = Invoke-DebuggerBreakWithVerification -tableId $tableId -reason $reason -message $escapedMessage
+                                    if (-not $pauseSuccess) {
+                                        Write-ConsoleOutput -Message "  Monitor will automatically retry when Unity is ready" -ForegroundColor "Yellow"
+                                    }
+                                    $isPaused = $true
+                                    $currentIssue = $line
+                                } catch {
+                                    Write-ConsoleOutput -Message "  ERROR: Failed to pause debugger: $_" -ForegroundColor "Red"
+                                }
+                            }
+                        } elseif ($addResult -and -not $addResult.success) {
+                            # Issue detector returned an error response
+                            $errorMsg = if ($addResult.error) { $addResult.error } else { "Unknown error" }
+                            $errorReason = if ($addResult.reason) { $addResult.reason } else { "unknown" }
+                            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ISSUE DETECTOR ERROR: Failed to log issue ($errorReason)" -ForegroundColor "Red"
+                            Write-ConsoleOutput -Message "  Error: $errorMsg" -ForegroundColor "Yellow"
+                            Write-ConsoleOutput -Message "  Issue detected but NOT logged - will retry on next detection" -ForegroundColor "Gray"
+                            
+                            # Don't start investigation if issue detector failed
+                            # Still pause Unity if it's a critical/high severity issue
+                            if (-not $isPaused -and $config.unity.pauseDebuggerOnIssue -and ($issue.severity -eq 'critical' -or $issue.severity -eq 'high')) {
+                                try {
+                                    $escapedMessage = $line.Replace('"','\"').Replace("`n"," ").Replace("`r"," ").Substring(0,[Math]::Min(200,$line.Length))
+                                    $reason = "$($issue.type) - $($issue.severity) severity (issue detector failed)"
+                                    $pauseSuccess = Invoke-DebuggerBreakWithVerification -tableId $tableId -reason $reason -message $escapedMessage
+                                    if (-not $pauseSuccess) {
+                                        Write-ConsoleOutput -Message "  Monitor will automatically retry when Unity is ready" -ForegroundColor "Yellow"
+                                    }
+                                    $isPaused = $true
+                                    $currentIssue = $line
+                                } catch {
+                                    Write-ConsoleOutput -Message "  ERROR: Failed to pause debugger: $_" -ForegroundColor "Red"
                                 }
                             }
                         } else {
-                            # Handle different failure reasons
+                            # Handle different failure reasons (queued, duplicate, etc.)
                             if ($addResult -and $addResult.reason -eq 'queued') {
                                 # Issue was queued (unrelated to focused issue)
                                 Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ISSUE QUEUED: Unrelated to focused issue - will process later" -ForegroundColor "Gray"
@@ -3134,7 +3185,7 @@ while ($monitoringActive) {
                                 Write-ConsoleOutput -Message $logFailMsg -ForegroundColor "Red"
                                 Write-ConsoleOutput -Message "  Issue detected but NOT logged to pending-issues.json" -ForegroundColor "Yellow"
                                 Write-ConsoleOutput -Message "  Diagnostics:" -ForegroundColor "Yellow"
-                                Write-ConsoleOutput -Message "    - Check if issue-detector.js is working: node monitoring/issue-detector.js --test" -ForegroundColor "Gray"
+                                Write-ConsoleOutput -Message "    - Check if issue-detector.js is working: node monitoring/issue-detector.js --check 'test'" -ForegroundColor "Gray"
                                 Write-ConsoleOutput -Message "    - Check if pending-issues.json is writable" -ForegroundColor "Gray"
                                 Write-ConsoleOutput -Message "    - Check Node.js error output for details" -ForegroundColor "Gray"
                                 
@@ -3215,7 +3266,8 @@ while ($monitoringActive) {
                                     Write-ConsoleOutput -Message "  Note: Medium/low severity issues don't pause debugger" -ForegroundColor "Gray"
                                     
                                     # Start investigation phase for medium/low issues too
-                                    if ($investigationEnabled -and $investigationTimeout -gt 0) {
+                                    # Only if issue was successfully logged
+                                    if ($addResult -and $addResult.success -and $investigationEnabled -and $investigationTimeout -gt 0) {
                                         $isInvestigating = $true
                                         $investigationStartTime = Get-Date
                                         Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] INVESTIGATION: Starting investigation phase ($investigationTimeout seconds)" -ForegroundColor "Cyan"
