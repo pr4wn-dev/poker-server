@@ -1251,6 +1251,9 @@ function Restart-UnityIfNeeded {
                 "-projectPath", $config.unity.projectPath
             )
             
+            # Enable debug mode so debugger can attach
+            $unityArgs += "-debugCodeOptimization"
+            
             # Pass auto-mode to Unity (simulation or normal)
             if ($config.simulation.enabled) {
                 $unityArgs += "-autoMode", "simulation"
@@ -1271,7 +1274,7 @@ function Restart-UnityIfNeeded {
                 }
             }
             
-            # Start Unity in normal window (visible, not headless) so user can see everything
+            # Start Unity in normal window (visible, not headless) with debugger support
             Start-Process -FilePath $config.unity.executablePath -ArgumentList $unityArgs -WindowStyle Normal
             Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Unity started, waiting for connection..." -ForegroundColor "Cyan"
             
