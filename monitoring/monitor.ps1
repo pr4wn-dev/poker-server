@@ -2152,7 +2152,10 @@ while ($monitoringActive) {
                 $resumeMarker = "[$timestamp] [GAME] [MONITOR] [ISSUES_FIXED] All issues fixed - resuming Unity | Data: {`"action`":`"resume`",`"reason`":`"pending-issues.json cleared`"}"
                 
                 try {
-                    Add-Content -Path $logFile -Value $resumeMarker -ErrorAction Stop
+                    $writeSuccess = Write-ToLogFile -FilePath $logFile -Content $resumeMarker
+                    if (-not $writeSuccess) {
+                        throw "Write-ToLogFile returned false"
+                    }
                     Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ISSUES FIXED: Resume marker written to game.log" -ForegroundColor "Green"
                     Write-ConsoleOutput -Message "  Waiting for log watcher to resume Unity..." -ForegroundColor "Yellow"
                 } catch {
