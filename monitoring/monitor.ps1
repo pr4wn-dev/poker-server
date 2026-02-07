@@ -3888,7 +3888,13 @@ while ($monitoringActive) {
         }
         
     } catch {
-        Write-Error "Monitoring error: $_"
+        $errorMsg = "Monitoring error: $_"
+        Write-Error $errorMsg
+        # Update status file with error
+        Update-MonitorStatus -statusUpdate @{
+            lastError = $errorMsg
+            lastErrorTime = (Get-Date).ToUniversalTime().ToString("o")
+        } -ErrorAction SilentlyContinue
     }
     
     Start-Sleep -Seconds $checkInterval
