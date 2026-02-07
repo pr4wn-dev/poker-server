@@ -2727,6 +2727,7 @@ $script:simulationEndTime = $null  # Track when simulation ended for idle detect
 $script:lastServerRestart = $null  # Track when server was last restarted (to prevent restart loops)
 $script:simulationStartTime = $null  # Track when we first detected a simulation starting (after monitor started)
 $script:monitorStartTime = Get-Date  # Track when monitor started to ignore old simulations
+$script:investigationCheckLogged = $false  # Track if we've logged the investigation check diagnostic message
 
 while ($monitoringActive) {
     try {
@@ -2758,6 +2759,14 @@ while ($monitoringActive) {
         # Check if investigation phase is complete
         # IMPORTANT: This check runs every loop iteration to ensure investigation completes on time
         # SELF-DIAGNOSTIC: Monitor must be able to diagnose its own problems
+        
+        # ALWAYS log investigation state (every 10 seconds) to diagnose why check isn't running
+        if (-not $script:lastInvestigationStateLog -or ((Get-Date) - $script:lastInvestigationStateLog).TotalSeconds -ge 10) {
+            $stateMsg = "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] Investigation state check: isInvestigating=$($script:isInvestigating), startTime=$($script:investigationStartTime), type=$($script:investigationStartTime.GetType().Name)"
+            Write-ConsoleOutput -Message $stateMsg -ForegroundColor "Gray"
+            $script:lastInvestigationStateLog = Get-Date
+        }
+        
         if ($script:isInvestigating -and $script:investigationStartTime) {
             try {
                 # SELF-DIAGNOSTIC: Log if investigation check is running (only once per investigation to avoid spam)
