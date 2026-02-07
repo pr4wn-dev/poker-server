@@ -1224,12 +1224,12 @@ function Restart-UnityIfNeeded {
         
         # Log Unity startup when process first appears
         if ($isUnityRunning -and -not $wasUnityRunning) {
-            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🎮 UNITY: Game process started (PID: $($unityProcess.Id))" -ForegroundColor "Green"
+            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Game process started (PID: $($unityProcess.Id))" -ForegroundColor "Green"
         }
         
         # Log Unity connection when it first connects
         if ($isConnected -and -not $stats.UnityConnected) {
-            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🎮 UNITY: Connected to server!" -ForegroundColor "Green"
+            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Connected to server!" -ForegroundColor "Green"
         }
         
         # Update stats
@@ -1728,7 +1728,7 @@ while ($monitoringActive) {
                     # Only pause for critical/high severity issues
                     if (($issue.severity -eq 'critical' -or $issue.severity -eq 'high') -and -not $isPaused) {
                         # Explain why we're pausing
-                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🔴 PAUSING: $($issue.severity.ToUpper()) severity issue detected" -ForegroundColor "Red"
+                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] PAUSING: $($issue.severity.ToUpper()) severity issue detected" -ForegroundColor "Red"
                         # Issue detected - pause Unity and log issue
                         # Don't write to console - update stats display instead
                         # Write-Error "ISSUE DETECTED: $($issue.message.Substring(0, [Math]::Min(100, $issue.message.Length)))"
@@ -1920,11 +1920,11 @@ while ($monitoringActive) {
             
             # Log status changes
             if ($unityActualStatus.ProcessRunning -and -not $wasUnityRunning) {
-                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🎮 UNITY: Process detected" -ForegroundColor "Green"
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Process detected" -ForegroundColor "Green"
             }
             
             if ($unityActualStatus.ConnectedToServer -and -not $wasUnityConnected) {
-                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🎮 UNITY: Connected to server!" -ForegroundColor "Green"
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Connected to server!" -ForegroundColor "Green"
             }
             
             # Warn if Unity is not actually playing (connected but idle)
