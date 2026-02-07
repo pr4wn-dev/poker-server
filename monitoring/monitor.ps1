@@ -793,6 +793,19 @@ function Show-Statistics {
     $simStatus = if ($stats.SimulationRunning) { "ACTIVE" } else { "STOPPED" }
     $simColor = if ($stats.SimulationRunning) { "Green" } else { "Red" }
     $logWatcherStatus = Get-LogWatcherStatus
+    
+    # Get server's ACTUAL simulation count for display (not stale log data)
+    $serverActualSimCount = 0
+    try {
+        $healthResponse = Invoke-WebRequest -Uri "$serverUrl/health" -Method GET -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop
+        $healthData = $healthResponse.Content | ConvertFrom-Json
+        $serverActualSimCount = $healthData.activeSimulations
+    } catch {
+        # If we can't check server, use log watcher count as fallback
+        $serverActualSimCount = $logWatcherStatus.ActiveSimulations
+    }
+    # Override log watcher count with server's actual count for display
+    $logWatcherStatus.ActiveSimulations = $serverActualSimCount
     # Calculate time since last activity (with null check)
     if ($stats.LastLogActivity -and $stats.LastLogActivity -is [DateTime]) {
         $timeSinceActivity = (Get-Date) - $stats.LastLogActivity
