@@ -1970,7 +1970,8 @@ while ($monitoringActive) {
                         Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🔄 Server likely dead after killing processes - restarting and waiting for server to be ready..." -ForegroundColor "Cyan"
                         $serverRestartResult = Start-ServerIfNeeded
                         if ($serverRestartResult) {
-                            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ✅ Server restarted and is ready - continuing with monitoring" -ForegroundColor "Green"
+                            $script:lastServerRestart = Get-Date  # Track server restart time to prevent restart loops
+                            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ✅ Server restarted and is ready - continuing with monitoring (cooldown: 60s)" -ForegroundColor "Green"
                         } else {
                             Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  Server restart may have failed - will retry on next check" -ForegroundColor "Yellow"
                         }
@@ -2049,7 +2050,8 @@ while ($monitoringActive) {
                             Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] 🔄 Server appears dead after killing processes - restarting server before Unity..." -ForegroundColor "Cyan"
                             $serverRestartResult = Start-ServerIfNeeded
                             if ($serverRestartResult) {
-                                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ✅ Server restarted successfully - Unity will connect shortly" -ForegroundColor "Green"
+                                $script:lastServerRestart = Get-Date  # Track server restart time to prevent restart loops
+                                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ✅ Server restarted successfully - Unity will connect shortly (cooldown: 60s)" -ForegroundColor "Green"
                             } else {
                                 Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ⚠️  Server restart may have failed - Unity may fail to connect" -ForegroundColor "Yellow"
                             }
