@@ -66,10 +66,17 @@ class UniversalErrorHandler extends EventEmitter {
         
         // Increase max listeners to prevent memory leak warnings when multiple components listen
         // This is safe because we're monitoring the entire process, not individual components
-        process.setMaxListeners(30);
+        // Increased to 100 to accommodate comprehensive monitoring system
+        process.setMaxListeners(100);
         
-        // Catch warnings
+        // Catch warnings (but ignore MaxListenersExceededWarning to prevent infinite loop)
         process.on('warning', (warning) => {
+            // Don't catch our own MaxListenersExceededWarning - it would cause infinite loop
+            if (warning.name === 'MaxListenersExceededWarning') {
+                // Just log it, don't handle it as an error
+                return;
+            }
+            
             this.handleError({
                 type: 'PROCESS_WARNING',
                 error: new Error(warning.message),
