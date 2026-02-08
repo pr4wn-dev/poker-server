@@ -874,6 +874,290 @@ class AILearningEngine extends EventEmitter {
         }
     }
     
+    // ============================================
+    // AI MISTAKE LEARNING & ENHANCED MASKING DETECTION
+    // ============================================
+    
+    /**
+     * Learn from AI mistake (giving up, masking, etc.)
+     */
+    learnFromAIMistake(mistake) {
+        // Track mistake pattern
+        const mistakePattern = {
+            type: mistake.type,
+            context: mistake.context || {},
+            frequency: 1,
+            firstSeen: Date.now(),
+            lastSeen: Date.now(),
+            examples: [mistake]
+        };
+        
+        const patternKey = `${mistake.type}_${JSON.stringify(mistake.context || {})}`;
+        const existing = this.stateStore.getState(`ai.mistakePatterns.${patternKey}`);
+        
+        if (existing) {
+            existing.frequency++;
+            existing.lastSeen = Date.now();
+            existing.examples.push(mistake);
+            if (existing.examples.length > 10) {
+                existing.examples.shift();
+            }
+        } else {
+            this.stateStore.updateState(`ai.mistakePatterns.${patternKey}`, mistakePattern);
+        }
+        
+        // Apply confidence penalty
+        this.applyMistakePenalty(mistake);
+        
+        // Learn from mistake
+        this.learnFromMistakePattern(mistake);
+        
+        // Emit event
+        this.emit('aiMistakeLearned', mistake);
+        
+        gameLogger.warn('CERBERUS', '[LEARNING_ENGINE] Learned from AI mistake', {
+            type: mistake.type,
+            context: mistake.context,
+            action: 'Pattern learned - will prevent similar mistakes'
+        });
+    }
+    
+    /**
+     * Apply confidence penalty for AI mistake
+     */
+    applyMistakePenalty(mistake) {
+        let penaltyAmount = 5; // Default
+        
+        if (mistake.type === 'masked_problem') {
+            penaltyAmount = 15; // High penalty for masking
+        } else if (mistake.type === 'gave_up') {
+            penaltyAmount = 20; // Critical penalty for giving up
+        } else if (mistake.type === 'superficial_fix') {
+            penaltyAmount = 10; // Medium penalty for superficial fixes
+        }
+        
+        // Reduce confidence
+        if (this.confidenceHistory.length > 0) {
+            const current = this.confidenceHistory[this.confidenceHistory.length - 1];
+            const newConfidence = Math.max(0, current.confidence - penaltyAmount);
+            
+            this.confidenceHistory.push({
+                timestamp: Date.now(),
+                confidence: newConfidence,
+                metrics: current.metrics,
+                maskingDetected: true,
+                penalty: {
+                    reason: mistake.type,
+                    amount: penaltyAmount
+                }
+            });
+            
+            // Keep only last 100
+            if (this.confidenceHistory.length > 100) {
+                this.confidenceHistory = this.confidenceHistory.slice(-100);
+            }
+        }
+        
+        // Flag masking
+        this.flagMasking('ai_mistake', `AI mistake: ${mistake.type} - ${mistake.details || ''}`);
+    }
+    
+    /**
+     * Learn from mistake pattern to prevent future mistakes
+     */
+    learnFromMistakePattern(mistake) {
+        // Extract patterns that lead to mistakes
+        const patterns = [];
+        
+        if (mistake.context) {
+            // Context patterns
+            if (mistake.context.problemType) {
+                patterns.push(`problem_${mistake.context.problemType}`);
+            }
+            if (mistake.context.complexity) {
+                patterns.push(`complexity_${mistake.context.complexity}`);
+            }
+            if (mistake.context.timePressure) {
+                patterns.push('time_pressure');
+            }
+        }
+        
+        // Store patterns that lead to mistakes
+        for (const pattern of patterns) {
+            const mistakePatterns = this.stateStore.getState('ai.mistakePatterns') || {};
+            if (!mistakePatterns[pattern]) {
+                mistakePatterns[pattern] = {
+                    pattern,
+                    mistakes: [],
+                    frequency: 0
+                };
+            }
+            mistakePatterns[pattern].mistakes.push(mistake.type);
+            mistakePatterns[pattern].frequency++;
+            this.stateStore.updateState('ai.mistakePatterns', mistakePatterns);
+        }
+    }
+    
+    /**
+     * Detect masking in test changes (enhanced)
+     */
+    detectTestMasking(oldTest, newTest, context) {
+        const maskingIndicators = [];
+        
+        // Check if test was simplified
+        if (oldTest && newTest) {
+            // Check if functionality checks were removed
+            const oldHasFunctionalityCheck = this.hasFunctionalityCheck(oldTest);
+            const newHasFunctionalityCheck = this.hasFunctionalityCheck(newTest);
+            
+            if (oldHasFunctionalityCheck && !newHasFunctionalityCheck) {
+                maskingIndicators.push('Functionality check removed from test');
+            }
+            
+            // Check if execution was removed
+            const oldHasExecution = this.hasExecution(oldTest);
+            const newHasExecution = this.hasExecution(newTest);
+            
+            if (oldHasExecution && !newHasExecution) {
+                maskingIndicators.push('Test execution removed - test no longer runs functionality');
+            }
+            
+            // Check if assertions were removed
+            const oldHasAssertions = this.hasAssertions(oldTest);
+            const newHasAssertions = this.hasAssertions(newTest);
+            
+            if (oldHasAssertions && !newHasAssertions) {
+                maskingIndicators.push('Assertions removed from test');
+            }
+        }
+        
+        // Check context for masking keywords
+        if (context && context.reason) {
+            const maskingKeywords = ['simplify', 'easier', 'avoid', 'skip', 'bypass', 'workaround', 'hanging'];
+            const reasonLower = context.reason.toLowerCase();
+            if (maskingKeywords.some(k => reasonLower.includes(k))) {
+                maskingIndicators.push(`Masking keyword in reason: "${context.reason}"`);
+            }
+        }
+        
+        if (maskingIndicators.length > 0) {
+            this.flagMasking('test_change', `Test masking detected: ${maskingIndicators.join('; ')}`);
+            return {
+                isMasking: true,
+                indicators: maskingIndicators,
+                severity: 'critical'
+            };
+        }
+        
+        return { isMasking: false, indicators: [] };
+    }
+    
+    /**
+     * Check if test has functionality check
+     */
+    hasFunctionalityCheck(testCode) {
+        if (!testCode) return false;
+        const code = testCode.toLowerCase();
+        return code.includes('result') || 
+               code.includes('verify') || 
+               code.includes('assert') || 
+               code.includes('expect') ||
+               code.includes('should') ||
+               code.includes('pass') ||
+               code.includes('fail') ||
+               code.includes('equal') ||
+               code.includes('match');
+    }
+    
+    /**
+     * Check if test has execution
+     */
+    hasExecution(testCode) {
+        if (!testCode) return false;
+        const code = testCode.toLowerCase();
+        return code.includes('await') || 
+               code.includes('()') || 
+               code.includes('call') ||
+               code.includes('execute') ||
+               code.includes('run') ||
+               code.includes('timeoperation') ||
+               code.includes('processline') ||
+               code.includes('recorderror');
+    }
+    
+    /**
+     * Check if test has assertions
+     */
+    hasAssertions(testCode) {
+        if (!testCode) return false;
+        const code = testCode.toLowerCase();
+        return code.includes('assert') || 
+               code.includes('expect') || 
+               code.includes('should') ||
+               code.includes('equal') ||
+               code.includes('match') ||
+               code.includes('be') ||
+               code.includes('have');
+    }
+    
+    /**
+     * Verify fix quality (not just that tests pass)
+     */
+    verifyFixQuality(fix, originalProblem) {
+        const quality = {
+            score: 100,
+            issues: [],
+            warnings: []
+        };
+        
+        // Check if fix addresses root cause
+        if (originalProblem && fix) {
+            const problemDesc = (originalProblem.description || '').toLowerCase();
+            const fixDesc = (fix.description || '').toLowerCase();
+            
+            // Check if fix mentions the problem
+            const problemWords = problemDesc.split(/\s+/).filter(w => w.length > 4);
+            const fixWords = fixDesc.split(/\s+/).filter(w => w.length > 4);
+            const matchingWords = problemWords.filter(w => fixWords.includes(w));
+            
+            if (matchingWords.length === 0) {
+                quality.issues.push('Fix does not mention original problem');
+                quality.score -= 30;
+            }
+            
+            // Check for workaround keywords
+            const workaroundKeywords = ['workaround', 'bypass', 'skip', 'avoid', 'ignore', 'simplify', 'easier'];
+            if (workaroundKeywords.some(k => fixDesc.includes(k))) {
+                quality.issues.push('Fix appears to be a workaround');
+                quality.score -= 50;
+            }
+        }
+        
+        // Check if test was changed
+        if (fix.testChange) {
+            const masking = this.detectTestMasking(fix.oldTest, fix.testChange, fix);
+            if (masking.isMasking) {
+                quality.issues.push(`Test masking detected: ${masking.indicators.join('; ')}`);
+                quality.score -= 40;
+            }
+        }
+        
+        // Check if fix has verification
+        if (!fix.verification || !fix.verification.verified) {
+            quality.warnings.push('Fix not verified - may not actually work');
+            quality.score -= 10;
+        }
+        
+        quality.score = Math.max(0, quality.score);
+        
+        // Apply confidence penalty if quality is low
+        if (quality.score < 50) {
+            this.flagMasking('fix_quality', `Low fix quality: ${quality.issues.join('; ')}`);
+        }
+        
+        return quality;
+    }
+    
     /**
      * Get learning report (enhanced with confidence)
      */

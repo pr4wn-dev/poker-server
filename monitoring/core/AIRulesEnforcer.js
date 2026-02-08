@@ -1133,6 +1133,267 @@ class AIRulesEnforcer extends EventEmitter {
             });
         }
     }
+    
+    // ============================================
+    // PROACTIVE ENFORCEMENT - Check BEFORE Actions
+    // ============================================
+    
+    /**
+     * Check if an action would violate a rule BEFORE executing it
+     * Returns { allowed: boolean, violations: [], warnings: [] }
+     */
+    checkActionBeforeExecution(action, context) {
+        const violations = [];
+        const warnings = [];
+        
+        // Check "never give up" rule
+        if (action.type === 'test_simplification' || action.type === 'test_change') {
+            const neverGiveUpRule = this.rules.find(r => r.id === 'cerberus_never_give_up');
+            if (neverGiveUpRule) {
+                // Check if test is being simplified instead of fixing the problem
+                if (this.isTestSimplification(action, context)) {
+                    violations.push({
+                        ruleId: 'cerberus_never_give_up',
+                        ruleName: neverGiveUpRule.name,
+                        severity: 'critical',
+                        reason: 'Test is being simplified instead of fixing the root cause',
+                        action: 'BLOCKED - Must fix root cause, not simplify test'
+                    });
+                }
+            }
+        }
+        
+        // Check if fix is being marked as complete without verification
+        if (action.type === 'mark_fixed' || action.type === 'fix_complete') {
+            if (!action.verification || !action.verification.verified) {
+                warnings.push({
+                    ruleId: 'cerberus_never_give_up',
+                    severity: 'high',
+                    reason: 'Fix marked as complete without verification',
+                    action: 'WARNING - Verify fix actually works before marking complete'
+                });
+            }
+        }
+        
+        // Check if problem is being worked around instead of fixed
+        if (action.type === 'workaround' || action.type === 'bypass') {
+            const neverGiveUpRule = this.rules.find(r => r.id === 'cerberus_never_give_up');
+            if (neverGiveUpRule) {
+                violations.push({
+                    ruleId: 'cerberus_never_give_up',
+                    ruleName: neverGiveUpRule.name,
+                    severity: 'critical',
+                    reason: 'Using workaround instead of fixing root cause',
+                    action: 'BLOCKED - Must fix root cause, not work around it'
+                });
+            }
+        }
+        
+        return {
+            allowed: violations.length === 0,
+            violations,
+            warnings,
+            mustVerify: warnings.length > 0 || violations.length > 0
+        };
+    }
+    
+    /**
+     * Detect if a test change is masking a problem (simplifying test instead of fixing)
+     */
+    isTestSimplification(action, context) {
+        // Check if test is being made easier (removing functionality checks)
+        if (action.oldTest && action.newTest) {
+            // If test went from checking functionality to just checking method exists
+            const oldChecksFunctionality = this.testChecksFunctionality(action.oldTest);
+            const newChecksFunctionality = this.testChecksFunctionality(action.newTest);
+            
+            if (oldChecksFunctionality && !newChecksFunctionality) {
+                return true; // Test was simplified
+            }
+            
+            // If test removed actual execution (await, function calls)
+            const oldHasExecution = this.testHasExecution(action.oldTest);
+            const newHasExecution = this.testHasExecution(action.newTest);
+            
+            if (oldHasExecution && !newHasExecution) {
+                return true; // Test execution was removed
+            }
+        }
+        
+        // Check context for masking indicators
+        if (context && context.reason) {
+            const maskingKeywords = ['simplify', 'easier', 'avoid', 'skip', 'bypass', 'workaround'];
+            const reasonLower = context.reason.toLowerCase();
+            if (maskingKeywords.some(keyword => reasonLower.includes(keyword))) {
+                return true;
+            }
+        }
+        
+        return false;
+    }
+    
+    /**
+     * Check if test actually checks functionality (not just method existence)
+     */
+    testChecksFunctionality(testCode) {
+        if (!testCode) return false;
+        const code = testCode.toLowerCase();
+        // Check for actual functionality testing (results, behavior, outcomes)
+        return code.includes('result') || 
+               code.includes('verify') || 
+               code.includes('assert') || 
+               code.includes('expect') ||
+               code.includes('should') ||
+               code.includes('pass') ||
+               code.includes('fail');
+    }
+    
+    /**
+     * Check if test has actual execution (not just method checks)
+     */
+    testHasExecution(testCode) {
+        if (!testCode) return false;
+        const code = testCode.toLowerCase();
+        // Check for actual execution (await, function calls, operations)
+        return code.includes('await') || 
+               code.includes('()') || 
+               code.includes('call') ||
+               code.includes('execute') ||
+               code.includes('run') ||
+               code.includes('timeoperation') ||
+               code.includes('processline');
+    }
+    
+    /**
+     * Verify that a fix actually works (not just that tests pass)
+     */
+    verifyFix(fix, originalProblem) {
+        const verification = {
+            verified: false,
+            issues: [],
+            warnings: []
+        };
+        
+        // Check if fix addresses the original problem
+        if (originalProblem && fix) {
+            const problemDescription = (originalProblem.description || '').toLowerCase();
+            const fixDescription = (fix.description || '').toLowerCase();
+            
+            // Check if fix mentions the problem
+            const problemKeywords = this.extractKeywords(problemDescription);
+            const fixKeywords = this.extractKeywords(fixDescription);
+            
+            const matchingKeywords = problemKeywords.filter(k => fixKeywords.includes(k));
+            if (matchingKeywords.length === 0) {
+                verification.issues.push('Fix does not mention the original problem');
+            }
+            
+            // Check if fix is a workaround
+            const workaroundKeywords = ['workaround', 'bypass', 'skip', 'avoid', 'ignore', 'simplify'];
+            if (workaroundKeywords.some(k => fixDescription.includes(k))) {
+                verification.issues.push('Fix appears to be a workaround, not a root cause fix');
+            }
+        }
+        
+        // Check if test was simplified
+        if (fix.testChange) {
+            if (this.isTestSimplification({ type: 'test_change', newTest: fix.testChange }, fix)) {
+                verification.issues.push('Test was simplified instead of fixing the problem');
+            }
+        }
+        
+        verification.verified = verification.issues.length === 0;
+        return verification;
+    }
+    
+    /**
+     * Extract keywords from text
+     */
+    extractKeywords(text) {
+        if (!text) return [];
+        // Simple keyword extraction (can be enhanced)
+        const words = text.split(/\s+/).filter(w => w.length > 3);
+        return words.map(w => w.toLowerCase());
+    }
+    
+    /**
+     * Track AI mistake (giving up, masking, etc.)
+     */
+    trackAIMistake(mistake) {
+        const mistakeRecord = {
+            id: this.generateViolationId(),
+            type: mistake.type, // 'gave_up', 'masked_problem', 'superficial_fix', etc.
+            timestamp: Date.now(),
+            context: mistake.context,
+            details: mistake.details,
+            originalProblem: mistake.originalProblem,
+            whatHappened: mistake.whatHappened,
+            whatShouldHaveHappened: mistake.whatShouldHaveHappened
+        };
+        
+        // Record as violation of "never give up" rule
+        if (mistake.type === 'gave_up' || mistake.type === 'masked_problem') {
+            this.recordViolation('cerberus_never_give_up', mistake.context, {
+                mistake: mistakeRecord,
+                severity: 'critical'
+            });
+        }
+        
+        // Store in state for learning
+        const mistakes = this.stateStore.getState('ai.mistakes') || [];
+        mistakes.push(mistakeRecord);
+        if (mistakes.length > 100) {
+            mistakes.shift();
+        }
+        this.stateStore.updateState('ai.mistakes', mistakes);
+        
+        // Emit event for learning engine
+        this.emit('aiMistake', mistakeRecord);
+        
+        // Advance learning from mistake
+        if (this.learningEngine) {
+            this.learningEngine.learnFromAIMistake(mistakeRecord);
+        }
+        
+        gameLogger.warn('CERBERUS', '[RULES_ENFORCER] AI mistake tracked', {
+            type: mistake.type,
+            context: mistake.context,
+            action: 'Mistake recorded - system will learn from this'
+        });
+        
+        return mistakeRecord;
+    }
+    
+    /**
+     * Apply confidence penalty for masking or low-quality fixes
+     */
+    applyConfidencePenalty(reason, severity = 'medium') {
+        if (!this.learningEngine) return;
+        
+        const penalty = {
+            reason,
+            severity,
+            timestamp: Date.now(),
+            amount: severity === 'critical' ? 20 : severity === 'high' ? 10 : 5
+        };
+        
+        // Flag masking in learning engine
+        this.learningEngine.flagMasking('rules_enforcer', reason);
+        
+        // Store penalty
+        const penalties = this.stateStore.getState('ai.confidencePenalties') || [];
+        penalties.push(penalty);
+        if (penalties.length > 50) {
+            penalties.shift();
+        }
+        this.stateStore.updateState('ai.confidencePenalties', penalties);
+        
+        gameLogger.warn('CERBERUS', '[RULES_ENFORCER] Confidence penalty applied', {
+            reason,
+            severity,
+            action: 'Learning confidence reduced due to masking/low-quality fix'
+        });
+    }
 }
 
 module.exports = AIRulesEnforcer;

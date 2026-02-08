@@ -87,6 +87,11 @@ class AIMonitorCore {
             this.rulesEnforcer = new AIRulesEnforcer(this.stateStore, this.learningEngine);
             this.errorRecovery.recordSuccess('rulesEnforcer');
             
+            // Initialize workflow enforcer (needs rulesEnforcer and learningEngine)
+            const AIWorkflowEnforcer = require('./AIWorkflowEnforcer');
+            this.workflowEnforcer = new AIWorkflowEnforcer(this.stateStore, this.rulesEnforcer, this.learningEngine);
+            this.errorRecovery.recordSuccess('workflowEnforcer');
+            
             // Connect ConsoleOverride to rules enforcer (so violations are learned from)
             const ConsoleOverride = require('./ConsoleOverride');
             ConsoleOverride.setViolationCallback((ruleId, context, details) => {
