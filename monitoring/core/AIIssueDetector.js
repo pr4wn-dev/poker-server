@@ -600,11 +600,16 @@ class AIIssueDetector extends EventEmitter {
      * Get historical fixes
      */
     getHistoricalFixes(issue) {
-        const fixes = this.stateStore.getState('fixes.attempts');
+        const fixes = this.stateStore.getState('fixes.attempts') || [];
+        
+        // Ensure fixes is an array
+        if (!Array.isArray(fixes)) {
+            return [];
+        }
         
         return fixes
-            .filter(f => f.issueId === issue.id || f.issueType === issue.type)
-            .sort((a, b) => b.timestamp - a.timestamp);
+            .filter(f => f && (f.issueId === issue.id || f.issueType === issue.type))
+            .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
     }
     
     /**
