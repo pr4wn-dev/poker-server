@@ -166,10 +166,96 @@ class StateStore extends EventEmitter {
     }
     
     /**
+     * Validate state structure
+     */
+    _validateState(path, value) {
+        // Basic validation
+        if (value === undefined) {
+            throw new Error(`Cannot set state to undefined at path: ${path}`);
+        }
+        
+        // Validate nested paths
+        const parts = path.split('.');
+        if (parts.length > 10) {
+            console.warn(`[StateStore] Deep nesting detected at path: ${path} (${parts.length} levels)`);
+        }
+        
+        // Validate value types for known paths
+        const knownPaths = {
+            'monitoring.investigation.status': ['string'],
+            'monitoring.investigation.startTime': ['number', 'null'],
+            'issues.active': ['array'],
+            'fixes.attempts': ['array'],
+            'system.server.status': ['string']
+        };
+        
+        if (knownPaths[path]) {
+            const expectedTypes = knownPaths[path];
+            const actualType = value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value;
+            
+            if (!expectedTypes.includes(actualType)) {
+                console.warn(`[StateStore] Type mismatch at path ${path}: expected ${expectedTypes.join('|')}, got ${actualType}`);
+            }
+        }
+        
+        return true;
+    }
+    
+    /**
+     * Validate data integrity
+     */
+    _validateDataIntegrity(path, value) {
+        // Check for common integrity issues
+        
+        // Arrays should be arrays
+        if (path.includes('.attempts') || path.includes('.active') || path.includes('.history')) {
+            if (value !== null && !Array.isArray(value)) {
+                console.warn(`[StateStore] Data integrity issue: ${path} should be array, got ${typeof value}. Auto-fixing...`);
+                // Auto-fix: convert to array if possible
+                if (typeof value === 'object' && value !== null) {
+                    return Array.from(Object.values(value));
+                }
+                return [];
+            }
+        }
+        
+        // Numbers should be numbers
+        if (path.includes('.count') || path.includes('.total') || path.includes('.time')) {
+            if (value !== null && typeof value !== 'number') {
+                console.warn(`[StateStore] Data integrity issue: ${path} should be number, got ${typeof value}`);
+            }
+        }
+        
+        // Status should be valid
+        if (path.includes('.status')) {
+            const validStatuses = ['active', 'inactive', 'starting', 'stopping', 'stopped', 'running', 'degraded', 'error', 'healthy', 'unhealthy'];
+            if (typeof value === 'string' && !validStatuses.includes(value.toLowerCase())) {
+                console.warn(`[StateStore] Data integrity issue: ${path} has invalid status: ${value}`);
+            }
+        }
+        
+        return true;
+    }
+    
+    /**
      * Update state atomically
      * This is the ONLY way state changes
      */
     updateState(path, value, metadata = {}) {
+        // Validate state
+        try {
+            this._validateState(path, value);
+        } catch (error) {
+            console.error(`[StateStore] Validation error for path ${path}:`, error.message);
+            throw error;
+        }
+        
+        // Auto-fix data integrity issues
+        const integrityCheck = this._validateDataIntegrity(path, value);
+        if (integrityCheck !== true && integrityCheck !== undefined && integrityCheck !== null) {
+            value = integrityCheck;
+        }
+        
         const oldValue = this.getState(path);
         
         // Update state atomically
