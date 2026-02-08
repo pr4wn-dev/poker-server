@@ -2313,9 +2313,9 @@ function Start-ServerIfNeeded {
                 }
                 # Log progress every 5 seconds
                 if ($waited % 5 -eq 0) {
-                    $waitingMsg = "[$(Get-Date -Format 'HH:mm:ss')] Still waiting for server... ($waited/$maxWait seconds)"
+                    $waitingMsg = "[$(Get-Date -Format 'HH:mm:ss')] Still waiting for server... ($waited / $maxWait seconds)"
                     Write-ConsoleOutput -Message $waitingMsg -ForegroundColor "Gray"
-            }
+                }
             }
             $serverFailMsg = "[$(Get-Date -Format 'HH:mm:ss')] Server failed to start within $maxWait seconds"
             Write-ConsoleOutput -Message $serverFailMsg -ForegroundColor "Red"
