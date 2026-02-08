@@ -1227,6 +1227,27 @@ class AIMonitorCore {
             this.processMonitor.stopMonitoring();
         }
         
+        // Stop logging integrity checks (Phase 5)
+        if (this.loggingIntegrityChecker && this.loggingIntegrityChecker.stopPeriodicChecks) {
+            this.loggingIntegrityChecker.stopPeriodicChecks();
+        }
+        
+        // Stop performance analysis (Phase 7)
+        if (this.performanceAnalyzer && this.performanceAnalyzer.stopPeriodicAnalysis) {
+            this.performanceAnalyzer.stopPeriodicAnalysis();
+        }
+        
+        // Run pattern learner improvements (Phase 7) before shutdown
+        if (this.learningEngine && this.learningEngine.runPatternLearnerImprovements) {
+            try {
+                this.learningEngine.runPatternLearnerImprovements();
+            } catch (error) {
+                gameLogger.error('MONITORING', '[AI_MONITOR_CORE] Pattern learner improvements error', {
+                    error: error.message
+                });
+            }
+        }
+        
         // Stop collaboration interface (remove listeners to prevent memory leaks)
         if (this.collaborationInterface) {
             this.collaborationInterface.removeAllListeners();
