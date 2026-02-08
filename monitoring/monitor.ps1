@@ -3297,30 +3297,34 @@ while ($monitoringActive) {
                 }
             } catch {
                 # File read failed - use pendingInfo as-is
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] Failed to read pending-issues.json: $_" -ForegroundColor "Yellow"
             }
             
-            # DIAGNOSTIC: Log why investigation isn't starting
-            if (-not $pendingInfo) {
-                # No pending info - skip
-            } elseif (-not $pendingInfo.InFocusMode -and -not $hasFocusedGroup) {
-                # Not in focus mode and no focused group in file - skip
-            } elseif (-not $pendingInfo.RootIssue) {
-                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] Focused group exists but no root issue" -ForegroundColor "Yellow"
-            } elseif (-not $investigationEnabled) {
-                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] Investigation disabled in config" -ForegroundColor "Yellow"
-            } elseif (-not $investigationTimeout -or $investigationTimeout -le 0) {
-                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] Investigation timeout invalid: $investigationTimeout" -ForegroundColor "Yellow"
-            } else {
-                # All conditions met - start investigation
-                $script:isInvestigating = $true
-                $script:investigationStartTime = Get-Date
-                $script:investigationCheckLogged = $false
-                $script:investigationNullStartTimeLogged = $false
-                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] INVESTIGATION: Starting for existing focus group ($investigationTimeout seconds)" -ForegroundColor "Cyan"
-                Write-ConsoleOutput -Message "  Root Issue: $($pendingInfo.RootIssue.type) ($($pendingInfo.RootIssue.severity))" -ForegroundColor "White"
-                # Force immediate status update
-                Update-MonitorStatus
-                $lastStatusUpdate = Get-Date
+            # DIAGNOSTIC: Log why investigation isn't starting (every 5 seconds to avoid spam)
+            if (-not $script:lastInvestigationStartCheck -or ((Get-Date) - $script:lastInvestigationStartCheck).TotalSeconds -ge 5) {
+                if (-not $pendingInfo) {
+                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] No pending info - investigation not starting" -ForegroundColor "Gray"
+                } elseif (-not $pendingInfo.InFocusMode -and -not $hasFocusedGroup) {
+                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] Not in focus mode (InFocusMode=$($pendingInfo.InFocusMode), hasFocusedGroup=$hasFocusedGroup) - investigation not starting" -ForegroundColor "Gray"
+                } elseif (-not $pendingInfo.RootIssue) {
+                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] Focused group exists but no root issue" -ForegroundColor "Yellow"
+                } elseif (-not $investigationEnabled) {
+                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] Investigation disabled in config" -ForegroundColor "Yellow"
+                } elseif (-not $investigationTimeout -or $investigationTimeout -le 0) {
+                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] Investigation timeout invalid: $investigationTimeout" -ForegroundColor "Yellow"
+                } else {
+                    # All conditions met - start investigation
+                    $script:isInvestigating = $true
+                    $script:investigationStartTime = Get-Date
+                    $script:investigationCheckLogged = $false
+                    $script:investigationNullStartTimeLogged = $false
+                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] INVESTIGATION: Starting for existing focus group ($investigationTimeout seconds)" -ForegroundColor "Cyan"
+                    Write-ConsoleOutput -Message "  Root Issue: $($pendingInfo.RootIssue.type) ($($pendingInfo.RootIssue.severity))" -ForegroundColor "White"
+                    # Force immediate status update
+                    Update-MonitorStatus
+                    $lastStatusUpdate = Get-Date
+                }
+                $script:lastInvestigationStartCheck = Get-Date
             }
         }
         
