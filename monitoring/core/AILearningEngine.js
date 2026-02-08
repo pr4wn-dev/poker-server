@@ -2227,6 +2227,120 @@ class AILearningEngine extends EventEmitter {
             source: 'learned_approach'
         };
     }
+    
+    // ============================================
+    // PATTERN LEARNER IMPROVEMENTS (Phase 7)
+    // ============================================
+    
+    /**
+     * Improve contracts based on learned patterns
+     */
+    improveContracts() {
+        const improvements = [];
+        
+        // Analyze successful fixes to improve contracts
+        for (const [patternKey, pattern] of this.patterns.entries()) {
+            if (pattern.successRate > 0.8 && pattern.frequency > 10) {
+                // High success rate pattern - can be used to improve contracts
+                improvements.push({
+                    pattern: patternKey,
+                    successRate: pattern.successRate,
+                    suggestion: `Use pattern ${patternKey} in contracts (${(pattern.successRate * 100).toFixed(1)}% success)`
+                });
+            }
+        }
+        
+        // Store improvements
+        this.stateStore.updateState('learning.contractImprovements', improvements);
+        
+        return improvements;
+    }
+    
+    /**
+     * Improve detection patterns based on learned patterns
+     */
+    improveDetectionPatterns() {
+        const improvements = [];
+        
+        // Analyze which patterns lead to successful detection
+        for (const [patternKey, pattern] of this.patterns.entries()) {
+            if (pattern.frequency > 5) {
+                // Frequently occurring pattern - should be in detection
+                improvements.push({
+                    pattern: patternKey,
+                    frequency: pattern.frequency,
+                    suggestion: `Add pattern ${patternKey} to detection (occurs ${pattern.frequency} times)`
+                });
+            }
+        }
+        
+        // Store improvements
+        this.stateStore.updateState('learning.detectionPatternImprovements', improvements);
+        
+        return improvements;
+    }
+    
+    /**
+     * Generate new test cases based on learned patterns
+     */
+    generateTestCases() {
+        const testCases = [];
+        
+        // Generate test cases for high-frequency patterns
+        for (const [patternKey, pattern] of this.patterns.entries()) {
+            if (pattern.frequency > 5 && pattern.successRate < 0.5) {
+                // High frequency, low success - needs testing
+                testCases.push({
+                    pattern: patternKey,
+                    description: `Test pattern: ${patternKey}`,
+                    expectedBehavior: 'Should handle this pattern correctly',
+                    testCode: this.generateTestCodeForPattern(patternKey, pattern)
+                });
+            }
+        }
+        
+        // Store test cases
+        this.stateStore.updateState('learning.generatedTestCases', testCases);
+        
+        return testCases;
+    }
+    
+    /**
+     * Generate test code for a pattern
+     */
+    generateTestCodeForPattern(patternKey, pattern) {
+        // Generate basic test structure
+        return `
+describe('Pattern: ${patternKey}', () => {
+    it('should handle ${patternKey} correctly', async () => {
+        // Test pattern: ${patternKey}
+        // Frequency: ${pattern.frequency}
+        // Success rate: ${(pattern.successRate * 100).toFixed(1)}%
+        // TODO: Implement test based on pattern
+    });
+});
+        `.trim();
+    }
+    
+    /**
+     * Run all pattern learner improvements (Phase 7)
+     */
+    runPatternLearnerImprovements() {
+        const results = {
+            timestamp: Date.now(),
+            contractImprovements: this.improveContracts(),
+            detectionPatternImprovements: this.improveDetectionPatterns(),
+            generatedTestCases: this.generateTestCases()
+        };
+        
+        // Store results
+        this.stateStore.updateState('learning.patternLearnerImprovements', results);
+        
+        // Emit event
+        this.emit('patternLearnerImproved', results);
+        
+        return results;
+    }
 }
 
 module.exports = AILearningEngine;

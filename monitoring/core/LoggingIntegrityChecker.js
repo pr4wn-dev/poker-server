@@ -279,6 +279,10 @@ class LoggingIntegrityChecker extends EventEmitter {
             result.parseable = parseabilityRate >= 90; // 90% parseability threshold
             
             if (!result.parseable) {
+                // Initialize currentResults if needed
+                if (!this.currentResults) {
+                    this.currentResults = { issues: [] };
+                }
                 this.addIssue('UNPARSEABLE_LOGS', 'high', {
                     message: `Unparseable logs detected: ${result.parseabilityRate}% parseable (target: 90%+)`,
                     unparseableLines: result.unparseableLines,
@@ -347,6 +351,10 @@ class LoggingIntegrityChecker extends EventEmitter {
             }
             
             if (!result.noInterference) {
+                // Initialize currentResults if needed
+                if (!this.currentResults) {
+                    this.currentResults = { issues: [] };
+                }
                 this.addIssue('MONITORING_INTERFERENCE', 'high', {
                     message: `Monitoring interference detected: ${result.interferenceFound.length} violations found`,
                     violations: result.interferenceFound.slice(0, 10) // First 10
@@ -426,6 +434,10 @@ class LoggingIntegrityChecker extends EventEmitter {
             }
             
             if (!result.healthy) {
+                // Initialize currentResults if needed
+                if (!this.currentResults) {
+                    this.currentResults = { issues: [] };
+                }
                 this.addIssue('LOGGING_PERFORMANCE', 'medium', {
                     message: 'Logging performance issues detected',
                     issues: result.issues
@@ -595,6 +607,54 @@ class LoggingIntegrityChecker extends EventEmitter {
             severity,
             ...details
         });
+    }
+    
+    /**
+     * Start periodic integrity checks
+     */
+    startPeriodicChecks(intervalMs = 300000) { // Every 5 minutes
+        if (this.checkInterval) {
+            clearInterval(this.checkInterval);
+        }
+        
+        this.checkInterval = setInterval(async () => {
+            try {
+                await this.checkIntegrity();
+            } catch (error) {
+                gameLogger.error('CERBERUS', '[LOGGING_INTEGRITY_CHECKER] Periodic check error', {
+                    error: error.message
+                });
+            }
+        }, intervalMs);
+        
+        // Run initial check
+        setImmediate(() => {
+            this.checkIntegrity().catch(error => {
+                gameLogger.error('CERBERUS', '[LOGGING_INTEGRITY_CHECKER] Initial check error', {
+                    error: error.message
+                });
+            });
+        });
+    }
+    
+    /**
+     * Stop periodic checks
+     */
+    stopPeriodicChecks() {
+        if (this.checkInterval) {
+            clearInterval(this.checkInterval);
+            this.checkInterval = null;
+        }
+    }
+    
+    /**
+     * Get last check results
+     */
+    getLastCheckResults() {
+        return this.stateStore.getState('monitoring.loggingIntegrity') || {
+            overallHealth: 'unknown',
+            timestamp: 0
+        };
     }
 }
 

@@ -198,6 +198,65 @@ class AIMonitorCore {
             this.issueDetector
         );
         
+        // Logging Integrity Checker (Phase 5)
+        try {
+            const LoggingIntegrityChecker = require('./LoggingIntegrityChecker');
+            this.loggingIntegrityChecker = new LoggingIntegrityChecker(
+                projectRoot,
+                this.stateStore,
+                this.issueDetector
+            );
+            this.errorRecovery.recordSuccess('loggingIntegrityChecker');
+        } catch (error) {
+            this.errorRecovery.recordError('loggingIntegrityChecker', error);
+            throw error;
+        }
+        
+        // Logging Auto-Fix (Phase 5)
+        try {
+            const LoggingAutoFix = require('./LoggingAutoFix');
+            this.loggingAutoFix = new LoggingAutoFix(
+                projectRoot,
+                this.stateStore,
+                this.issueDetector,
+                this.loggingIntegrityChecker
+            );
+            this.errorRecovery.recordSuccess('loggingAutoFix');
+        } catch (error) {
+            this.errorRecovery.recordError('loggingAutoFix', error);
+            throw error;
+        }
+        
+        // Code Enhancement System (Phase 5)
+        try {
+            const CodeEnhancementSystem = require('./CodeEnhancementSystem');
+            this.codeEnhancementSystem = new CodeEnhancementSystem(
+                projectRoot,
+                this.stateStore,
+                this.issueDetector
+            );
+            this.errorRecovery.recordSuccess('codeEnhancementSystem');
+        } catch (error) {
+            this.errorRecovery.recordError('codeEnhancementSystem', error);
+            throw error;
+        }
+        
+        // Performance Analyzer (Phase 7)
+        try {
+            const PerformanceAnalyzer = require('./PerformanceAnalyzer');
+            this.performanceAnalyzer = new PerformanceAnalyzer(
+                this.stateStore,
+                this.issueDetector,
+                this.fixTracker,
+                this.learningEngine,
+                this.performanceMonitor
+            );
+            this.errorRecovery.recordSuccess('performanceAnalyzer');
+        } catch (error) {
+            this.errorRecovery.recordError('performanceAnalyzer', error);
+            throw error;
+        }
+        
         // Server state capture (captures server health/metrics)
         try {
             this.serverStateCapture = new ServerStateCapture(
@@ -297,6 +356,16 @@ class AIMonitorCore {
         // Start server state capture
         this.serverStateCapture.start();
         
+        // Start logging integrity checks (Phase 5)
+        if (this.loggingIntegrityChecker) {
+            this.loggingIntegrityChecker.startPeriodicChecks();
+        }
+        
+        // Start performance analysis (Phase 7)
+        if (this.performanceAnalyzer) {
+            this.performanceAnalyzer.startPeriodicAnalysis();
+        }
+        
         // Setup event listeners
         this.setupEventListeners();
         
@@ -305,6 +374,9 @@ class AIMonitorCore {
         
         // Setup performance monitoring listeners
         this.setupPerformanceListeners();
+        
+        // Setup logging integrity listeners (Phase 5)
+        this.setupLoggingIntegrityListeners();
         
         // Log initialization - all debug goes to log, not console
         gameLogger.info('MONITORING', '[AI_MONITOR_CORE] Initialized', {
@@ -491,6 +563,30 @@ class AIMonitorCore {
         this.performanceMonitor.on('highCpuUsage', ({ usagePercent, threshold }) => {
             // DO NOT log to console - errors are for AI only, not user
             // Performance issues are tracked in state store
+        });
+    }
+    
+    /**
+     * Setup logging integrity listeners (Phase 5)
+     */
+    setupLoggingIntegrityListeners() {
+        if (!this.loggingIntegrityChecker) return;
+        
+        // When integrity check completes, attempt auto-fix if enabled
+        this.loggingIntegrityChecker.on('integrityChecked', async (results) => {
+            if (this.loggingAutoFix && results.issues && results.issues.length > 0) {
+                // Attempt to fix issues automatically
+                for (const issue of results.issues.slice(0, 5)) { // Fix first 5 issues
+                    try {
+                        await this.loggingAutoFix.attemptFix(issue);
+                    } catch (error) {
+                        gameLogger.error('MONITORING', '[LOGGING_AUTO_FIX] Auto-fix error', {
+                            error: error.message,
+                            issue: issue.type
+                        });
+                    }
+                }
+            }
         });
     }
     
