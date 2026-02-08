@@ -57,12 +57,14 @@ This monitoring system consists of **two integrated but separate components**:
 
 ### How They Work Together
 
-1. **Monitor detects issue** → Writes pause marker to `game.log` with `tableId`
-2. **Log Watcher reads `game.log`** → Detects Monitor's pause marker → Pauses Unity
-3. **You tell Assistant**: "issue found"
-4. **Assistant fixes issues** → Clears `pending-issues.json`
-5. **Monitor detects `pending-issues.json` cleared** → Writes resume marker to `game.log`
-6. **Log Watcher reads `game.log`** → Detects Monitor's resume marker → Resumes Unity
+1. **Monitor detects issue** (non-blocking) → Calls `/api/simulation/pause` API (non-blocking async job)
+2. **Server receives pause request** → Sets `table.isPaused = true` → Broadcasts `table_state` event
+3. **Unity receives `table_state`** → Reads `isPaused` flag → Sets `Time.timeScale = 0` (pauses game)
+4. **You tell Assistant**: "issue found"
+5. **Assistant fixes issues** → Writes `fix-applied.json` with required restarts
+6. **Monitor detects `fix-applied.json`** → Starts verification phase (non-blocking)
+7. **Verification completes** → Monitor clears `fix-applied.json` and `pending-issues.json`
+8. **Monitor calls `/api/simulation/resume`** (non-blocking) → Server sets `table.isPaused = false` → Unity resumes
 
 **Key Point**: Log Watcher is now a **pause/resume service only**. It does NOT detect issues independently or attempt auto-fixes. All issue detection and fixing is coordinated by Monitor → Assistant workflow.
 
@@ -241,12 +243,13 @@ $status.verification.active       # Is verification running?
 #### Phase 1: Issue Detection (Automatic - Monitor)
 
 1. **Monitor continuously reads `game.log`**
-2. **Monitor detects issue** using `issue-detector.js` patterns
+2. **Monitor detects issue** using `issue-detector.js` patterns (non-blocking Node.js calls)
 3. **Monitor enters Investigation Phase** (15 seconds default)
    - Gathers related issues
    - Groups by pattern, tableId, stack trace, keywords
    - Queues unrelated issues
-4. **Monitor writes to `pending-issues.json`**:
+   - **All operations are non-blocking**: Web requests and Node.js calls use async jobs
+4. **Monitor writes to `pending-issues.json`** (non-blocking):
    ```json
    {
      "focusedGroup": {
@@ -258,12 +261,14 @@ $status.verification.active       # Is verification running?
      "queuedIssues": [...]
    }
    ```
-5. **Investigation completes** → Monitor pauses Unity
-   - Calls `/api/simulation/pause` API (sets `table.isPaused = true`)
+5. **Investigation completes** → Monitor pauses Unity (non-blocking)
+   - Calls `/api/simulation/pause` API using async job (sets `table.isPaused = true`)
+   - All web requests use PowerShell jobs with timeouts to prevent blocking the main loop
    - Server broadcasts `table_state` event with `isPaused: true`
    - Unity reads `isPaused` from `table_state` and sets `Time.timeScale = 0`
    - More reliable than `Debug.Break()` (works even without debugger attached)
-6. **Monitor updates `monitor-status.json`** with current state
+   - **Non-blocking**: Monitor loop continues running while pause request executes
+6. **Monitor updates `monitor-status.json`** with current state (non-blocking file write with flush)
 
 #### Phase 2: User Notification (Manual - User)
 
@@ -531,15 +536,16 @@ The monitor will:
    - Issue logged to `pending-issues.json` with focused group
    - Statistics updated (issues detected, severity, source)
    
-2. **Investigation completes** → Monitor pauses Unity
+2. **Investigation completes** → Monitor pauses Unity (non-blocking)
    - Dashboard status changes to "PAUSED (Fix Required)" (Red)
    - Shows investigation summary:
      - Root issue type and severity
      - Number of related issues found
      - Group ID for tracking
-   - Monitor calls `/api/simulation/pause` which sets `table.isPaused = true`
-   - Server broadcasts `table_state` event with `isPaused: true`
-   - Unity reads `isPaused` from `table_state` and sets `Time.timeScale = 0`
+   - Monitor calls `/api/simulation/pause` using async job (non-blocking, prevents loop from hanging)
+   - Server sets `table.isPaused = true` and broadcasts `table_state` event with `isPaused: true`
+   - Unity reads `isPaused` from `table_state` event and sets `Time.timeScale = 0`
+   - **All operations are non-blocking**: Monitor loop continues running while pause executes
    - Monitor waits for you to review and fix
 
 #### Phase 2: Fix Application
@@ -1801,12 +1807,15 @@ Edit `monitoring/monitor.ps1`:
 - If verification fails, Monitor re-enters investigation mode
 - Fix attempts are recorded to help understand what didn't work
 
-### Unity Pause Mechanism (2026-02-07)
-- Monitor calls `/api/simulation/pause` endpoint (replaces deprecated `/api/debugger/break`)
+### Unity Pause Mechanism (2026-02-07, Updated 2026-02-08)
+- Monitor calls `/api/simulation/pause` endpoint using async PowerShell jobs (non-blocking)
+- All web requests use `Invoke-WebRequestAsync` helper function with job timeouts
 - Server sets `table.isPaused = true` and broadcasts table state
 - Unity reads `isPaused` from `table_state` event and sets `Time.timeScale = 0`
 - More reliable than `Debug.Break()` approach (works even without debugger attached)
+- **Non-blocking**: Monitor loop never hangs, even if server is slow or unresponsive
 - Falls back to old method if new endpoint fails
+- **All Node.js calls are also non-blocking**: Use `Invoke-NodeAsync` helper with timeouts
 
 ### Investigation Completion Check Improvements (2026-02-07)
 - **Prioritizes Script Variables**: Completion check uses script variables as primary source, not status file
@@ -1821,9 +1830,9 @@ Edit `monitoring/monitor.ps1`:
 
 ---
 
-**Last Updated**: 2026-02-07
-**Version**: 2.2.0
-**Status**: Complete with Investigation Phase, Fix Verification System, Fix Attempt Tracking, Robust Completion Checks, Unity Pause Improvements, and All Previous Features
+**Last Updated**: 2026-02-08
+**Version**: 2.3.0
+**Status**: Complete with Investigation Phase, Fix Verification System, Fix Attempt Tracking, Robust Completion Checks, Unity Pause Improvements, Non-Blocking Operations, and All Previous Features
 
 ### Recent Fixes (2026-02-07)
 
