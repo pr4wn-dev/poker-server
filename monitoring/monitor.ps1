@@ -3168,13 +3168,17 @@ while ($monitoringActive) {
             
             if ($shouldCompleteNow) {
                 # Investigation should have completed - complete IMMEDIATELY
-                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] Investigation MUST complete NOW (timeRemaining: $statusFileTimeRemaining, elapsed: $([Math]::Round($elapsedFromStatus, 1))s, timeout: $timeoutValue s)" -ForegroundColor "Yellow"
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] Investigation MUST complete NOW ($completionReason)" -ForegroundColor "Yellow"
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] ENTERING COMPLETION BLOCK - resetting investigation state" -ForegroundColor "Cyan"
                 
                 # Complete investigation immediately
                 $script:isInvestigating = $false
                 $script:investigationStartTime = $null
                 $script:investigationCheckLogged = $false
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] Investigation state reset: isInvestigating=$($script:isInvestigating), startTime=$($script:investigationStartTime)" -ForegroundColor "Cyan"
+                
                 $pendingInfo = Get-PendingIssuesInfo
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] Got pending info: InFocusMode=$($pendingInfo.InFocusMode), hasRootIssue=$($null -ne $pendingInfo.RootIssue)" -ForegroundColor "Cyan"
                 
                 if ($pendingInfo -and $pendingInfo.InFocusMode -and $pendingInfo.RootIssue) {
                     $rootIssue = $pendingInfo.RootIssue
