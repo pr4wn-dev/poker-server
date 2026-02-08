@@ -409,16 +409,16 @@ class SocketHandler {
                 const userId = user?.userId || 'unknown';
                 
                 // Get Cerberus UnityStateReporter if available
-                // Cerberus is initialized by monitor.ps1, so it may not always be available
+                // Cerberus is initialized by cerberus.ps1, so it may not always be available
                 try {
-                    const MonitorIntegration = require('../../monitoring/integration/MonitorIntegration');
+                    const CerberusIntegration = require('../../monitoring/integration/CerberusIntegration');
                     // Check if there's a global instance or create one
                     // For now, we'll access it through a singleton pattern
-                    // If monitor.ps1 is running, it will have initialized Cerberus
+                    // If cerberus.ps1 is running, it will have initialized Cerberus
                     const path = require('path');
                     const projectRoot = path.join(__dirname, '../..');
-                    const monitorIntegration = new MonitorIntegration(projectRoot, { startSyncLoop: false });
-                    const unityStateReporter = monitorIntegration.aiCore.getUnityStateReporter();
+                    const cerberusIntegration = new CerberusIntegration(projectRoot, { startSyncLoop: false });
+                    const unityStateReporter = cerberusIntegration.aiCore.getUnityStateReporter();
                     if (unityStateReporter) {
                         unityStateReporter.handleUnityStateReport(userId, data);
                     }

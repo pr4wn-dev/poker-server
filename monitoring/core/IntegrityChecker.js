@@ -354,7 +354,7 @@ class IntegrityChecker extends EventEmitter {
         const monitorPath = path.join(this.projectRoot, 'monitoring', 'cerberus.ps1');
         if (fs.existsSync(monitorPath)) {
             const content = fs.readFileSync(monitorPath, 'utf8');
-            const aiIntegrationSourced = /\.\s*\$aiIntegrationPath|\.\s*AIIntegration\.ps1/i.test(content);
+            const aiIntegrationSourced = /\.\s*\$aiIntegrationPath|\.\s*CerberusIntegration\.ps1/i.test(content);
             
             if (!aiIntegrationSourced) {
                 results.issues.push('cerberus.ps1 does not source CerberusIntegration.ps1');

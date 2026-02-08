@@ -40,8 +40,8 @@
 
 ### **PowerShell Integration**
 
-- **AIIntegration.ps1** - PowerShell helper functions
-- **monitor.ps1** - Main monitor script (AI system integrated)
+- **CerberusIntegration.ps1** - PowerShell helper functions
+- **cerberus.ps1** - Main Cerberus script (AI system integrated)
 
 ---
 
@@ -51,7 +51,7 @@
 
 ```powershell
 cd C:\Projects\poker-server
-.\monitoring\monitor.ps1
+.\monitoring\cerberus.ps1
 ```
 
 ### **Use AI Functions from PowerShell**
@@ -94,15 +94,12 @@ monitoring/
 │   └── IntegrityChecker.js         # AI verifies itself
 │
 ├── integration/                    # ✅ Integration layer
-│   ├── MonitorIntegration.js      # Node.js integration
-│   └── monitor-integration.js      # CLI interface
+│   ├── CerberusIntegration.js     # Node.js integration
+│   └── cerberus-integration.js    # CLI interface
 │
-├── AIIntegration.ps1              # ✅ PowerShell helpers
-├── monitor.ps1                     # ✅ Main Cerberus script (AI integrated)
-├── monitor-config.json            # Configuration
-│
-├── issue-detector.js              # ⚠️ Legacy (being replaced by AIIssueDetector)
-├── fix-tracker.js                 # ⚠️ Legacy (being replaced by AIFixTracker)
+├── CerberusIntegration.ps1        # ✅ PowerShell helpers
+├── cerberus.ps1                    # ✅ Main Cerberus script (AI integrated)
+├── cerberus-config.json           # Configuration
 ├── unity-log-handler.js           # Unity log handler (used by server)
 │
 └── Documentation/
@@ -167,7 +164,7 @@ monitoring/
 - ✅ Better Error Messages: **COMPLETE** (NEW)
 - ✅ Array Safety Fixes: **COMPLETE**
 - ✅ Exception Error Fixes: **COMPLETE**
-- ✅ monitor.ps1 Integration: **COMPLETE**
+- ✅ cerberus.ps1 Integration: **COMPLETE**
 - 🔄 Final Polish: **IN PROGRESS** (95%)
 - 📋 Enhancements: **PLANNED**
 
@@ -188,7 +185,7 @@ See `PROGRESS_REPORT.md` for detailed status.
 
 ## 🔧 Configuration
 
-Edit `monitor-config.json` to configure:
+Edit `cerberus-config.json` to configure:
 
 ```json
 {

@@ -2236,7 +2236,7 @@ function Show-Statistics {
         $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
     } else {
         # Fallback: assume we're in the monitoring directory or project root
-        $scriptRoot = if (Test-Path "monitoring\monitor.ps1") { "monitoring" } elseif (Test-Path "logs\monitor-status.json") { "." } else { Get-Location }
+        $scriptRoot = if (Test-Path "monitoring\cerberus.ps1") { "monitoring" } elseif (Test-Path "logs\monitor-status.json") { "." } else { Get-Location }
     }
     $statusFilePath = Join-Path $scriptRoot "..\logs\monitor-status.json" | Resolve-Path -ErrorAction SilentlyContinue
     if (-not $statusFilePath) {
