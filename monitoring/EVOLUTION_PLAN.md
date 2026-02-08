@@ -134,9 +134,9 @@
 
 6. **Integrate Live Statistics** ✅
    - ✅ Replaced basic Show-Statistics with AILiveStatistics
-   - ✅ Created Show-AIStatistics.ps1 for human-readable display
+   - ✅ Created Show-CerberusStatistics.ps1 for human-readable display
    - ✅ Comprehensive AI-consumable data available
-   - ✅ Integrated into monitor.ps1
+   - ✅ Integrated into cerberus.ps1
 
 7. **Add Server State Capture** ✅
    - ✅ Created ServerStateCapture.js
