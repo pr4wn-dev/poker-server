@@ -208,13 +208,16 @@ class AutoFixEngine extends EventEmitter {
         
         // Get fixes from fix tracker
         if (this.fixTracker) {
-            const trackerFixes = this.fixTracker.getSuggestedFixes(issue.id);
-            for (const fix of trackerFixes) {
-                fixes.push({
-                    method: fix.method,
-                    confidence: fix.confidence || 0.5,
-                    source: 'fix_tracker'
-                });
+            const trackerFixes = this.fixTracker.getSuggestedFixes(issue);
+            // trackerFixes is an object with shouldTry array, not an array itself
+            if (trackerFixes && Array.isArray(trackerFixes.shouldTry)) {
+                for (const fix of trackerFixes.shouldTry) {
+                    fixes.push({
+                        method: fix.method,
+                        confidence: fix.confidence || fix.successRate || 0.5,
+                        source: 'fix_tracker'
+                    });
+                }
             }
         }
         
