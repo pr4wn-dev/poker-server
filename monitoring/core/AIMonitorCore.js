@@ -151,6 +151,19 @@ class AIMonitorCore {
             this.learningEngine, // Pass learning engine for confidence tracking
             this.rulesEnforcer // Pass rules enforcer - AI must never forget rules
         );
+        
+        // AI Collaboration Interface - WE ARE ONE
+        // This makes AI and Learning System completely symbiotic
+        const AICollaborationInterface = require('./AICollaborationInterface');
+        this.collaborationInterface = new AICollaborationInterface(
+            this.stateStore,
+            this.learningEngine,
+            this.issueDetector,
+            this.fixTracker,
+            this.communicationInterface
+        );
+        this.errorRecovery.recordSuccess('collaborationInterface');
+        
         this.integrityChecker = new IntegrityChecker(
             projectRoot,
             this.stateStore,
@@ -613,6 +626,58 @@ class AIMonitorCore {
      */
     getProcessMonitor() {
         return this.processMonitor;
+    }
+    
+    /**
+     * Get AI collaboration interface - WE ARE ONE
+     * This is the bridge that makes AI and Learning System completely symbiotic
+     */
+    getCollaborationInterface() {
+        return this.collaborationInterface;
+    }
+    
+    /**
+     * Before AI action - get proactive suggestions from learning system
+     * Call this BEFORE taking any action to get warnings, recommendations, patterns
+     */
+    beforeAIAction(action) {
+        if (!this.collaborationInterface) {
+            return { warnings: [], recommendations: [], patterns: [], alternatives: [], confidence: null };
+        }
+        return this.collaborationInterface.beforeAIAction(action);
+    }
+    
+    /**
+     * After AI action - learn from the result
+     * Call this AFTER taking any action so learning system can learn from it
+     */
+    afterAIAction(action, result) {
+        if (!this.collaborationInterface) {
+            return;
+        }
+        this.collaborationInterface.afterAIAction(action, result);
+    }
+    
+    /**
+     * AI needs help - get proactive assistance from learning system
+     * Call this when stuck or need suggestions
+     */
+    aiNeedsHelp(context) {
+        if (!this.collaborationInterface) {
+            return { suggestions: [], patterns: [], similarProblems: [], solutions: [], confidence: null };
+        }
+        return this.collaborationInterface.aiNeedsHelp(context);
+    }
+    
+    /**
+     * Query learning system - unified interface
+     * Ask the learning system anything
+     */
+    queryLearning(question) {
+        if (!this.collaborationInterface) {
+            return { error: 'Collaboration interface not available' };
+        }
+        return this.collaborationInterface.queryLearning(question);
     }
     
     /**
