@@ -3357,9 +3357,13 @@ while ($monitoringActive) {
         
         # Use direct read values if they're more recent/accurate
         # CRITICAL: Always prefer direct read if it shows active investigation (more accurate)
+        # CRITICAL: If direct read found active investigation, ALWAYS use it (even if initial read said inactive)
         if ($statusFileDirectActive -or $statusFileDirectStartTime) {
             Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] Direct status file read: active=$statusFileDirectActive, startTime=$statusFileDirectStartTime, timeRemaining=$statusFileDirectTimeRemaining" -ForegroundColor "Gray"
-            $statusFileInvestigationActive = $statusFileDirectActive
+            # CRITICAL: If direct read shows active, use it (even if initial read said false)
+            if ($statusFileDirectActive) {
+                $statusFileInvestigationActive = $statusFileDirectActive
+            }
             if ($statusFileDirectStartTime) {
                 $statusFileInvestigationStartTime = $statusFileDirectStartTime
             }
@@ -3370,7 +3374,16 @@ while ($monitoringActive) {
         
         # CRITICAL: Always check forced completion if direct read shows active investigation
         # This ensures we catch stuck investigations even if initial read failed
-        if ($statusFileInvestigationActive -and $statusFileInvestigationStartTime) {
+        # CRITICAL: Also check if direct read found active but we're not using it
+        if (($statusFileInvestigationActive -and $statusFileInvestigationStartTime) -or ($statusFileDirectActive -and $statusFileDirectStartTime)) {
+            # Use direct read values if they're available and show active investigation
+            if ($statusFileDirectActive -and $statusFileDirectStartTime) {
+                $statusFileInvestigationActive = $statusFileDirectActive
+                $statusFileInvestigationStartTime = $statusFileDirectStartTime
+                if ($statusFileDirectTimeRemaining -ne $null) {
+                    $statusFileTimeRemaining = $statusFileDirectTimeRemaining
+                }
+            }
             $timeoutValue = if ($investigationTimeout) { $investigationTimeout } else { 15 }
             $elapsedFromStatusFile = ((Get-Date) - $statusFileInvestigationStartTime).TotalSeconds
             $shouldForceCompletion = $false
