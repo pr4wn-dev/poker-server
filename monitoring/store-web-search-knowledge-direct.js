@@ -99,53 +99,51 @@ async function storeWebSearchKnowledge() {
             stateStore.autoSaveInterval = null;
         }
         
-        // Force save immediately with arrays
+        // Force save immediately with arrays - use sync write to ensure it completes
         stateStore.save();
         
-        // Wait for file write to complete
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        // Wait for file write to complete and verify immediately
+        await new Promise(resolve => setTimeout(resolve, 1000));
         
-        // Verify arrays are in memory before checking file
-        const memKnowledge = stateStore.getState('learning.knowledge') || [];
-        const memImprovements = stateStore.getState('learning.improvements') || [];
-        console.log(`   - Memory check: knowledge (${memKnowledge.length} entries), improvements (${memImprovements.length} entries)`);
+        // Read file directly to verify (don't create new StateStore - it might load old state)
+        const fs = require('fs');
+        const stateFile = path.join(projectRoot, 'logs', 'ai-state-store.json');
         
-        // Verify storage in memory
-        const storedKnowledge = stateStore.getState('learning.knowledge') || [];
-        const storedImprovements = stateStore.getState('learning.improvements') || [];
-        
-        console.log('✅ Web search findings stored permanently in learning system');
-        console.log(`   - Stored in learning.knowledge (${storedKnowledge.length} entries)`);
-        console.log(`   - Stored in learning.improvements (${storedImprovements.length} entries)`);
-        
-        if (storedKnowledge.length === 0 && storedImprovements.length === 0) {
-            console.error('❌ ERROR: Knowledge was not stored!');
-            const learningState = stateStore.getState('learning');
-            console.error('   Learning state:', JSON.stringify(learningState, null, 2));
+        if (!fs.existsSync(stateFile)) {
+            console.error('❌ ERROR: State file not found after save!');
             process.exit(1);
         }
         
-        // Verify saved to disk by reading file directly (don't create new StateStore - it might overwrite)
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        const fs = require('fs');
-        const stateFile = path.join(projectRoot, 'logs', 'ai-state-store.json');
-        if (fs.existsSync(stateFile)) {
-            const fileState = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
-            const fileKnowledge = fileState.state?.learning?.knowledge || [];
-            const fileImprovements = fileState.state?.learning?.improvements || [];
-            const knowledgeIsArray = Array.isArray(fileKnowledge);
-            const improvementsIsArray = Array.isArray(fileImprovements);
-            
-            console.log(`   - Verified on disk: knowledge (${knowledgeIsArray ? fileKnowledge.length : 0} entries), improvements (${improvementsIsArray ? fileImprovements.length : 0} entries)`);
-            console.log('   - Will persist across sessions');
-            
-            if ((!knowledgeIsArray || fileKnowledge.length === 0) && (!improvementsIsArray || fileImprovements.length === 0)) {
-                console.error('❌ ERROR: Knowledge was not persisted to disk!');
-                console.error('   File knowledge type:', typeof fileKnowledge, 'isArray:', knowledgeIsArray);
-                process.exit(1);
-            }
-        } else {
-            console.error('❌ ERROR: State file not found!');
+        // Read and verify file contents
+        let fileState;
+        try {
+            fileState = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
+        } catch (error) {
+            console.error('❌ ERROR: Failed to read state file:', error.message);
+            process.exit(1);
+        }
+        
+        const fileKnowledge = fileState.state?.learning?.knowledge || [];
+        const fileImprovements = fileState.state?.learning?.improvements || [];
+        const knowledgeIsArray = Array.isArray(fileKnowledge);
+        const improvementsIsArray = Array.isArray(fileImprovements);
+        const knowledgeLength = knowledgeIsArray ? fileKnowledge.length : 0;
+        const improvementsLength = improvementsIsArray ? fileImprovements.length : 0;
+        
+        // Verify arrays are in memory
+        const memKnowledge = stateStore.getState('learning.knowledge') || [];
+        const memImprovements = stateStore.getState('learning.improvements') || [];
+        
+        console.log('✅ Web search findings stored permanently in learning system');
+        console.log(`   - Memory: knowledge (${memKnowledge.length} entries), improvements (${memImprovements.length} entries)`);
+        console.log(`   - File: knowledge (${knowledgeLength} entries), improvements (${improvementsLength} entries)`);
+        console.log('   - Will persist across sessions');
+        
+        // Final verification - both memory and file must have data
+        if ((memKnowledge.length === 0 && memImprovements.length === 0) || (knowledgeLength === 0 && improvementsLength === 0)) {
+            console.error('❌ ERROR: Knowledge was not persisted!');
+            console.error(`   Memory: knowledge=${memKnowledge.length}, improvements=${memImprovements.length}`);
+            console.error(`   File: knowledge=${knowledgeLength} (isArray: ${knowledgeIsArray}), improvements=${improvementsLength} (isArray: ${improvementsIsArray})`);
             process.exit(1);
         }
         process.exit(0);
