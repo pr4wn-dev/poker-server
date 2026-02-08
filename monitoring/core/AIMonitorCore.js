@@ -69,6 +69,11 @@ class AIMonitorCore {
         try {
             this.issueDetector = new AIIssueDetector(this.stateStore, this.logProcessor);
             this.errorRecovery.recordSuccess('issueDetector');
+            
+            // Initialize process monitor (needs issueDetector)
+            const ProcessMonitor = require('./ProcessMonitor');
+            this.processMonitor = new ProcessMonitor(this.stateStore, this.issueDetector);
+            this.errorRecovery.recordSuccess('processMonitor');
         } catch (error) {
             this.errorRecovery.recordError('issueDetector', error);
             throw error;
