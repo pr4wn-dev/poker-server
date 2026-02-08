@@ -3308,6 +3308,12 @@ while ($monitoringActive) {
         # Get current log file size
         $currentSize = (Get-Item $logFile).Length
         
+        # DIAGNOSTIC: Log file reading status every 10 seconds
+        if (-not $script:lastLogReadDiagnostic -or ((Get-Date) - $script:lastLogReadDiagnostic).TotalSeconds -ge 10) {
+            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] Log file: size=$currentSize, lastPos=$lastLogPosition, diff=$($currentSize - $lastLogPosition), linesProcessed=$($stats.TotalLinesProcessed)" -ForegroundColor "Gray"
+            $script:lastLogReadDiagnostic = Get-Date
+        }
+        
         # If file has grown, read new lines
         if ($currentSize -gt $lastLogPosition) {
             # Use FileShare.ReadWrite to allow concurrent writes while reading
