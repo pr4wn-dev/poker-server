@@ -3955,7 +3955,8 @@ while ($monitoringActive) {
             
             $reader.Close()
             $fileStream.Close()
-            $lastLogPosition = $currentSize
+            $script:lastLogPosition = $currentSize  # Use script scope to ensure it persists
+            $lastLogPosition = $script:lastLogPosition  # Sync local variable
         }
         
         # Check for fix-applied.json and start verification phase
