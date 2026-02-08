@@ -16,7 +16,7 @@
 
 ### ❌ What We DON'T Have (But Should)
 1. **File Integrity Checks** - Not built yet
-   - Does `monitor.ps1` have required functions?
+   - Does `cerberus.ps1` have required functions?
    - Does `issue-detector.js` have required exports?
    - Does `fix-tracker.js` have required methods?
    - Are integration files present and correct?
@@ -48,9 +48,9 @@
 
 **Examples**:
 - ✅ `monitoring/core/StateStore.js` exists and exports `StateStore` class
-- ✅ `monitoring/integration/MonitorIntegration.js` exists and exports `MonitorIntegration` class
-- ✅ `monitoring/AIIntegration.ps1` exists and has all required functions
-- ✅ `monitoring/monitor.ps1` sources `AIIntegration.ps1`
+- ✅ `monitoring/integration/CerberusIntegration.js` exists and exports `CerberusIntegration` class
+- ✅ `monitoring/CerberusIntegration.ps1` exists and has all required functions
+- ✅ `monitoring/cerberus.ps1` sources `CerberusIntegration.ps1`
 
 **What to Check**:
 ```javascript
@@ -62,7 +62,7 @@ const StateStore = require('./monitoring/core/StateStore.js')
 // StateStore should be a class with required methods
 
 // File has required functions (PowerShell)
-// Check if AIIntegration.ps1 has Get-AIInvestigationStatus, etc.
+// Check if CerberusIntegration.ps1 has Get-AIInvestigationStatus, etc.
 ```
 
 ---
@@ -75,7 +75,7 @@ const StateStore = require('./monitoring/core/StateStore.js')
 - ✅ `AIIssueDetector.js` has `detectIssue()`, `verifyState()`, `getActiveIssues()` methods
 - ✅ `AIFixTracker.js` has `recordAttempt()`, `getSuggestedFixes()` methods
 - ✅ `AIDecisionEngine.js` has `shouldStartInvestigation()`, `shouldPauseUnity()` methods
-- ✅ `AIIntegration.ps1` has all PowerShell helper functions
+- ✅ `CerberusIntegration.ps1` has all PowerShell helper functions
 
 **What to Check**:
 ```javascript
@@ -123,18 +123,18 @@ const match = logLine.match(/\[([^\]]+)\]\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+(.+)/)
 **Check**: Do files integrate properly with AI system?
 
 **Examples**:
-- ✅ `monitor.ps1` sources `AIIntegration.ps1`
-- ✅ `monitor.ps1` calls AI functions (not just old broken logic)
+- ✅ `cerberus.ps1` sources `CerberusIntegration.ps1`
+- ✅ `cerberus.ps1` calls AI functions (not just old broken logic)
 - ✅ Files update StateStore when state changes
 - ✅ Files emit events when things happen
 - ✅ Files call AI functions for decisions
 
 **What to Check**:
 ```javascript
-// Check if monitor.ps1 sources AIIntegration.ps1
-// Search for: . $aiIntegrationPath or . AIIntegration.ps1
+// Check if cerberus.ps1 sources CerberusIntegration.ps1
+// Search for: . $aiIntegrationPath or . CerberusIntegration.ps1
 
-// Check if monitor.ps1 calls AI functions
+// Check if cerberus.ps1 calls AI functions
 // Search for: Get-AIInvestigationStatus, Should-AIStartInvestigation, etc.
 
 // Check if files update StateStore

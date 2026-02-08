@@ -16,7 +16,7 @@
 
 ### **2. getActiveIssues Array Safety** ✅ FIXED
 - **Issue**: `getActiveIssues()` could return non-array, causing `.length` errors
-- **Fix**: Added array safety check in `MonitorIntegration.getActiveIssues()`
+- **Fix**: Added array safety check in `CerberusIntegration.getActiveIssues()`
 - **Impact**: No more array errors when getting active issues
 
 ### **3. attempts.push Array Safety** ✅ FIXED

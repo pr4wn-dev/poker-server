@@ -23,10 +23,10 @@ All 8 core components built and ready:
 ### **2. Integration Layer** ✅ **COMPLETE**
 Bridge between PowerShell monitor and AI core:
 
-1. ✅ **MonitorIntegration.js** - Node.js integration class
-2. ✅ **monitor-integration.js** - CLI interface for PowerShell
-3. ✅ **AIIntegration.ps1** - PowerShell helper functions
-4. ✅ **monitor.ps1** - AI integration sourced and ready
+1. ✅ **CerberusIntegration.js** - Node.js integration class
+2. ✅ **cerberus-integration.js** - CLI interface for PowerShell
+3. ✅ **CerberusIntegration.ps1** - PowerShell helper functions
+4. ✅ **cerberus.ps1** - AI integration sourced and ready
 
 ---
 
@@ -45,11 +45,11 @@ monitoring/
 │   └── AIMonitorCore.js            # Orchestrator
 │
 ├── integration/                    # ✅ COMPLETE - Integration layer
-│   ├── MonitorIntegration.js      # Node.js integration class
-│   └── monitor-integration.js      # CLI interface
+│   ├── CerberusIntegration.js     # Node.js integration class
+│   └── cerberus-integration.js    # CLI interface
 │
-├── AIIntegration.ps1              # ✅ COMPLETE - PowerShell helpers
-├── monitor.ps1                     # ✅ INTEGRATED - AI system sourced
+├── CerberusIntegration.ps1        # ✅ COMPLETE - PowerShell helpers
+├── cerberus.ps1                    # ✅ INTEGRATED - AI system sourced
 │
 ├── README.md                       # Documentation
 ├── EVOLUTION_PLAN.md              # Updated plan
@@ -63,7 +63,7 @@ monitoring/
 
 ### **From PowerShell Monitor**
 
-The AI system is now integrated into `monitor.ps1`. You can use it like this:
+The AI system is now integrated into `cerberus.ps1`. You can use it like this:
 
 ```powershell
 # Get investigation status from AI
@@ -103,9 +103,9 @@ $report = Get-AIStatusReport
 ### **From Node.js**
 
 ```javascript
-const MonitorIntegration = require('./monitoring/integration/MonitorIntegration');
+const CerberusIntegration = require('./monitoring/integration/CerberusIntegration');
 
-const integration = new MonitorIntegration(projectRoot);
+const integration = new CerberusIntegration(projectRoot);
 
 // Get investigation status
 const status = integration.getInvestigationStatus();
@@ -139,7 +139,7 @@ const report = integration.getStatusReport();
 
 ```bash
 # Get investigation status
-node monitoring/integration/monitor-integration.js get-investigation-status
+node monitoring/integration/cerberus-integration.js get-investigation-status
 
 # Should start investigation?
 node monitoring/integration/monitor-integration.js should-start-investigation
@@ -232,7 +232,7 @@ node monitoring/integration/monitor-integration.js get-status-report
 
 **Replaced With**:
 - ✅ `Get-AILiveStatistics` (comprehensive AI data)
-- ✅ `Show-AIStatistics.ps1` (human-readable display)
+- ✅ `Show-CerberusStatistics.ps1` (human-readable display)
 - ✅ Single source (AI state)
 
 **Result**: Comprehensive statistics display with AI data.
@@ -285,7 +285,7 @@ node monitoring/integration/monitor-integration.js get-status-report
 2. ✅ **Integration Layer** - Bridge between PowerShell and AI core
 3. ✅ **PowerShell Helpers** - All helper functions available
 4. ✅ **CLI Interface** - Command-line access to AI system
-5. ✅ **monitor.ps1 Integration** - AI system fully integrated, all broken systems replaced
+5. ✅ **cerberus.ps1 Integration** - AI system fully integrated, all broken systems replaced
 6. ✅ **Server State Capture** - Real-time server health and table info
 7. ✅ **AI Statistics Display** - Comprehensive visibility
 8. ✅ **Array Safety** - All array operations protected
@@ -334,7 +334,7 @@ node monitoring/integration/monitor-integration.js get-status-report
 | Integration Layer | ✅ Complete | Bridge PowerShell ↔ AI core |
 | PowerShell Helpers | ✅ Complete | All functions available |
 | CLI Interface | ✅ Complete | Command-line access |
-| monitor.ps1 Integration | ✅ Complete | AI system fully integrated |
+| cerberus.ps1 Integration | ✅ Complete | AI system fully integrated |
 | Investigation Replacement | ✅ Complete | Broken logic replaced |
 | Status Sync Replacement | ✅ Complete | Single source of truth |
 | Issue Detection Integration | ✅ Complete | AI + patterns combined |

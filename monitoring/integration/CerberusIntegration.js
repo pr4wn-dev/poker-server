@@ -378,7 +378,7 @@ class CerberusIntegration {
     
     /**
      * Get suggested fixes for an issue
-     * Enhances existing fix-tracker.js
+     * Uses AIFixTracker for learning
      */
     getSuggestedFixes(issueId) {
         const issue = this.aiCore.issueDetector.getIssue(issueId);

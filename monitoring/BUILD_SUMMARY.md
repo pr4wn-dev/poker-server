@@ -298,13 +298,13 @@ A comprehensive AI-first system built FOR the AI, BY the AI. Cerberus sees every
 
 ## 🚀 Integration Layer
 
-### **MonitorIntegration.js** - Node.js Integration Class
+### **CerberusIntegration.js** - Node.js Integration Class
 - ✅ Bridges PowerShell monitor with AI core
 - ✅ Provides all AI functions
 - ✅ Syncs state automatically
 - ✅ Status: **WORKING** ✅
 
-### **monitor-integration.js** - CLI Interface
+### **cerberus-integration.js** - CLI Interface
 - ✅ Command-line access to AI system
 - ✅ All functions available
 - ✅ Non-blocking execution
@@ -315,7 +315,7 @@ A comprehensive AI-first system built FOR the AI, BY the AI. Cerberus sees every
 - ✅ Easy to use from monitor.ps1
 - ✅ Status: **WORKING** ✅
 
-### **Show-AIStatistics.ps1** - AI Statistics Display
+### **Show-CerberusStatistics.ps1** - Cerberus Statistics Display
 - ✅ Fetches data from `Get-AILiveStatistics`
 - ✅ Formats into 3-column console display
 - ✅ Shows comprehensive AI data
@@ -350,7 +350,7 @@ A comprehensive AI-first system built FOR the AI, BY the AI. Cerberus sees every
 - ✅ `AILogProcessor.processExistingLogs` - Fixed (avoids processing entire log on startup)
 
 ### **CLI Hanging** (2 fixes)
-- ✅ `MonitorIntegration` sync loop - Fixed (optional for CLI usage)
+- ✅ `CerberusIntegration` sync loop - Fixed (optional for CLI usage)
 - ✅ Background intervals - Fixed (destroy methods added)
 
 ---

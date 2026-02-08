@@ -35,8 +35,8 @@
 
 ### **Integration Layer** (`monitoring/integration/`)
 
-- **MonitorIntegration.js** - Node.js integration class
-- **monitor-integration.js** - CLI interface for PowerShell
+- **CerberusIntegration.js** - Node.js integration class
+- **cerberus-integration.js** - CLI interface for PowerShell
 
 ### **PowerShell Integration**
 
