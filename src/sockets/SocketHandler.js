@@ -403,6 +403,34 @@ class SocketHandler {
                 socket.emit('get_item_ante_response', { success: true, itemAnte: itemAnteState });
             });
             
+            // Unity state reporting - Cerberus receives Unity UI/audio state
+            socket.on('report_unity_state', (data) => {
+                const user = this.getAuthenticatedUser(socket);
+                const userId = user?.userId || 'unknown';
+                
+                // Get Cerberus UnityStateReporter if available
+                // Cerberus is initialized by monitor.ps1, so it may not always be available
+                try {
+                    const MonitorIntegration = require('../../monitoring/integration/MonitorIntegration');
+                    // Check if there's a global instance or create one
+                    // For now, we'll access it through a singleton pattern
+                    // If monitor.ps1 is running, it will have initialized Cerberus
+                    const path = require('path');
+                    const projectRoot = path.join(__dirname, '../..');
+                    const monitorIntegration = new MonitorIntegration(projectRoot, { startSyncLoop: false });
+                    const unityStateReporter = monitorIntegration.aiCore.getUnityStateReporter();
+                    if (unityStateReporter) {
+                        unityStateReporter.handleUnityStateReport(userId, data);
+                    }
+                } catch (error) {
+                    // Cerberus not available - this is fine, just log to gameLogger
+                    gameLogger.info('CERBERUS', '[UNITY_STATE] CERBERUS_NOT_AVAILABLE', {
+                        userId,
+                        message: 'Cerberus not initialized - Unity state reporting skipped'
+                    });
+                }
+            });
+            
             // Report icon loading issues from Unity client
             // Unity log capture - captures ALL Unity console logs
             socket.on('report_unity_log', (data) => {

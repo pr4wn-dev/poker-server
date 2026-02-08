@@ -21,6 +21,7 @@ const ErrorRecovery = require('./ErrorRecovery');
 const PerformanceMonitor = require('./PerformanceMonitor');
 const AILearningEngine = require('./AILearningEngine');
 const UniversalErrorHandler = require('./UniversalErrorHandler');
+const UnityStateReporter = require('./UnityStateReporter');
 const gameLogger = require('../../src/utils/GameLogger');
 
 class AIMonitorCore {
@@ -123,6 +124,18 @@ class AIMonitorCore {
             this.errorRecovery.recordSuccess('serverStateCapture');
         } catch (error) {
             this.errorRecovery.recordError('serverStateCapture', error);
+            throw error;
+        }
+        
+        // Unity state reporter (handles Unity UI/audio state reports)
+        try {
+            this.unityStateReporter = new UnityStateReporter(
+                this.stateStore,
+                this.issueDetector
+            );
+            this.errorRecovery.recordSuccess('unityStateReporter');
+        } catch (error) {
+            this.errorRecovery.recordError('unityStateReporter', error);
             throw error;
         }
         
@@ -394,6 +407,13 @@ class AIMonitorCore {
             return null;
         }
         return this.learningEngine.getBestSolution(issueType);
+    }
+    
+    /**
+     * Get Unity state reporter
+     */
+    getUnityStateReporter() {
+        return this.unityStateReporter;
     }
     
     /**

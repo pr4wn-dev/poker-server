@@ -139,6 +139,9 @@ module.exports = {
     // Client -> Server: Unity Logging (captures all Unity console logs)
     REPORT_UNITY_LOG: 'report_unity_log',  // Unity sends all Debug.Log/LogError/LogWarning here
     
+    // Client -> Server: Unity State Reporting (Cerberus - UI/audio state)
+    REPORT_UNITY_STATE: 'report_unity_state',  // Unity sends UI/audio state for Cerberus verification
+    
     // Client -> Server: Adventure
     GET_WORLD_MAP: 'get_world_map',
     GET_AREA_BOSSES: 'get_area_bosses',
