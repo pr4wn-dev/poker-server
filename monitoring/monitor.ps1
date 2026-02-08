@@ -2033,10 +2033,8 @@ function Show-Statistics {
         $investigationStartTimeValue = $script:investigationStartTime
     }
     
-    $col3Lines += ""
-    $col3Lines += "==========================="
-    $col3Lines += "  INVESTIGATION PHASE"
-    $col3Lines += "==========================="
+    # Build investigation phase info for separate full-width display (not in columns)
+    $investigationDisplayLines = @()
     if ($investigationActive -and $investigationStartTimeValue) {
         $investigationElapsed = (Get-Date) - $investigationStartTimeValue
         # Use timeRemaining from status file if available, otherwise calculate
@@ -2051,49 +2049,50 @@ function Show-Statistics {
         $progressPercent = [Math]::Round(($elapsed / $investigationTimeout) * 100)
         $elapsedSeconds = $investigationElapsed.TotalSeconds
         
-        # Progress bar visualization (text-based, wider)
-        $progressBarWidth = $colWidth - 8
+        # Progress bar visualization (text-based, full width)
+        $progressBarWidth = $consoleWidth - 20
         $filled = [Math]::Round(($elapsed / $investigationTimeout) * $progressBarWidth)
         $empty = $progressBarWidth - $filled
         $progressBar = "[" + ("#" * $filled) + ("-" * $empty) + "]"
         
-        $col3Lines += ""
-        $col3Lines += "Status: ACTIVE"
-        $col3Lines += "Elapsed: " + ("{0:N1}s" -f $elapsedSeconds) + " / " + ("{0:N0}s" -f $investigationTimeout)
-        $col3Lines += "Remaining: " + ("{0:N1}s" -f $remaining)
-        $col3Lines += ""
-        $col3Lines += $progressBar
-        $col3Lines += "Progress: " + ("{0:N1}%" -f $progressPercent)
-        $col3Lines += ""
+        $investigationDisplayLines += ""
+        $investigationDisplayLines += ("=" * $consoleWidth)
+        $investigationDisplayLines += "INVESTIGATION PHASE - ACTIVE"
+        $investigationDisplayLines += ("=" * $consoleWidth)
+        $investigationDisplayLines += ""
+        $investigationDisplayLines += "  Elapsed: " + ("{0:N1}s" -f $elapsedSeconds) + " / " + ("{0:N0}s" -f $investigationTimeout) + "  |  Remaining: " + ("{0:N1}s" -f $remaining) + "  |  Progress: " + ("{0:N1}%" -f $progressPercent)
+        $investigationDisplayLines += ""
+        $investigationDisplayLines += "  " + $progressBar
+        $investigationDisplayLines += ""
         
         # Show start time
         $startTimeStr = $investigationStartTimeValue.ToString("HH:mm:ss")
-        $col3Lines += "Started: $startTimeStr"
+        $investigationDisplayLines += "  Started: $startTimeStr"
+        $investigationDisplayLines += ""
         
-        # Show what's being investigated
-        $col3Lines += ""
-        $col3Lines += "- Root Issue -"
+        # Show what's being investigated - in columns for better layout
+        $investigationDisplayLines += "  ROOT ISSUE:"
         if ($pendingInfo -and $pendingInfo.RootIssue) {
             $rootIssue = $pendingInfo.RootIssue
-            $col3Lines += "Type: " + $rootIssue.type
-            $col3Lines += "Severity: " + $rootIssue.severity.ToUpper()
+            $investigationDisplayLines += "    Type: " + $rootIssue.type
+            $investigationDisplayLines += "    Severity: " + $rootIssue.severity.ToUpper()
             if ($rootIssue.source) {
-                $col3Lines += "Source: " + $rootIssue.source
+                $investigationDisplayLines += "    Source: " + $rootIssue.source
             }
             if ($rootIssue.tableId) {
-                $col3Lines += "Table: " + $rootIssue.tableId
+                $tableIdShort = if ($rootIssue.tableId.Length -gt 36) { $rootIssue.tableId.Substring(0, 36) + "..." } else { $rootIssue.tableId }
+                $investigationDisplayLines += "    Table: " + $tableIdShort
             }
         } else {
-            $col3Lines += "No root issue found"
-            $col3Lines += "(Focus group may have cleared)"
+            $investigationDisplayLines += "    No root issue found (Focus group may have cleared)"
         }
         
         # Show related issues found so far
-        $col3Lines += ""
-        $col3Lines += "- Related Issues -"
+        $investigationDisplayLines += ""
+        $investigationDisplayLines += "  RELATED ISSUES:"
         if ($pendingInfo -and $pendingInfo.InFocusMode) {
             if ($pendingInfo.RelatedIssuesCount -gt 0) {
-                $col3Lines += "Count: " + $pendingInfo.RelatedIssuesCount
+                $investigationDisplayLines += "    Count: " + $pendingInfo.RelatedIssuesCount
                 # Show breakdown if available
                 if ($pendingInfo.RelatedIssues -and $pendingInfo.RelatedIssues.Count -gt 0) {
                     $relatedTypes = @{}
@@ -2106,34 +2105,35 @@ function Show-Statistics {
                     }
                     $relatedSorted = $relatedTypes.GetEnumerator() | Sort-Object Value -Descending | Select-Object -First 5
                     foreach ($typeEntry in $relatedSorted) {
-                        $col3Lines += "  * " + $typeEntry.Key + ": " + $typeEntry.Value
+                        $investigationDisplayLines += "      * " + $typeEntry.Key + ": " + $typeEntry.Value
                     }
                 }
             } else {
-                $col3Lines += "Gathering related issues..."
+                $investigationDisplayLines += "    Gathering related issues..."
             }
         } else {
-            $col3Lines += "Focus mode: INACTIVE"
-            $col3Lines += "(No active focus group)"
+            $investigationDisplayLines += "    Focus mode: INACTIVE (No active focus group)"
         }
         
         # Show focus mode status
-        $col3Lines += ""
-        $col3Lines += "- Focus Mode -"
+        $investigationDisplayLines += ""
+        $investigationDisplayLines += "  FOCUS MODE:"
         if ($pendingInfo -and $pendingInfo.InFocusMode) {
-            $col3Lines += "Status: ACTIVE"
+            $investigationDisplayLines += "    Status: ACTIVE"
             if ($pendingInfo.GroupId) {
-                $col3Lines += "Group ID: " + $pendingInfo.GroupId
+                $groupIdShort = if ($pendingInfo.GroupId.Length -gt 36) { $pendingInfo.GroupId.Substring(0, 36) + "..." } else { $pendingInfo.GroupId }
+                $investigationDisplayLines += "    Group ID: " + $groupIdShort
             }
         } else {
-            $col3Lines += "Status: INACTIVE"
-            $col3Lines += "(Will complete soon)"
+            $investigationDisplayLines += "    Status: INACTIVE (Will complete soon)"
         }
+        $investigationDisplayLines += ("=" * $consoleWidth)
     } else {
-        # Not investigating - show status
+        # Not investigating - show minimal status in column 3 only
         $col3Lines += ""
+        $col3Lines += "INVESTIGATION"
+        $col3Lines += ("-" * ($colWidth - 2))
         $col3Lines += "Status: NOT ACTIVE"
-        $col3Lines += ""
         $col3Lines += "Timeout: " + ("{0:N0}s" -f $investigationTimeout)
         if ($investigationEnabled) {
             $col3Lines += "Enabled: YES"
@@ -2146,7 +2146,7 @@ function Show-Statistics {
         if ($pausedFromStatusFile) {
             $col3Lines += "WAITING FOR:"
             if ($fixAppliedExists) {
-                $col3Lines += "  Verification to complete"
+                $col3Lines += "  Verification"
             } else {
                 $col3Lines += "  fix-applied.json"
                 $col3Lines += ""
@@ -2288,6 +2288,22 @@ function Show-Statistics {
         Write-Host $separatorStr -NoNewline -ForegroundColor DarkGray
         Write-Host ($line3.PadRight($colWidth)) -NoNewline -ForegroundColor $c3
         Write-Host ""
+    }
+    
+    # Display investigation phase in full-width section (if active)
+    if ($investigationDisplayLines -and $investigationDisplayLines.Count -gt 0) {
+        Write-Host ""
+        foreach ($line in $investigationDisplayLines) {
+            if ($line -match "^INVESTIGATION PHASE|^===|^  ROOT ISSUE:|^  RELATED ISSUES:|^  FOCUS MODE:") {
+                Write-Host $line -ForegroundColor Cyan
+            } elseif ($line -match "ACTIVE|Progress:|Elapsed:|Remaining:") {
+                Write-Host $line -ForegroundColor Green
+            } elseif ($line -match "INACTIVE|No root issue|Gathering") {
+                Write-Host $line -ForegroundColor Yellow
+            } else {
+                Write-Host $line -ForegroundColor White
+            }
+        }
     }
     
     Write-Host ("=" * $consoleWidth) -ForegroundColor Cyan
