@@ -23,6 +23,7 @@ const AILearningEngine = require('./AILearningEngine');
 const UniversalErrorHandler = require('./UniversalErrorHandler');
 const UnityStateReporter = require('./UnityStateReporter');
 const StateVerificationContracts = require('./StateVerificationContracts');
+const DependencyGraph = require('./DependencyGraph');
 const gameLogger = require('../../src/utils/GameLogger');
 
 class AIMonitorCore {
@@ -149,6 +150,18 @@ class AIMonitorCore {
             this.errorRecovery.recordSuccess('stateVerificationContracts');
         } catch (error) {
             this.errorRecovery.recordError('stateVerificationContracts', error);
+            throw error;
+        }
+        
+        // Dependency graph (maps relationships between components)
+        try {
+            this.dependencyGraph = new DependencyGraph(
+                this.stateStore,
+                this.issueDetector
+            );
+            this.errorRecovery.recordSuccess('dependencyGraph');
+        } catch (error) {
+            this.errorRecovery.recordError('dependencyGraph', error);
             throw error;
         }
         
