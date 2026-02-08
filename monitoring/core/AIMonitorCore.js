@@ -22,6 +22,7 @@ const PerformanceMonitor = require('./PerformanceMonitor');
 const AILearningEngine = require('./AILearningEngine');
 const UniversalErrorHandler = require('./UniversalErrorHandler');
 const UnityStateReporter = require('./UnityStateReporter');
+const StateVerificationContracts = require('./StateVerificationContracts');
 const gameLogger = require('../../src/utils/GameLogger');
 
 class AIMonitorCore {
@@ -136,6 +137,18 @@ class AIMonitorCore {
             this.errorRecovery.recordSuccess('unityStateReporter');
         } catch (error) {
             this.errorRecovery.recordError('unityStateReporter', error);
+            throw error;
+        }
+        
+        // State verification contracts (defines what "correct" state looks like)
+        try {
+            this.stateVerificationContracts = new StateVerificationContracts(
+                this.stateStore,
+                this.issueDetector
+            );
+            this.errorRecovery.recordSuccess('stateVerificationContracts');
+        } catch (error) {
+            this.errorRecovery.recordError('stateVerificationContracts', error);
             throw error;
         }
         
