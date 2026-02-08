@@ -1659,10 +1659,28 @@ function Show-Statistics {
     # CRITICAL: Read status from status file to avoid sync issues
     $statusFromFile = "ACTIVE"
     $pausedFromFile = $false
-    $statusFilePath = Join-Path $PWD "logs\monitor-status.json"
-    if (Test-Path $statusFilePath) {
+    # Use same path resolution as investigation section (reuse if already calculated)
+    $statusTextFilePath = $statusFilePath
+    if (-not $statusTextFilePath -or -not (Test-Path $statusTextFilePath)) {
+        $scriptRoot = $null
+        if ($PSScriptRoot) {
+            $scriptRoot = $PSScriptRoot
+        } elseif ($MyInvocation.MyCommand.Path) {
+            $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+        } else {
+            $scriptRoot = if (Test-Path "monitoring\monitor.ps1") { "monitoring" } elseif (Test-Path "logs\monitor-status.json") { "." } else { Get-Location }
+        }
+        $statusTextFilePath = Join-Path $scriptRoot "..\logs\monitor-status.json" | Resolve-Path -ErrorAction SilentlyContinue
+        if (-not $statusTextFilePath) {
+            $statusTextFilePath = Join-Path (Get-Location) "logs\monitor-status.json"
+            if (-not (Test-Path $statusTextFilePath)) {
+                $statusTextFilePath = "C:\Projects\poker-server\logs\monitor-status.json"
+            }
+        }
+    }
+    if (Test-Path $statusTextFilePath) {
         try {
-            $statusData = Get-Content $statusFilePath -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+            $statusData = Get-Content $statusTextFilePath -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
             if ($statusData.verification -and $statusData.verification.active -is [bool] -and $statusData.verification.active) {
                 $statusFromFile = "VERIFYING FIX (Unity Paused)"
             } elseif ($statusData.investigation -and $statusData.investigation.active -is [bool] -and $statusData.investigation.active) {
@@ -1985,9 +2003,28 @@ function Show-Statistics {
     $verificationActive = $false
     $verificationStartTimeValue = $null
     $verificationTimeRemaining = $null
-    if (Test-Path "logs\monitor-status.json") {
+    # Use same path resolution as investigation section
+    $verificationStatusFilePath = $statusFilePath
+    if (-not $verificationStatusFilePath -or -not (Test-Path $verificationStatusFilePath)) {
+        $scriptRoot = $null
+        if ($PSScriptRoot) {
+            $scriptRoot = $PSScriptRoot
+        } elseif ($MyInvocation.MyCommand.Path) {
+            $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+        } else {
+            $scriptRoot = if (Test-Path "monitoring\monitor.ps1") { "monitoring" } elseif (Test-Path "logs\monitor-status.json") { "." } else { Get-Location }
+        }
+        $verificationStatusFilePath = Join-Path $scriptRoot "..\logs\monitor-status.json" | Resolve-Path -ErrorAction SilentlyContinue
+        if (-not $verificationStatusFilePath) {
+            $verificationStatusFilePath = Join-Path (Get-Location) "logs\monitor-status.json"
+            if (-not (Test-Path $verificationStatusFilePath)) {
+                $verificationStatusFilePath = "C:\Projects\poker-server\logs\monitor-status.json"
+            }
+        }
+    }
+    if (Test-Path $verificationStatusFilePath) {
         try {
-            $statusData = Get-Content "logs\monitor-status.json" -Raw | ConvertFrom-Json
+            $statusData = Get-Content $verificationStatusFilePath -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
             if ($statusData.verification) {
                 $verificationActive = $statusData.verification.active
                 if ($statusData.verification.startTime) {
