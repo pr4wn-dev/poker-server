@@ -1863,12 +1863,18 @@ function Show-Statistics {
     $investigationActive = $false
     $investigationStartTimeValue = $null
     $investigationTimeRemaining = $null
-    $statusFilePath = Join-Path $PWD "logs\monitor-status.json"
+    # Use script root directory (where monitor.ps1 is located)
+    $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+    $statusFilePath = Join-Path $scriptRoot "..\logs\monitor-status.json" | Resolve-Path -ErrorAction SilentlyContinue
+    if (-not $statusFilePath) {
+        # Fallback to relative path
+        $statusFilePath = Join-Path (Get-Location) "logs\monitor-status.json"
+    }
     if (Test-Path $statusFilePath) {
         try {
             $statusData = Get-Content $statusFilePath -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
             if ($statusData.investigation) {
-                $investigationActive = if ($statusData.investigation.active -is [bool]) { $statusData.investigation.active } else { $false }
+                $investigationActive = if ($statusData.investigation.active -is [bool]) { $statusData.investigation.active } else { [bool]$statusData.investigation.active }
                 if ($statusData.investigation.startTime) {
                     try {
                         $investigationStartTimeValue = [DateTime]::Parse($statusData.investigation.startTime)
@@ -1882,7 +1888,7 @@ function Show-Statistics {
             }
         } catch {
             # Status file read failed - fall back to variables with diagnostic
-            Write-Error "Show-Statistics: Failed to read status file: $_" -ErrorAction SilentlyContinue
+            Write-Error "Show-Statistics: Failed to read status file ($statusFilePath): $_" -ErrorAction SilentlyContinue
             $investigationActive = $script:isInvestigating
             $investigationStartTimeValue = $script:investigationStartTime
         }
