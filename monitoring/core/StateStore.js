@@ -686,6 +686,9 @@ class StateStore extends EventEmitter {
                 if (data.eventLog) {
                     this.eventLog = data.eventLog;
                 }
+                
+                // CRITICAL: Repair state after loading to ensure arrays are arrays
+                this._repairState();
             }
         } catch (error) {
             // DO NOT log to console - errors are for AI only, not user
@@ -707,6 +710,67 @@ class StateStore extends EventEmitter {
             }
             // Re-throw so UniversalErrorHandler can catch it
             throw error;
+        }
+    }
+    
+    /**
+     * Repair state - ensure arrays are arrays, fix corrupted data
+     */
+    _repairState() {
+        // Ensure issues arrays are always arrays
+        if (!this.state.issues) {
+            this.state.issues = {
+                detected: [],
+                active: [],
+                resolved: [],
+                patterns: new Map(),
+                fixes: new Map()
+            };
+        }
+        
+        // Repair issues.active
+        if (!Array.isArray(this.state.issues.active)) {
+            if (typeof this.state.issues.active === 'object' && this.state.issues.active !== null) {
+                // Convert object with numeric keys to array
+                const keys = Object.keys(this.state.issues.active).map(k => parseInt(k)).filter(k => !isNaN(k)).sort((a, b) => a - b);
+                this.state.issues.active = keys.map(k => this.state.issues.active[k.toString()]).filter(item => item !== undefined);
+            } else {
+                this.state.issues.active = [];
+            }
+        }
+        
+        // Repair issues.detected
+        if (!Array.isArray(this.state.issues.detected)) {
+            if (typeof this.state.issues.detected === 'object' && this.state.issues.detected !== null) {
+                // Convert object with numeric keys to array
+                const keys = Object.keys(this.state.issues.detected).map(k => parseInt(k)).filter(k => !isNaN(k)).sort((a, b) => a - b);
+                this.state.issues.detected = keys.map(k => this.state.issues.detected[k.toString()]).filter(item => item !== undefined);
+            } else {
+                this.state.issues.detected = [];
+            }
+        }
+        
+        // Repair issues.resolved
+        if (!Array.isArray(this.state.issues.resolved)) {
+            if (typeof this.state.issues.resolved === 'object' && this.state.issues.resolved !== null) {
+                // Convert object with numeric keys to array
+                const keys = Object.keys(this.state.issues.resolved).map(k => parseInt(k)).filter(k => !isNaN(k)).sort((a, b) => a - b);
+                this.state.issues.resolved = keys.map(k => this.state.issues.resolved[k.toString()]).filter(item => item !== undefined);
+            } else {
+                this.state.issues.resolved = [];
+            }
+        }
+        
+        // Ensure fixes.attempts is an array
+        if (this.state.fixes) {
+            if (!Array.isArray(this.state.fixes.attempts)) {
+                if (typeof this.state.fixes.attempts === 'object' && this.state.fixes.attempts !== null) {
+                    const keys = Object.keys(this.state.fixes.attempts).map(k => parseInt(k)).filter(k => !isNaN(k)).sort((a, b) => a - b);
+                    this.state.fixes.attempts = keys.map(k => this.state.fixes.attempts[k.toString()]).filter(item => item !== undefined);
+                } else {
+                    this.state.fixes.attempts = [];
+                }
+            }
         }
     }
     
@@ -742,6 +806,49 @@ class StateStore extends EventEmitter {
                 state[key] = value;
             }
         }
+        
+        // CRITICAL: Ensure issues arrays are always arrays (repair corrupted state)
+        if (state.issues) {
+            // Fix issues.active - must be array
+            if (state.issues.active && !Array.isArray(state.issues.active)) {
+                // Convert object with numeric keys to array
+                if (typeof state.issues.active === 'object') {
+                    const keys = Object.keys(state.issues.active).map(k => parseInt(k)).filter(k => !isNaN(k)).sort((a, b) => a - b);
+                    state.issues.active = keys.map(k => state.issues.active[k.toString()]).filter(item => item !== undefined);
+                } else {
+                    state.issues.active = [];
+                }
+            } else if (!state.issues.active) {
+                state.issues.active = [];
+            }
+            
+            // Fix issues.detected - must be array
+            if (state.issues.detected && !Array.isArray(state.issues.detected)) {
+                // Convert object with numeric keys to array
+                if (typeof state.issues.detected === 'object') {
+                    const keys = Object.keys(state.issues.detected).map(k => parseInt(k)).filter(k => !isNaN(k)).sort((a, b) => a - b);
+                    state.issues.detected = keys.map(k => state.issues.detected[k.toString()]).filter(item => item !== undefined);
+                } else {
+                    state.issues.detected = [];
+                }
+            } else if (!state.issues.detected) {
+                state.issues.detected = [];
+            }
+            
+            // Fix issues.resolved - must be array
+            if (state.issues.resolved && !Array.isArray(state.issues.resolved)) {
+                // Convert object with numeric keys to array
+                if (typeof state.issues.resolved === 'object') {
+                    const keys = Object.keys(state.issues.resolved).map(k => parseInt(k)).filter(k => !isNaN(k)).sort((a, b) => a - b);
+                    state.issues.resolved = keys.map(k => state.issues.resolved[k.toString()]).filter(item => item !== undefined);
+                } else {
+                    state.issues.resolved = [];
+                }
+            } else if (!state.issues.resolved) {
+                state.issues.resolved = [];
+            }
+        }
+        
         return state;
     }
     

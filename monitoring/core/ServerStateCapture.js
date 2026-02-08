@@ -198,33 +198,67 @@ class ServerStateCapture {
         } catch (error) {
             this.consecutiveErrors++;
             const errorMessage = error.message || 'Unknown error';
+            const errorCode = error.code || '';
             
             // DO NOT log to console - errors are for AI only, not user
             
-            // Record error with error recovery if available
-            if (this.errorRecovery) {
+            // Check if this is "server not running" (ECONNREFUSED) vs actual connection problem
+            const isServerNotRunning = errorCode === 'ECONNREFUSED' || 
+                                      errorMessage.includes('ECONNREFUSED') ||
+                                      errorMessage.includes('connect ECONNREFUSED');
+            
+            // Only record as error if it's not just "server not running"
+            // Server not running is expected behavior, not an error
+            if (!isServerNotRunning && this.errorRecovery) {
                 this.errorRecovery.recordError('serverStateCapture', error);
             }
             
-            // Report to issue detector if we have too many consecutive errors
+            // Only report to issue detector if:
+            // 1. We have too many consecutive errors AND
+            // 2. It's not just "server not running" (which is expected)
+            // OR it's been failing for a very long time (5+ errors) which might indicate server should be running
             if (this.consecutiveErrors >= this.maxConsecutiveErrors && this.issueDetector) {
-                this.issueDetector.detectIssue({
-                    type: 'SERVER_STATE_CAPTURE_FAILED',
-                    severity: this.consecutiveErrors >= 5 ? 'critical' : 'high',
-                    method: 'serverStateCapture',
-                    details: {
-                        error: errorMessage,
-                        consecutiveErrors: this.consecutiveErrors,
-                        serverUrl: this.serverUrl,
-                        lastCaptureTime: this.lastCaptureTime
-                    },
-                    timestamp: Date.now()
-                });
+                // If server not running but we've had many failures, check if server should be running
+                if (isServerNotRunning) {
+                    // Only report if we've had many failures (5+) - might indicate server should be running
+                    if (this.consecutiveErrors >= 5) {
+                        this.issueDetector.detectIssue({
+                            type: 'SERVER_NOT_RUNNING',
+                            severity: 'medium', // Lower severity - server not running is expected
+                            method: 'serverStateCapture',
+                            details: {
+                                error: 'Server is not running (ECONNREFUSED)',
+                                consecutiveErrors: this.consecutiveErrors,
+                                serverUrl: this.serverUrl,
+                                lastCaptureTime: this.lastCaptureTime,
+                                note: 'This may be expected if server is intentionally stopped'
+                            },
+                            timestamp: Date.now()
+                        });
+                    }
+                } else {
+                    // Actual connection problem (not ECONNREFUSED)
+                    this.issueDetector.detectIssue({
+                        type: 'SERVER_STATE_CAPTURE_FAILED',
+                        severity: this.consecutiveErrors >= 5 ? 'critical' : 'high',
+                        method: 'serverStateCapture',
+                        details: {
+                            error: errorMessage,
+                            errorCode: errorCode,
+                            consecutiveErrors: this.consecutiveErrors,
+                            serverUrl: this.serverUrl,
+                            lastCaptureTime: this.lastCaptureTime
+                        },
+                        timestamp: Date.now()
+                    });
+                }
             }
             
             // Update StateStore with error state
+            // Use 'stopped' status for ECONNREFUSED (server not running), 'error' for actual problems
+            const serverStatus = isServerNotRunning ? 'stopped' : 'error';
             this.stateStore.updateState('system.server', {
-                status: 'error',
+                status: serverStatus,
                 health: 0,
                 metrics: {
                     uptime: 0,
@@ -234,7 +268,7 @@ class ServerStateCapture {
                     consecutiveErrors: this.consecutiveErrors
                 },
                 lastCheck: Date.now(),
-                error: errorMessage
+                error: isServerNotRunning ? 'Server not running' : errorMessage
             });
         }
     }

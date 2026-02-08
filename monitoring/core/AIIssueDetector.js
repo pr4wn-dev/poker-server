@@ -316,13 +316,16 @@ class AIIssueDetector extends EventEmitter {
             };
         }
         
-        // Connection error
+        // Connection error (but exclude ECONNREFUSED which is "server not running", not a connection problem)
         if (message.includes('connection') && (message.includes('failed') || message.includes('error'))) {
-            return {
-                type: 'CONNECTION_ERROR',
-                severity: 'high',
-                details: { source: log.source }
-            };
+            // Don't classify ECONNREFUSED as connection error - that's "server not running"
+            if (!message.includes('ECONNREFUSED') && !message.includes('connect ECONNREFUSED')) {
+                return {
+                    type: 'CONNECTION_ERROR',
+                    severity: 'high',
+                    details: { source: log.source }
+                };
+            }
         }
         
         // Database error
