@@ -456,9 +456,34 @@ class AIIssueDetector extends EventEmitter {
     }
     
     /**
+     * Create contextual error message
+     */
+    _createErrorContext(operation, context = {}) {
+        const errorCode = `AIID-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        return {
+            errorCode,
+            operation,
+            context: {
+                ...context,
+                timestamp: Date.now(),
+                state: {
+                    issuesCount: this.issues.size,
+                    activeIssues: this.getActiveIssues().length
+                }
+            }
+        };
+    }
+    
+    /**
      * Detect an issue
      */
     detectIssue(issueData) {
+        // Validate input
+        if (!issueData || !issueData.type) {
+            const errorContext = this._createErrorContext('detectIssue', { issueData });
+            throw new Error(`[AIIssueDetector] Invalid issue data: ${JSON.stringify(errorContext)}`);
+        }
+        
         // Generate unique ID
         const issueId = this.generateIssueId(issueData);
         

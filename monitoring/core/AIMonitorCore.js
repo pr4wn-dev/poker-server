@@ -17,6 +17,8 @@ const AILiveStatistics = require('./AILiveStatistics');
 const AICommunicationInterface = require('./AICommunicationInterface');
 const IntegrityChecker = require('./IntegrityChecker');
 const ServerStateCapture = require('./ServerStateCapture');
+const ErrorRecovery = require('./ErrorRecovery');
+const PerformanceMonitor = require('./PerformanceMonitor');
 
 class AIMonitorCore {
     constructor(projectRoot) {
@@ -50,9 +52,11 @@ class AIMonitorCore {
         );
         
         // Server state capture (captures server health/metrics)
-        this.serverStateCapture = new ServerStateCapture(
-            this.stateStore,
-            process.env.SERVER_URL || 'http://localhost:3000'
+        this.serverStateCapture = this._initWithRecovery('serverStateCapture', () =>
+            new ServerStateCapture(
+                this.stateStore,
+                process.env.SERVER_URL || 'http://localhost:3000'
+            )
         );
         
         // Start server state capture
@@ -61,8 +65,31 @@ class AIMonitorCore {
         // Setup event listeners
         this.setupEventListeners();
         
+        // Setup error recovery listeners
+        this.setupErrorRecoveryListeners();
+        
+        // Setup performance monitoring listeners
+        this.setupPerformanceListeners();
+        
         console.log('[AI Monitor Core] Initialized - AI sees everything, knows everything, acts on everything');
         console.log('[AI Monitor Core] Integrity checker active - AI verifies its own integrity');
+        console.log('[AI Monitor Core] Error recovery active - System can self-heal');
+        console.log('[AI Monitor Core] Performance monitoring active - Tracking system performance');
+    }
+    
+    /**
+     * Initialize component with error recovery
+     */
+    _initWithRecovery(componentName, initFn) {
+        try {
+            const component = initFn();
+            this.errorRecovery.recordSuccess(componentName);
+            return component;
+        } catch (error) {
+            this.errorRecovery.recordError(componentName, error);
+            console.error(`[AI Monitor Core] Failed to initialize ${componentName}:`, error.message);
+            throw error;
+        }
     }
     
     /**
