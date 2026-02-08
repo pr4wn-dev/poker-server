@@ -117,18 +117,27 @@ async function storeWebSearchKnowledge() {
             process.exit(1);
         }
         
-        // Verify saved to disk by loading a new instance
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        const verifyStore = new StateStore(projectRoot);
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        const diskKnowledge = verifyStore.getState('learning.knowledge') || [];
-        const diskImprovements = verifyStore.getState('learning.improvements') || [];
-        
-        console.log(`   - Verified on disk: knowledge (${diskKnowledge.length} entries), improvements (${diskImprovements.length} entries)`);
-        console.log('   - Will persist across sessions');
-        
-        if (diskKnowledge.length === 0 && diskImprovements.length === 0) {
-            console.error('❌ ERROR: Knowledge was not persisted to disk!');
+        // Verify saved to disk by reading file directly (don't create new StateStore - it might overwrite)
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        const fs = require('fs');
+        const stateFile = path.join(projectRoot, 'logs', 'ai-state-store.json');
+        if (fs.existsSync(stateFile)) {
+            const fileState = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
+            const fileKnowledge = fileState.state?.learning?.knowledge || [];
+            const fileImprovements = fileState.state?.learning?.improvements || [];
+            const knowledgeIsArray = Array.isArray(fileKnowledge);
+            const improvementsIsArray = Array.isArray(fileImprovements);
+            
+            console.log(`   - Verified on disk: knowledge (${knowledgeIsArray ? fileKnowledge.length : 0} entries), improvements (${improvementsIsArray ? fileImprovements.length : 0} entries)`);
+            console.log('   - Will persist across sessions');
+            
+            if ((!knowledgeIsArray || fileKnowledge.length === 0) && (!improvementsIsArray || fileImprovements.length === 0)) {
+                console.error('❌ ERROR: Knowledge was not persisted to disk!');
+                console.error('   File knowledge type:', typeof fileKnowledge, 'isArray:', knowledgeIsArray);
+                process.exit(1);
+            }
+        } else {
+            console.error('❌ ERROR: State file not found!');
             process.exit(1);
         }
         process.exit(0);
