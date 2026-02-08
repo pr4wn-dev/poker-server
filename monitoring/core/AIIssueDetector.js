@@ -700,8 +700,11 @@ class AIIssueDetector extends EventEmitter {
         // Add to active issues
         const activeIssues = this.stateStore.getState('issues.active') || [];
         
+        // Ensure activeIssues is an array
+        const activeIssuesArray = Array.isArray(activeIssues) ? activeIssues : [];
+        
         // Remove if already exists
-        const filtered = activeIssues.filter(i => i.id !== issue.id);
+        const filtered = activeIssuesArray.filter(i => i && i.id !== issue.id);
         
         // Add new issue
         filtered.push(issue);
