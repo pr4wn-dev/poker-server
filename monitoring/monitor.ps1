@@ -977,19 +977,10 @@ function Invoke-DebuggerBreakWithVerification {
     }
     
     if (-not $unityStatus.ConnectedToServer) {
-        Write-ConsoleOutput -Message "  WARNING: Unity not connected to server - waiting for connection..." -ForegroundColor "Yellow"
-        # Wait up to 10 seconds for Unity to connect
-        $waitCount = 0
-        while ($waitCount -lt 10 -and -not $unityStatus.ConnectedToServer) {
-            Start-Sleep -Seconds 1
-            $unityStatus = Get-UnityActualStatus
-            $waitCount++
-        }
-        if (-not $unityStatus.ConnectedToServer) {
-            Write-ConsoleOutput -Message "  ERROR: Unity still not connected after 10 seconds" -ForegroundColor "Red"
-            Write-ConsoleOutput -Message "    Monitor will automatically restart Unity" -ForegroundColor "Yellow"
-            return $false
-        }
+        Write-ConsoleOutput -Message "  WARNING: Unity not connected to server - attempting break anyway (Unity may still receive event)" -ForegroundColor "Yellow"
+        Write-ConsoleOutput -Message "    If Unity is in a table room, it will receive the event even if health check shows 0 players" -ForegroundColor "Gray"
+        # Don't fail here - try to send the break anyway
+        # Unity might be connected but health check might be wrong, or Unity might connect during the break attempt
     }
     
     # Step 2: If no tableId provided, automatically find active simulation table
@@ -1070,16 +1061,38 @@ function Invoke-DebuggerBreakWithVerification {
                 $result = $response.Content | ConvertFrom-Json
                 if ($result.success -and $result.emittedCount -gt 0) {
                     $stats.PauseMarkersWritten++
-                    Write-ConsoleOutput -Message "  Debugger break triggered - Unity paused" -ForegroundColor "Green"
+                    Write-ConsoleOutput -Message "  Debugger break event emitted to Unity ($($result.emittedCount) table(s))" -ForegroundColor "Green"
                     if ($result.emittedTables) {
-                        Write-ConsoleOutput -Message "  Emitted to $($result.emittedCount) table(s): $($result.emittedTables -join ', ')" -ForegroundColor "Cyan"
-                    } else {
-                        Write-ConsoleOutput -Message "  Emitted to $($result.emittedCount) table(s)" -ForegroundColor "Cyan"
+                        Write-ConsoleOutput -Message "  Tables: $($result.emittedTables -join ', ')" -ForegroundColor "Cyan"
                     }
+                    Write-ConsoleOutput -Message "  Verifying Unity received and processed the pause..." -ForegroundColor "Yellow"
+                    
+                    # Wait a moment for Unity to process the event
+                    Start-Sleep -Milliseconds 500
+                    
+                    # Check Unity logs for confirmation that it paused
+                    $pauseConfirmed = $false
+                    if (Test-Path $logFile) {
+                        $recentLogs = Get-Content $logFile -Tail 50 -ErrorAction SilentlyContinue
+                        foreach ($logLine in $recentLogs) {
+                            if ($logLine -match '\[Game\].*DEBUGGER BREAK|\[Game\].*PAUSED|Time\.timeScale.*0') {
+                                $pauseConfirmed = $true
+                                Write-ConsoleOutput -Message "  CONFIRMED: Unity received pause command (found in logs)" -ForegroundColor "Green"
+                                break
+                            }
+                        }
+                    }
+                    
+                    if (-not $pauseConfirmed) {
+                        Write-ConsoleOutput -Message "  WARNING: Could not confirm Unity paused - check Unity console for 'DEBUGGER BREAK' or 'PAUSED' messages" -ForegroundColor "Yellow"
+                        Write-ConsoleOutput -Message "  If Unity didn't pause, it may not be receiving the event or HandleDebuggerBreak isn't being called" -ForegroundColor "Yellow"
+                    }
+                    
                     Update-MonitorStatus -statusUpdate @{
                         debuggerBreakStatus = "success"
                         lastDebuggerBreakSuccess = (Get-Date).ToUniversalTime().ToString("o")
                         lastDebuggerBreakTables = $result.emittedTables
+                        pauseConfirmed = $pauseConfirmed
                     }
                     $success = $true
                 } elseif ($result.success -and $result.emittedCount -eq 0) {
@@ -3046,6 +3059,7 @@ while ($monitoringActive) {
         $statusFileInvestigationActive = $false
         $statusFileInvestigationStartTime = $null
         $statusFileTimeRemaining = $null
+        $statusFileReadSuccess = $false
         try {
             $statusFilePath = Join-Path $script:projectRoot "logs\monitor-status.json"
             if (Test-Path $statusFilePath) {
@@ -3071,15 +3085,21 @@ while ($monitoringActive) {
                     if ($statusData.investigation.timeRemaining -ne $null) {
                         $statusFileTimeRemaining = $statusData.investigation.timeRemaining
                     }
+                    $statusFileReadSuccess = $true
                 }
             }
         } catch {
-            # Status file read failed - log error
+            # Status file read failed - log error but continue with script variables
             Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] Failed to read status file: $_" -ForegroundColor "Red"
+            $statusFileReadSuccess = $false
         }
         
-        # DIAGNOSTIC: Always log what we read from status file
-        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] Status file read: active=$statusFileInvestigationActive, timeRemaining=$statusFileTimeRemaining, startTime=$statusFileInvestigationStartTime" -ForegroundColor "Gray"
+        # DIAGNOSTIC: Always log what we read from status file (or that read failed)
+        if ($statusFileReadSuccess) {
+            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] Status file read: active=$statusFileInvestigationActive, timeRemaining=$statusFileTimeRemaining, startTime=$statusFileInvestigationStartTime" -ForegroundColor "Gray"
+        } else {
+            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] Status file read: FAILED - using script variables only" -ForegroundColor "Yellow"
+        }
         
         # CRITICAL: If status file shows investigation active, ALWAYS sync script variables
         # This ensures script variables match the status file (source of truth)
@@ -3141,42 +3161,84 @@ while ($monitoringActive) {
             $investigationStartTimeValid = $true
         }
         
-        # CRITICAL: If status file shows timeRemaining <= 0, investigation MUST complete IMMEDIATELY
-        # This check runs FIRST and completes immediately, bypassing all other logic
-        # DIAGNOSTIC: Log every loop iteration when investigation is active to see why it's not completing
-        if ($statusFileInvestigationActive) {
-            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] Investigation completion check: active=$statusFileInvestigationActive, timeRemaining=$statusFileTimeRemaining, startTime=$($statusFileInvestigationStartTime)" -ForegroundColor "Gray"
+        # CRITICAL: Investigation completion check - use SCRIPT VARIABLES as PRIMARY source of truth
+        # Status file is for external tools, but script variables are the real state
+        # ALWAYS check script variables FIRST - don't depend on status file read success
+        # This ensures completion check runs even if status file read fails
+        $investigationIsActive = $false
+        $investigationStartTimeToUse = $null
+        
+        # PRIMARY: Check script variables first (most reliable)
+        if ($script:isInvestigating -and $script:investigationStartTime -and $script:investigationStartTime -is [DateTime]) {
+            $investigationIsActive = $true
+            $investigationStartTimeToUse = $script:investigationStartTime
+        }
+        # FALLBACK: If script variables not set but status file says active, use status file
+        elseif ($statusFileInvestigationActive -and $statusFileInvestigationStartTime) {
+            $investigationIsActive = $true
+            $investigationStartTimeToUse = $statusFileInvestigationStartTime
+            # Sync script variables from status file
+            if (-not $script:isInvestigating) {
+                $script:isInvestigating = $true
+            }
+            if (-not $script:investigationStartTime -or $script:investigationStartTime -ne $statusFileInvestigationStartTime) {
+                $script:investigationStartTime = $statusFileInvestigationStartTime
+            }
+        }
+        # FALLBACK: If script says investigating but no startTime, try to get from status file
+        elseif ($script:isInvestigating -and -not $script:investigationStartTime -and $statusFileInvestigationStartTime) {
+            $investigationIsActive = $true
+            $investigationStartTimeToUse = $statusFileInvestigationStartTime
+            $script:investigationStartTime = $statusFileInvestigationStartTime
+        }
+        
+        # CRITICAL: Always run completion check if we have ANY indication of active investigation
+        # This ensures we complete even if status file read failed
+        if ($investigationIsActive -and $investigationStartTimeToUse) {
+            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] Investigation completion check: scriptActive=$($script:isInvestigating), statusFileActive=$statusFileInvestigationActive, startTime=$($investigationStartTimeToUse.ToString('HH:mm:ss')), statusFileReadSuccess=$statusFileReadSuccess" -ForegroundColor "Gray"
             
             $timeoutValue = if ($investigationTimeout) { $investigationTimeout } else { 15 }
             $shouldCompleteNow = $false
             $completionReason = ""
             
-            # Check timeRemaining first (most direct indicator) - if it's <= 0, complete immediately
-            if ($statusFileTimeRemaining -ne $null -and $statusFileTimeRemaining -le 0) {
-                $shouldCompleteNow = $true
-                $completionReason = "timeRemaining=$statusFileTimeRemaining <= 0"
-                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] timeRemaining check: $statusFileTimeRemaining <= 0 = TRUE - should complete" -ForegroundColor "Yellow"
-            } else {
-                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] timeRemaining check: $statusFileTimeRemaining <= 0 = FALSE" -ForegroundColor "Gray"
-            }
+            # CRITICAL: Calculate elapsed time FIRST (primary check - always works)
+            # This is the most reliable way to determine if investigation should complete
+            $elapsedFromStartTime = ((Get-Date) - $investigationStartTimeToUse).TotalSeconds
+            $elapsedCheckResult = $elapsedFromStartTime -ge ($timeoutValue - 1)
             
-            # Also check elapsed time if we have startTime
-            # CRITICAL: Check elapsed time even if timeRemaining check passed, to ensure we complete
-            if ($statusFileInvestigationStartTime) {
-                $elapsedFromStatus = ((Get-Date) - $statusFileInvestigationStartTime).TotalSeconds
-                $elapsedCheckResult = $elapsedFromStatus -ge ($timeoutValue - 1)
-                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] elapsed check: $([Math]::Round($elapsedFromStatus, 1))s >= ($timeoutValue - 1) = $elapsedCheckResult" -ForegroundColor "Gray"
-                if ($elapsedCheckResult) {
-                    $shouldCompleteNow = $true  # CRITICAL FIX: Always set to true if elapsed check passes, don't check if already set
-                    if ([string]::IsNullOrEmpty($completionReason)) {
-                        $completionReason = "elapsed=$([Math]::Round($elapsedFromStatus, 1))s >= timeout=$timeoutValue s"
-                    }
-                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] elapsed check: TRUE - should complete (elapsed=$([Math]::Round($elapsedFromStatus, 1))s, timeout=$timeoutValue s)" -ForegroundColor "Yellow"
+            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] elapsed check: $([Math]::Round($elapsedFromStartTime, 1))s >= ($timeoutValue - 1) = $elapsedCheckResult" -ForegroundColor "Gray"
+            
+            # Check timeRemaining from status file as secondary indicator (if available)
+            if ($statusFileReadSuccess -and $statusFileTimeRemaining -ne $null) {
+                if ($statusFileTimeRemaining -le 0) {
+                    $shouldCompleteNow = $true
+                    $completionReason = "timeRemaining=$statusFileTimeRemaining <= 0"
+                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] timeRemaining check: $statusFileTimeRemaining <= 0 = TRUE - should complete" -ForegroundColor "Yellow"
                 } else {
-                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] elapsed check: FALSE - not yet (elapsed=$([Math]::Round($elapsedFromStatus, 1))s, timeout=$timeoutValue s)" -ForegroundColor "Gray"
+                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] timeRemaining check: $statusFileTimeRemaining <= 0 = FALSE" -ForegroundColor "Gray"
                 }
             } else {
-                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] elapsed check: SKIPPED (no startTime)" -ForegroundColor "Gray"
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] timeRemaining check: SKIPPED (statusFileReadSuccess=$statusFileReadSuccess, timeRemaining=$statusFileTimeRemaining)" -ForegroundColor "Gray"
+            }
+            
+            # CRITICAL: Elapsed time check is PRIMARY - always use this
+            # This ensures we complete even if status file read failed or is stale
+            if ($elapsedCheckResult) {
+                $shouldCompleteNow = $true  # CRITICAL: Always set to true if elapsed check passes
+                if ([string]::IsNullOrEmpty($completionReason)) {
+                    $completionReason = "elapsed=$([Math]::Round($elapsedFromStartTime, 1))s >= timeout=$timeoutValue s"
+                }
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] elapsed check: TRUE - should complete (elapsed=$([Math]::Round($elapsedFromStartTime, 1))s, timeout=$timeoutValue s)" -ForegroundColor "Yellow"
+            } else {
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] elapsed check: FALSE - not yet (elapsed=$([Math]::Round($elapsedFromStartTime, 1))s, timeout=$timeoutValue s)" -ForegroundColor "Gray"
+            }
+            
+            # SAFETY CHECK: Force completion if investigation has been running way too long (2x timeout)
+            # This prevents investigations from getting stuck indefinitely
+            if (-not $shouldCompleteNow -and $elapsedFromStartTime -ge ($timeoutValue * 2)) {
+                $shouldCompleteNow = $true
+                $completionReason = "SAFETY: elapsed=$([Math]::Round($elapsedFromStartTime, 1))s >= 2x timeout=$($timeoutValue * 2)s"
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] INVESTIGATION STUCK - FORCING COMPLETION (elapsed=$([Math]::Round($elapsedFromStartTime, 1))s >= 2x timeout=$($timeoutValue * 2)s)" -ForegroundColor "Red"
             }
             
             Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] shouldCompleteNow=$shouldCompleteNow, reason=$completionReason" -ForegroundColor $(if ($shouldCompleteNow) { "Yellow" } else { "Gray" })
@@ -3203,6 +3265,11 @@ while ($monitoringActive) {
                     if ($relatedCount -gt 0) {
                         Write-ConsoleOutput -Message "  Related Issues Found: $relatedCount" -ForegroundColor "Cyan"
                     }
+                    Write-ConsoleOutput -Message "" -ForegroundColor "White"
+                    Write-ConsoleOutput -Message "  >>> ACTION REQUIRED: Ask the AI to analyze this investigation <<<" -ForegroundColor "Cyan"
+                    Write-ConsoleOutput -Message "  The AI will use patterns, fix attempts, and investigation data to propose a fix" -ForegroundColor "White"
+                    Write-ConsoleOutput -Message "  Investigation data is in: logs\pending-issues.json" -ForegroundColor "Gray"
+                    Write-ConsoleOutput -Message "" -ForegroundColor "White"
                     $tableId = if ($rootIssue.tableId) { $rootIssue.tableId } else { $null }
                     if (-not $isPaused -and $config.unity.pauseDebuggerOnIssue) {
                         $pauseSuccess = Invoke-DebuggerBreakWithVerification -tableId $tableId -reason "$($rootIssue.type) - $($rootIssue.severity) severity (Investigation complete)" -message "Investigation complete. Root issue: $($rootIssue.type). Related issues: $relatedCount"
@@ -3227,7 +3294,14 @@ while ($monitoringActive) {
                 Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] shouldCompleteNow is FALSE - investigation will continue" -ForegroundColor "Gray"
             }
         } else {
-            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] statusFileInvestigationActive is FALSE - completion check skipped" -ForegroundColor "Gray"
+            # Investigation not active - but log why for diagnostics
+            $whyNotActive = @()
+            if (-not $script:isInvestigating) { $whyNotActive += "script:isInvestigating=false" }
+            if (-not $script:investigationStartTime) { $whyNotActive += "script:startTime=null" }
+            if ($script:investigationStartTime -and $script:investigationStartTime -isnot [DateTime]) { $whyNotActive += "script:startTime=invalid_type" }
+            if (-not $statusFileInvestigationActive) { $whyNotActive += "statusFile:active=false" }
+            if (-not $statusFileInvestigationStartTime) { $whyNotActive += "statusFile:startTime=null" }
+            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] Investigation not active - completion check skipped. Reasons: $($whyNotActive -join ', ')" -ForegroundColor "Gray"
         }
         
         if ($shouldCheckInvestigation -and $investigationStartTimeValid) {
@@ -3368,8 +3442,13 @@ while ($monitoringActive) {
         # CRITICAL FIX: Check for focused group and start investigation if needed
         # Check EVERY loop iteration (not just every 5 seconds) to catch issues immediately
         # BUT: Don't start immediately after completion - wait 5 seconds cooldown
+        # CRITICAL: If Unity is paused, DO NOT start new investigations - wait for user/AI to fix the current one
         $canStartNewInvestigation = $true
-        if ($script:lastInvestigationComplete) {
+        if ($isPaused) {
+            # Unity is paused - don't start new investigations until current issue is fixed
+            $canStartNewInvestigation = $false
+            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] Unity is paused - waiting for fix to be applied (checking for fix-applied.json)" -ForegroundColor "Gray"
+        } elseif ($script:lastInvestigationComplete) {
             $timeSinceCompletion = ((Get-Date) - $script:lastInvestigationComplete).TotalSeconds
             if ($timeSinceCompletion -lt 5) {
                 $canStartNewInvestigation = $false

@@ -149,32 +149,22 @@ app.post('/api/debugger/break', (req, res) => {
     const { tableId, reason, message } = req.body || {};
     const gameLogger = require('./utils/GameLogger');
     
-    let emittedCount = 0;
-    const emittedTables = [];
+    let pausedCount = 0;
+    const pausedTables = [];
     
     if (tableId) {
-        // Emit to specific table
+        // Pause specific table
         const table = gameManager.getTable(tableId);
         if (table) {
-            const tableRoom = `table:${tableId}`;
-            const spectatorRoom = `spectator:${tableId}`;
+            table.isPaused = true;
+            table.pauseReason = reason || message || 'Monitor detected critical issue';
+            // Force table state broadcast so Unity sees isPaused=true
+            socketHandler.broadcastTableState(tableId);
             
-            socketHandler.io.to(tableRoom).emit('debugger_break', {
-                tableId: tableId,
-                reason: reason || 'Monitor detected critical issue',
-                message: message || 'Pausing debugger for issue inspection'
-            });
+            pausedCount = 1;
+            pausedTables.push(tableId);
             
-            socketHandler.io.to(spectatorRoom).emit('debugger_break', {
-                tableId: tableId,
-                reason: reason || 'Monitor detected critical issue',
-                message: message || 'Pausing debugger for issue inspection'
-            });
-            
-            emittedCount = 1;
-            emittedTables.push(tableId);
-            
-            gameLogger.gameEvent('SERVER', `[DEBUGGER_BREAK] EMITTED_TO_TABLE`, {
+            gameLogger.gameEvent('SERVER', `[DEBUGGER_BREAK] TABLE_PAUSED`, {
                 tableId,
                 reason: reason || 'Monitor detected critical issue',
                 message: message || 'Pausing debugger for issue inspection'
@@ -183,38 +173,28 @@ app.post('/api/debugger/break', (req, res) => {
             return res.status(404).json({ success: false, error: 'Table not found', tableId });
         }
     } else {
-        // Emit to all active simulation tables
+        // Pause all active simulation tables
         for (const [id, table] of gameManager.tables) {
             if (table.isSimulation) {
-                const tableRoom = `table:${id}`;
-                const spectatorRoom = `spectator:${id}`;
+                table.isPaused = true;
+                table.pauseReason = reason || message || 'Monitor detected critical issue';
+                // Force table state broadcast so Unity sees isPaused=true
+                socketHandler.broadcastTableState(id);
                 
-                socketHandler.io.to(tableRoom).emit('debugger_break', {
-                    tableId: id,
-                    reason: reason || 'Monitor detected critical issue',
-                    message: message || 'Pausing debugger for issue inspection'
-                });
-                
-                socketHandler.io.to(spectatorRoom).emit('debugger_break', {
-                    tableId: id,
-                    reason: reason || 'Monitor detected critical issue',
-                    message: message || 'Pausing debugger for issue inspection'
-                });
-                
-                emittedCount++;
-                emittedTables.push(id);
+                pausedCount++;
+                pausedTables.push(id);
             }
         }
         
-        gameLogger.gameEvent('SERVER', `[DEBUGGER_BREAK] EMITTED_TO_ALL_SIMULATIONS`, {
-            count: emittedCount,
-            tableIds: emittedTables,
+        gameLogger.gameEvent('SERVER', `[DEBUGGER_BREAK] ALL_SIMULATIONS_PAUSED`, {
+            count: pausedCount,
+            tableIds: pausedTables,
             reason: reason || 'Monitor detected critical issue',
             message: message || 'Pausing debugger for issue inspection'
         });
     }
     
-    if (emittedCount === 0) {
+    if (pausedCount === 0) {
         return res.status(404).json({ 
             success: false, 
             error: 'No simulation tables found',
@@ -224,9 +204,9 @@ app.post('/api/debugger/break', (req, res) => {
     
     res.json({ 
         success: true, 
-        message: `Debugger break emitted to ${emittedCount} table(s)`,
-        emittedCount,
-        tableIds: emittedTables
+        message: `Paused ${pausedCount} table(s) - Unity will pause automatically`,
+        pausedCount,
+        tableIds: pausedTables
     });
 });
 
