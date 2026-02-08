@@ -656,8 +656,31 @@ class StateStore extends EventEmitter {
      */
     save() {
         try {
+            // Serialize state
+            const serializedState = this._serializeState(this.state);
+            
+            // CRITICAL: Ensure learning arrays are preserved (they can be lost during serialization)
+            if (this.state.learning) {
+                if (Array.isArray(this.state.learning.knowledge) && this.state.learning.knowledge.length > 0) {
+                    if (!serializedState.learning) {
+                        serializedState.learning = {};
+                    }
+                    if (!Array.isArray(serializedState.learning.knowledge) || serializedState.learning.knowledge.length === 0) {
+                        serializedState.learning.knowledge = this.state.learning.knowledge;
+                    }
+                }
+                if (Array.isArray(this.state.learning.improvements) && this.state.learning.improvements.length > 0) {
+                    if (!serializedState.learning) {
+                        serializedState.learning = {};
+                    }
+                    if (!Array.isArray(serializedState.learning.improvements) || serializedState.learning.improvements.length === 0) {
+                        serializedState.learning.improvements = this.state.learning.improvements;
+                    }
+                }
+            }
+            
             const data = {
-                state: this._serializeState(this.state),
+                state: serializedState,
                 eventLog: this.eventLog.slice(-1000), // Save last 1000 events
                 timestamp: Date.now()
             };

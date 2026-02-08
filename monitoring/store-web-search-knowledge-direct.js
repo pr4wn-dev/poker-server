@@ -93,6 +93,11 @@ async function storeWebSearchKnowledge() {
         // Store in learning.improvements
         stateStore.updateState('learning.improvements', currentImprovements);
         
+        // Disable auto-save temporarily to prevent overwriting
+        if (stateStore.autoSaveInterval) {
+            clearInterval(stateStore.autoSaveInterval);
+        }
+        
         // Force save immediately
         stateStore.save();
         await new Promise(resolve => setTimeout(resolve, 1000));
