@@ -3318,7 +3318,8 @@ while ($monitoringActive) {
         # CRITICAL SAFETY CHECK: If status file shows investigation active for too long, force completion check
         # This prevents investigations from getting stuck when the normal check isn't running
         # CRITICAL: Also check if timeRemaining is 0 or negative - this is a direct indicator it should complete
-        # CRITICAL: Re-read status file directly if initial read failed or shows inactive but file has active data
+        # CRITICAL: ALWAYS re-read status file directly EVERY loop iteration to catch stuck investigations
+        # This ensures we catch investigations that started but weren't detected by the initial read
         $statusFileDirectRead = $null
         $statusFileDirectActive = $false
         $statusFileDirectStartTime = $null
