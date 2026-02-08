@@ -3459,6 +3459,8 @@ if (Test-Path $fixAppliedFile) {
 Update-MonitorStatus -statusUpdate @{
     monitorStatus = "starting"
 }
+}
+}
 
 # Initial display
 Show-Statistics
