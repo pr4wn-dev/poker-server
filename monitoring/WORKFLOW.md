@@ -13,42 +13,60 @@ This document describes how the AI (you) and the Learning System (Cerberus) work
 
 ## 🔄 Core Workflow
 
-### **0. Search Online First (NEW - Permanent Learning)**
+### **0. Search Online First (ENFORCED - Permanent Learning)**
 
-**CRITICAL**: Before exhaustive local debugging, **search online for solutions**. The learning system is a **permanent learner** - it should store web-sourced solutions, not just runtime fixes.
+**CRITICAL**: The learning system **MANDATES** web search after failures. This is not optional - it's enforced by the learning system itself.
 
-**When to Search**:
-- When stuck on syntax errors (PowerShell, JavaScript, etc.)
-- When encountering unfamiliar error messages
-- When local debugging loops without progress
-- When official documentation might have answers
+**When Learning System Enforces Web Search**:
+- **After 1 failure**: Learning system requires web search before continuing
+- **After 2+ failures**: Learning system **CRITICALLY** requires web search immediately
+- Learning system tracks consecutive failures and automatically enforces search
 
-**How to Search**:
-1. Use web search with specific error messages
-2. Check official documentation (Microsoft Learn, MDN, etc.)
-3. Look for Stack Overflow solutions
-4. Find GitHub issues with similar problems
+**How It Works**:
+1. AI attempts a fix → fails
+2. Learning system tracks failure → increments consecutive failure count
+3. **Learning system automatically requires web search** (stored in `ai.learning.webSearchRequired`)
+4. `beforeAIAction()` and `aiNeedsHelp()` return `webSearchRequired: true` with search terms
+5. AI **MUST** search online using provided search terms
+6. AI stores findings in learning system as permanent knowledge
+7. Learning system marks requirement as resolved after successful search
 
-**What to Store in Learning System**:
-- Official documentation links and key syntax rules
-- Proven solutions from authoritative sources
-- Search terms that worked well
-- Refined search strategies over time
+**What Learning System Provides**:
+- `webSearchRequired: true` flag in suggestions
+- `webSearchTerms: [...]` - Generated from failure context (error, issue type, component, method)
+- `webSearchMessage` - Clear instruction from learning system
+- `webSearchUrgency` - 'high' or 'critical' based on failure count
 
-**Example**:
+**Example Workflow**:
 ```javascript
-// Instead of looping locally, search first:
-// "PowerShell try catch missing closing brace"
-// Found: Microsoft Learn documentation
-// Store: Official syntax rules + proven fixes
-// Result: Permanent knowledge for future similar issues
+// AI attempts fix → fails
+const result = await fixIssue(issue);
+if (!result.success) {
+    // Learning system automatically tracks failure
+    // After 1 failure, learning system requires web search
+    
+    // Next time AI calls beforeAIAction() or aiNeedsHelp():
+    const suggestions = core.beforeAIAction({...});
+    if (suggestions.webSearchRequired) {
+        // Learning system is telling AI to search online
+        const searchTerms = suggestions.webSearchTerms; // ["PowerShell", "try catch", "syntax error"]
+        // AI MUST search online using these terms
+        const searchResults = await webSearch(searchTerms.join(' '));
+        // Store findings in learning system
+        await storeWebSearchKnowledge(searchResults, searchTerms);
+    }
+}
 ```
 
 **The Symbiotic Principle**:
+- **Learning system tracks failures** → Knows when AI is stuck
+- **Learning system enforces search** → Prevents endless local debugging loops
 - **You search** → Find authoritative solutions
 - **Learning system stores** → Permanent knowledge base
 - **Next time** → Faster resolution using stored knowledge
 - **System improves** → Better search terms, better results
+
+**CRITICAL RULE**: If `webSearchRequired: true` is returned, you **MUST** search online before attempting another fix. The learning system is telling you that local debugging has failed and external knowledge is needed.
 
 ---
 

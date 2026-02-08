@@ -80,6 +80,15 @@ class AICollaborationInterface extends EventEmitter {
             jointImprovements: [] // How we improved together
         };
         
+        // Failure tracking for web search enforcement
+        this.failureTracking = {
+            consecutiveFailures: 0, // Track consecutive failures
+            lastFailureTime: null,
+            failureHistory: [], // Last 10 failures
+            webSearchEnforced: false, // Whether web search was enforced
+            webSearchResults: [] // Store web search findings
+        };
+        
         // Start proactive monitoring
         this.startProactiveMonitoring();
         
@@ -266,8 +275,25 @@ class AICollaborationInterface extends EventEmitter {
             recommendations: [],
             patterns: [],
             alternatives: [],
-            confidence: null
+            confidence: null,
+            webSearchRequired: false,
+            webSearchTerms: []
         };
+        
+        // CRITICAL: Check if learning system requires web search before action
+        const webSearchRequired = this.stateStore.getState('ai.learning.webSearchRequired');
+        if (webSearchRequired && !webSearchRequired.resolved) {
+            suggestions.webSearchRequired = true;
+            suggestions.webSearchTerms = webSearchRequired.searchTerms || [];
+            suggestions.warnings.unshift({
+                type: 'WEB_SEARCH_REQUIRED',
+                priority: 'critical',
+                message: webSearchRequired.message || 'Learning system requires web search before continuing.',
+                searchTerms: suggestions.webSearchTerms,
+                urgency: webSearchRequired.urgency || 'high',
+                why: `After ${webSearchRequired.consecutiveFailures} consecutive failure(s), learning system requires online research.`
+            });
+        }
         
         // Track the action
         this.trackAIAction(action);
@@ -503,6 +529,12 @@ class AICollaborationInterface extends EventEmitter {
             // Track failures specifically - learning system needs to know what NOT to do
             if (!wasSuccess) {
                 this.trackAIFailure(action, result);
+                // Enforce web search after failures
+                this.enforceWebSearchAfterFailure(action, result);
+            } else {
+                // Reset failure count on success
+                this.failureTracking.consecutiveFailures = 0;
+                this.failureTracking.webSearchEnforced = false;
             }
         }
         
@@ -616,6 +648,90 @@ class AICollaborationInterface extends EventEmitter {
     }
     
     /**
+     * Enforce web search after failures - CRITICAL: Learning system must tell AI to search online
+     */
+    enforceWebSearchAfterFailure(action, result) {
+        // After 1-2 failures, learning system MUST tell AI to search online
+        if (this.failureTracking.consecutiveFailures >= 1 && !this.failureTracking.webSearchEnforced) {
+            this.failureTracking.webSearchEnforced = true;
+            
+            // Generate search terms from failure
+            const searchTerms = this.generateSearchTermsFromFailure(action, result);
+            
+            // Store in learning system that web search is required
+            const webSearchRequirement = {
+                type: 'web_search_required',
+                timestamp: Date.now(),
+                consecutiveFailures: this.failureTracking.consecutiveFailures,
+                action: {
+                    type: action.type,
+                    method: action.method,
+                    issueType: action.issueType,
+                    component: action.component
+                },
+                failure: {
+                    reason: result.reason || result.error || 'Unknown failure reason',
+                    error: result.error
+                },
+                searchTerms: searchTerms,
+                urgency: this.failureTracking.consecutiveFailures >= 2 ? 'critical' : 'high',
+                message: this.failureTracking.consecutiveFailures >= 2 
+                    ? 'CRITICAL: Multiple failures detected. You MUST search online for solutions immediately.'
+                    : 'Failure detected. Learning system requires you to search online for solutions before continuing.',
+                resolved: false
+            };
+            
+            // Store in state for AI to query
+            this.stateStore.updateState('ai.learning.webSearchRequired', webSearchRequirement);
+            
+            // Emit event that learning system is telling AI to search
+            this.emit('learningSystemRequiresWebSearch', webSearchRequirement);
+            
+            gameLogger.warn('CERBERUS', '[LEARNING_SYSTEM] Web search required after failure', {
+                consecutiveFailures: this.failureTracking.consecutiveFailures,
+                searchTerms: searchTerms,
+                action: 'Learning system enforcing web search - AI must search online'
+            });
+        }
+    }
+    
+    /**
+     * Generate search terms from failure context
+     */
+    generateSearchTermsFromFailure(action, result) {
+        const terms = [];
+        
+        // Add error message if available
+        if (result.error) {
+            terms.push(result.error);
+        }
+        
+        // Add issue type
+        if (action.issueType) {
+            terms.push(action.issueType);
+        }
+        
+        // Add component
+        if (action.component) {
+            terms.push(action.component);
+        }
+        
+        // Add method that failed
+        if (action.method) {
+            terms.push(action.method);
+        }
+        
+        // Add failure reason
+        if (result.reason) {
+            const reasonWords = result.reason.split(/\s+/).filter(w => w.length > 3);
+            terms.push(...reasonWords.slice(0, 3)); // Top 3 words from reason
+        }
+        
+        // Remove duplicates and return
+        return [...new Set(terms)].slice(0, 5); // Max 5 search terms
+    }
+    
+    /**
      * Analyze failure together - we work together to understand why it failed
      */
     analyzeFailureTogether(failureRecord) {
@@ -689,11 +805,32 @@ class AICollaborationInterface extends EventEmitter {
             patterns: [],
             similarProblems: [],
             solutions: [],
-            confidence: null
+            confidence: null,
+            webSearchRequired: false,
+            webSearchTerms: []
         };
         
         // Set active problem
         this.activeProblem = context;
+        
+        // CRITICAL: Check if learning system requires web search
+        const webSearchRequired = this.stateStore.getState('ai.learning.webSearchRequired');
+        if (webSearchRequired && !webSearchRequired.resolved) {
+            assistance.webSearchRequired = true;
+            assistance.webSearchTerms = webSearchRequired.searchTerms || [];
+            assistance.webSearchMessage = webSearchRequired.message || 'Learning system requires web search before continuing.';
+            assistance.webSearchUrgency = webSearchRequired.urgency || 'high';
+            
+            // Add web search as top priority suggestion
+            assistance.suggestions.unshift({
+                type: 'web_search',
+                priority: 'critical',
+                message: assistance.webSearchMessage,
+                searchTerms: assistance.webSearchTerms,
+                why: `After ${webSearchRequired.consecutiveFailures} consecutive failure(s), learning system requires online research for authoritative solutions.`,
+                action: 'Search online using the provided search terms and store findings in learning system.'
+            });
+        }
         
         // Get suggestions from learning system
         if (this.learningEngine) {
@@ -716,8 +853,9 @@ class AICollaborationInterface extends EventEmitter {
             const confidence = this.learningEngine.getLearningConfidence();
             assistance.confidence = confidence;
             
-            // Generate suggestions
-            assistance.suggestions = this.generateHelpSuggestions(context, similarProblems, relevantPatterns);
+            // Generate suggestions (web search already added if required)
+            const regularSuggestions = this.generateHelpSuggestions(context, similarProblems, relevantPatterns);
+            assistance.suggestions.push(...regularSuggestions);
             
             // Learning system predicts what AI might do wrong
             const prediction = this.generateAIMistakePrediction(context);
@@ -735,6 +873,89 @@ class AICollaborationInterface extends EventEmitter {
         this.emit('aiNeedsHelp', { context, assistance });
         
         return assistance;
+    }
+    
+    /**
+     * Enforce web search after failures - CRITICAL: Learning system must tell AI to search online
+     */
+    enforceWebSearchAfterFailure(action, result) {
+        // After 1-2 failures, learning system MUST tell AI to search online
+        if (this.failureTracking.consecutiveFailures >= 1 && !this.failureTracking.webSearchEnforced) {
+            this.failureTracking.webSearchEnforced = true;
+            
+            // Generate search terms from failure
+            const searchTerms = this.generateSearchTermsFromFailure(action, result);
+            
+            // Store in learning system that web search is required
+            const webSearchRequirement = {
+                type: 'web_search_required',
+                timestamp: Date.now(),
+                consecutiveFailures: this.failureTracking.consecutiveFailures,
+                action: {
+                    type: action.type,
+                    method: action.method,
+                    issueType: action.issueType,
+                    component: action.component
+                },
+                failure: {
+                    reason: result.reason || result.error || 'Unknown failure reason',
+                    error: result.error
+                },
+                searchTerms: searchTerms,
+                urgency: this.failureTracking.consecutiveFailures >= 2 ? 'critical' : 'high',
+                message: this.failureTracking.consecutiveFailures >= 2 
+                    ? 'CRITICAL: Multiple failures detected. You MUST search online for solutions immediately.'
+                    : 'Failure detected. Learning system requires you to search online for solutions before continuing.'
+            };
+            
+            // Store in state for AI to query
+            this.stateStore.updateState('ai.learning.webSearchRequired', webSearchRequirement);
+            
+            // Emit event that learning system is telling AI to search
+            this.emit('learningSystemRequiresWebSearch', webSearchRequirement);
+            
+            gameLogger.warn('CERBERUS', '[LEARNING_SYSTEM] Web search required after failure', {
+                consecutiveFailures: this.failureTracking.consecutiveFailures,
+                searchTerms: searchTerms,
+                action: 'Learning system enforcing web search - AI must search online'
+            });
+        }
+    }
+    
+    /**
+     * Generate search terms from failure context
+     */
+    generateSearchTermsFromFailure(action, result) {
+        const terms = [];
+        
+        // Add error message if available
+        if (result.error) {
+            terms.push(result.error);
+        }
+        
+        // Add issue type
+        if (action.issueType) {
+            terms.push(action.issueType);
+        }
+        
+        // Add component
+        if (action.component) {
+            terms.push(action.component);
+        }
+        
+        // Add method that failed
+        if (action.method) {
+            terms.push(action.method);
+        }
+        
+        // Add failure reason
+        if (result.reason) {
+            const reasonWords = result.reason.split(/\s+/).filter(w => w.length > 3);
+            terms.push(...reasonWords.slice(0, 3)); // Top 3 words from reason
+        }
+        
+        // Remove duplicates and return
+        return [...new Set(terms)].slice(0, 5); // Max 5 search terms
     }
     
     /**

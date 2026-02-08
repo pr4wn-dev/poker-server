@@ -926,6 +926,35 @@ class StateStore extends EventEmitter {
             }
         }
         
+        // CRITICAL: Ensure learning.knowledge and learning.improvements are arrays (repair corrupted state)
+        if (state.learning) {
+            // Fix learning.knowledge - must be array
+            if (state.learning.knowledge && !Array.isArray(state.learning.knowledge)) {
+                // Convert object with numeric keys to array
+                if (typeof state.learning.knowledge === 'object') {
+                    const keys = Object.keys(state.learning.knowledge).map(k => parseInt(k)).filter(k => !isNaN(k)).sort((a, b) => a - b);
+                    state.learning.knowledge = keys.map(k => state.learning.knowledge[k.toString()]).filter(item => item !== undefined);
+                } else {
+                    state.learning.knowledge = [];
+                }
+            } else if (!state.learning.knowledge) {
+                state.learning.knowledge = [];
+            }
+            
+            // Fix learning.improvements - must be array
+            if (state.learning.improvements && !Array.isArray(state.learning.improvements)) {
+                // Convert object with numeric keys to array
+                if (typeof state.learning.improvements === 'object') {
+                    const keys = Object.keys(state.learning.improvements).map(k => parseInt(k)).filter(k => !isNaN(k)).sort((a, b) => a - b);
+                    state.learning.improvements = keys.map(k => state.learning.improvements[k.toString()]).filter(item => item !== undefined);
+                } else {
+                    state.learning.improvements = [];
+                }
+            } else if (!state.learning.improvements) {
+                state.learning.improvements = [];
+            }
+        }
+        
         return state;
     }
     

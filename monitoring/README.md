@@ -72,9 +72,10 @@ cd C:\Projects\poker-server
 The AI and Learning System work together as one unified entity. **See [WORKFLOW.md](WORKFLOW.md) for complete details.**
 
 **Quick Overview:**
-- **Before Action**: Call `beforeAIAction()` to get warnings, recommendations, and solution templates
-- **When Stuck**: Call `aiNeedsHelp()` to get similar problems and solutions
+- **Before Action**: Call `beforeAIAction()` to get warnings, recommendations, solution templates, and **web search requirements** (if failures occurred)
+- **When Stuck**: Call `aiNeedsHelp()` to get similar problems, solutions, and **web search requirements** (if failures occurred)
 - **After Action**: Call `afterAIAction()` to teach the learning system (success or failure)
+- **Web Search Enforcement**: Learning system automatically requires web search after 1-2 failures, providing search terms and urgency level
 
 **From Node.js:**
 ```javascript
@@ -191,12 +192,16 @@ monitoring/
 - Anomaly detection (statistical)
 - Causal analysis (root causes)
 
-### **Learning System**
+### **Learning System (Symbiotic with AI)**
 - Tracks every fix attempt
 - Remembers what works/doesn't work
 - Learns patterns
 - Gets smarter over time
 - **Self-learning rules enforcement** - Learns from rule violations automatically
+- **ENFORCES WEB SEARCH** - After 1-2 failures, learning system automatically requires AI to search online
+- **Permanent Learning** - Stores web search findings as permanent knowledge
+- **Proactive Communication** - Learning system tells AI what to do via `beforeAIAction()` and `aiNeedsHelp()`
+- **See [WORKFLOW.md](WORKFLOW.md) for complete symbiotic workflow details**
 - **Learning confidence tracking** - Quantifies learning effectiveness (cannot be masked)
 - **Automatic self-improvement** - Adjusts when confidence is low
 - **Symbiotic Workflow** - AI and Learning System work together as one unified entity (see **WORKFLOW.md**)
