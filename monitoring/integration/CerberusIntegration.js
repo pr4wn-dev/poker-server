@@ -18,6 +18,7 @@ class CerberusIntegration {
         this.integrationActive = true;
         this.lastSync = Date.now();
         this.syncInterval = 1000; // Sync every second
+        this.syncIntervalId = null; // Store interval ID for cleanup
         
         // Only start sync loop if not in CLI mode (options.startSyncLoop defaults to true for backward compatibility)
         // CLI mode should not start sync loop to allow process to exit
@@ -34,9 +35,21 @@ class CerberusIntegration {
      * Start sync loop - Keep AI core and cerberus.ps1 in sync
      */
     startSyncLoop() {
-        setInterval(() => {
-            this.syncWithMonitor();
+        this.syncIntervalId = setInterval(() => {
+            if (this.integrationActive) {
+                this.syncWithMonitor();
+            }
         }, this.syncInterval);
+    }
+    
+    /**
+     * Stop sync loop
+     */
+    stopSyncLoop() {
+        if (this.syncIntervalId) {
+            clearInterval(this.syncIntervalId);
+            this.syncIntervalId = null;
+        }
     }
     
     /**
@@ -665,7 +678,14 @@ class CerberusIntegration {
      */
     destroy() {
         this.integrationActive = false;
-        this.aiCore.destroy();
+        
+        // CRITICAL: Stop sync loop interval to prevent zombie processes
+        this.stopSyncLoop();
+        
+        // Destroy AI core (stops all its intervals)
+        if (this.aiCore) {
+            this.aiCore.destroy();
+        }
     }
 }
 
