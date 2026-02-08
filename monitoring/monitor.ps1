@@ -3686,9 +3686,12 @@ while ($monitoringActive) {
                     $script:investigationNullStartTimeLogged = $false
                     Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] INVESTIGATION: Starting for existing focus group ($investigationTimeout seconds)" -ForegroundColor "Cyan"
                     Write-ConsoleOutput -Message "  Root Issue: $($pendingInfo.RootIssue.type) ($($pendingInfo.RootIssue.severity))" -ForegroundColor "White"
-                    # Force immediate status update
+                    # CRITICAL: Force immediate status update to ensure status file reflects new investigation state
                     Update-MonitorStatus
                     $lastStatusUpdate = Get-Date
+                    # CRITICAL: Force another status update after brief delay to ensure persistence
+                    Start-Sleep -Milliseconds 100
+                    Update-MonitorStatus
                 }
                 $script:lastInvestigationStartCheck = Get-Date
             }
