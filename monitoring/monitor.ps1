@@ -1887,94 +1887,12 @@ function Show-Statistics {
     $col3Lines += "Database: " + ("{0:N0}" -f $stats.IssuesBySource.database)
     $col3Lines += "Network:  " + ("{0:N0}" -f $stats.IssuesBySource.network)
     $col3Lines += ""
-    $col3Lines += "FIX ATTEMPTS"
-    $col3Lines += ("-" * ($colWidth - 2))
-    $col3Lines += "Total: " + ("{0:N0}" -f $fixStats.Total)
-    $col3Lines += "Success: " + ("{0:N0}" -f $fixStats.Successes)
-    $col3Lines += "Failed: " + ("{0:N0}" -f $fixStats.Failures)
-    $col3Lines += "Rate: " + ("{0:N1}%" -f $fixStats.SuccessRate)
-    $col3Lines += ""
+    # Investigation info moved to full-width row - column 3 now only shows summary
     $col3Lines += "PENDING ISSUES"
     $col3Lines += ("-" * ($colWidth - 2))
     if ($pendingInfo.InFocusMode) {
         $col3Lines += "Mode: FOCUS MODE"
-        if ($pendingInfo.RootIssue) {
-            $rootIssue = $pendingInfo.RootIssue
-            $col3Lines += "Root Issue: " + $rootIssue.type
-            $col3Lines += "Severity: " + $rootIssue.severity.ToUpper()
-            
-            # Show source and tableId if available
-            if ($rootIssue.source) {
-                $sourceText = "Source: " + $rootIssue.source
-                if ($rootIssue.tableId) {
-                    $tableShort = if ($rootIssue.tableId.Length -gt 10) { $rootIssue.tableId.Substring(0, 10) + ".." } else { $rootIssue.tableId }
-                    $sourceText += " (t:$tableShort)"
-                }
-                if ($sourceText.Length -gt ($colWidth - 2)) {
-                    $sourceText = $sourceText.Substring(0, ($colWidth - 5)) + "..."
-                }
-                $col3Lines += $sourceText
-            }
-            
-            # Show message preview (truncated)
-            if ($rootIssue.message) {
-                $msgPreview = $rootIssue.message
-                # Remove timestamps and brackets for cleaner display
-                $msgPreview = $msgPreview -replace '\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+\]', ''
-                $msgPreview = $msgPreview.Trim()
-                $maxMsgLen = $colWidth - 7  # "Msg: " prefix
-                if ($msgPreview.Length -gt $maxMsgLen) {
-                    $msgPreview = $msgPreview.Substring(0, $maxMsgLen - 3) + "..."
-                }
-                $col3Lines += "Msg: " + $msgPreview
-            }
-            
-            $col3Lines += "Related: " + $pendingInfo.RelatedIssuesCount
-            $col3Lines += "Queued: " + $pendingInfo.QueuedIssuesCount
-            
-            # Show related issues summary if available
-            if ($pendingInfo.RelatedIssues -and $pendingInfo.RelatedIssues.Count -gt 0) {
-                $col3Lines += ""
-                $col3Lines += "RELATED ISSUES:"
-                $relatedTypes = @{}
-                foreach ($related in $pendingInfo.RelatedIssues) {
-                    $type = if ($related.type) { $related.type } else { "unknown" }
-                    if (-not $relatedTypes.ContainsKey($type)) {
-                        $relatedTypes[$type] = 0
-                    }
-                    $relatedTypes[$type]++
-                }
-                # Show up to 3 most common related issue types
-                $relatedSorted = $relatedTypes.GetEnumerator() | Sort-Object Value -Descending | Select-Object -First 3
-                foreach ($typeEntry in $relatedSorted) {
-                    $typeText = "  " + $typeEntry.Key + ": " + $typeEntry.Value
-                    if ($typeText.Length -gt ($colWidth - 2)) {
-                        $typeText = $typeText.Substring(0, ($colWidth - 5)) + "..."
-                    }
-                    $col3Lines += $typeText
-                }
-            }
-            
-            # Show fix attempts count if available
-            try {
-                if (Test-Path $pendingIssuesFile) {
-                    $pendingContent = Get-Content $pendingIssuesFile -Raw | ConvertFrom-Json
-                    if ($pendingContent.focusedGroup -and $pendingContent.focusedGroup.fixAttempts) {
-                        $fixAttemptsCount = $pendingContent.focusedGroup.fixAttempts.Count
-                        if ($fixAttemptsCount -gt 0) {
-                            $failedCount = ($pendingContent.focusedGroup.fixAttempts | Where-Object { $_.result -eq "failed" }).Count
-                            $col3Lines += ""
-                            $col3Lines += "Fix Attempts: " + $fixAttemptsCount
-                            if ($failedCount -gt 0) {
-                                $col3Lines += "  Failed: " + $failedCount
-                            }
-                        }
-                    }
-                }
-            } catch {
-                # Ignore errors reading fix attempts
-            }
-        }
+        $col3Lines += "Total: " + $pendingInfo.TotalIssues
     } else {
         $col3Lines += "Mode: NORMAL"
         $col3Lines += "Pending: " + $pendingInfo.TotalIssues
@@ -2033,8 +1951,32 @@ function Show-Statistics {
         $investigationStartTimeValue = $script:investigationStartTime
     }
     
-    # Build investigation phase info for separate full-width display (not in columns)
+    # Build investigation phase info for separate full-width display (ALWAYS SHOWN, not in columns)
     $investigationDisplayLines = @()
+    $investigationDisplayLines += ""
+    $investigationDisplayLines += ("=" * $consoleWidth)
+    
+    # Get fix attempts from pending-issues.json if available
+    $fixAttemptsInfo = @{
+        Total = 0
+        Failed = 0
+        Success = 0
+        Attempts = @()
+    }
+    try {
+        if (Test-Path $pendingIssuesFile) {
+            $pendingContent = Get-Content $pendingIssuesFile -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+            if ($pendingContent.focusedGroup -and $pendingContent.focusedGroup.fixAttempts) {
+                $fixAttemptsInfo.Total = $pendingContent.focusedGroup.fixAttempts.Count
+                $fixAttemptsInfo.Failed = ($pendingContent.focusedGroup.fixAttempts | Where-Object { $_.result -eq "failed" }).Count
+                $fixAttemptsInfo.Success = ($pendingContent.focusedGroup.fixAttempts | Where-Object { $_.result -eq "success" }).Count
+                $fixAttemptsInfo.Attempts = $pendingContent.focusedGroup.fixAttempts
+            }
+        }
+    } catch {
+        # Failed to read fix attempts - continue
+    }
+    
     if ($investigationActive -and $investigationStartTimeValue) {
         $investigationElapsed = (Get-Date) - $investigationStartTimeValue
         # Use timeRemaining from status file if available, otherwise calculate
@@ -2055,8 +1997,6 @@ function Show-Statistics {
         $empty = $progressBarWidth - $filled
         $progressBar = "[" + ("#" * $filled) + ("-" * $empty) + "]"
         
-        $investigationDisplayLines += ""
-        $investigationDisplayLines += ("=" * $consoleWidth)
         $investigationDisplayLines += "INVESTIGATION PHASE - ACTIVE"
         $investigationDisplayLines += ("=" * $consoleWidth)
         $investigationDisplayLines += ""
@@ -2064,105 +2004,154 @@ function Show-Statistics {
         $timeoutStr = "{0:N0}s" -f $investigationTimeout
         $remainingStr = "{0:N1}s" -f $remaining
         $progressStr = "{0:N1}%" -f $progressPercent
-        $investigationDisplayLines += "  Elapsed: $elapsedStr / $timeoutStr  |  Remaining: $remainingStr  |  Progress: $progressStr"
+        $investigationDisplayLines += "  Status: ACTIVE  |  Elapsed: $elapsedStr / $timeoutStr  |  Remaining: $remainingStr  |  Progress: $progressStr"
         $investigationDisplayLines += ""
         $investigationDisplayLines += "  " + $progressBar
         $investigationDisplayLines += ""
         
         # Show start time
         $startTimeStr = $investigationStartTimeValue.ToString("HH:mm:ss")
-        $investigationDisplayLines += "  Started: $startTimeStr"
-        $investigationDisplayLines += ""
-        
-        # Show what's being investigated - in columns for better layout
-        $investigationDisplayLines += "  ROOT ISSUE:"
-        if ($pendingInfo -and $pendingInfo.RootIssue) {
-            $rootIssue = $pendingInfo.RootIssue
-            $investigationDisplayLines += "    Type: " + $rootIssue.type
-            $investigationDisplayLines += "    Severity: " + $rootIssue.severity.ToUpper()
-            if ($rootIssue.source) {
-                $investigationDisplayLines += "    Source: " + $rootIssue.source
-            }
-            if ($rootIssue.tableId) {
-                $tableIdShort = if ($rootIssue.tableId.Length -gt 36) { $rootIssue.tableId.Substring(0, 36) + "..." } else { $rootIssue.tableId }
-                $investigationDisplayLines += "    Table: " + $tableIdShort
-            }
-        } else {
-            $investigationDisplayLines += "    No root issue found (Focus group may have cleared)"
-        }
-        
-        # Show related issues found so far
-        $investigationDisplayLines += ""
-        $investigationDisplayLines += "  RELATED ISSUES:"
-        if ($pendingInfo -and $pendingInfo.InFocusMode) {
-            if ($pendingInfo.RelatedIssuesCount -gt 0) {
-                $investigationDisplayLines += "    Count: " + $pendingInfo.RelatedIssuesCount
-                # Show breakdown if available
-                if ($pendingInfo.RelatedIssues -and $pendingInfo.RelatedIssues.Count -gt 0) {
-                    $relatedTypes = @{}
-                    foreach ($related in $pendingInfo.RelatedIssues) {
-                        $type = if ($related.type) { $related.type } else { "unknown" }
-                        if (-not $relatedTypes.ContainsKey($type)) {
-                            $relatedTypes[$type] = 0
-                        }
-                        $relatedTypes[$type]++
-                    }
-                    $relatedSorted = $relatedTypes.GetEnumerator() | Sort-Object Value -Descending | Select-Object -First 5
-                    foreach ($typeEntry in $relatedSorted) {
-                        $investigationDisplayLines += "      * " + $typeEntry.Key + ": " + $typeEntry.Value
-                    }
-                }
-            } else {
-                $investigationDisplayLines += "    Gathering related issues..."
-            }
-        } else {
-            $investigationDisplayLines += "    Focus mode: INACTIVE (No active focus group)"
-        }
-        
-        # Show focus mode status
-        $investigationDisplayLines += ""
-        $investigationDisplayLines += "  FOCUS MODE:"
-        if ($pendingInfo -and $pendingInfo.InFocusMode) {
-            $investigationDisplayLines += "    Status: ACTIVE"
-            if ($pendingInfo.GroupId) {
-                $groupIdShort = if ($pendingInfo.GroupId.Length -gt 36) { $pendingInfo.GroupId.Substring(0, 36) + "..." } else { $pendingInfo.GroupId }
-                $investigationDisplayLines += "    Group ID: " + $groupIdShort
-            }
-        } else {
-            $investigationDisplayLines += "    Status: INACTIVE (Will complete soon)"
-        }
-        $investigationDisplayLines += ("=" * $consoleWidth)
+        $investigationDisplayLines += "  Started: $startTimeStr  |  Timeout: $timeoutStr  |  Enabled: " + $(if($investigationEnabled){"YES"}else{"NO"})
     } else {
-        # Not investigating - show minimal status in column 3 only
-        $col3Lines += ""
-        $col3Lines += "INVESTIGATION"
-        $col3Lines += ("-" * ($colWidth - 2))
-        $col3Lines += "Status: NOT ACTIVE"
-        $col3Lines += "Timeout: " + ("{0:N0}s" -f $investigationTimeout)
-        if ($investigationEnabled) {
-            $col3Lines += "Enabled: YES"
-        } else {
-            $col3Lines += "Enabled: NO"
-        }
-        $col3Lines += ""
+        $investigationDisplayLines += "INVESTIGATION PHASE - NOT ACTIVE"
+        $investigationDisplayLines += ("=" * $consoleWidth)
+        $investigationDisplayLines += ""
+        $investigationDisplayLines += "  Status: NOT ACTIVE  |  Timeout: " + ("{0:N0}s" -f $investigationTimeout) + "  |  Enabled: " + $(if($investigationEnabled){"YES"}else{"NO"})
         
         # Show what monitor is waiting for
         if ($pausedFromStatusFile) {
-            $col3Lines += "WAITING FOR:"
             if ($fixAppliedExists) {
-                $col3Lines += "  Verification"
+                $investigationDisplayLines += "  Waiting: VERIFICATION"
             } else {
-                $col3Lines += "  fix-applied.json"
-                $col3Lines += ""
-                $col3Lines += "Next Step:"
-                $col3Lines += "  Create fix-applied.json"
-                $col3Lines += "  with fix details"
+                $investigationDisplayLines += "  Waiting: fix-applied.json (Create with fix details)"
             }
         } else {
-            $col3Lines += "Waiting for:"
-            $col3Lines += "  New issues to detect"
+            $investigationDisplayLines += "  Waiting: New issues to detect"
         }
     }
+    
+    $investigationDisplayLines += ""
+    $investigationDisplayLines += ("-" * $consoleWidth)
+    
+    # ROOT ISSUE section
+    $investigationDisplayLines += "  ROOT ISSUE:"
+    if ($pendingInfo -and $pendingInfo.RootIssue) {
+        $rootIssue = $pendingInfo.RootIssue
+        $investigationDisplayLines += "    Type: " + $rootIssue.type
+        $investigationDisplayLines += "    Severity: " + $rootIssue.severity.ToUpper()
+        if ($rootIssue.source) {
+            $investigationDisplayLines += "    Source: " + $rootIssue.source
+        }
+        if ($rootIssue.tableId) {
+            $tableIdShort = if ($rootIssue.tableId.Length -gt 40) { $rootIssue.tableId.Substring(0, 40) + "..." } else { $rootIssue.tableId }
+            $investigationDisplayLines += "    Table: " + $tableIdShort
+        }
+    } else {
+        $investigationDisplayLines += "    No root issue (No active focus group)"
+    }
+    
+    $investigationDisplayLines += ""
+    $investigationDisplayLines += ("-" * $consoleWidth)
+    
+    # RELATED ISSUES section - show all related issues (non-duplicate)
+    $investigationDisplayLines += "  RELATED ISSUES:"
+    if ($pendingInfo -and $pendingInfo.InFocusMode) {
+        if ($pendingInfo.RelatedIssuesCount -gt 0) {
+            $investigationDisplayLines += "    Total Count: " + $pendingInfo.RelatedIssuesCount
+            # Show breakdown by type
+            if ($pendingInfo.RelatedIssues -and $pendingInfo.RelatedIssues.Count -gt 0) {
+                $relatedTypes = @{}
+                $relatedBySeverity = @{}
+                foreach ($related in $pendingInfo.RelatedIssues) {
+                    $type = if ($related.type) { $related.type } else { "unknown" }
+                    $severity = if ($related.severity) { $related.severity } else { "unknown" }
+                    if (-not $relatedTypes.ContainsKey($type)) {
+                        $relatedTypes[$type] = 0
+                    }
+                    if (-not $relatedBySeverity.ContainsKey($severity)) {
+                        $relatedBySeverity[$severity] = 0
+                    }
+                    $relatedTypes[$type]++
+                    $relatedBySeverity[$severity]++
+                }
+                $investigationDisplayLines += "    By Type:"
+                $relatedSorted = $relatedTypes.GetEnumerator() | Sort-Object Value -Descending
+                foreach ($typeEntry in $relatedSorted) {
+                    $investigationDisplayLines += "      * " + $typeEntry.Key + ": " + $typeEntry.Value
+                }
+                $investigationDisplayLines += "    By Severity:"
+                $severitySorted = $relatedBySeverity.GetEnumerator() | Sort-Object Value -Descending
+                foreach ($severityEntry in $severitySorted) {
+                    $investigationDisplayLines += "      * " + $severityEntry.Key.ToUpper() + ": " + $severityEntry.Value
+                }
+            }
+        } else {
+            $investigationDisplayLines += "    Gathering related issues..."
+        }
+    } else {
+        $investigationDisplayLines += "    No related issues (Focus mode: INACTIVE)"
+    }
+    
+    $investigationDisplayLines += ""
+    $investigationDisplayLines += ("-" * $consoleWidth)
+    
+    # FIX ATTEMPTS section - comprehensive history
+    $investigationDisplayLines += "  FIX ATTEMPTS:"
+    if ($fixAttemptsInfo.Total -gt 0) {
+        $investigationDisplayLines += "    Total Attempts: " + $fixAttemptsInfo.Total + "  |  Success: " + $fixAttemptsInfo.Success + "  |  Failed: " + $fixAttemptsInfo.Failed
+        $successRate = if ($fixAttemptsInfo.Total -gt 0) { [Math]::Round(($fixAttemptsInfo.Success / $fixAttemptsInfo.Total) * 100, 1) } else { 0 }
+        $investigationDisplayLines += "    Success Rate: " + ("{0:N1}%" -f $successRate)
+        $investigationDisplayLines += ""
+        $investigationDisplayLines += "    Recent Attempts:"
+        # Show last 5 fix attempts with details
+        $recentAttempts = $fixAttemptsInfo.Attempts | Sort-Object { if ($_.timestamp) { [DateTime]::Parse($_.timestamp) } else { [DateTime]::MinValue } } -Descending | Select-Object -First 5
+        foreach ($attempt in $recentAttempts) {
+            $result = if ($attempt.result) { $attempt.result.ToUpper() } else { "UNKNOWN" }
+            $desc = if ($attempt.fixDescription) { 
+                $shortDesc = $attempt.fixDescription
+                if ($shortDesc.Length -gt 60) { $shortDesc = $shortDesc.Substring(0, 60) + "..." }
+                $shortDesc
+            } else { "No description" }
+            $timestamp = if ($attempt.timestamp) {
+                try {
+                    $dt = [DateTime]::Parse($attempt.timestamp)
+                    $dt.ToString("HH:mm:ss")
+                } catch {
+                    "Unknown"
+                }
+            } else {
+                "Unknown"
+            }
+            $resultColor = if ($result -eq "SUCCESS") { "SUCCESS" } elseif ($result -eq "FAILED") { "FAILED" } else { "PENDING" }
+            $investigationDisplayLines += "      [$timestamp] $resultColor - $desc"
+            if ($attempt.failureReason) {
+                $failReason = $attempt.failureReason
+                if ($failReason.Length -gt 55) { $failReason = $failReason.Substring(0, 55) + "..." }
+                $investigationDisplayLines += "        Reason: $failReason"
+            }
+        }
+    } else {
+        $investigationDisplayLines += "    No fix attempts recorded yet"
+    }
+    
+    $investigationDisplayLines += ""
+    $investigationDisplayLines += ("-" * $consoleWidth)
+    
+    # FOCUS MODE section
+    $investigationDisplayLines += "  FOCUS MODE:"
+    if ($pendingInfo -and $pendingInfo.InFocusMode) {
+        $investigationDisplayLines += "    Status: ACTIVE"
+        if ($pendingInfo.GroupId) {
+            $groupIdShort = if ($pendingInfo.GroupId.Length -gt 50) { $pendingInfo.GroupId.Substring(0, 50) + "..." } else { $pendingInfo.GroupId }
+            $investigationDisplayLines += "    Group ID: " + $groupIdShort
+        }
+        $investigationDisplayLines += "    Total Issues: " + $pendingInfo.TotalIssues + " (Root: 1, Related: " + $pendingInfo.RelatedIssuesCount + ", Queued: " + $pendingInfo.QueuedIssuesCount + ")"
+    } else {
+        $investigationDisplayLines += "    Status: INACTIVE"
+        $investigationDisplayLines += "    Total Issues: " + $pendingInfo.TotalIssues
+    }
+    
+    $investigationDisplayLines += ("=" * $consoleWidth)
     
     # Add verification progress if verifying
     # CRITICAL: Read from status file to avoid sync issues
