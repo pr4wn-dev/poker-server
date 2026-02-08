@@ -768,7 +768,7 @@ function Test-ServicesReady {
     }
     
     return @{
-        Ready = $allReady
+        AllReady = $allReady
         NotReady = $notReady
     }
 }
@@ -952,20 +952,19 @@ function Get-FixAttemptsStats {
     return @{ Total = 0; Successes = 0; Failures = 0; SuccessRate = 0 }
 }
 
-# Function to check if server is running
+# Function to check if server is running (non-blocking)
 function Test-ServerRunning {
     try {
-        # Try health endpoint with longer timeout
-        $response = Invoke-WebRequest -Uri "$serverUrl/health" -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
-        return $true
-    } catch {
-        # If health check fails, also try root endpoint as fallback
-        try {
-            $response = Invoke-WebRequest -Uri "$serverUrl/" -UseBasicParsing -TimeoutSec 3 -ErrorAction Stop
+        # Try health endpoint with longer timeout (non-blocking)
+        $healthResult = Invoke-WebRequestAsync -Uri "$serverUrl/health" -TimeoutSec 5 -JobTimeout 6
+        if ($healthResult.Success) {
             return $true
-        } catch {
-            return $false
         }
+        # If health check fails, also try root endpoint as fallback (non-blocking)
+        $rootResult = Invoke-WebRequestAsync -Uri "$serverUrl/" -TimeoutSec 3 -JobTimeout 4
+        return $rootResult.Success
+    } catch {
+        return $false
     }
 }
 
@@ -1179,19 +1178,21 @@ function Invoke-DebuggerBreakWithVerification {
         # Unity might be connected but health check might be wrong, or Unity might connect during the break attempt
     }
     
-    # Step 2: If no tableId provided, automatically find active simulation table
+    # Step 2: If no tableId provided, automatically find active simulation table (non-blocking)
     if (-not $tableId) {
         try {
-            $healthResponse = Invoke-WebRequest -Uri "$serverUrl/health" -TimeoutSec 2 -ErrorAction Stop
-            $health = $healthResponse.Content | ConvertFrom-Json
-            if ($health.activeSimulations -gt 0) {
-                $tablesResponse = Invoke-WebRequest -Uri "$serverUrl/api/tables" -TimeoutSec 2 -ErrorAction Stop
-                if ($tablesResponse.StatusCode -eq 200) {
-                    $tables = $tablesResponse.Content | ConvertFrom-Json
-                    $simTable = $tables | Where-Object { $_.isSimulation -eq $true -and $_.activePlayers -gt 0 } | Select-Object -First 1
-                    if ($simTable -and $simTable.id) {
-                        $tableId = $simTable.id
-                        Write-ConsoleOutput -Message "  Auto-detected table: $tableId" -ForegroundColor "Cyan"
+            $healthResult = Invoke-WebRequestAsync -Uri "$serverUrl/health" -TimeoutSec 2 -JobTimeout 3
+            if ($healthResult.Success) {
+                $health = $healthResult.Content | ConvertFrom-Json
+                if ($health.activeSimulations -gt 0) {
+                    $tablesResult = Invoke-WebRequestAsync -Uri "$serverUrl/api/tables" -TimeoutSec 2 -JobTimeout 3
+                    if ($tablesResult.Success -and $tablesResult.StatusCode -eq 200) {
+                        $tables = $tablesResult.Content | ConvertFrom-Json
+                        $simTable = $tables | Where-Object { $_.isSimulation -eq $true -and $_.activePlayers -gt 0 } | Select-Object -First 1
+                        if ($simTable -and $simTable.id) {
+                            $tableId = $simTable.id
+                            Write-ConsoleOutput -Message "  Auto-detected table: $tableId" -ForegroundColor "Cyan"
+                        }
                     }
                 }
             }
@@ -1251,7 +1252,12 @@ function Invoke-DebuggerBreakWithVerification {
                 message = $message
             } | ConvertTo-Json
             
-            $response = Invoke-WebRequest -Uri "$serverUrl/api/debugger/break" -Method POST -Body $body -ContentType "application/json" -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
+            # Use async call (non-blocking) - this is fallback function, but still should be non-blocking
+            $debuggerResult = Invoke-WebRequestAsync -Uri "$serverUrl/api/debugger/break" -Method POST -Body $body -ContentType "application/json" -TimeoutSec 5 -JobTimeout 6
+            if (-not $debuggerResult.Success) {
+                throw $debuggerResult.Error
+            }
+            $response = @{ StatusCode = $debuggerResult.StatusCode; Content = $debuggerResult.Content }
             
             if ($response.StatusCode -eq 200) {
                 $result = $response.Content | ConvertFrom-Json
@@ -1266,16 +1272,30 @@ function Invoke-DebuggerBreakWithVerification {
                     # Wait a moment for Unity to process the event
                     Start-Sleep -Milliseconds 500
                     
-                    # Check Unity logs for confirmation that it paused
+                    # Check Unity logs for confirmation that it paused (limit to small read to avoid blocking)
                     $pauseConfirmed = $false
                     if (Test-Path $logFile) {
-                        $recentLogs = Get-Content $logFile -Tail 50 -ErrorAction SilentlyContinue
-                        foreach ($logLine in $recentLogs) {
-                            if ($logLine -match '\[Game\].*DEBUGGER BREAK|\[Game\].*PAUSED|Time\.timeScale.*0') {
-                                $pauseConfirmed = $true
-                                Write-ConsoleOutput -Message "  CONFIRMED: Unity received pause command (found in logs)" -ForegroundColor "Green"
-                                break
+                        try {
+                            # Use FileStream to read only last 50 lines efficiently (non-blocking for small reads)
+                            $fileInfo = Get-Item $logFile
+                            $maxBytes = 50 * 200  # Assume ~200 bytes per line max
+                            $startPos = [Math]::Max(0, $fileInfo.Length - $maxBytes)
+                            $fileStream = [System.IO.File]::Open($logFile, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)
+                            $fileStream.Position = $startPos
+                            $reader = New-Object System.IO.StreamReader($fileStream)
+                            $recentLogs = ($reader.ReadToEnd() -split "`n") | Select-Object -Last 50
+                            $reader.Close()
+                            $fileStream.Close()
+                            
+                            foreach ($logLine in $recentLogs) {
+                                if ($logLine -match '\[Game\].*DEBUGGER BREAK|\[Game\].*PAUSED|Time\.timeScale.*0') {
+                                    $pauseConfirmed = $true
+                                    Write-ConsoleOutput -Message "  CONFIRMED: Unity received pause command (found in logs)" -ForegroundColor "Green"
+                                    break
+                                }
                             }
+                        } catch {
+                            # File read failed - skip confirmation check
                         }
                     }
                     
@@ -1456,7 +1476,21 @@ function Get-UnityActualStatus {
             $status.Details += "Game Activity: Active simulation with $($healthData.onlinePlayers) players online"
         }
         if (Test-Path $logFile) {
-            $recentLines = Get-Content $logFile -Tail 500 -ErrorAction SilentlyContinue
+            # Use efficient file reading to avoid blocking on large files (cached function, so OK to read more)
+            $recentLines = @()
+            try {
+                $fileInfo = Get-Item $logFile -ErrorAction Stop
+                $maxBytes = 500 * 200  # Assume ~200 bytes per line max
+                $startPos = [Math]::Max(0, $fileInfo.Length - $maxBytes)
+                $fileStream = [System.IO.File]::Open($logFile, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)
+                $fileStream.Position = $startPos
+                $reader = New-Object System.IO.StreamReader($fileStream)
+                $recentLines = ($reader.ReadToEnd() -split "`n") | Select-Object -Last 500
+                $reader.Close()
+                $fileStream.Close()
+            } catch {
+                # File read failed - continue with empty array
+            }
             $now = Get-Date
             $gameActivityFound = $false
             $connectionActivityFound = $false
@@ -1585,8 +1619,23 @@ function Get-LogWatcherStatus {
         }
         
         # Read last 1000 lines to find recent activity (increased to catch simulations that start after a delay)
-        $recentLines = Get-Content $logFile -Tail 1000 -ErrorAction SilentlyContinue
-        if (-not $recentLines) {
+        # Use efficient file reading to avoid blocking on large files
+        $recentLines = @()
+        try {
+            $fileInfo = Get-Item $logFile -ErrorAction Stop
+            $maxBytes = 1000 * 200  # Assume ~200 bytes per line max
+            $startPos = [Math]::Max(0, $fileInfo.Length - $maxBytes)
+            $fileStream = [System.IO.File]::Open($logFile, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)
+            $fileStream.Position = $startPos
+            $reader = New-Object System.IO.StreamReader($fileStream)
+            $recentLines = ($reader.ReadToEnd() -split "`n") | Select-Object -Last 1000
+            $reader.Close()
+            $fileStream.Close()
+        } catch {
+            # File read failed - return default
+            return @{ Active = $false; PausedTables = 0; ActiveSimulations = 0; LastSeen = $null }
+        }
+        if (-not $recentLines -or $recentLines.Count -eq 0) {
             return @{ Active = $false; PausedTables = 0; ActiveSimulations = 0; LastSeen = $null }
         }
         
@@ -1844,12 +1893,14 @@ function Show-Statistics {
     $simColor = if ($stats.SimulationRunning) { "Green" } else { "Red" }
     $logWatcherStatus = Get-LogWatcherStatus
     
-    # Get server's ACTUAL simulation count for display (not stale log data)
+    # Get server's ACTUAL simulation count for display (not stale log data) - non-blocking
     $serverActualSimCount = 0
     try {
-        $healthResponse = Invoke-WebRequest -Uri "$serverUrl/health" -Method GET -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop
-        $healthData = $healthResponse.Content | ConvertFrom-Json
-        $serverActualSimCount = $healthData.activeSimulations
+        $healthResult = Invoke-WebRequestAsync -Uri "$serverUrl/health" -Method GET -TimeoutSec 2 -JobTimeout 3
+        if ($healthResult.Success) {
+            $healthData = $healthResult.Content | ConvertFrom-Json
+            $serverActualSimCount = $healthData.activeSimulations
+        }
     } catch {
         # Health check failed - log the error but default to 0
         $healthErrorDetails = $_.Exception.Message
@@ -2581,10 +2632,14 @@ function Start-ServerIfNeeded {
             # This ensures port 3000 is free before we start the server
             Kill-Port3000Processes
             
-            # Step 1: Try to stop all active simulations via API (if server is still running)
+            # Step 1: Try to stop all active simulations via API (if server is still running) - non-blocking
             try {
-                $stopResponse = Invoke-WebRequest -Uri "$serverUrl/api/simulations/stop-all" -Method POST -UseBasicParsing -TimeoutSec 2 -ErrorAction Stop  # Reduced from 5 to 2 seconds
-                $stopResult = $stopResponse.Content | ConvertFrom-Json
+                $stopResultObj = Invoke-WebRequestAsync -Uri "$serverUrl/api/simulations/stop-all" -Method POST -TimeoutSec 2 -JobTimeout 3
+                if ($stopResultObj.Success) {
+                    $stopResult = $stopResultObj.Content | ConvertFrom-Json
+                } else {
+                    throw $stopResultObj.Error
+                }
                 if ($stopResult.success -and $stopResult.stopped -gt 0) {
             # Don't write to console - update stats display instead
                     # Write-Info "Stopped $($stopResult.stopped) active simulation(s) before restart"
@@ -2756,11 +2811,15 @@ function Restart-UnityIfNeeded {
         # Check if Unity is connected to server
         $isConnected = $false
         if ($unityProcess) {
-            # Check server health for active connections
+            # Check server health for active connections (non-blocking)
             try {
-                $healthCheck = Invoke-WebRequest -Uri "$serverUrl/health" -TimeoutSec 2 -ErrorAction Stop
-                $health = $healthCheck.Content | ConvertFrom-Json
-                $isConnected = $health.onlinePlayers -gt 0
+                $healthResult = Invoke-WebRequestAsync -Uri "$serverUrl/health" -TimeoutSec 2 -JobTimeout 3
+                if ($healthResult.Success) {
+                    $health = $healthResult.Content | ConvertFrom-Json
+                    $isConnected = $health.onlinePlayers -gt 0
+                } else {
+                    $isConnected = $false
+                }
             } catch {
                 $isConnected = $false
             }
@@ -3135,11 +3194,15 @@ try {
     Write-Info "Killing processes on port 3000..."
     Kill-Port3000Processes
     
-    # Step 1: Try to stop all active simulations via API (if server is still running)
+    # Step 1: Try to stop all active simulations via API (if server is still running) - non-blocking
     Write-Info "Stopping all active simulations via API..."
     try {
-        $stopResponse = Invoke-WebRequest -Uri "$serverUrl/api/simulations/stop-all" -Method POST -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
-        $stopResult = $stopResponse.Content | ConvertFrom-Json
+        $stopResultObj = Invoke-WebRequestAsync -Uri "$serverUrl/api/simulations/stop-all" -Method POST -TimeoutSec 5 -JobTimeout 6
+        if ($stopResultObj.Success) {
+            $stopResult = $stopResultObj.Content | ConvertFrom-Json
+        } else {
+            throw $stopResultObj.Error
+        }
         if ($stopResult.success) {
             Write-Success "Stopped $($stopResult.stopped) active simulation(s)"
             if ($stopResult.failed -gt 0) {
@@ -3234,10 +3297,12 @@ try {
     $unityProc = Get-Process -Name "Unity" -ErrorAction SilentlyContinue
     $quickUnityCheck = $null -ne $unityProc
     if ($quickUnityCheck -and $quickServerCheck) {
-        # Check if Unity is already connected
-        $healthCheck = Invoke-WebRequest -Uri "$serverUrl/health" -TimeoutSec 1 -ErrorAction Stop
-        $health = $healthCheck.Content | ConvertFrom-Json
-        $quickUnityConnected = $health.onlinePlayers -gt 0
+        # Check if Unity is already connected (non-blocking)
+        $healthResult = Invoke-WebRequestAsync -Uri "$serverUrl/health" -TimeoutSec 1 -JobTimeout 2
+        if ($healthResult.Success) {
+            $health = $healthResult.Content | ConvertFrom-Json
+            $quickUnityConnected = $health.onlinePlayers -gt 0
+        }
     }
 } catch {
     # Unity check failed - will do full maintenance
@@ -3816,12 +3881,11 @@ while ($monitoringActive) {
                                             $pauseResult = $pauseJob | Wait-Job -Timeout 6 | Receive-Job
                                             $pauseJob | Remove-Job -ErrorAction SilentlyContinue
                                             
-                                            if ($pauseResult -and $pauseResult.Success) {
+                                            if ($pauseSuccess) {
                                                 Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Paused via table state update for table $($targetTable.id)" -ForegroundColor "Green"
                                                 $isPaused = $true
-                                                $pauseSuccess = $true
                                             } else {
-                                                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] WARNING: Failed to pause Unity via API: $($pauseResult.Error)" -ForegroundColor "Yellow"
+                                                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] WARNING: Failed to pause Unity via API" -ForegroundColor "Yellow"
                                                 $pauseSuccess = $false
                                             }
                                         } else {
@@ -4731,10 +4795,12 @@ while ($monitoringActive) {
                     $readyStartTime = Get-Date
                     while (-not $servicesReady -and ((Get-Date) - $readyStartTime).TotalSeconds -lt $readyTimeout) {
                         $readyCheck = Test-ServicesReady -requiredRestarts $requiredRestarts
-                        if ($readyCheck.Ready) {
+                        if ($readyCheck.AllReady) {
                             $servicesReady = $true
                         } else {
-                            Start-Sleep -Seconds 2
+                            # Non-blocking sleep - use small increments to allow loop to continue checking other things
+                            # This is in verification phase, so blocking is acceptable but minimize it
+                            Start-Sleep -Seconds 1  # Reduced from 2 to 1 for more responsive checking
                         }
                     }
                     
@@ -5057,10 +5123,23 @@ while ($monitoringActive) {
         # If server check failed, we defaulted to 0, which is correct (no server = no simulations)
         $logWatcherStatus.ActiveSimulations = $serverActualCount
         
-        # Also check logs directly for simulation completion (10/10 games)
+        # Also check logs directly for simulation completion (10/10 games) - efficient read
         $simulationCompleted = $false
         if (Test-Path $logFile) {
-            $recentLogs = Get-Content $logFile -Tail 200 -ErrorAction SilentlyContinue
+            $recentLogs = @()
+            try {
+                $fileInfo = Get-Item $logFile -ErrorAction Stop
+                $maxBytes = 200 * 200  # Assume ~200 bytes per line max
+                $startPos = [Math]::Max(0, $fileInfo.Length - $maxBytes)
+                $fileStream = [System.IO.File]::Open($logFile, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)
+                $fileStream.Position = $startPos
+                $reader = New-Object System.IO.StreamReader($fileStream)
+                $recentLogs = ($reader.ReadToEnd() -split "`n") | Select-Object -Last 200
+                $reader.Close()
+                $fileStream.Close()
+            } catch {
+                # File read failed - continue with empty array
+            }
             foreach ($line in $recentLogs) {
                 # Check for simulation completion indicators
                 if ($line -match 'Reached max games|maxGames.*reached|Game\s+10\s*/\s*10|10\s*/\s*10\s+games|simulation.*complete|stopping simulation') {
