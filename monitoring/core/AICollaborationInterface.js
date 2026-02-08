@@ -41,6 +41,42 @@ class AICollaborationInterface extends EventEmitter {
         this.decisions = []; // Track decisions made together
         this.decisionOutcomes = new Map(); // Track outcomes to learn
         
+        // Shared knowledge base - we both contribute and access
+        this.sharedKnowledge = {
+            successes: [], // What worked (from both of us)
+            failures: [], // What didn't work (from both of us)
+            patterns: [], // Patterns we've discovered together
+            predictions: [], // What we predict will happen
+            warnings: [] // Warnings we've given each other
+        };
+        
+        // Pattern detection together
+        this.patternDetection = {
+            aiPatterns: [], // Patterns I've detected
+            learningPatterns: [], // Patterns learning system detected
+            sharedPatterns: [] // Patterns we built together
+        };
+        
+        // Predictive collaboration
+        this.predictions = {
+            aiPredictsLearning: [], // What I predict learning system will suggest
+            learningPredictsAI: [] // What learning system predicts I'll do wrong
+        };
+        
+        // Failure analysis together
+        this.failureAnalysis = {
+            aiFailures: [], // My failures analyzed together
+            learningFailures: [], // Learning system failures analyzed together
+            jointAnalysis: [] // Analysis we did together
+        };
+        
+        // Continuous improvement tracking
+        this.improvementTracking = {
+            aiImprovements: [], // How I've improved
+            learningImprovements: [], // How learning system improved
+            jointImprovements: [] // How we improved together
+        };
+        
         // Start proactive monitoring
         this.startProactiveMonitoring();
         
@@ -82,6 +118,12 @@ class AICollaborationInterface extends EventEmitter {
             lesson: this.extractLesson(action, result)
         };
         
+        // Store in shared knowledge
+        this.sharedKnowledge.successes.push(knowledgeUpdate);
+        if (this.sharedKnowledge.successes.length > 100) {
+            this.sharedKnowledge.successes.shift();
+        }
+        
         // Store in state so AI can query it
         this.stateStore.updateState('ai.knowledge.learningSystemSuccesses', (successes = []) => {
             successes.push(knowledgeUpdate);
@@ -90,6 +132,15 @@ class AICollaborationInterface extends EventEmitter {
                 successes.shift();
             }
             return successes;
+        });
+        
+        // Track improvement together
+        this.trackImprovementTogether({
+            type: 'learning_improved',
+            whatImproved: `Learning system successfully fixed ${action.issueType} using ${action.method}`,
+            how: 'AutoFixEngine tried learned solution and it worked',
+            impact: 'Learning system confidence increased',
+            metrics: { method: action.method, issueType: action.issueType }
         });
         
         // Emit event so AI can listen
@@ -104,6 +155,7 @@ class AICollaborationInterface extends EventEmitter {
     
     /**
      * Learning system tried something and it failed - teach AI what not to do
+     * We analyze the failure together
      */
     learningSystemFailed(action, result) {
         const knowledgeUpdate = {
@@ -124,6 +176,12 @@ class AICollaborationInterface extends EventEmitter {
             lesson: `Don't use ${action.method || action.fixMethod} for ${action.issueType} - it failed: ${result.reason || 'unknown reason'}`
         };
         
+        // Store in shared knowledge
+        this.sharedKnowledge.failures.push(knowledgeUpdate);
+        if (this.sharedKnowledge.failures.length > 100) {
+            this.sharedKnowledge.failures.shift();
+        }
+        
         // Store in state
         this.stateStore.updateState('ai.knowledge.learningSystemFailures', (failures = []) => {
             failures.push(knowledgeUpdate);
@@ -133,13 +191,36 @@ class AICollaborationInterface extends EventEmitter {
             return failures;
         });
         
+        // Analyze failure together
+        const failureRecord = {
+            type: 'LEARNING_SYSTEM_FAILURE',
+            timestamp: Date.now(),
+            action: {
+                type: action.type || 'auto_fix',
+                method: action.method || action.fixMethod,
+                issueType: action.issueType,
+                component: action.component,
+                details: action.details
+            },
+            failure: {
+                reason: result.reason || result.description,
+                error: result.error
+            }
+        };
+        
+        const jointAnalysis = this.analyzeFailureTogether(failureRecord);
+        this.failureAnalysis.learningFailures.push(failureRecord);
+        this.failureAnalysis.jointAnalysis.push(jointAnalysis);
+        
         // Emit event
         this.emit('learningSystemTaughtAI', knowledgeUpdate);
+        this.emit('failureAnalyzedTogether', jointAnalysis);
         
-        gameLogger.info('CERBERUS', '[AI_COLLABORATION] Learning system taught AI (failure)', {
+        gameLogger.info('CERBERUS', '[AI_COLLABORATION] Learning system taught AI (failure) - analyzed together', {
             method: action.method || action.fixMethod,
             issueType: action.issueType,
-            reason: result.reason
+            reason: result.reason,
+            jointAnalysis: jointAnalysis.insights
         });
     }
     
@@ -279,29 +360,34 @@ class AICollaborationInterface extends EventEmitter {
     }
     
     /**
-     * AI completed an action - learn from it
-     * This is called AFTER the AI does something
+     * AI completed an action - learn from it (SUCCESS OR FAILURE)
+     * This is called AFTER the AI does something - we learn from BOTH successes and failures
      */
     afterAIAction(action, result) {
         // Track outcome
         this.trackActionOutcome(action, result);
         
-        // Learn from the action
+        // Learn from the action - SUCCESS OR FAILURE
         if (this.learningEngine && result) {
-            // If it was a fix attempt, learn from it
+            const wasSuccess = result.success !== false;
+            
+            // If it was a fix attempt, learn from it (success OR failure)
             if (action.type === 'fix_attempt' && result.success !== undefined) {
                 this.learningEngine.learnFromAttempt({
                     issueId: action.issueId,
                     issueType: action.issueType,
                     fixMethod: action.method,
                     fixDetails: action.details,
-                    result: result.success ? 'success' : 'failure',
-                    timestamp: Date.now()
+                    result: wasSuccess ? 'success' : 'failure',
+                    timestamp: Date.now(),
+                    // Include failure details so learning system knows WHY it failed
+                    failureReason: wasSuccess ? null : (result.reason || result.error || 'Unknown failure reason'),
+                    failureContext: wasSuccess ? null : (result.context || action.details)
                 });
             }
             
-            // Track circular dependency if it was detected and fixed
-            if (action.type === 'fix_attempt' && action.method === 'make_async' && result.success) {
+            // Track circular dependency if it was detected and fixed (SUCCESS)
+            if (action.type === 'fix_attempt' && action.method === 'make_async' && wasSuccess) {
                 if (action.details && action.details.chain) {
                     this.learningEngine.trackCircularDependency(
                         action.details.chain,
@@ -313,8 +399,8 @@ class AICollaborationInterface extends EventEmitter {
                 }
             }
             
-            // Track blocking chain if it was detected and fixed
-            if (action.type === 'fix_attempt' && action.method === 'make_async' && result.success) {
+            // Track blocking chain if it was detected and fixed (SUCCESS)
+            if (action.type === 'fix_attempt' && action.method === 'make_async' && wasSuccess) {
                 if (action.details && action.details.chain) {
                     this.learningEngine.trackBlockingChain(
                         action.details.chain,
@@ -326,33 +412,223 @@ class AICollaborationInterface extends EventEmitter {
                 }
             }
             
-            // Track manual debugging if it was successful
-            if (action.type === 'debugging' && result.success) {
+            // Track manual debugging (SUCCESS OR FAILURE)
+            if (action.type === 'debugging') {
                 this.learningEngine.trackManualDebugging(
                     {
                         component: action.component,
                         issue: action.issueType || 'unknown'
                     },
                     {
-                        result: 'success',
-                        description: result.description || 'Systematic debugging approach',
-                        steps: result.steps || []
+                        result: wasSuccess ? 'success' : 'failure',
+                        description: result.description || (wasSuccess ? 'Systematic debugging approach' : 'Debugging attempt failed'),
+                        steps: result.steps || [],
+                        failureReason: wasSuccess ? null : (result.reason || 'Unknown reason')
                     }
                 );
             }
+            
+            // Track successes in shared knowledge
+            if (wasSuccess) {
+                const successRecord = {
+                    type: 'AI_SUCCESS',
+                    timestamp: Date.now(),
+                    action: {
+                        type: action.type,
+                        method: action.method,
+                        issueType: action.issueType,
+                        component: action.component
+                    },
+                    result: {
+                        description: result.description || 'Action succeeded',
+                        confidence: result.confidence || 0.9
+                    }
+                };
+                
+                this.sharedKnowledge.successes.push(successRecord);
+                if (this.sharedKnowledge.successes.length > 100) {
+                    this.sharedKnowledge.successes.shift();
+                }
+            }
+            
+            // Track failures specifically - learning system needs to know what NOT to do
+            if (!wasSuccess) {
+                this.trackAIFailure(action, result);
+            }
         }
         
-        // Update decision outcomes
+        // Update decision outcomes (success OR failure)
         if (action.decisionId) {
             this.decisionOutcomes.set(action.decisionId, {
                 action,
                 result,
-                timestamp: Date.now()
+                timestamp: Date.now(),
+                learned: true
             });
         }
         
         // Emit event
         this.emit('afterAIAction', { action, result });
+    }
+    
+    /**
+     * Track AI failure - learning system learns what NOT to do
+     * We analyze failures TOGETHER
+     */
+    trackAIFailure(action, result) {
+        if (!this.learningEngine) return;
+        
+        const failureRecord = {
+            type: 'AI_FAILURE',
+            timestamp: Date.now(),
+            action: {
+                type: action.type,
+                method: action.method,
+                issueType: action.issueType,
+                component: action.component,
+                details: action.details
+            },
+            failure: {
+                reason: result.reason || result.error || 'Unknown failure reason',
+                error: result.error,
+                context: result.context,
+                whatWentWrong: result.whatWentWrong || 'Action failed',
+                whatShouldHaveHappened: result.whatShouldHaveHappened || 'Action should have succeeded'
+            },
+            lesson: this.extractFailureLesson(action, result)
+        };
+        
+        // Store in shared knowledge
+        this.sharedKnowledge.failures.push(failureRecord);
+        if (this.sharedKnowledge.failures.length > 100) {
+            this.sharedKnowledge.failures.shift();
+        }
+        
+        // Store in state so learning system can query it
+        this.stateStore.updateState('ai.knowledge.aiFailures', (failures = []) => {
+            failures.push(failureRecord);
+            if (failures.length > 100) {
+                failures.shift();
+            }
+            return failures;
+        });
+        
+        // Analyze failure TOGETHER with learning system
+        const jointAnalysis = this.analyzeFailureTogether(failureRecord);
+        this.failureAnalysis.aiFailures.push(failureRecord);
+        this.failureAnalysis.jointAnalysis.push(jointAnalysis);
+        
+        // Update learning engine's failure patterns
+        if (action.issueType) {
+            // Track that this method failed for this issue type
+            const patternKey = `fixMethod:${action.method}:issueType:${action.issueType}`;
+            const existing = this.learningEngine.patterns.get(patternKey) || {
+                frequency: 0,
+                successes: 0,
+                failures: 0,
+                contexts: [],
+                solutions: []
+            };
+            
+            existing.failures++;
+            existing.frequency++;
+            existing.contexts.push({
+                component: action.component,
+                failureReason: result.reason,
+                timestamp: Date.now()
+            });
+            
+            existing.successRate = existing.successes / existing.frequency;
+            this.learningEngine.patterns.set(patternKey, existing);
+            
+            // Learning system learns: don't suggest this method for this issue type
+            this.learningEngine.learnFromAttempt({
+                issueId: action.issueId || 'unknown',
+                issueType: action.issueType,
+                fixMethod: action.method,
+                fixDetails: action.details,
+                result: 'failure',
+                timestamp: Date.now(),
+                failureReason: result.reason,
+                learned: 'This method does not work for this issue type'
+            });
+        }
+        
+        // Emit event
+        this.emit('aiFailure', failureRecord);
+        this.emit('failureAnalyzedTogether', jointAnalysis);
+        
+        gameLogger.warn('CERBERUS', '[AI_COLLABORATION] AI failure tracked and analyzed together - learning system learns what not to do', {
+            method: action.method,
+            issueType: action.issueType,
+            reason: result.reason,
+            jointAnalysis: jointAnalysis.insights
+        });
+    }
+    
+    /**
+     * Analyze failure together - we work together to understand why it failed
+     */
+    analyzeFailureTogether(failureRecord) {
+        const analysis = {
+            timestamp: Date.now(),
+            failure: failureRecord,
+            insights: [],
+            rootCause: null,
+            recommendations: [],
+            patterns: []
+        };
+        
+        if (!this.learningEngine) return analysis;
+        
+        // Find similar failures
+        const similarFailures = this.findSimilarFailures(failureRecord);
+        if (similarFailures.length > 0) {
+            analysis.insights.push({
+                type: 'SIMILAR_FAILURES',
+                message: `Found ${similarFailures.length} similar failures - this is a pattern`,
+                failures: similarFailures.slice(0, 5)
+            });
+            
+            // Extract pattern
+            const pattern = this.extractFailurePattern(failureRecord, similarFailures);
+            analysis.patterns.push(pattern);
+            this.patternDetection.sharedPatterns.push(pattern);
+        }
+        
+        // Learning system suggests root cause
+        if (failureRecord.action.issueType) {
+            const bestSolution = this.learningEngine.getBestSolution(failureRecord.action.issueType);
+            if (bestSolution) {
+                analysis.recommendations.push({
+                    type: 'LEARNED_SOLUTION',
+                    message: `Learning system suggests trying: ${bestSolution.description || bestSolution.method}`,
+                    solution: bestSolution
+                });
+            }
+        }
+        
+        // Check if this matches known failure patterns
+        const knownFailurePatterns = this.getKnownFailurePatterns(failureRecord);
+        if (knownFailurePatterns.length > 0) {
+            analysis.insights.push({
+                type: 'KNOWN_FAILURE_PATTERN',
+                message: 'This matches a known failure pattern',
+                patterns: knownFailurePatterns
+            });
+        }
+        
+        // Determine root cause together
+        analysis.rootCause = this.determineRootCauseTogether(failureRecord, similarFailures);
+        
+        return analysis;
+    }
+    
+    /**
+     * Extract lesson from AI failure
+     */
+    extractFailureLesson(action, result) {
+        return `AI tried ${action.method || 'action'} for ${action.issueType || 'issue'} but it failed: ${result.reason || 'unknown reason'}. ${result.whatShouldHaveHappened || 'Consider alternative approach.'}`;
     }
     
     /**

@@ -731,6 +731,56 @@ class AIMonitorCore {
     }
     
     /**
+     * AI warns learning system - bidirectional warnings
+     */
+    aiWarnsLearningSystem(warning) {
+        if (!this.collaborationInterface) {
+            return { error: 'Collaboration interface not available' };
+        }
+        return this.collaborationInterface.aiWarnsLearningSystem(warning);
+    }
+    
+    /**
+     * AI detects pattern and shares with learning system
+     */
+    aiDetectsPattern(pattern) {
+        if (!this.collaborationInterface) {
+            return { error: 'Collaboration interface not available' };
+        }
+        return this.collaborationInterface.aiDetectsPattern(pattern);
+    }
+    
+    /**
+     * Work together on a problem
+     */
+    workTogetherOnProblem(problem) {
+        if (!this.collaborationInterface) {
+            return { error: 'Collaboration interface not available' };
+        }
+        return this.collaborationInterface.workTogetherOnProblem(problem);
+    }
+    
+    /**
+     * Get symbiotic status - how well we're working together
+     */
+    getSymbioticStatus() {
+        if (!this.collaborationInterface) {
+            return { error: 'Collaboration interface not available' };
+        }
+        return this.collaborationInterface.getSymbioticStatus();
+    }
+    
+    /**
+     * Track improvement together
+     */
+    trackImprovementTogether(improvement) {
+        if (!this.collaborationInterface) {
+            return { error: 'Collaboration interface not available' };
+        }
+        return this.collaborationInterface.trackImprovementTogether(improvement);
+    }
+    
+    /**
      * Get state verification contracts
      */
     getStateVerificationContracts() {
