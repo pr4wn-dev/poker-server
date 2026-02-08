@@ -485,6 +485,41 @@ class AIMonitorCore {
     }
     
     /**
+     * Get auto-fix engine
+     */
+    getAutoFixEngine() {
+        return this.autoFixEngine;
+    }
+    
+    /**
+     * Get state verification contracts
+     */
+    getStateVerificationContracts() {
+        return this.stateVerificationContracts;
+    }
+    
+    /**
+     * Get dependency graph
+     */
+    getDependencyGraph() {
+        return this.dependencyGraph;
+    }
+    
+    /**
+     * Get enhanced anomaly detection
+     */
+    getEnhancedAnomalyDetection() {
+        return this.enhancedAnomalyDetection;
+    }
+    
+    /**
+     * Get causal analysis
+     */
+    getCausalAnalysis() {
+        return this.causalAnalysis;
+    }
+    
+    /**
      * Predict likely issues
      */
     predictIssues(currentState = null) {
@@ -606,6 +641,15 @@ class AIMonitorCore {
         }
         if (this.issueDetector) {
             this.issueDetector.stopStateVerification();
+        }
+        if (this.stateVerificationContracts && this.stateVerificationContracts.stop) {
+            this.stateVerificationContracts.stop();
+        }
+        if (this.enhancedAnomalyDetection && this.enhancedAnomalyDetection.stop) {
+            this.enhancedAnomalyDetection.stop();
+        }
+        if (this.causalAnalysis && this.causalAnalysis.stop) {
+            this.causalAnalysis.stop();
         }
         if (this.stateStore) {
             this.stateStore.destroy();
