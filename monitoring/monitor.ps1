@@ -3317,11 +3317,31 @@ while ($monitoringActive) {
         
         # CRITICAL SAFETY CHECK: If status file shows investigation active for too long, force completion check
         # This prevents investigations from getting stuck when the normal check isn't running
+        # CRITICAL: Also check if timeRemaining is 0 or negative - this is a direct indicator it should complete
         if ($statusFileInvestigationActive -and $statusFileInvestigationStartTime) {
             $timeoutValue = if ($investigationTimeout) { $investigationTimeout } else { 15 }
             $elapsedFromStatusFile = ((Get-Date) - $statusFileInvestigationStartTime).TotalSeconds
+            $shouldForceCompletion = $false
+            $forceReason = ""
+            
+            # Force if elapsed time exceeds 2x timeout
             if ($elapsedFromStatusFile -ge ($timeoutValue * 2)) {
-                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] FORCED COMPLETION CHECK: Status file shows investigation active for $([Math]::Round($elapsedFromStatusFile, 1))s (2x timeout=$($timeoutValue * 2)s) - FORCING COMPLETION CHECK" -ForegroundColor "Red"
+                $shouldForceCompletion = $true
+                $forceReason = "elapsed=$([Math]::Round($elapsedFromStatusFile, 1))s >= 2x timeout=$($timeoutValue * 2)s"
+            }
+            # Force if timeRemaining is 0 or negative (direct indicator)
+            elseif ($statusFileTimeRemaining -ne $null -and $statusFileTimeRemaining -le 0) {
+                $shouldForceCompletion = $true
+                $forceReason = "timeRemaining=$statusFileTimeRemaining <= 0"
+            }
+            # Force if elapsed time exceeds timeout (normal completion)
+            elseif ($elapsedFromStatusFile -ge $timeoutValue) {
+                $shouldForceCompletion = $true
+                $forceReason = "elapsed=$([Math]::Round($elapsedFromStatusFile, 1))s >= timeout=$timeoutValue s"
+            }
+            
+            if ($shouldForceCompletion) {
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] FORCED COMPLETION CHECK: Status file shows investigation active ($forceReason) - FORCING COMPLETION CHECK" -ForegroundColor "Red"
                 # Force investigation to be active so completion check runs
                 $investigationIsActive = $true
                 $investigationStartTimeToUse = $statusFileInvestigationStartTime
