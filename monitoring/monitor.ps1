@@ -4768,9 +4768,54 @@ while ($monitoringActive) {
                     Remove-Item $fixAppliedFile -Force -ErrorAction SilentlyContinue
                 }
                 
-                # Clear pending-issues.json (this will move to next queued issue if any)
-                $clearResult = & node $nodeScript --clear-pending
-                if ($clearResult -match '"success":\s*true') {
+                # Resume Unity (non-blocking) - call resume API to set table.isPaused = false
+                $tableIdToResume = $null
+                try {
+                    # Get tableId from pending issues before clearing
+                    $pendingInfoBeforeClear = Get-PendingIssuesInfo
+                    if ($pendingInfoBeforeClear -and $pendingInfoBeforeClear.RootIssue -and $pendingInfoBeforeClear.RootIssue.tableId) {
+                        $tableIdToResume = $pendingInfoBeforeClear.RootIssue.tableId
+                    } elseif ($currentIssue -and $currentIssue -match 'tableId.*?"([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})"') {
+                        $tableIdToResume = $matches[1]
+                    }
+                    
+                    # Try to get tableId from active simulation if not found
+                    if (-not $tableIdToResume) {
+                        $healthResult = Invoke-WebRequestAsync -Uri "$serverUrl/health" -TimeoutSec 2 -JobTimeout 3
+                        if ($healthResult.Success) {
+                            $serverHealth = $healthResult.Content | ConvertFrom-Json
+                            if ($serverHealth.activeSimulations -gt 0) {
+                                $tablesResult = Invoke-WebRequestAsync -Uri "$serverUrl/api/tables" -TimeoutSec 2 -JobTimeout 3
+                                if ($tablesResult.Success) {
+                                    $tables = $tablesResult.Content | ConvertFrom-Json
+                                    $simTable = $tables | Where-Object { $_.isSimulation -eq $true } | Select-Object -First 1
+                                    if ($simTable) {
+                                        $tableIdToResume = $simTable.id
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    # Call resume API if we have a tableId
+                    if ($tableIdToResume) {
+                        $resumeResult = Invoke-WebRequestAsync -Uri "$serverUrl/api/simulations/$tableIdToResume/resume" -Method POST -TimeoutSec 5 -JobTimeout 6
+                        if ($resumeResult.Success) {
+                            Write-ConsoleOutput -Message "  Unity resumed via API for table $tableIdToResume" -ForegroundColor "Green"
+                        } else {
+                            Write-ConsoleOutput -Message "  WARNING: Failed to resume Unity via API: $($resumeResult.Error)" -ForegroundColor "Yellow"
+                        }
+                    } else {
+                        Write-ConsoleOutput -Message "  WARNING: Could not determine tableId to resume Unity" -ForegroundColor "Yellow"
+                    }
+                } catch {
+                    Write-ConsoleOutput -Message "  WARNING: Error resuming Unity: $_" -ForegroundColor "Yellow"
+                }
+                
+                # Clear pending-issues.json (this will move to next queued issue if any) - non-blocking
+                $nodeResult = Invoke-NodeAsync -ScriptPath $nodeScript -Arguments @("--clear-pending") -JobTimeout 5
+                $clearResult = if ($nodeResult.Output) { $nodeResult.Output } else { "" }
+                if ($nodeResult.Success -and $clearResult -match '"success":\s*true') {
                     $pendingInfo = Get-PendingIssuesInfo
                     if ($pendingInfo.QueuedIssuesCount -gt 0) {
                         Write-ConsoleOutput -Message "  Next investigation: $($pendingInfo.QueuedIssuesCount) queued issue(s) waiting" -ForegroundColor "Cyan"
