@@ -26,6 +26,7 @@ const StateVerificationContracts = require('./StateVerificationContracts');
 const DependencyGraph = require('./DependencyGraph');
 const EnhancedAnomalyDetection = require('./EnhancedAnomalyDetection');
 const CausalAnalysis = require('./CausalAnalysis');
+const AutoFixEngine = require('./AutoFixEngine');
 const gameLogger = require('../../src/utils/GameLogger');
 
 class AIMonitorCore {
@@ -189,6 +190,20 @@ class AIMonitorCore {
             this.errorRecovery.recordSuccess('causalAnalysis');
         } catch (error) {
             this.errorRecovery.recordError('causalAnalysis', error);
+            throw error;
+        }
+        
+        // Auto-fix engine (automatically tries fixes from knowledge base)
+        try {
+            this.autoFixEngine = new AutoFixEngine(
+                this.stateStore,
+                this.issueDetector,
+                this.fixTracker,
+                this.learningEngine
+            );
+            this.errorRecovery.recordSuccess('autoFixEngine');
+        } catch (error) {
+            this.errorRecovery.recordError('autoFixEngine', error);
             throw error;
         }
         
