@@ -26,10 +26,44 @@ class AIMonitorCore {
         
         // Initialize core components
         this.stateStore = new StateStore(projectRoot);
-        this.logProcessor = new AILogProcessor(projectRoot, this.stateStore);
-        this.issueDetector = new AIIssueDetector(this.stateStore, this.logProcessor);
-        this.fixTracker = new AIFixTracker(this.stateStore, this.issueDetector);
-        this.decisionEngine = new AIDecisionEngine(this.stateStore, this.issueDetector, this.fixTracker);
+        
+        // Initialize error recovery and performance monitor first
+        this.errorRecovery = new ErrorRecovery(this.stateStore);
+        this.performanceMonitor = new PerformanceMonitor(this.stateStore);
+        
+        // Initialize core components (with error recovery tracking)
+        try {
+            this.logProcessor = new AILogProcessor(projectRoot, this.stateStore);
+            this.errorRecovery.recordSuccess('logProcessor');
+        } catch (error) {
+            this.errorRecovery.recordError('logProcessor', error);
+            throw error;
+        }
+        
+        try {
+            this.issueDetector = new AIIssueDetector(this.stateStore, this.logProcessor);
+            this.errorRecovery.recordSuccess('issueDetector');
+        } catch (error) {
+            this.errorRecovery.recordError('issueDetector', error);
+            throw error;
+        }
+        
+        try {
+            this.fixTracker = new AIFixTracker(this.stateStore, this.issueDetector);
+            this.errorRecovery.recordSuccess('fixTracker');
+        } catch (error) {
+            this.errorRecovery.recordError('fixTracker', error);
+            throw error;
+        }
+        
+        try {
+            this.decisionEngine = new AIDecisionEngine(this.stateStore, this.issueDetector, this.fixTracker);
+            this.errorRecovery.recordSuccess('decisionEngine');
+        } catch (error) {
+            this.errorRecovery.recordError('decisionEngine', error);
+            throw error;
+        }
+        
         this.liveStatistics = new AILiveStatistics(
             this.stateStore,
             this.issueDetector,
@@ -52,11 +86,16 @@ class AIMonitorCore {
         );
         
         // Server state capture (captures server health/metrics)
-        this.serverStateCapture = new ServerStateCapture(
-            this.stateStore,
-            process.env.SERVER_URL || 'http://localhost:3000'
-        );
-        this.errorRecovery.recordSuccess('serverStateCapture');
+        try {
+            this.serverStateCapture = new ServerStateCapture(
+                this.stateStore,
+                process.env.SERVER_URL || 'http://localhost:3000'
+            );
+            this.errorRecovery.recordSuccess('serverStateCapture');
+        } catch (error) {
+            this.errorRecovery.recordError('serverStateCapture', error);
+            throw error;
+        }
         
         // Start server state capture
         this.serverStateCapture.start();
