@@ -204,6 +204,66 @@ async function handleCommand() {
                 console.log(JSON.stringify(report));
                 break;
                 
+            case 'get-issue':
+                const issueId3 = args[0];
+                if (!issueId3) {
+                    console.error('Error: issueId required'); // CLI user feedback
+                    gameLogger.error('MONITORING', '[MONITOR_INTEGRATION_CLI] Missing issueId', {
+                        command: 'get-issue'
+                    });
+                    process.exit(1);
+                }
+                const issue = integration.getIssue(issueId3);
+                console.log(JSON.stringify(issue || { error: 'Issue not found' }));
+                break;
+                
+            case 'get-system-report':
+                const systemReport = integration.getSystemReport();
+                console.log(JSON.stringify(systemReport));
+                break;
+                
+            case 'get-component-health':
+                const health = integration.getComponentHealth();
+                console.log(JSON.stringify(health));
+                break;
+                
+            case 'attempt-auto-fix':
+                const issueId4 = args[0];
+                if (!issueId4) {
+                    console.error('Error: issueId required'); // CLI user feedback
+                    gameLogger.error('MONITORING', '[MONITOR_INTEGRATION_CLI] Missing issueId', {
+                        command: 'attempt-auto-fix'
+                    });
+                    process.exit(1);
+                }
+                const fixResult = await integration.attemptAutoFix(issueId4);
+                console.log(JSON.stringify(fixResult));
+                break;
+                
+            case 'get-auto-fix-statistics':
+                const autoFixStats = integration.getAutoFixStatistics();
+                console.log(JSON.stringify(autoFixStats));
+                break;
+                
+            case 'get-auto-fix-suggestions':
+                const issueId5 = args[0];
+                if (!issueId5) {
+                    console.error('Error: issueId required'); // CLI user feedback
+                    gameLogger.error('MONITORING', '[MONITOR_INTEGRATION_CLI] Missing issueId', {
+                        command: 'get-auto-fix-suggestions'
+                    });
+                    process.exit(1);
+                }
+                const suggestions = integration.getAutoFixSuggestions(issueId5);
+                console.log(JSON.stringify(suggestions));
+                break;
+                
+            case 'set-auto-fix-enabled':
+                const enabled = args[0] === 'true' || args[0] === '1';
+                integration.setAutoFixEnabled(enabled);
+                console.log(JSON.stringify({ success: true, enabled }));
+                break;
+                
             default:
                 console.error(`Unknown command: ${command}`); // CLI user feedback
                 gameLogger.warn('MONITORING', '[MONITOR_INTEGRATION_CLI] Unknown command', {
@@ -225,6 +285,13 @@ async function handleCommand() {
                 console.log('  update-monitor-status');
                 console.log('  query <question>');
                 console.log('  get-status-report');
+                console.log('  get-issue <issueId>');
+                console.log('  get-system-report');
+                console.log('  get-component-health');
+                console.log('  attempt-auto-fix <issueId>');
+                console.log('  get-auto-fix-statistics');
+                console.log('  get-auto-fix-suggestions <issueId>');
+                console.log('  set-auto-fix-enabled <true|false>');
                 process.exit(1);
         }
     } catch (error) {

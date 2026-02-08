@@ -368,34 +368,84 @@ class AIMonitorCore {
      * Get complete status - AI can see everything
      */
     getStatus() {
-        return this.communicationInterface.getStatusReport();
+        if (!this.communicationInterface) {
+            return { error: 'Communication interface not available', timestamp: Date.now() };
+        }
+        try {
+            return this.communicationInterface.getStatusReport();
+        } catch (error) {
+            gameLogger.error('MONITORING', '[AI_MONITOR_CORE] Get status error', {
+                error: error.message,
+                stack: error.stack
+            });
+            return { error: error.message, timestamp: Date.now() };
+        }
     }
     
     /**
      * Query system - AI can ask anything
      */
     query(question) {
-        return this.communicationInterface.query(question);
+        if (!this.communicationInterface) {
+            return { error: 'Communication interface not available', answer: null };
+        }
+        try {
+            return this.communicationInterface.query(question);
+        } catch (error) {
+            gameLogger.error('MONITORING', '[AI_MONITOR_CORE] Query error', {
+                question,
+                error: error.message,
+                stack: error.stack
+            });
+            return { error: error.message, answer: null };
+        }
     }
     
     /**
      * Get live statistics - AI sees comprehensive info
      */
     getStatistics() {
-        return this.liveStatistics.getStatistics();
+        if (!this.liveStatistics) {
+            return { error: 'Live statistics not available', timestamp: Date.now() };
+        }
+        try {
+            return this.liveStatistics.getStatistics();
+        } catch (error) {
+            gameLogger.error('MONITORING', '[AI_MONITOR_CORE] Get statistics error', {
+                error: error.message,
+                stack: error.stack
+            });
+            return { error: error.message, timestamp: Date.now() };
+        }
     }
     
     /**
      * Record fix attempt - AI tracks everything
      */
     recordFixAttempt(issueId, fixMethod, fixDetails, result) {
-        return this.fixTracker.recordAttempt(issueId, fixMethod, fixDetails, result);
+        if (!this.fixTracker) {
+            return { success: false, reason: 'Fix tracker not available' };
+        }
+        try {
+            return this.fixTracker.recordAttempt(issueId, fixMethod, fixDetails, result);
+        } catch (error) {
+            gameLogger.error('MONITORING', '[AI_MONITOR_CORE] Record fix attempt error', {
+                issueId,
+                fixMethod,
+                error: error.message,
+                stack: error.stack
+            });
+            return { success: false, reason: error.message };
+        }
     }
     
     /**
      * Get suggested fixes - AI knows what to try
      */
     getSuggestedFixes(issue) {
+        if (!this.fixTracker || !issue) {
+            return { shouldTry: [], shouldNotTry: [], confidence: 0 };
+        }
         return this.fixTracker.getSuggestedFixes(issue);
     }
     
@@ -403,7 +453,21 @@ class AIMonitorCore {
      * Get active issues - AI sees all issues
      */
     getActiveIssues() {
-        return this.issueDetector.getActiveIssues();
+        if (!this.issueDetector) {
+            return [];
+        }
+        const issues = this.issueDetector.getActiveIssues();
+        return Array.isArray(issues) ? issues : [];
+    }
+    
+    /**
+     * Get issue by ID
+     */
+    getIssue(issueId) {
+        if (!this.issueDetector) {
+            return null;
+        }
+        return this.issueDetector.getIssue(issueId) || null;
     }
     
     /**
@@ -528,6 +592,116 @@ class AIMonitorCore {
         }
         const state = currentState || this.stateStore.getState('game');
         return this.learningEngine.predictIssues(state);
+    }
+    
+    /**
+     * Attempt auto-fix for an issue
+     */
+    async attemptAutoFix(issueId) {
+        if (!this.autoFixEngine) {
+            return { success: false, reason: 'Auto-fix engine not available' };
+        }
+        const issue = this.issueDetector.getIssue(issueId);
+        if (!issue) {
+            return { success: false, reason: 'Issue not found' };
+        }
+        // AutoFixEngine handles issues automatically, but we can trigger it manually
+        return await this.autoFixEngine.handleIssue(issue);
+    }
+    
+    /**
+     * Get auto-fix statistics
+     */
+    getAutoFixStatistics() {
+        if (!this.autoFixEngine) {
+            return { enabled: false, totalAttempts: 0, successful: 0, failed: 0 };
+        }
+        return this.autoFixEngine.getStatistics();
+    }
+    
+    /**
+     * Enable/disable auto-fix
+     */
+    setAutoFixEnabled(enabled) {
+        if (this.autoFixEngine) {
+            if (enabled) {
+                this.autoFixEngine.enable();
+            } else {
+                this.autoFixEngine.disable();
+            }
+        }
+    }
+    
+    /**
+     * Get auto-fix suggested fixes for an issue
+     */
+    getAutoFixSuggestions(issueId) {
+        if (!this.autoFixEngine) {
+            return [];
+        }
+        const issue = this.issueDetector.getIssue(issueId);
+        if (!issue) {
+            return [];
+        }
+        return this.autoFixEngine.getSuggestedFixes(issue);
+    }
+    
+    /**
+     * Get component health summary
+     */
+    getComponentHealth() {
+        const health = {
+            timestamp: Date.now(),
+            components: {}
+        };
+        
+        // Get error recovery health
+        if (this.errorRecovery) {
+            health.components = this.errorRecovery.getAllHealth();
+        }
+        
+        // Add component status
+        health.status = {
+            stateStore: !!this.stateStore,
+            logProcessor: !!this.logProcessor,
+            issueDetector: !!this.issueDetector,
+            fixTracker: !!this.fixTracker,
+            decisionEngine: !!this.decisionEngine,
+            liveStatistics: !!this.liveStatistics,
+            communicationInterface: !!this.communicationInterface,
+            integrityChecker: !!this.integrityChecker,
+            serverStateCapture: !!this.serverStateCapture,
+            unityStateReporter: !!this.unityStateReporter,
+            stateVerificationContracts: !!this.stateVerificationContracts,
+            dependencyGraph: !!this.dependencyGraph,
+            enhancedAnomalyDetection: !!this.enhancedAnomalyDetection,
+            causalAnalysis: !!this.causalAnalysis,
+            autoFixEngine: !!this.autoFixEngine,
+            learningEngine: !!this.learningEngine,
+            errorRecovery: !!this.errorRecovery,
+            performanceMonitor: !!this.performanceMonitor,
+            universalErrorHandler: !!this.universalErrorHandler
+        };
+        
+        return health;
+    }
+    
+    /**
+     * Get comprehensive system report
+     */
+    getSystemReport() {
+        return {
+            timestamp: Date.now(),
+            status: this.getStatus(),
+            statistics: this.getStatistics(),
+            activeIssues: this.getActiveIssues(),
+            integrity: this.getIntegrityStatus(),
+            errorRecovery: this.getErrorRecoveryStatus(),
+            performance: this.getPerformanceReport(),
+            learning: this.getLearningReport(),
+            autoFix: this.getAutoFixStatistics(),
+            componentHealth: this.getComponentHealth()
+        };
     }
     
     /**

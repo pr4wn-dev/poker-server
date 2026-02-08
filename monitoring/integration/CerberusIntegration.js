@@ -356,24 +356,35 @@ class CerberusIntegration {
      * Replaces reading from pending-issues.json
      */
     getActiveIssues() {
-        const issues = this.aiCore.issueDetector.getActiveIssues();
-        // Ensure issues is an array
-        const issuesArray = Array.isArray(issues) ? issues : [];
-        return {
-            count: issuesArray.length,
-            issues: issuesArray.map(i => ({
-                id: i.id,
-                type: i.type,
-                severity: i.severity,
-                priority: i.priority,
-                confidence: i.confidence,
-                rootCause: i.rootCause,
-                possibleFixes: i.possibleFixes,
-                firstSeen: i.firstSeen,
-                lastSeen: i.lastSeen,
-                count: i.count
-            }))
-        };
+        try {
+            if (!this.aiCore || !this.aiCore.issueDetector) {
+                return { count: 0, issues: [] };
+            }
+            const issues = this.aiCore.issueDetector.getActiveIssues();
+            // Ensure issues is an array
+            const issuesArray = Array.isArray(issues) ? issues : [];
+            return {
+                count: issuesArray.length,
+                issues: issuesArray.map(i => ({
+                    id: i.id || 'unknown',
+                    type: i.type || 'unknown',
+                    severity: i.severity || 'medium',
+                    priority: i.priority || 0,
+                    confidence: i.confidence || 0,
+                    rootCause: i.rootCause || null,
+                    possibleFixes: i.possibleFixes || [],
+                    firstSeen: i.firstSeen || Date.now(),
+                    lastSeen: i.lastSeen || Date.now(),
+                    count: i.count || 1
+                }))
+            };
+        } catch (error) {
+            gameLogger.error('MONITORING', '[MONITOR_INTEGRATION] Get active issues error', {
+                error: error.message,
+                stack: error.stack
+            });
+            return { count: 0, issues: [] };
+        }
     }
     
     /**
@@ -381,21 +392,39 @@ class CerberusIntegration {
      * Uses AIFixTracker for learning
      */
     getSuggestedFixes(issueId) {
-        const issue = this.aiCore.issueDetector.getIssue(issueId);
-        if (!issue) {
+        try {
+            if (!this.aiCore || !this.aiCore.issueDetector || !this.aiCore.fixTracker) {
+                return {
+                    error: 'AI core not available',
+                    issueId
+                };
+            }
+            const issue = this.aiCore.issueDetector.getIssue(issueId);
+            if (!issue) {
+                return {
+                    error: 'Issue not found',
+                    issueId
+                };
+            }
+            
+            const suggestions = this.aiCore.fixTracker.getSuggestedFixes(issue);
             return {
-                error: 'Issue not found',
+                issue,
+                shouldTry: Array.isArray(suggestions.shouldTry) ? suggestions.shouldTry : [],
+                shouldNotTry: Array.isArray(suggestions.shouldNotTry) ? suggestions.shouldNotTry : [],
+                confidence: suggestions.confidence || 0
+            };
+        } catch (error) {
+            gameLogger.error('MONITORING', '[MONITOR_INTEGRATION] Get suggested fixes error', {
+                issueId,
+                error: error.message,
+                stack: error.stack
+            });
+            return {
+                error: error.message,
                 issueId
             };
         }
-        
-        const suggestions = this.aiCore.fixTracker.getSuggestedFixes(issue);
-        return {
-            issue,
-            shouldTry: suggestions.shouldTry,
-            shouldNotTry: suggestions.shouldNotTry,
-            confidence: suggestions.confidence
-        };
     }
     
     /**
@@ -435,6 +464,134 @@ class CerberusIntegration {
      */
     getStatusReport() {
         return this.aiCore.communication.getStatusReport();
+    }
+    
+    /**
+     * Get issue by ID
+     */
+    getIssue(issueId) {
+        try {
+            if (!this.aiCore || !this.aiCore.issueDetector) {
+                return null;
+            }
+            return this.aiCore.issueDetector.getIssue(issueId);
+        } catch (error) {
+            gameLogger.error('MONITORING', '[MONITOR_INTEGRATION] Get issue error', {
+                issueId,
+                error: error.message,
+                stack: error.stack
+            });
+            return null;
+        }
+    }
+    
+    /**
+     * Get comprehensive system report
+     */
+    getSystemReport() {
+        try {
+            if (!this.aiCore) {
+                return { error: 'AI core not available', timestamp: Date.now() };
+            }
+            return this.aiCore.getSystemReport();
+        } catch (error) {
+            gameLogger.error('MONITORING', '[MONITOR_INTEGRATION] Get system report error', {
+                error: error.message,
+                stack: error.stack
+            });
+            return { error: error.message, timestamp: Date.now() };
+        }
+    }
+    
+    /**
+     * Get component health
+     */
+    getComponentHealth() {
+        try {
+            if (!this.aiCore) {
+                return { error: 'AI core not available', timestamp: Date.now() };
+            }
+            return this.aiCore.getComponentHealth();
+        } catch (error) {
+            gameLogger.error('MONITORING', '[MONITOR_INTEGRATION] Get component health error', {
+                error: error.message,
+                stack: error.stack
+            });
+            return { error: error.message, timestamp: Date.now() };
+        }
+    }
+    
+    /**
+     * Attempt auto-fix for an issue
+     */
+    async attemptAutoFix(issueId) {
+        try {
+            if (!this.aiCore) {
+                return { success: false, reason: 'AI core not available' };
+            }
+            return await this.aiCore.attemptAutoFix(issueId);
+        } catch (error) {
+            gameLogger.error('MONITORING', '[MONITOR_INTEGRATION] Attempt auto-fix error', {
+                issueId,
+                error: error.message,
+                stack: error.stack
+            });
+            return { success: false, reason: error.message };
+        }
+    }
+    
+    /**
+     * Get auto-fix statistics
+     */
+    getAutoFixStatistics() {
+        try {
+            if (!this.aiCore) {
+                return { enabled: false, totalAttempts: 0, successful: 0, failed: 0 };
+            }
+            return this.aiCore.getAutoFixStatistics();
+        } catch (error) {
+            gameLogger.error('MONITORING', '[MONITOR_INTEGRATION] Get auto-fix statistics error', {
+                error: error.message,
+                stack: error.stack
+            });
+            return { enabled: false, totalAttempts: 0, successful: 0, failed: 0, error: error.message };
+        }
+    }
+    
+    /**
+     * Get auto-fix suggestions for an issue
+     */
+    getAutoFixSuggestions(issueId) {
+        try {
+            if (!this.aiCore) {
+                return [];
+            }
+            return this.aiCore.getAutoFixSuggestions(issueId);
+        } catch (error) {
+            gameLogger.error('MONITORING', '[MONITOR_INTEGRATION] Get auto-fix suggestions error', {
+                issueId,
+                error: error.message,
+                stack: error.stack
+            });
+            return [];
+        }
+    }
+    
+    /**
+     * Enable/disable auto-fix
+     */
+    setAutoFixEnabled(enabled) {
+        try {
+            if (this.aiCore) {
+                this.aiCore.setAutoFixEnabled(enabled);
+            }
+        } catch (error) {
+            gameLogger.error('MONITORING', '[MONITOR_INTEGRATION] Set auto-fix enabled error', {
+                enabled,
+                error: error.message,
+                stack: error.stack
+            });
+        }
     }
     
     /**
