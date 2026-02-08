@@ -5191,7 +5191,17 @@ while ($monitoringActive) {
         
     } catch {
         $errorMsg = "Monitoring error: $_"
+        $errorStackTrace = $_.ScriptStackTrace
         Write-Error $errorMsg
+        # CRITICAL: Log error to diagnostics file so we can see what's blocking the loop
+        try {
+            $diagnosticsLog = Join-Path $script:projectRoot "logs\monitor-diagnostics.log"
+            $errorLogEntry = "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] [ERROR] $errorMsg`nStack trace: $errorStackTrace`n"
+            Add-Content -Path $diagnosticsLog -Value $errorLogEntry -ErrorAction SilentlyContinue
+        } catch {
+            # If logging fails, at least try to write to console
+            Write-Host "[$(Get-Date -Format 'HH:mm:ss')] CRITICAL: Failed to log error to diagnostics: $_" -ForegroundColor "Red"
+        }
         # Update status file with error
         Update-MonitorStatus -statusUpdate @{
             lastError = $errorMsg
