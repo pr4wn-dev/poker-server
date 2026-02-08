@@ -21,8 +21,17 @@ class UniversalErrorHandler extends EventEmitter {
         this.componentErrors = new Map(); // component -> { count, errors: [] }
         this.maxHistorySize = 10000; // Keep last 10k errors
         
+        // Error rate tracking
+        this.errorRateWindow = 60000; // 1 minute window
+        this.errorRateHistory = []; // Timestamps of recent errors for rate calculation
+        this.errorRateThreshold = 10; // Alert if more than 10 errors per minute
+        this.lastSpikeAlert = 0; // Prevent spam - only alert once per minute
+        
         // Setup global error handlers
         this.setupGlobalHandlers();
+        
+        // Start error rate monitoring
+        this.startErrorRateMonitoring();
         
         // Load error history
         this.load();
@@ -103,6 +112,10 @@ class UniversalErrorHandler extends EventEmitter {
         if (this.errorHistory.length > this.maxHistorySize) {
             this.errorHistory.shift();
         }
+        
+        // Track for error rate calculation
+        this.errorRateHistory.push(Date.now());
+        this.checkErrorRate();
         
         // Track by component
         if (!this.componentErrors.has(component)) {
