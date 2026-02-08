@@ -531,9 +531,16 @@ class AIFixTracker extends EventEmitter {
     getFailedFixes() {
         const failed = this.stateStore.getState('fixes.failures') || [];
         
+        // Ensure failed is an array
+        if (!Array.isArray(failed)) {
+            return [];
+        }
+        
         // Group by method
         const grouped = new Map();
         for (const failure of failed) {
+            if (!failure || !failure.method) continue;
+            
             if (!grouped.has(failure.method)) {
                 grouped.set(failure.method, {
                     method: failure.method,
@@ -542,8 +549,10 @@ class AIFixTracker extends EventEmitter {
                 });
             }
             const entry = grouped.get(failure.method);
-            entry.totalFailures += failure.count;
-            entry.issues.push(failure.issueId);
+            entry.totalFailures += failure.count || 1;
+            if (failure.issueId) {
+                entry.issues.push(failure.issueId);
+            }
         }
         
         return Array.from(grouped.values())
