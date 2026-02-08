@@ -48,6 +48,7 @@ $pendingIssuesFile = Join-Path $script:projectRoot "logs\pending-issues.json"
 $fixAppliedFile = Join-Path $script:projectRoot "logs\fix-applied.json"
 $monitorStatusFile = Join-Path $script:projectRoot "logs\monitor-status.json"  # Persistent status file for AI assistant
 $checkInterval = 1  # Check every 1 second
+# Legacy issue-detector.js path (fallback only, AI system preferred)
 $nodeScript = Join-Path $script:projectRoot "monitoring\issue-detector.js"
 $serverUrl = "http://localhost:3000"
 $statsUpdateInterval = 5  # Update stats display every 5 seconds (more responsive)
@@ -366,26 +367,20 @@ function Invoke-PauseUnity {
     }
 }
 
-# Function to call Node.js issue detector (non-blocking)
+# Function to call Node.js issue detector (non-blocking) - LEGACY, use AI system instead
 function Invoke-IssueDetector {
     param($logLine)
     
-    try {
-        # Escape the log line for PowerShell
-        $escapedLine = $logLine -replace '"', '""'
-        
-        # Use async call with timeout
-        $nodeResult = Invoke-NodeAsync -ScriptPath $nodeScript -Arguments @("--check", "`"$escapedLine`"") -JobTimeout 3
-        
-        if ($nodeResult.Success -and $nodeResult.ExitCode -eq 0 -and $nodeResult.Output) {
-            $jsonResult = $nodeResult.Output | ConvertFrom-Json -ErrorAction SilentlyContinue
-            if ($jsonResult) {
-                return $jsonResult
+    # Use AI system if available, otherwise return null (legacy fallback removed)
+    if ($script:aiIntegrationEnabled) {
+        try {
+            $aiDetected = Detect-AIIssue -LogLine $logLine
+            if ($aiDetected -and $aiDetected.Issue) {
+                return $aiDetected.Issue
             }
+        } catch {
+            # AI detection failed - return null
         }
-    } catch {
-        # If Node.js script fails, fall back to basic pattern matching
-        return $null
     }
     return $null
 }
@@ -479,6 +474,28 @@ function Add-PendingIssue {
             return $null
         }
         
+        # Use AI system if available, otherwise fallback to legacy
+        if ($script:aiIntegrationEnabled) {
+            try {
+                $addResult = Add-AIIssueFromFile -FilePath $tempFile
+                if ($addResult -and $addResult.success) {
+                    # Clean up temp file
+                    try {
+                        Remove-Item $tempFile -Force -ErrorAction SilentlyContinue
+                    } catch {
+                        # Ignore cleanup errors
+                    }
+                    return $addResult
+                } else {
+                    $errorMsg = if ($addResult -and $addResult.error) { $addResult.error } else { "AI issue detection failed" }
+                    Write-Warning "Failed to add issue via AI system: $errorMsg"
+                }
+            } catch {
+                Write-Warning "AI issue detection error: $_"
+            }
+        }
+        
+        # Fallback to legacy issue-detector.js (if AI not available)
         # Automatic retry logic for issue detector
         $maxRetries = 3
         $retryCount = 0

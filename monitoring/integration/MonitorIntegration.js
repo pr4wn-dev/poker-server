@@ -313,6 +313,45 @@ class MonitorIntegration {
     }
     
     /**
+     * Add issue to AI detector
+     * Replaces issue-detector.js --add-issue-file functionality
+     */
+    addIssue(issueData) {
+        try {
+            // Create issue object
+            const issue = {
+                type: issueData.type || 'error',
+                severity: issueData.severity || 'critical',
+                method: 'manual',
+                details: {
+                    message: issueData.message || '',
+                    source: issueData.source || 'server',
+                    tableId: issueData.tableId || null
+                },
+                timestamp: Date.now()
+            };
+            
+            // Detect issue via AI system
+            const detected = this.aiCore.issueDetector.detectIssue(issue);
+            
+            return {
+                success: true,
+                issueId: detected.id,
+                issue: detected
+            };
+        } catch (error) {
+            gameLogger.error('MONITORING', '[MONITOR_INTEGRATION] Add issue error', {
+                error: error.message,
+                stack: error.stack
+            });
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    }
+    
+    /**
      * Get active issues from AI detector
      * Replaces reading from pending-issues.json
      */

@@ -84,6 +84,60 @@ async function handleCommand() {
                 console.log(JSON.stringify(detected || { issue: null }));
                 break;
                 
+            case 'add-issue':
+                const issueDataJson = args.join(' ');
+                if (!issueDataJson) {
+                    console.error('Error: issueData JSON required'); // CLI user feedback
+                    gameLogger.error('MONITORING', '[MONITOR_INTEGRATION_CLI] Missing issueData', {
+                        command: 'add-issue'
+                    });
+                    process.exit(1);
+                }
+                try {
+                    const issueData = JSON.parse(issueDataJson);
+                    const addResult = integration.addIssue(issueData);
+                    console.log(JSON.stringify(addResult));
+                } catch (error) {
+                    console.error('Error: Invalid JSON'); // CLI user feedback
+                    gameLogger.error('MONITORING', '[MONITOR_INTEGRATION_CLI] Invalid JSON', {
+                        command: 'add-issue',
+                        error: error.message
+                    });
+                    process.exit(1);
+                }
+                break;
+                
+            case 'add-issue-file':
+                const fs = require('fs');
+                const issueFilePath = args[0];
+                if (!issueFilePath) {
+                    console.error('Error: issue file path required'); // CLI user feedback
+                    gameLogger.error('MONITORING', '[MONITOR_INTEGRATION_CLI] Missing file path', {
+                        command: 'add-issue-file'
+                    });
+                    process.exit(1);
+                }
+                try {
+                    const fileContent = fs.readFileSync(issueFilePath, 'utf8');
+                    const issueData = JSON.parse(fileContent);
+                    const addResult = integration.addIssue(issueData);
+                    console.log(JSON.stringify(addResult));
+                    // Clean up temp file
+                    try {
+                        fs.unlinkSync(issueFilePath);
+                    } catch (e) {
+                        // Ignore cleanup errors
+                    }
+                } catch (error) {
+                    console.error('Error: Failed to read or parse issue file'); // CLI user feedback
+                    gameLogger.error('MONITORING', '[MONITOR_INTEGRATION_CLI] File read error', {
+                        command: 'add-issue-file',
+                        error: error.message
+                    });
+                    process.exit(1);
+                }
+                break;
+                
             case 'get-active-issues':
                 const issues = integration.getActiveIssues();
                 console.log(JSON.stringify(issues));

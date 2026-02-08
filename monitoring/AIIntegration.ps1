@@ -133,6 +133,27 @@ function Detect-AIIssue {
     return $null
 }
 
+# Add issue to AI detector (replaces issue-detector.js --add-issue-file)
+function Add-AIIssue {
+    param(
+        [hashtable]$IssueData
+    )
+    
+    $jsonData = $IssueData | ConvertTo-Json -Compress
+    $result = Invoke-AIIntegration -Command "add-issue" -Arguments @($jsonData)
+    return $result
+}
+
+# Add issue from file (replaces issue-detector.js --add-issue-file)
+function Add-AIIssueFromFile {
+    param(
+        [string]$FilePath
+    )
+    
+    $result = Invoke-AIIntegration -Command "add-issue-file" -Arguments @($FilePath)
+    return $result
+}
+
 # Get active issues from AI detector
 function Get-AIActiveIssues {
     $result = Invoke-AIIntegration -Command "get-active-issues"
