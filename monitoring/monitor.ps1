@@ -3199,12 +3199,18 @@ while ($monitoringActive) {
                 } else {
                     Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] INVESTIGATION COMPLETE: Timeout reached (no active focus group)" -ForegroundColor "Yellow"
                 }
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] Calling Update-MonitorStatus to save completion" -ForegroundColor "Cyan"
                 Update-MonitorStatus
                 $lastStatusUpdate = Get-Date
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] Update-MonitorStatus completed, skipping normal check block" -ForegroundColor "Cyan"
                 # Skip the normal check block since we already completed
                 $shouldCheckInvestigation = $false
                 $investigationStartTimeValid = $false
+            } else {
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] shouldCompleteNow is FALSE - investigation will continue" -ForegroundColor "Gray"
             }
+        } else {
+            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] statusFileInvestigationActive is FALSE - completion check skipped" -ForegroundColor "Gray"
         }
         
         if ($shouldCheckInvestigation -and $investigationStartTimeValid) {
