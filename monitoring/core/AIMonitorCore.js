@@ -25,6 +25,7 @@ const UnityStateReporter = require('./UnityStateReporter');
 const StateVerificationContracts = require('./StateVerificationContracts');
 const DependencyGraph = require('./DependencyGraph');
 const EnhancedAnomalyDetection = require('./EnhancedAnomalyDetection');
+const CausalAnalysis = require('./CausalAnalysis');
 const gameLogger = require('../../src/utils/GameLogger');
 
 class AIMonitorCore {
@@ -175,6 +176,19 @@ class AIMonitorCore {
             this.errorRecovery.recordSuccess('enhancedAnomalyDetection');
         } catch (error) {
             this.errorRecovery.recordError('enhancedAnomalyDetection', error);
+            throw error;
+        }
+        
+        // Causal analysis (trace state changes backwards, build causal chains)
+        try {
+            this.causalAnalysis = new CausalAnalysis(
+                this.stateStore,
+                this.issueDetector,
+                this.dependencyGraph
+            );
+            this.errorRecovery.recordSuccess('causalAnalysis');
+        } catch (error) {
+            this.errorRecovery.recordError('causalAnalysis', error);
             throw error;
         }
         
