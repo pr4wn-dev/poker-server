@@ -3385,6 +3385,7 @@ while ($monitoringActive) {
         # CRITICAL: Use direct read values if available (they're more recent)
         # If direct read found active investigation, use those values for forced completion check
         # CRITICAL: Always check direct read FIRST, then fall back to initial read
+        # CRITICAL: Also check status file directly if both reads failed but status file exists
         $forcedCheckActive = $false
         $forcedCheckStartTime = $null
         $forcedCheckTimeRemaining = $null
@@ -3399,6 +3400,34 @@ while ($monitoringActive) {
             $forcedCheckActive = $statusFileInvestigationActive
             $forcedCheckStartTime = $statusFileInvestigationStartTime
             $forcedCheckTimeRemaining = $statusFileTimeRemaining
+        } elseif ($statusFileDirectReadSuccess -and $statusFileDirectRead -and $statusFileDirectRead.investigation) {
+            # CRITICAL: If direct read succeeded but didn't set variables, try to parse directly
+            # This handles edge cases where parsing failed silently
+            try {
+                $inv = $statusFileDirectRead.investigation
+                if ($inv.active) {
+                    $activeVal = $inv.active
+                    if ($activeVal -is [bool] -and $activeVal) {
+                        $forcedCheckActive = $true
+                    } elseif ($activeVal -is [string] -and ($activeVal -eq "True" -or $activeVal -eq "true" -or $activeVal -eq "1")) {
+                        $forcedCheckActive = $true
+                    } elseif ([bool]$activeVal) {
+                        $forcedCheckActive = $true
+                    }
+                    if ($inv.startTime) {
+                        try {
+                            $forcedCheckStartTime = [DateTime]::Parse($inv.startTime)
+                        } catch {
+                            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] Failed to parse startTime in fallback: $($inv.startTime)" -ForegroundColor "Yellow"
+                        }
+                    }
+                    if ($inv.timeRemaining -ne $null) {
+                        $forcedCheckTimeRemaining = $inv.timeRemaining
+                    }
+                }
+            } catch {
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] Fallback forced check parse failed: $_" -ForegroundColor "Yellow"
+            }
         }
         
         # CRITICAL: ALWAYS check forced completion if we found ANY active investigation
