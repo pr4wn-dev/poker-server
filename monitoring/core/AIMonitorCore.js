@@ -19,6 +19,7 @@ const IntegrityChecker = require('./IntegrityChecker');
 const ServerStateCapture = require('./ServerStateCapture');
 const ErrorRecovery = require('./ErrorRecovery');
 const PerformanceMonitor = require('./PerformanceMonitor');
+const AILearningEngine = require('./AILearningEngine');
 
 class AIMonitorCore {
     constructor(projectRoot) {
@@ -30,6 +31,8 @@ class AIMonitorCore {
         // Initialize error recovery and performance monitor first
         this.errorRecovery = new ErrorRecovery(this.stateStore);
         this.performanceMonitor = new PerformanceMonitor(this.stateStore);
+        
+        // Initialize learning engine (after fixTracker is ready)
         
         // Initialize core components (with error recovery tracking)
         try {
@@ -51,6 +54,15 @@ class AIMonitorCore {
         try {
             this.fixTracker = new AIFixTracker(this.stateStore, this.issueDetector);
             this.errorRecovery.recordSuccess('fixTracker');
+            
+            // Initialize learning engine (needs fixTracker)
+            this.learningEngine = new AILearningEngine(this.stateStore, this.issueDetector, this.fixTracker);
+            this.errorRecovery.recordSuccess('learningEngine');
+            
+            // Connect learning engine to fix tracker
+            this.fixTracker.on('attemptRecorded', (attempt) => {
+                this.learningEngine.learnFromAttempt(attempt);
+            });
         } catch (error) {
             this.errorRecovery.recordError('fixTracker', error);
             throw error;
@@ -301,6 +313,37 @@ class AIMonitorCore {
             return { system: {}, operations: {}, thresholds: {}, timestamp: Date.now() };
         }
         return this.performanceMonitor.getPerformanceReport();
+    }
+    
+    /**
+     * Get learning report
+     */
+    getLearningReport() {
+        if (!this.learningEngine) {
+            return { patterns: {}, causalChains: {}, solutionOptimization: {}, crossIssueLearning: {} };
+        }
+        return this.learningEngine.getLearningReport();
+    }
+    
+    /**
+     * Get best solution for issue type
+     */
+    getBestSolution(issueType) {
+        if (!this.learningEngine) {
+            return null;
+        }
+        return this.learningEngine.getBestSolution(issueType);
+    }
+    
+    /**
+     * Predict likely issues
+     */
+    predictIssues(currentState = null) {
+        if (!this.learningEngine) {
+            return [];
+        }
+        const state = currentState || this.stateStore.getState('game');
+        return this.learningEngine.predictIssues(state);
     }
     
     /**

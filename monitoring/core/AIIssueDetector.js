@@ -47,6 +47,20 @@ class AIIssueDetector extends EventEmitter {
     }
     
     /**
+     * State verification interval
+     */
+    stopStateVerification() {
+        if (this.stateVerificationInterval) {
+            clearInterval(this.stateVerificationInterval);
+            this.stateVerificationInterval = null;
+        }
+        if (this.anomalyDetectionInterval) {
+            clearInterval(this.anomalyDetectionInterval);
+            this.anomalyDetectionInterval = null;
+        }
+    }
+    
+    /**
      * Start detection
      */
     start() {

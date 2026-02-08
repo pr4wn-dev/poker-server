@@ -28,7 +28,7 @@ class AIDecisionEngine extends EventEmitter {
      */
     start() {
         // Make decisions every second
-        setInterval(() => {
+        this.decisionInterval = setInterval(() => {
             this.makeDecisions();
         }, 1000);
         
@@ -40,6 +40,23 @@ class AIDecisionEngine extends EventEmitter {
         this.issueDetector.on('issueDetected', (issue) => {
             this.onIssueDetected(issue);
         });
+    }
+    
+    /**
+     * Stop decision making
+     */
+    stop() {
+        if (this.decisionInterval) {
+            clearInterval(this.decisionInterval);
+            this.decisionInterval = null;
+        }
+    }
+    
+    /**
+     * Destroy - alias for stop
+     */
+    destroy() {
+        this.stop();
     }
     
     /**
