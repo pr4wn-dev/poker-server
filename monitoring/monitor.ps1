@@ -1836,6 +1836,20 @@ function Kill-Port3000Processes {
 
 # Function to display statistics in a formatted layout
 function Show-Statistics {
+    # NEW: Try AI-powered statistics first, fallback to legacy if unavailable
+    if ($script:aiIntegrationEnabled) {
+        try {
+            $aiStats = Get-AILiveStatistics
+            if ($aiStats) {
+                Show-AIStatistics -LegacyStats $stats -LogFile $logFile -ServerUrl $serverUrl
+                return
+            }
+        } catch {
+            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] AI statistics failed, using legacy: $_" -ForegroundColor "Yellow"
+        }
+    }
+    
+    # LEGACY: Original Show-Statistics implementation (fallback)
     $fixStats = Get-FixAttemptsStats
     $pendingInfo = Get-PendingIssuesInfo
     $stats.PendingIssues = $pendingInfo.TotalIssues

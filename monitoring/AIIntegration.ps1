@@ -173,6 +173,7 @@ function Record-AIFixAttempt {
 }
 
 # Get live statistics from AI
+# Get live statistics from AI system
 function Get-AILiveStatistics {
     $result = Invoke-AIIntegration -Command "get-live-statistics"
     return $result
