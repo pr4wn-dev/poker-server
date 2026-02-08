@@ -3272,21 +3272,38 @@ while ($monitoringActive) {
             }
         }
         
-        # CRITICAL FIX: If there's a focused group but no active investigation, start one
-        # This handles the case where a focus group exists but investigation never started
-        # Only check every 5 seconds to avoid spam
-        if (-not $script:lastFocusedGroupCheck) {
-            $script:lastFocusedGroupCheck = Get-Date
-        }
-        $timeSinceLastCheck = ((Get-Date) - $script:lastFocusedGroupCheck).TotalSeconds
-        
-        if (-not $script:isInvestigating -and $timeSinceLastCheck -ge 5) {
+        # CRITICAL FIX: Check for focused group and start investigation if needed
+        # Check EVERY loop iteration (not just every 5 seconds) to catch issues immediately
+        if (-not $script:isInvestigating) {
             $pendingInfo = Get-PendingIssuesInfo
+            # Check if there's actually a focused group in the file (even if Get-PendingIssuesInfo says InFocusMode=false)
+            $hasFocusedGroup = $false
+            try {
+                if (Test-Path $pendingIssuesFile) {
+                    $pendingContent = Get-Content $pendingIssuesFile -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+                    if ($pendingContent.focusedGroup -and $pendingContent.focusedGroup.rootIssue) {
+                        $hasFocusedGroup = $true
+                        # If Get-PendingIssuesInfo returned false but file has focusedGroup, use file data
+                        if (-not $pendingInfo -or -not $pendingInfo.InFocusMode) {
+                            $pendingInfo = @{
+                                InFocusMode = $true
+                                RootIssue = $pendingContent.focusedGroup.rootIssue
+                                RelatedIssuesCount = if ($pendingContent.focusedGroup.relatedIssues) { $pendingContent.focusedGroup.relatedIssues.Count } else { 0 }
+                                RelatedIssues = if ($pendingContent.focusedGroup.relatedIssues) { $pendingContent.focusedGroup.relatedIssues } else { @() }
+                                GroupId = $pendingContent.focusedGroup.id
+                            }
+                        }
+                    }
+                }
+            } catch {
+                # File read failed - use pendingInfo as-is
+            }
+            
             # DIAGNOSTIC: Log why investigation isn't starting
             if (-not $pendingInfo) {
                 # No pending info - skip
-            } elseif (-not $pendingInfo.InFocusMode) {
-                # Not in focus mode - skip
+            } elseif (-not $pendingInfo.InFocusMode -and -not $hasFocusedGroup) {
+                # Not in focus mode and no focused group in file - skip
             } elseif (-not $pendingInfo.RootIssue) {
                 Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] Focused group exists but no root issue" -ForegroundColor "Yellow"
             } elseif (-not $investigationEnabled) {
@@ -3305,7 +3322,6 @@ while ($monitoringActive) {
                 Update-MonitorStatus
                 $lastStatusUpdate = Get-Date
             }
-            $script:lastFocusedGroupCheck = Get-Date
         }
         
         # Check if log file exists
