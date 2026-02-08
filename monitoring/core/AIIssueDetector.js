@@ -714,8 +714,10 @@ class AIIssueDetector extends EventEmitter {
         
         // Add to detected
         const detected = this.stateStore.getState('issues.detected') || [];
-        detected.push(issue);
-        this.stateStore.updateState('issues.detected', detected);
+        // Ensure detected is an array
+        const detectedArray = Array.isArray(detected) ? detected : [];
+        detectedArray.push(issue);
+        this.stateStore.updateState('issues.detected', detectedArray);
     }
     
     /**
