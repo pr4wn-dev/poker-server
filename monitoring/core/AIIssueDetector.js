@@ -552,19 +552,44 @@ class AIIssueDetector extends EventEmitter {
         // Get fixes from knowledge base
         const knowledge = this.stateStore.getState('fixes.knowledge');
         
+        if (!knowledge) {
+            return [];
+        }
+        
         const suggestions = [];
         
+        // Handle different knowledge formats
+        let knowledgeEntries = [];
+        if (knowledge instanceof Map) {
+            knowledgeEntries = Array.from(knowledge.entries());
+        } else if (Array.isArray(knowledge)) {
+            // Array of [pattern, data] entries
+            knowledgeEntries = knowledge;
+        } else if (typeof knowledge === 'object') {
+            knowledgeEntries = Object.entries(knowledge);
+        } else {
+            return [];
+        }
+        
         // Look for similar issues in knowledge base
-        for (const [pattern, data] of knowledge.entries()) {
-            if (pattern.includes(issue.type) || issue.type.includes(pattern)) {
-                if (data.successRate > 0.5) {
-                    suggestions.push({
-                        method: data.method,
-                        successRate: data.successRate,
-                        attempts: data.attempts,
-                        confidence: data.successRate
-                    });
+        for (const [pattern, data] of knowledgeEntries) {
+            if (!pattern || !data || !issue.type) continue;
+            
+            try {
+                if (pattern.includes(issue.type) || issue.type.includes(pattern)) {
+                    const successRate = data.successRate || 0;
+                    if (successRate > 0.5) {
+                        suggestions.push({
+                            method: data.method || 'unknown',
+                            successRate: successRate,
+                            attempts: data.attempts || 0,
+                            confidence: successRate
+                        });
+                    }
                 }
+            } catch (error) {
+                // Skip invalid entries
+                continue;
             }
         }
         
