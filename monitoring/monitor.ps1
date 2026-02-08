@@ -840,6 +840,7 @@ function Update-MonitorStatus {
         }
         
         # Calculate investigation time remaining safely
+        # CRITICAL: If investigation is not active, timeRemaining must be null (not 0)
         $investigationTimeRemaining = $null
         if ($isInvestigatingValue -and $investigationStartTimeValue -is [DateTime]) {
             try {
@@ -849,6 +850,10 @@ function Update-MonitorStatus {
             } catch {
                 $investigationTimeRemaining = $null
             }
+        } else {
+            # CRITICAL: If investigation is not active, explicitly set timeRemaining to null
+            # This prevents stale "0" values from appearing in status file
+            $investigationTimeRemaining = $null
         }
         
         # Calculate verification time remaining safely
@@ -876,9 +881,9 @@ function Update-MonitorStatus {
             }
             investigation = @{
                 active = $isInvestigatingValue
-                startTime = if ($investigationStartTimeValue -is [DateTime]) { $investigationStartTimeValue.ToString("o") } else { $null }
+                startTime = if ($investigationStartTimeValue -is [DateTime] -and $isInvestigatingValue) { $investigationStartTimeValue.ToString("o") } else { $null }
                 timeout = $investigationTimeoutValue
-                timeRemaining = $investigationTimeRemaining
+                timeRemaining = if ($isInvestigatingValue) { $investigationTimeRemaining } else { $null }
             }
             verification = @{
                 active = $isVerifyingFixValue
