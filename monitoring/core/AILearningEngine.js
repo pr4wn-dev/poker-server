@@ -30,6 +30,11 @@ class AILearningEngine extends EventEmitter {
         this.maskingDetected = false;
         this.maskingWarnings = [];
         
+        // Initialization hang pattern tracking
+        this.initializationTimings = new Map(); // component -> { startTime, endTime, duration, hung }
+        this.getterTimings = new Map(); // method -> { calls, totalTime, avgTime, maxTime, hangs }
+        this.synchronousOperations = new Map(); // method -> { fileOps, stateOps, blockingOps }
+        
         // Automatic adjustment thresholds
         this.lowConfidenceThreshold = 50; // Below 50% triggers adjustments
         this.criticalConfidenceThreshold = 30; // Below 30% is critical
@@ -1233,6 +1238,15 @@ class AILearningEngine extends EventEmitter {
             
             const crossIssueLearning = this.stateStore.getState('learning.crossIssueLearning') || {};
             this.crossIssueLearning = new Map(Object.entries(crossIssueLearning));
+            
+            const initializationTimings = this.stateStore.getState('learning.initializationTimings') || {};
+            this.initializationTimings = new Map(Object.entries(initializationTimings));
+            
+            const getterTimings = this.stateStore.getState('learning.getterTimings') || {};
+            this.getterTimings = new Map(Object.entries(getterTimings));
+            
+            const synchronousOperations = this.stateStore.getState('learning.synchronousOperations') || {};
+            this.synchronousOperations = new Map(Object.entries(synchronousOperations));
         } catch (error) {
             // DO NOT log to console - errors are for AI only, not user
             // Re-throw so UniversalErrorHandler can catch it
