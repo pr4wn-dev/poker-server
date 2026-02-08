@@ -1968,7 +1968,7 @@ function Show-Statistics {
         
         # Show what's being investigated
         $col3Lines += ""
-        $col3Lines += "─ Root Issue ─"
+        $col3Lines += "- Root Issue -"
         if ($pendingInfo -and $pendingInfo.RootIssue) {
             $rootIssue = $pendingInfo.RootIssue
             $col3Lines += "Type: " + $rootIssue.type
@@ -1986,7 +1986,7 @@ function Show-Statistics {
         
         # Show related issues found so far
         $col3Lines += ""
-        $col3Lines += "─ Related Issues ─"
+        $col3Lines += "- Related Issues -"
         if ($pendingInfo -and $pendingInfo.InFocusMode) {
             if ($pendingInfo.RelatedIssuesCount -gt 0) {
                 $col3Lines += "Count: " + $pendingInfo.RelatedIssuesCount
@@ -2002,7 +2002,7 @@ function Show-Statistics {
                     }
                     $relatedSorted = $relatedTypes.GetEnumerator() | Sort-Object Value -Descending | Select-Object -First 5
                     foreach ($typeEntry in $relatedSorted) {
-                        $col3Lines += "  • " + $typeEntry.Key + ": " + $typeEntry.Value
+                        $col3Lines += "  * " + $typeEntry.Key + ": " + $typeEntry.Value
                     }
                 }
             } else {
@@ -2015,7 +2015,7 @@ function Show-Statistics {
         
         # Show focus mode status
         $col3Lines += ""
-        $col3Lines += "─ Focus Mode ─"
+        $col3Lines += "- Focus Mode -"
         if ($pendingInfo -and $pendingInfo.InFocusMode) {
             $col3Lines += "Status: ACTIVE"
             if ($pendingInfo.GroupId) {
@@ -2028,13 +2028,13 @@ function Show-Statistics {
     } else {
         # Not investigating - show status
         $col3Lines += ""
-        $col3Lines += "Status: ○ NOT ACTIVE"
+        $col3Lines += "Status: NOT ACTIVE"
         $col3Lines += ""
         $col3Lines += "Timeout: " + ("{0:N0}s" -f $investigationTimeout)
         if ($investigationEnabled) {
-            $col3Lines += "Enabled: ✓ YES"
+            $col3Lines += "Enabled: YES"
         } else {
-            $col3Lines += "Enabled: ✗ NO"
+            $col3Lines += "Enabled: NO"
         }
         $col3Lines += ""
         $col3Lines += "Waiting for new issues..."
