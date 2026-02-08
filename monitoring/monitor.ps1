@@ -3152,8 +3152,8 @@ while ($monitoringActive) {
                 $elapsedCheckResult = $elapsedFromStatus -ge ($timeoutValue - 1)
                 Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] elapsed check: $([Math]::Round($elapsedFromStatus, 1))s >= ($timeoutValue - 1) = $elapsedCheckResult" -ForegroundColor "Gray"
                 if ($elapsedCheckResult) {
-                    if (-not $shouldCompleteNow) {
-                        $shouldCompleteNow = $true
+                    $shouldCompleteNow = $true  # CRITICAL FIX: Always set to true if elapsed check passes, don't check if already set
+                    if ([string]::IsNullOrEmpty($completionReason)) {
                         $completionReason = "elapsed=$([Math]::Round($elapsedFromStatus, 1))s >= timeout=$timeoutValue s"
                     }
                     Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] elapsed check: TRUE - should complete (elapsed=$([Math]::Round($elapsedFromStatus, 1))s, timeout=$timeoutValue s)" -ForegroundColor "Yellow"
