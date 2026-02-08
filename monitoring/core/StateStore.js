@@ -685,16 +685,38 @@ class StateStore extends EventEmitter {
             };
             
             // FINAL SAFEGUARD: Force arrays into data object right before writing
+            // This MUST happen - arrays can be lost during JSON.stringify if they're empty objects
             if (knowledgeBackup || improvementsBackup) {
                 if (!data.state.learning) {
                     data.state.learning = {};
                 }
+                // ALWAYS overwrite - don't check, just force it
                 if (knowledgeBackup) {
                     data.state.learning.knowledge = knowledgeBackup;
+                    // Double-check it's actually an array
+                    if (!Array.isArray(data.state.learning.knowledge)) {
+                        data.state.learning.knowledge = knowledgeBackup;
+                    }
                 }
                 if (improvementsBackup) {
                     data.state.learning.improvements = improvementsBackup;
+                    // Double-check it's actually an array
+                    if (!Array.isArray(data.state.learning.improvements)) {
+                        data.state.learning.improvements = improvementsBackup;
+                    }
                 }
+            }
+            
+            // Verify arrays are arrays before writing
+            const finalKnowledge = data.state.learning?.knowledge;
+            const finalImprovements = data.state.learning?.improvements;
+            if (knowledgeBackup && (!Array.isArray(finalKnowledge) || finalKnowledge.length === 0)) {
+                data.state.learning = data.state.learning || {};
+                data.state.learning.knowledge = knowledgeBackup;
+            }
+            if (improvementsBackup && (!Array.isArray(finalImprovements) || finalImprovements.length === 0)) {
+                data.state.learning = data.state.learning || {};
+                data.state.learning.improvements = improvementsBackup;
             }
             
             fs.writeFileSync(this.persistenceFile, JSON.stringify(data, null, 2), 'utf8');
