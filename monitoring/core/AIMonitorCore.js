@@ -104,13 +104,15 @@ class AIMonitorCore {
             this.decisionEngine,
             this.logProcessor
         );
+        // Communication interface needs learning engine for confidence - create after learning engine
         this.communicationInterface = new AICommunicationInterface(
             this.stateStore,
             this.issueDetector,
             this.fixTracker,
             this.decisionEngine,
             this.logProcessor,
-            this.liveStatistics
+            this.liveStatistics,
+            this.learningEngine // Pass learning engine for confidence tracking
         );
         this.integrityChecker = new IntegrityChecker(
             projectRoot,

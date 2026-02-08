@@ -10,6 +10,7 @@
  */
 
 const EventEmitter = require('events');
+const gameLogger = require('../../src/utils/GameLogger');
 
 class AILearningEngine extends EventEmitter {
     constructor(stateStore, issueDetector, fixTracker) {
@@ -24,8 +25,21 @@ class AILearningEngine extends EventEmitter {
         this.solutionOptimization = new Map(); // issueType -> { bestSolution, alternatives, successRate }
         this.crossIssueLearning = new Map(); // pattern -> { relatedIssues, commonSolutions }
         
+        // Learning confidence tracking (anti-masking safeguards)
+        this.confidenceHistory = []; // Track confidence over time to detect masking
+        this.maskingDetected = false;
+        this.maskingWarnings = [];
+        
+        // Automatic adjustment thresholds
+        this.lowConfidenceThreshold = 50; // Below 50% triggers adjustments
+        this.criticalConfidenceThreshold = 30; // Below 30% is critical
+        this.minSampleSize = 10; // Minimum samples before trusting success rates
+        
         // Load learning data
         this.load();
+        
+        // Start periodic confidence check and auto-adjustment
+        this.startConfidenceMonitoring();
     }
     
     /**
@@ -395,10 +409,469 @@ class AILearningEngine extends EventEmitter {
     }
     
     /**
-     * Get learning report
+     * Get learning confidence - overall ability percentage
+     * This represents how well Cerberus is learning across all capabilities
+     * ALWAYS visible - cannot be masked
+     */
+    getLearningConfidence() {
+        const metrics = this.calculateLearningMetrics();
+        const confidence = this.calculateOverallConfidence(metrics);
+        
+        // Detect masking attempts
+        this.detectMasking(confidence, metrics);
+        
+        // Store in history for trend analysis
+        this.confidenceHistory.push({
+            timestamp: Date.now(),
+            confidence,
+            metrics,
+            maskingDetected: this.maskingDetected
+        });
+        
+        // Keep only last 100 entries
+        if (this.confidenceHistory.length > 100) {
+            this.confidenceHistory = this.confidenceHistory.slice(-100);
+        }
+        
+        // Auto-adjust if confidence is low
+        if (confidence < this.lowConfidenceThreshold) {
+            this.autoAdjust(confidence, metrics);
+        }
+        
+        return {
+            overallConfidence: Math.round(confidence),
+            breakdown: {
+                patternRecognition: Math.round(metrics.patternRecognition),
+                causalAnalysis: Math.round(metrics.causalAnalysis),
+                solutionOptimization: Math.round(metrics.solutionOptimization),
+                crossIssueLearning: Math.round(metrics.crossIssueLearning),
+                predictionAccuracy: Math.round(metrics.predictionAccuracy),
+                dataQuality: Math.round(metrics.dataQuality)
+            },
+            maskingDetected: this.maskingDetected,
+            maskingWarnings: this.maskingWarnings.slice(-5), // Last 5 warnings
+            autoAdjustments: this.getAutoAdjustments(),
+            trend: this.getConfidenceTrend(),
+            sampleSizes: {
+                patterns: this.patterns.size,
+                causalChains: this.causalChains.size,
+                solutions: this.solutionOptimization.size,
+                crossIssue: this.crossIssueLearning.size
+            },
+            timestamp: Date.now()
+        };
+    }
+    
+    /**
+     * Calculate learning metrics for each capability
+     */
+    calculateLearningMetrics() {
+        // Pattern Recognition: Based on pattern frequency and success rate quality
+        let patternRecognition = 0;
+        if (this.patterns.size > 0) {
+            const patternScores = Array.from(this.patterns.values()).map(p => {
+                // Score based on frequency (more data = better) and success rate variance (realistic rates)
+                const frequencyScore = Math.min(p.frequency / 20, 1) * 50; // Max 50 points for frequency
+                const qualityScore = this.assessPatternQuality(p) * 50; // Max 50 points for quality
+                return frequencyScore + qualityScore;
+            });
+            patternRecognition = patternScores.reduce((a, b) => a + b, 0) / patternScores.length;
+        }
+        
+        // Causal Analysis: Based on chain depth and accuracy
+        let causalAnalysis = 0;
+        if (this.causalChains.size > 0) {
+            const chainScores = Array.from(this.causalChains.values()).map(chain => {
+                const depthScore = Math.min(chain.length / 5, 1) * 50;
+                const completenessScore = (chain.filter(c => c.relationship).length / chain.length) * 50;
+                return depthScore + completenessScore;
+            });
+            causalAnalysis = chainScores.reduce((a, b) => a + b, 0) / chainScores.length;
+        }
+        
+        // Solution Optimization: Based on solution success rates and alternatives
+        let solutionOptimization = 0;
+        if (this.solutionOptimization.size > 0) {
+            const solutionScores = Array.from(this.solutionOptimization.values()).map(sol => {
+                const successScore = this.assessSuccessRateQuality(sol.successRate, sol.attempts) * 60;
+                const alternativesScore = Math.min(sol.alternatives.length / 3, 1) * 40;
+                return successScore + alternativesScore;
+            });
+            solutionOptimization = solutionScores.reduce((a, b) => a + b, 0) / solutionScores.length;
+        }
+        
+        // Cross-Issue Learning: Based on relationship discovery
+        let crossIssueLearning = 0;
+        if (this.crossIssueLearning.size > 0) {
+            const crossScores = Array.from(this.crossIssueLearning.values()).map(cross => {
+                const relationshipScore = Math.min(cross.relatedIssues.length / 5, 1) * 50;
+                const solutionScore = Math.min(cross.commonSolutions.length / 3, 1) * 50;
+                return relationshipScore + solutionScore;
+            });
+            crossIssueLearning = crossScores.reduce((a, b) => a + b, 0) / crossScores.length;
+        }
+        
+        // Prediction Accuracy: Based on pattern prediction success (if we track this)
+        const predictionAccuracy = this.assessPredictionAccuracy();
+        
+        // Data Quality: Based on sample sizes and data integrity
+        const dataQuality = this.assessDataQuality();
+        
+        return {
+            patternRecognition: Math.max(0, Math.min(100, patternRecognition)),
+            causalAnalysis: Math.max(0, Math.min(100, causalAnalysis)),
+            solutionOptimization: Math.max(0, Math.min(100, solutionOptimization)),
+            crossIssueLearning: Math.max(0, Math.min(100, crossIssueLearning)),
+            predictionAccuracy: Math.max(0, Math.min(100, predictionAccuracy)),
+            dataQuality: Math.max(0, Math.min(100, dataQuality))
+        };
+    }
+    
+    /**
+     * Calculate overall confidence from metrics
+     */
+    calculateOverallConfidence(metrics) {
+        // Weighted average - all capabilities are important
+        const weights = {
+            patternRecognition: 0.20,
+            causalAnalysis: 0.20,
+            solutionOptimization: 0.25,
+            crossIssueLearning: 0.15,
+            predictionAccuracy: 0.10,
+            dataQuality: 0.10
+        };
+        
+        const weightedSum = 
+            metrics.patternRecognition * weights.patternRecognition +
+            metrics.causalAnalysis * weights.causalAnalysis +
+            metrics.solutionOptimization * weights.solutionOptimization +
+            metrics.crossIssueLearning * weights.crossIssueLearning +
+            metrics.predictionAccuracy * weights.predictionAccuracy +
+            metrics.dataQuality * weights.dataQuality;
+        
+        return Math.max(0, Math.min(100, weightedSum));
+    }
+    
+    /**
+     * Assess pattern quality - detect masking
+     */
+    assessPatternQuality(pattern) {
+        // Check for suspicious patterns (masking indicators)
+        if (pattern.frequency < this.minSampleSize) {
+            // Low sample size - don't trust high success rates
+            if (pattern.successRate > 0.8) {
+                this.flagMasking('pattern', `High success rate (${(pattern.successRate * 100).toFixed(1)}%) with low sample size (${pattern.frequency})`);
+                return 0.3; // Penalize low sample sizes with high rates
+            }
+        }
+        
+        // Check for unrealistic success rates (100% is suspicious)
+        if (pattern.successRate === 1.0 && pattern.frequency < 50) {
+            this.flagMasking('pattern', `Perfect success rate (100%) with insufficient samples (${pattern.frequency})`);
+            return 0.2; // Heavy penalty for perfect rates with low samples
+        }
+        
+        // Check for sudden jumps (masking attempt)
+        if (pattern.solutions.length >= 2) {
+            const recent = pattern.solutions.slice(-5);
+            const recentSuccessRate = recent.filter(s => s.result === 'success').length / recent.length;
+            const overallSuccessRate = pattern.successRate;
+            
+            if (Math.abs(recentSuccessRate - overallSuccessRate) > 0.5) {
+                this.flagMasking('pattern', `Sudden success rate change detected (${(overallSuccessRate * 100).toFixed(1)}% -> ${(recentSuccessRate * 100).toFixed(1)}%)`);
+                return 0.4; // Penalize sudden changes
+            }
+        }
+        
+        // Normal quality assessment
+        const frequencyQuality = Math.min(pattern.frequency / 50, 1);
+        const successRateQuality = pattern.successRate; // Realistic success rates are good
+        const varianceQuality = this.calculateVarianceQuality(pattern.solutions);
+        
+        return (frequencyQuality * 0.3 + successRateQuality * 0.4 + varianceQuality * 0.3);
+    }
+    
+    /**
+     * Assess success rate quality - detect masking
+     */
+    assessSuccessRateQuality(successRate, attempts) {
+        // Masking detection: 100% success with low attempts is suspicious
+        if (successRate === 1.0 && attempts < this.minSampleSize * 2) {
+            this.flagMasking('solution', `Perfect success rate (100%) with low attempts (${attempts})`);
+            return 0.2;
+        }
+        
+        // Realistic success rates (30-80%) are more trustworthy than extremes
+        if (successRate > 0.95 && attempts < 50) {
+            this.flagMasking('solution', `Unrealistically high success rate (${(successRate * 100).toFixed(1)}%) with insufficient data`);
+            return 0.3;
+        }
+        
+        // Low sample size penalty
+        if (attempts < this.minSampleSize) {
+            return Math.min(successRate, 0.5); // Cap at 50% for low samples
+        }
+        
+        return successRate;
+    }
+    
+    /**
+     * Calculate variance quality - consistent results are better
+     */
+    calculateVarianceQuality(solutions) {
+        if (solutions.length < 3) return 0.5; // Need at least 3 samples
+        
+        const results = solutions.map(s => s.result === 'success' ? 1 : 0);
+        const mean = results.reduce((a, b) => a + b, 0) / results.length;
+        const variance = results.reduce((sum, r) => sum + Math.pow(r - mean, 2), 0) / results.length;
+        
+        // Low variance (consistent) is good, but too consistent (0 variance) might indicate masking
+        if (variance === 0 && results.length < 20) {
+            return 0.6; // Slightly penalize perfect consistency with low samples
+        }
+        
+        return 1.0 - Math.min(variance, 0.5); // Prefer consistency
+    }
+    
+    /**
+     * Assess prediction accuracy (placeholder - can be enhanced)
+     */
+    assessPredictionAccuracy() {
+        // For now, base on pattern quality
+        if (this.patterns.size === 0) return 0;
+        
+        const avgPatternQuality = Array.from(this.patterns.values())
+            .map(p => this.assessPatternQuality(p))
+            .reduce((a, b) => a + b, 0) / this.patterns.size;
+        
+        return avgPatternQuality * 100;
+    }
+    
+    /**
+     * Assess data quality
+     */
+    assessDataQuality() {
+        let quality = 0;
+        let factors = 0;
+        
+        // Pattern data quality
+        if (this.patterns.size > 0) {
+            const avgFrequency = Array.from(this.patterns.values())
+                .map(p => p.frequency)
+                .reduce((a, b) => a + b, 0) / this.patterns.size;
+            quality += Math.min(avgFrequency / 30, 1) * 25;
+            factors++;
+        }
+        
+        // Causal chain quality
+        if (this.causalChains.size > 0) {
+            const avgChainLength = Array.from(this.causalChains.values())
+                .map(c => c.length)
+                .reduce((a, b) => a + b, 0) / this.causalChains.size;
+            quality += Math.min(avgChainLength / 5, 1) * 25;
+            factors++;
+        }
+        
+        // Solution optimization quality
+        if (this.solutionOptimization.size > 0) {
+            const avgAttempts = Array.from(this.solutionOptimization.values())
+                .map(s => s.attempts)
+                .reduce((a, b) => a + b, 0) / this.solutionOptimization.size;
+            quality += Math.min(avgAttempts / 20, 1) * 25;
+            factors++;
+        }
+        
+        // Cross-issue learning quality
+        if (this.crossIssueLearning.size > 0) {
+            const avgFrequency = Array.from(this.crossIssueLearning.values())
+                .map(c => c.frequency)
+                .reduce((a, b) => a + b, 0) / this.crossIssueLearning.size;
+            quality += Math.min(avgFrequency / 10, 1) * 25;
+            factors++;
+        }
+        
+        return factors > 0 ? quality / factors : 0;
+    }
+    
+    /**
+     * Detect masking attempts
+     */
+    detectMasking(confidence, metrics) {
+        this.maskingDetected = false;
+        
+        // Check for suspicious patterns across all metrics
+        const suspiciousPatterns = [];
+        
+        // Check for sudden confidence jumps (masking attempt)
+        if (this.confidenceHistory.length >= 2) {
+            const recent = this.confidenceHistory.slice(-3);
+            const avgRecent = recent.reduce((sum, h) => sum + h.confidence, 0) / recent.length;
+            const previous = this.confidenceHistory[this.confidenceHistory.length - 4];
+            
+            if (previous && avgRecent - previous.confidence > 30) {
+                suspiciousPatterns.push('Sudden confidence jump detected - possible masking');
+                this.maskingDetected = true;
+            }
+        }
+        
+        // Check for unrealistic metrics
+        if (metrics.solutionOptimization > 95 && this.solutionOptimization.size < 5) {
+            suspiciousPatterns.push('Unrealistically high solution optimization with low data');
+            this.maskingDetected = true;
+        }
+        
+        if (suspiciousPatterns.length > 0) {
+            this.maskingWarnings.push({
+                timestamp: Date.now(),
+                patterns: suspiciousPatterns,
+                confidence,
+                metrics
+            });
+            
+            // Keep only last 20 warnings
+            if (this.maskingWarnings.length > 20) {
+                this.maskingWarnings = this.maskingWarnings.slice(-20);
+            }
+            
+            gameLogger.warn('CERBERUS', '[LEARNING_ENGINE] Masking detected', {
+                patterns: suspiciousPatterns,
+                confidence,
+                action: 'Masking detected - confidence may be artificially inflated'
+            });
+        }
+    }
+    
+    /**
+     * Flag masking attempt
+     */
+    flagMasking(source, reason) {
+        this.maskingDetected = true;
+        this.maskingWarnings.push({
+            timestamp: Date.now(),
+            source,
+            reason,
+            severity: 'warning'
+        });
+        
+        gameLogger.warn('CERBERUS', '[LEARNING_ENGINE] Masking flag', {
+            source,
+            reason,
+            action: 'Masking attempt detected - data quality reduced'
+        });
+    }
+    
+    /**
+     * Auto-adjust when confidence is low
+     */
+    autoAdjust(confidence, metrics) {
+        const adjustments = [];
+        
+        // If pattern recognition is low, need more data
+        if (metrics.patternRecognition < this.lowConfidenceThreshold) {
+            adjustments.push({
+                type: 'pattern_recognition',
+                action: 'Increase pattern collection - need more fix attempts to learn patterns',
+                priority: confidence < this.criticalConfidenceThreshold ? 'critical' : 'high'
+            });
+        }
+        
+        // If causal analysis is low, need deeper analysis
+        if (metrics.causalAnalysis < this.lowConfidenceThreshold) {
+            adjustments.push({
+                type: 'causal_analysis',
+                action: 'Improve causal chain tracking - need to track more state changes',
+                priority: confidence < this.criticalConfidenceThreshold ? 'critical' : 'high'
+            });
+        }
+        
+        // If solution optimization is low, need more fix attempts
+        if (metrics.solutionOptimization < this.lowConfidenceThreshold) {
+            adjustments.push({
+                type: 'solution_optimization',
+                action: 'Increase fix attempt tracking - need more attempts to optimize solutions',
+                priority: confidence < this.criticalConfidenceThreshold ? 'critical' : 'high'
+            });
+        }
+        
+        // If data quality is low, need better data collection
+        if (metrics.dataQuality < this.lowConfidenceThreshold) {
+            adjustments.push({
+                type: 'data_quality',
+                action: 'Improve data collection - need larger sample sizes and better data integrity',
+                priority: 'high'
+            });
+        }
+        
+        // Store adjustments
+        this.stateStore.updateState('learning.autoAdjustments', adjustments);
+        
+        // Emit event for monitoring
+        this.emit('autoAdjustment', {
+            confidence,
+            metrics,
+            adjustments
+        });
+        
+        gameLogger.info('CERBERUS', '[LEARNING_ENGINE] Auto-adjustment triggered', {
+            confidence: Math.round(confidence),
+            adjustments: adjustments.length,
+            actions: adjustments.map(a => a.action)
+        });
+    }
+    
+    /**
+     * Get auto-adjustments
+     */
+    getAutoAdjustments() {
+        return this.stateStore.getState('learning.autoAdjustments') || [];
+    }
+    
+    /**
+     * Get confidence trend
+     */
+    getConfidenceTrend() {
+        if (this.confidenceHistory.length < 2) {
+            return { direction: 'stable', change: 0 };
+        }
+        
+        const recent = this.confidenceHistory.slice(-5);
+        const older = this.confidenceHistory.slice(-10, -5);
+        
+        if (older.length === 0) {
+            return { direction: 'stable', change: 0 };
+        }
+        
+        const recentAvg = recent.reduce((sum, h) => sum + h.confidence, 0) / recent.length;
+        const olderAvg = older.reduce((sum, h) => sum + h.confidence, 0) / older.length;
+        
+        const change = recentAvg - olderAvg;
+        
+        return {
+            direction: change > 5 ? 'improving' : change < -5 ? 'declining' : 'stable',
+            change: Math.round(change),
+            recentAverage: Math.round(recentAvg),
+            previousAverage: Math.round(olderAvg)
+        };
+    }
+    
+    /**
+     * Start confidence monitoring
+     */
+    startConfidenceMonitoring() {
+        // Check confidence every 5 minutes
+        setInterval(() => {
+            this.getLearningConfidence(); // This triggers detection and auto-adjustment
+        }, 5 * 60 * 1000);
+    }
+    
+    /**
+     * Get learning report (enhanced with confidence)
      */
     getLearningReport() {
+        const confidence = this.getLearningConfidence();
+        
         return {
+            confidence, // ALWAYS include confidence - cannot be masked
             patterns: {
                 total: this.patterns.size,
                 topPatterns: Array.from(this.patterns.entries())
@@ -407,7 +880,8 @@ class AILearningEngine extends EventEmitter {
                     .map(([key, data]) => ({
                         pattern: key,
                         frequency: data.frequency,
-                        successRate: data.successRate
+                        successRate: data.successRate,
+                        quality: this.assessPatternQuality(data)
                     }))
             },
             causalChains: {
@@ -427,6 +901,8 @@ class AILearningEngine extends EventEmitter {
                         issueType,
                         bestSolution: data.bestSolution,
                         successRate: data.successRate,
+                        attempts: data.attempts,
+                        quality: this.assessSuccessRateQuality(data.successRate, data.attempts),
                         alternatives: data.alternatives.length
                     }))
             },

@@ -10,13 +10,14 @@
  */
 
 class AICommunicationInterface {
-    constructor(stateStore, issueDetector, fixTracker, decisionEngine, logProcessor, liveStatistics) {
+    constructor(stateStore, issueDetector, fixTracker, decisionEngine, logProcessor, liveStatistics, learningEngine) {
         this.stateStore = stateStore;
         this.issueDetector = issueDetector;
         this.fixTracker = fixTracker;
         this.decisionEngine = decisionEngine;
         this.logProcessor = logProcessor;
         this.liveStatistics = liveStatistics;
+        this.learningEngine = learningEngine; // Add learning engine for confidence
     }
     
     /**
@@ -359,9 +360,10 @@ class AICommunicationInterface {
     /**
      * Get complete status report
      * AI gets everything it needs to know
+     * ALWAYS includes learning confidence - cannot be masked
      */
     getStatusReport() {
-        return {
+        const report = {
             timestamp: Date.now(),
             statistics: this.liveStatistics.getStatistics(),
             state: this.stateStore.getStatusReport(),
@@ -375,6 +377,19 @@ class AICommunicationInterface {
             decisions: this.decisionEngine.getRecentDecisions(5),
             recommendations: this.getRecommendations()
         };
+        
+        // ALWAYS include learning confidence - baked in, cannot be masked
+        if (this.learningEngine) {
+            report.learningConfidence = this.learningEngine.getLearningConfidence();
+        } else {
+            report.learningConfidence = {
+                overallConfidence: 0,
+                error: 'Learning engine not available',
+                timestamp: Date.now()
+            };
+        }
+        
+        return report;
     }
     
     /**
