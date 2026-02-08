@@ -3805,8 +3805,8 @@ while ($monitoringActive) {
                             }
                         } elseif ($addResult -and -not $addResult.success) {
                             # Issue detector returned an error response
-                            $errorMsg = if ($addResult.error) { $addResult.error } else { "Unknown error" }
-                            $errorReason = if ($addResult.reason) { $addResult.reason } else { "unknown" }
+                            $errorMsg = if ($addResult.error) { $addResult.error } else { "Issue detection failed - check issue-detector.js" }
+                            $errorReason = if ($addResult.reason) { $addResult.reason } else { "detection_failed" }
                             Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ISSUE DETECTOR ERROR: Failed to log issue ($errorReason)" -ForegroundColor "Red"
                             Write-ConsoleOutput -Message "  Error: $errorMsg" -ForegroundColor "Yellow"
                             Write-ConsoleOutput -Message "  Issue detected but NOT logged - will retry on next detection" -ForegroundColor "Gray"
