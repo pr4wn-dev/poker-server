@@ -15,6 +15,7 @@ const AIFixTracker = require('./AIFixTracker');
 const AIDecisionEngine = require('./AIDecisionEngine');
 const AILiveStatistics = require('./AILiveStatistics');
 const AICommunicationInterface = require('./AICommunicationInterface');
+const IntegrityChecker = require('./IntegrityChecker');
 
 class AIMonitorCore {
     constructor(projectRoot) {
@@ -41,11 +42,17 @@ class AIMonitorCore {
             this.logProcessor,
             this.liveStatistics
         );
+        this.integrityChecker = new IntegrityChecker(
+            projectRoot,
+            this.stateStore,
+            this.issueDetector
+        );
         
         // Setup event listeners
         this.setupEventListeners();
         
         console.log('[AI Monitor Core] Initialized - AI sees everything, knows everything, acts on everything');
+        console.log('[AI Monitor Core] Integrity checker active - AI verifies its own integrity');
     }
     
     /**
