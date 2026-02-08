@@ -570,12 +570,17 @@ class AIFixTracker extends EventEmitter {
             this.knowledge = new Map(knowledge);
         }
         
-        const attempts = this.stateStore.getState('fixes.attempts') || [];
-        for (const attempt of attempts) {
-            if (!this.attemptsByIssue.has(attempt.issueId)) {
-                this.attemptsByIssue.set(attempt.issueId, []);
+        const attempts = this.stateStore.getState('fixes.attempts');
+        // Ensure attempts is an array
+        if (Array.isArray(attempts)) {
+            for (const attempt of attempts) {
+                if (attempt && attempt.issueId) {
+                    if (!this.attemptsByIssue.has(attempt.issueId)) {
+                        this.attemptsByIssue.set(attempt.issueId, []);
+                    }
+                    this.attemptsByIssue.get(attempt.issueId).push(attempt);
+                }
             }
-            this.attemptsByIssue.get(attempt.issueId).push(attempt);
         }
     }
     

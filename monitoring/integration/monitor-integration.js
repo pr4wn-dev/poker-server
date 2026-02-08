@@ -11,14 +11,20 @@ const MonitorIntegration = require('./MonitorIntegration');
 // Get project root (parent of monitoring directory)
 const projectRoot = path.resolve(__dirname, '../..');
 
-// Initialize integration
-const integration = new MonitorIntegration(projectRoot);
+// Initialize integration (CLI mode - don't start sync loop, allow process to exit)
+const integration = new MonitorIntegration(projectRoot, { startSyncLoop: false });
 
 // Handle command line arguments
 const command = process.argv[2];
 const args = process.argv.slice(3);
 
 async function handleCommand() {
+    // Set a timeout to force exit if command takes too long (5 seconds max)
+    const timeout = setTimeout(() => {
+        console.error('Error: Command timed out');
+        process.exit(1);
+    }, 5000);
+    
     try {
         switch (command) {
             case 'should-start-investigation':
@@ -39,6 +45,11 @@ async function handleCommand() {
             case 'get-investigation-status':
                 const investigationStatus = integration.getInvestigationStatus();
                 console.log(JSON.stringify(investigationStatus));
+                // Force cleanup and exit immediately
+                if (integration && integration.aiCore) {
+                    integration.aiCore.destroy();
+                }
+                process.exit(0);
                 break;
                 
             case 'start-investigation':
@@ -145,11 +156,22 @@ async function handleCommand() {
 }
 
 handleCommand().then(() => {
-    // Keep process alive briefly to allow output
+    // Cleanup before exiting
+    clearTimeout(globalTimeout);
+    if (integration && integration.aiCore) {
+        integration.aiCore.destroy();
+    }
+    // Small delay to allow cleanup to complete
     setTimeout(() => {
         process.exit(0);
     }, 100);
 }).catch(error => {
+    clearTimeout(globalTimeout);
+    if (integration && integration.aiCore) {
+        integration.aiCore.destroy();
+    }
     console.error('Fatal error:', error);
-    process.exit(1);
+    setTimeout(() => {
+        process.exit(1);
+    }, 100);
 });

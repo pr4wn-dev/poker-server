@@ -102,9 +102,19 @@ class AILogProcessor extends EventEmitter {
      */
     watchLogFile() {
         // Check for new logs every second
-        setInterval(() => {
+        this.watchIntervalId = setInterval(() => {
             this.checkForNewLogs();
         }, 1000);
+    }
+    
+    /**
+     * Stop watching log file
+     */
+    stopWatching() {
+        if (this.watchIntervalId) {
+            clearInterval(this.watchIntervalId);
+            this.watchIntervalId = null;
+        }
     }
     
     /**

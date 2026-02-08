@@ -174,11 +174,23 @@ class AIMonitorCore {
     }
     
     /**
-     * Cleanup
+     * Cleanup - Stop all background processes
      */
     destroy() {
-        this.stateStore.destroy();
-        console.log('[AI Monitor Core] Destroyed');
+        // Stop all background intervals
+        if (this.integrityChecker) {
+            this.integrityChecker.stopPeriodicChecks();
+        }
+        if (this.logProcessor) {
+            this.logProcessor.stopWatching();
+        }
+        if (this.issueDetector) {
+            this.issueDetector.stopStateVerification();
+        }
+        if (this.stateStore) {
+            this.stateStore.destroy();
+        }
+        console.log('[AI Monitor Core] Destroyed - All background processes stopped');
     }
 }
 

@@ -151,6 +151,7 @@ class IntegrityChecker extends EventEmitter {
         ];
         
         // Start periodic checks
+        this.checkIntervalId = null;
         this.startPeriodicChecks();
     }
     
@@ -158,13 +159,33 @@ class IntegrityChecker extends EventEmitter {
      * Start periodic integrity checks
      */
     startPeriodicChecks() {
-        // Check on startup
-        this.runAllChecks();
+        // Check on startup (async, don't block)
+        setImmediate(() => {
+            try {
+                this.runAllChecks();
+            } catch (error) {
+                console.error('[IntegrityChecker] Startup check error:', error.message);
+            }
+        });
         
         // Check periodically
-        setInterval(() => {
-            this.runAllChecks();
+        this.checkIntervalId = setInterval(() => {
+            try {
+                this.runAllChecks();
+            } catch (error) {
+                console.error('[IntegrityChecker] Periodic check error:', error.message);
+            }
         }, this.checkInterval);
+    }
+    
+    /**
+     * Stop periodic checks
+     */
+    stopPeriodicChecks() {
+        if (this.checkIntervalId) {
+            clearInterval(this.checkIntervalId);
+            this.checkIntervalId = null;
+        }
     }
     
     /**

@@ -9,7 +9,7 @@ const path = require('path');
 const AIMonitorCore = require('../core/AIMonitorCore');
 
 class MonitorIntegration {
-    constructor(projectRoot) {
+    constructor(projectRoot, options = {}) {
         this.projectRoot = projectRoot;
         this.aiCore = new AIMonitorCore(projectRoot);
         
@@ -18,8 +18,11 @@ class MonitorIntegration {
         this.lastSync = Date.now();
         this.syncInterval = 1000; // Sync every second
         
-        // Start sync loop
-        this.startSyncLoop();
+        // Only start sync loop if not in CLI mode (options.startSyncLoop defaults to true for backward compatibility)
+        // CLI mode should not start sync loop to allow process to exit
+        if (options.startSyncLoop !== false) {
+            this.startSyncLoop();
+        }
         
         console.log('[Monitor Integration] Initialized - Bridging PowerShell monitor with AI core');
     }
