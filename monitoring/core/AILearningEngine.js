@@ -40,10 +40,11 @@ class AILearningEngine extends EventEmitter {
         this.blockingChains = new Map(); // pattern -> { chain: [], frequency, solutions }
         this.debuggingPatterns = new Map(); // pattern -> { method: 'manual_debugging', successRate, contexts }
         
-        // Critical problem-solving patterns (learned from actual fixes)
-        this.circularDependencies = new Map(); // pattern -> { chain: [], frequency, solutions }
-        this.blockingChains = new Map(); // pattern -> { chain: [], frequency, solutions }
-        this.debuggingPatterns = new Map(); // pattern -> { method: 'manual_debugging', successRate, contexts }
+        // Generalized patterns (abstracted from specific instances)
+        this.generalizedPatterns = new Map(); // generalPattern -> { specificInstances: [], generalSolution: string, successRate: number }
+        
+        // Pattern generalization rules
+        this.generalizationRules = new Map(); // specificPattern -> generalPattern
         
         // Automatic adjustment thresholds
         this.lowConfidenceThreshold = 50; // Below 50% triggers adjustments
@@ -441,7 +442,7 @@ class AILearningEngine extends EventEmitter {
     }
     
     /**
-     * Predict likely issues
+     * Predict likely issues - ENHANCED with proactive prediction
      */
     predictIssues(currentState) {
         const predictions = [];
@@ -453,9 +454,95 @@ class AILearningEngine extends EventEmitter {
                 predictions.push({
                     pattern: patternKey,
                     likelihood: pattern.frequency / 100, // Normalize
-                    reason: `Pattern ${patternKey} has high failure rate (${(pattern.successRate * 100).toFixed(1)}%)`
+                    reason: `Pattern ${patternKey} has high failure rate (${(pattern.successRate * 100).toFixed(1)}%)`,
+                    type: 'pattern_based'
                 });
             }
+        }
+        
+        // Proactive prediction: Analyze code patterns
+        const codePredictions = this.predictFromCodePatterns(currentState);
+        predictions.push(...codePredictions);
+        
+        // Proactive prediction: Analyze state patterns
+        const statePredictions = this.predictFromStatePatterns(currentState);
+        predictions.push(...statePredictions);
+        
+        // Sort by likelihood
+        predictions.sort((a, b) => b.likelihood - a.likelihood);
+        
+        return predictions;
+    }
+    
+    /**
+     * Predict issues from code patterns (proactive)
+     */
+    predictFromCodePatterns(currentState) {
+        const predictions = [];
+        
+        // Check for common problematic patterns
+        const problematicPatterns = [
+            {
+                pattern: 'setInterval_in_constructor',
+                description: 'setInterval called in constructor without guards',
+                likelihood: 0.8,
+                suggestion: 'Delay interval start with setImmediate and add guards',
+                type: 'code_pattern'
+            },
+            {
+                pattern: 'synchronous_state_access',
+                description: 'Synchronous state access without guards',
+                likelihood: 0.7,
+                suggestion: 'Add guards before stateStore access',
+                type: 'code_pattern'
+            },
+            {
+                pattern: 'circular_synchronous_calls',
+                description: 'Circular synchronous method calls',
+                likelihood: 0.9,
+                suggestion: 'Break cycle with setImmediate',
+                type: 'code_pattern'
+            }
+        ];
+        
+        // Check if current state matches problematic patterns
+        for (const problematic of problematicPatterns) {
+            // This would be enhanced with actual code analysis
+            // For now, check if we've seen this pattern fail before
+            const patternData = this.patterns.get(problematic.pattern);
+            if (patternData && patternData.successRate < 0.5) {
+                predictions.push({
+                    pattern: problematic.pattern,
+                    likelihood: problematic.likelihood,
+                    reason: problematic.description,
+                    suggestion: problematic.suggestion,
+                    type: problematic.type,
+                    confidence: patternData.successRate
+                });
+            }
+        }
+        
+        return predictions;
+    }
+    
+    /**
+     * Predict issues from state patterns (proactive)
+     */
+    predictFromStatePatterns(currentState) {
+        const predictions = [];
+        
+        if (!currentState) return predictions;
+        
+        // Check for state patterns that lead to issues
+        // Example: If stateStore is accessed before initialization
+        if (currentState.initialization && !currentState.initialization.complete) {
+            predictions.push({
+                pattern: 'state_access_before_init',
+                likelihood: 0.75,
+                reason: 'State accessed before initialization complete',
+                suggestion: 'Add guards to check initialization state',
+                type: 'state_pattern'
+            });
         }
         
         return predictions;
@@ -1326,6 +1413,8 @@ class AILearningEngine extends EventEmitter {
             this.stateStore.updateState('learning.circularDependencies', Object.fromEntries(this.circularDependencies));
             this.stateStore.updateState('learning.blockingChains', Object.fromEntries(this.blockingChains));
             this.stateStore.updateState('learning.debuggingPatterns', Object.fromEntries(this.debuggingPatterns));
+            this.stateStore.updateState('learning.generalizedPatterns', Array.from(this.generalizedPatterns.entries()));
+            this.stateStore.updateState('learning.generalizationRules', Array.from(this.generalizationRules.entries()));
         } catch (error) {
             // DO NOT log to console - errors are for AI only, not user
             // Re-throw so UniversalErrorHandler can catch it

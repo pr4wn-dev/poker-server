@@ -16,13 +16,15 @@ const EventEmitter = require('events');
 const gameLogger = require('../../src/utils/GameLogger');
 
 class AICollaborationInterface extends EventEmitter {
-    constructor(stateStore, learningEngine, issueDetector, fixTracker, communicationInterface) {
+    constructor(stateStore, learningEngine, issueDetector, fixTracker, communicationInterface, solutionTemplateEngine, codeChangeTracker) {
         super();
         this.stateStore = stateStore;
         this.learningEngine = learningEngine;
         this.issueDetector = issueDetector;
         this.fixTracker = fixTracker;
         this.communicationInterface = communicationInterface;
+        this.solutionTemplateEngine = solutionTemplateEngine;
+        this.codeChangeTracker = codeChangeTracker;
         
         // AI action tracking
         this.aiActions = []; // Track all AI actions for learning
