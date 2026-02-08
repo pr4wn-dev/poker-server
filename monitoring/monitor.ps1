@@ -2108,7 +2108,7 @@ function Show-Statistics {
         if ($verificationTimeRemaining -ne $null) {
             $remaining = $verificationTimeRemaining
             $elapsed = $verificationPeriod - $remaining
-        } else {
+    } else {
             $verificationElapsed = (Get-Date) - $verificationStartTimeValue
             $remaining = [Math]::Max(0, $verificationPeriod - $verificationElapsed.TotalSeconds)
             $elapsed = [Math]::Min($verificationPeriod, $verificationElapsed.TotalSeconds)
@@ -2324,7 +2324,7 @@ function Start-ServerIfNeeded {
                 if ($waited % 5 -eq 0) {
                     $waitingMsg = "[$(Get-Date -Format 'HH:mm:ss')] Still waiting for server... ($waited / $maxWait seconds)"
                     Write-ConsoleOutput -Message $waitingMsg -ForegroundColor "Gray"
-                }
+            }
             }
             $serverFailMsg = "[$(Get-Date -Format 'HH:mm:ss')] Server failed to start within $maxWait seconds"
             Write-ConsoleOutput -Message $serverFailMsg -ForegroundColor "Red"
@@ -3337,6 +3337,7 @@ while ($monitoringActive) {
         # Reset lastLogPosition to current size to start reading from current position
         if ($currentSize -lt $lastLogPosition) {
             Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] Log file was rotated/cleared (size=$currentSize < lastPos=$lastLogPosition) - resetting position" -ForegroundColor "Yellow"
+            $script:lastLogPosition = $currentSize  # Use script scope to ensure it persists
             $lastLogPosition = $currentSize
         }
         
