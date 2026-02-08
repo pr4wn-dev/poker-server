@@ -139,6 +139,12 @@ $script:maxConsoleLines = 15  # Maximum number of console output lines to keep v
 $script:consoleLineCount = 0  # Track how many console lines we've written
 $script:lastConsoleError = $null  # Track last console error to avoid spam
 
+# Caching for non-blocking operations
+$script:unityStatusCache = $null  # Cached Unity status
+$script:unityStatusCacheTime = $null  # When Unity status was last cached
+$script:unityStatusCacheInterval = 5  # Cache Unity status for 5 seconds
+$script:activeJobs = @{}  # Track active PowerShell jobs to prevent job leaks
+
 # Statistics tracking
 $stats = @{
     StartTime = Get-Date
@@ -173,16 +179,195 @@ $stats = @{
     SimulationRunning = $false
 }
 
-# Function to call Node.js issue detector
+# ============================================================================
+# NON-BLOCKING HELPER FUNCTIONS
+# ============================================================================
+
+# Helper function for non-blocking web requests using jobs
+function Invoke-WebRequestAsync {
+    param(
+        [string]$Uri,
+        [string]$Method = "GET",
+        [string]$Body = $null,
+        [string]$ContentType = "application/json",
+        [int]$TimeoutSec = 5,
+        [int]$JobTimeout = 8
+    )
+    
+    try {
+        $jobId = "webrequest_$(Get-Date -Format 'yyyyMMddHHmmss')_$(Get-Random)"
+        $scriptBlock = {
+            param($url, $method, $body, $contentType, $timeout)
+            try {
+                $params = @{
+                    Uri = $url
+                    Method = $method
+                    UseBasicParsing = $true
+                    TimeoutSec = $timeout
+                    ErrorAction = "Stop"
+                }
+                if ($body) {
+                    $params.Body = $body
+                    $params.ContentType = $contentType
+                }
+                $response = Invoke-WebRequest @params
+                return @{
+                    Success = $true
+                    StatusCode = $response.StatusCode
+                    Content = $response.Content
+                }
+            } catch {
+                return @{
+                    Success = $false
+                    Error = $_.Exception.Message
+                    StatusCode = if ($_.Exception.Response) { $_.Exception.Response.StatusCode } else { $null }
+                }
+            }
+        }
+        
+        $job = Start-Job -ScriptBlock $scriptBlock -ArgumentList $Uri, $Method, $Body, $ContentType, $TimeoutSec
+        if (-not $script:activeJobs) { $script:activeJobs = @{} }
+        $script:activeJobs[$jobId] = $job
+        
+        # Wait for job with timeout
+        $result = $job | Wait-Job -Timeout $JobTimeout | Receive-Job
+        $job | Remove-Job -ErrorAction SilentlyContinue
+        if ($script:activeJobs.ContainsKey($jobId)) {
+            $script:activeJobs.Remove($jobId)
+        }
+        
+        return $result
+    } catch {
+        # Clean up job if it exists
+        if ($script:activeJobs -and $script:activeJobs.ContainsKey($jobId)) {
+            $script:activeJobs[$jobId] | Remove-Job -Force -ErrorAction SilentlyContinue
+            $script:activeJobs.Remove($jobId)
+        }
+        return @{ Success = $false; Error = $_.Exception.Message }
+    }
+}
+
+# Helper function for non-blocking Node.js calls using jobs
+function Invoke-NodeAsync {
+    param(
+        [string]$ScriptPath,
+        [string[]]$Arguments = @(),
+        [int]$JobTimeout = 10
+    )
+    
+    try {
+        $jobId = "node_$(Get-Date -Format 'yyyyMMddHHmmss')_$(Get-Random)"
+        $scriptBlock = {
+            param($scriptPath, $args)
+            try {
+                $result = & node $scriptPath @args 2>&1 | Out-String
+                return @{
+                    Success = $true
+                    ExitCode = $LASTEXITCODE
+                    Output = $result
+                }
+            } catch {
+                return @{
+                    Success = $false
+                    ExitCode = -1
+                    Error = $_.Exception.Message
+                    Output = $null
+                }
+            }
+        }
+        
+        $job = Start-Job -ScriptBlock $scriptBlock -ArgumentList $ScriptPath, $Arguments
+        if (-not $script:activeJobs) { $script:activeJobs = @{} }
+        $script:activeJobs[$jobId] = $job
+        
+        # Wait for job with timeout
+        $result = $job | Wait-Job -Timeout $JobTimeout | Receive-Job
+        $job | Remove-Job -ErrorAction SilentlyContinue
+        if ($script:activeJobs.ContainsKey($jobId)) {
+            $script:activeJobs.Remove($jobId)
+        }
+        
+        return $result
+    } catch {
+        # Clean up job if it exists
+        if ($script:activeJobs -and $script:activeJobs.ContainsKey($jobId)) {
+            $script:activeJobs[$jobId] | Remove-Job -Force -ErrorAction SilentlyContinue
+            $script:activeJobs.Remove($jobId)
+        }
+        return @{ Success = $false; ExitCode = -1; Error = $_.Exception.Message; Output = $null }
+    }
+}
+
+# Function to pause Unity using /api/simulation/pause (non-blocking, more reliable)
+function Invoke-PauseUnity {
+    param(
+        [string]$tableId = $null,
+        [string]$reason = "Monitor detected critical issue"
+    )
+    
+    try {
+        # First, get the table from server (non-blocking)
+        $healthResult = Invoke-WebRequestAsync -Uri "$serverUrl/health" -TimeoutSec 2 -JobTimeout 3
+        if (-not $healthResult.Success) {
+            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] WARNING: Failed to get server health for Unity pause: $($healthResult.Error)" -ForegroundColor "Yellow"
+            return $false
+        }
+        
+        $serverHealth = $healthResult.Content | ConvertFrom-Json
+        if ($serverHealth.activeSimulations -eq 0) {
+            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] WARNING: No active simulations to pause" -ForegroundColor "Yellow"
+            return $false
+        }
+        
+        # Get tables (non-blocking)
+        $tablesResult = Invoke-WebRequestAsync -Uri "$serverUrl/api/tables" -TimeoutSec 2 -JobTimeout 3
+        if (-not $tablesResult.Success) {
+            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] WARNING: Failed to get tables for Unity pause: $($tablesResult.Error)" -ForegroundColor "Yellow"
+            return $false
+        }
+        
+        $tables = $tablesResult.Content | ConvertFrom-Json
+        $targetTable = $tables | Where-Object { $_.id -eq $tableId -or ($null -eq $tableId -and $_.isSimulation -eq $true) } | Select-Object -First 1
+        
+        if (-not $targetTable) {
+            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] WARNING: Could not find target simulation table to pause" -ForegroundColor "Yellow"
+            return $false
+        }
+        
+        # Call the server API to pause the simulation table (non-blocking)
+        $pauseBody = @{
+            tableId = $targetTable.id
+            reason = $reason
+        } | ConvertTo-Json
+        
+        $pauseResult = Invoke-WebRequestAsync -Uri "$serverUrl/api/simulation/pause" -Method POST -Body $pauseBody -ContentType "application/json" -TimeoutSec 5 -JobTimeout 6
+        
+        if ($pauseResult.Success) {
+            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Paused via table state update for table $($targetTable.id)" -ForegroundColor "Green"
+            return $true
+        } else {
+            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] WARNING: Failed to pause Unity via API: $($pauseResult.Error)" -ForegroundColor "Yellow"
+            return $false
+        }
+    } catch {
+        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ERROR: Failed to pause Unity: $_" -ForegroundColor "Red"
+        return $false
+    }
+}
+
+# Function to call Node.js issue detector (non-blocking)
 function Invoke-IssueDetector {
     param($logLine)
     
     try {
         # Escape the log line for PowerShell
         $escapedLine = $logLine -replace '"', '""'
-        $result = node $nodeScript --check "$escapedLine" 2>&1
-        if ($LASTEXITCODE -eq 0 -and $result) {
-            $jsonResult = $result | ConvertFrom-Json -ErrorAction SilentlyContinue
+        
+        # Use async call with timeout
+        $nodeResult = Invoke-NodeAsync -ScriptPath $nodeScript -Arguments @("--check", "`"$escapedLine`"") -JobTimeout 3
+        
+        if ($nodeResult.Success -and $nodeResult.ExitCode -eq 0 -and $nodeResult.Output) {
+            $jsonResult = $nodeResult.Output | ConvertFrom-Json -ErrorAction SilentlyContinue
             if ($jsonResult) {
                 return $jsonResult
             }
@@ -291,8 +476,10 @@ function Add-PendingIssue {
         try {
             while ($retryCount -lt $maxRetries) {
             try {
-                $result = node $nodeScript --add-issue-file $tempFile 2>&1 | Out-String
-        if ($LASTEXITCODE -eq 0 -and $result) {
+                # Use non-blocking async call
+                $nodeResult = Invoke-NodeAsync -ScriptPath $nodeScript -Arguments @("--add-issue-file", $tempFile) -JobTimeout 5
+                $result = if ($nodeResult.Output) { $nodeResult.Output } else { $null }
+        if ($nodeResult.Success -and $nodeResult.ExitCode -eq 0 -and $result) {
                     # Remove any non-JSON output (like warnings or errors)
                     $jsonLines = $result -split "`n" | Where-Object { $_ -match '^\s*\{' -or $_ -match '^\s*\[' }
                     $cleanResult = $jsonLines -join "`n"
@@ -322,10 +509,7 @@ function Add-PendingIssue {
                 }
                 
                 # If we get here, something failed
-                $errorDetails = $result
-                if (-not $errorDetails) {
-                    $errorDetails = "Node.js script returned no output (exit code: $LASTEXITCODE)"
-                }
+                $errorDetails = if ($nodeResult.Error) { $nodeResult.Error } elseif ($result) { $result } else { "Node.js script returned no output (exit code: $($nodeResult.ExitCode))" }
                 
                 # Try to parse error from result if it's JSON
                 try {
@@ -1155,7 +1339,16 @@ function Invoke-DebuggerBreakWithVerification {
 }
 
 # Function to verify Unity is actually connected and playing (not just that a simulation table exists)
+# Uses caching to avoid blocking the main loop
 function Get-UnityActualStatus {
+    # Return cached status if available and recent
+    if ($script:unityStatusCache -and $script:unityStatusCacheTime) {
+        $cacheAge = ((Get-Date) - $script:unityStatusCacheTime).TotalSeconds
+        if ($cacheAge -lt $script:unityStatusCacheInterval) {
+            return $script:unityStatusCache.Status
+        }
+    }
+    
     try {
         $status = @{
             ProcessRunning = $false
@@ -3633,9 +3826,9 @@ while ($monitoringActive) {
                         } catch {
                             Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ERROR: Failed to pause Unity via table state: $_" -ForegroundColor "Red"
                             $pauseSuccess = $false
-                            # Fallback to old method if new one fails
+                            # Fallback: Try pause again with tableId
                             try {
-                                $pauseSuccess = Invoke-DebuggerBreakWithVerification -tableId $tableId -reason "$($rootIssue.type) - $($rootIssue.severity) severity (Investigation complete)" -message "Investigation complete. Root issue: $($rootIssue.type). Related issues: $relatedCount"
+                                $pauseSuccess = Invoke-PauseUnity -tableId $tableId -reason "$($rootIssue.type) - $($rootIssue.severity) severity (Investigation complete)"
                             } catch {
                                 Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ERROR: Fallback pause method also failed: $_" -ForegroundColor "Red"
                             }
@@ -3864,8 +4057,10 @@ while ($monitoringActive) {
                             $fixAttempt | ConvertTo-Json -Depth 10 | Out-File -FilePath $tempFixAttemptFile -Encoding UTF8 -Force
                             
                             try {
-                                $recordResult = & node $nodeScript --record-fix-attempt --groupId $pendingInfo.GroupId --fix-attempt-file $tempFixAttemptFile 2>&1
-                                if ($LASTEXITCODE -eq 0) {
+                                # Use non-blocking async call
+                                $nodeResult = Invoke-NodeAsync -ScriptPath $nodeScript -Arguments @("--record-fix-attempt", "--groupId", $pendingInfo.GroupId, "--fix-attempt-file", $tempFixAttemptFile) -JobTimeout 5
+                                $recordResult = if ($nodeResult.Output) { $nodeResult.Output } else { "" }
+                                if ($nodeResult.Success -and $nodeResult.ExitCode -eq 0) {
                                     Write-ConsoleOutput -Message "  Fix attempt recorded in investigation" -ForegroundColor "Cyan"
                                 } else {
                                     Write-ConsoleOutput -Message "  WARNING: Failed to record fix attempt: $recordResult" -ForegroundColor "Yellow"
@@ -4044,19 +4239,18 @@ while ($monitoringActive) {
                             $messagePreview = "  Message: $($line.Substring(0, [Math]::Min(100, $line.Length)))"
                             Write-ConsoleOutput -Message $messagePreview -ForegroundColor "Gray"
                             
-                            # If tableId is null, try to get it from active simulation tables
+                            # If tableId is null, try to get it from active simulation tables (non-blocking)
                             if (-not $tableId) {
                                 try {
-                                    $healthResponse = Invoke-WebRequest -Uri "http://localhost:3000/health" -TimeoutSec 2 -ErrorAction Stop
-                                    if ($healthResponse.StatusCode -eq 200) {
-                                        $health = $healthResponse.Content | ConvertFrom-Json
+                                    $healthResult = Invoke-WebRequestAsync -Uri "$serverUrl/health" -TimeoutSec 2 -JobTimeout 3
+                                    if ($healthResult.Success -and $healthResult.StatusCode -eq 200) {
+                                        $health = $healthResult.Content | ConvertFrom-Json
                                         if ($health.activeSimulations -gt 0) {
-                                            # Try to get the first active simulation table ID
-                                            # We'll need to query the server for active tables
+                                            # Try to get the first active simulation table ID (non-blocking)
                                             try {
-                                                $tablesResponse = Invoke-WebRequest -Uri "http://localhost:3000/api/tables" -TimeoutSec 2 -ErrorAction Stop
-                                                if ($tablesResponse.StatusCode -eq 200) {
-                                                    $tables = $tablesResponse.Content | ConvertFrom-Json
+                                                $tablesResult = Invoke-WebRequestAsync -Uri "$serverUrl/api/tables" -TimeoutSec 2 -JobTimeout 3
+                                                if ($tablesResult.Success -and $tablesResult.StatusCode -eq 200) {
+                                                    $tables = $tablesResult.Content | ConvertFrom-Json
                                                     $simTable = $tables | Where-Object { $_.isSimulation -eq $true -and $_.activePlayers -gt 0 } | Select-Object -First 1
                                                     if ($simTable -and $simTable.id) {
                                                         $tableId = $simTable.id
@@ -4116,13 +4310,14 @@ while ($monitoringActive) {
                                     if ($config.unity.pauseDebuggerOnIssue) {
                             $escapedMessage = $line.Replace('"','\"').Replace("`n"," ").Replace("`r"," ").Substring(0,[Math]::Min(200,$line.Length))
                                         $reason = "$($issue.type) - $($issue.severity) severity"
-                                        $pauseSuccess = Invoke-DebuggerBreakWithVerification -tableId $tableId -reason $reason -message $escapedMessage
-                                        if (-not $pauseSuccess) {
+                                        $pauseSuccess = Invoke-PauseUnity -tableId $tableId -reason $reason
+                                        if ($pauseSuccess) {
+                                            $isPaused = $true
+                                            $currentIssue = $line
+                                        } else {
                                             Write-ConsoleOutput -Message "  Monitor will automatically retry when Unity is ready" -ForegroundColor "Yellow"
                                         }
                                     }
-                                    $isPaused = $true
-                                    $currentIssue = $line
                                 }
                             }
                         } elseif (-not $addResult) {
@@ -4140,12 +4335,13 @@ while ($monitoringActive) {
                                 try {
                                     $escapedMessage = $line.Replace('"','\"').Replace("`n"," ").Replace("`r"," ").Substring(0,[Math]::Min(200,$line.Length))
                                     $reason = "$($issue.type) - $($issue.severity) severity (issue detector failed)"
-                                    $pauseSuccess = Invoke-DebuggerBreakWithVerification -tableId $tableId -reason $reason -message $escapedMessage
-                                    if (-not $pauseSuccess) {
+                                    $pauseSuccess = Invoke-PauseUnity -tableId $tableId -reason $reason
+                                    if ($pauseSuccess) {
+                                        $isPaused = $true
+                                        $currentIssue = $line
+                                    } else {
                                         Write-ConsoleOutput -Message "  Monitor will automatically retry when Unity is ready" -ForegroundColor "Yellow"
                                     }
-                                    $isPaused = $true
-                                    $currentIssue = $line
                             } catch {
                                     Write-ConsoleOutput -Message "  ERROR: Failed to pause debugger: $_" -ForegroundColor "Red"
                                 }
@@ -4162,14 +4358,14 @@ while ($monitoringActive) {
                             # Still pause Unity if it's a critical/high severity issue
                             if (-not $isPaused -and $config.unity.pauseDebuggerOnIssue -and ($issue.severity -eq 'critical' -or $issue.severity -eq 'high')) {
                                 try {
-                                    $escapedMessage = $line.Replace('"','\"').Replace("`n"," ").Replace("`r"," ").Substring(0,[Math]::Min(200,$line.Length))
                                     $reason = "$($issue.type) - $($issue.severity) severity (issue detector failed)"
-                                    $pauseSuccess = Invoke-DebuggerBreakWithVerification -tableId $tableId -reason $reason -message $escapedMessage
-                                    if (-not $pauseSuccess) {
+                                    $pauseSuccess = Invoke-PauseUnity -tableId $tableId -reason $reason
+                                    if ($pauseSuccess) {
+                                        $isPaused = $true
+                                        $currentIssue = $line
+                                    } else {
                                         Write-ConsoleOutput -Message "  Monitor will automatically retry when Unity is ready" -ForegroundColor "Yellow"
                                     }
-                            $isPaused = $true
-                            $currentIssue = $line
                                 } catch {
                                     Write-ConsoleOutput -Message "  ERROR: Failed to pause debugger: $_" -ForegroundColor "Red"
                                 }
@@ -4189,17 +4385,15 @@ while ($monitoringActive) {
                                     $escapedMessage = $line.Replace('"','\"').Replace("`n"," ").Replace("`r"," ").Substring(0,[Math]::Min(200,$line.Length))
                                         $reason = "Duplicate issue: $($issue.type) - $($issue.severity) severity"
                                         
-                                        $body = @{
-                                            tableId = $tableId
-                                            reason = $reason
-                                            message = $escapedMessage
-                                        } | ConvertTo-Json
-                                        
-                                        Invoke-WebRequest -Uri "$serverUrl/api/debugger/break" -Method POST -Body $body -ContentType "application/json" -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop | Out-Null
-                                    $isPaused = $true
-                                    $currentIssue = $line
+                                        # Use non-blocking pause function
+                                        $pauseSuccess = Invoke-PauseUnity -tableId $tableId -reason $reason
+                                        if ($pauseSuccess) {
+                                            $isPaused = $true
+                                            $currentIssue = $line
+                                        }
                                     } catch {
-                                        # API call failed - continue anyway
+                                        # Pause failed - continue anyway
+                                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] WARNING: Failed to pause Unity for duplicate issue: $_" -ForegroundColor "Yellow"
                                     }
                                 }
                             } else {
@@ -4219,20 +4413,16 @@ while ($monitoringActive) {
                                         $escapedMessage = $line.Replace('"','\"').Replace("`n"," ").Replace("`r"," ").Substring(0,[Math]::Min(200,$line.Length))
                                         $reason = "$($issue.type) - $($issue.severity) severity (logging failed)"
                                         
-                                        $body = @{
-                                            tableId = $tableId
-                                            reason = $reason
-                                            message = $escapedMessage
-                                        } | ConvertTo-Json
-                                        
-                                        $response = Invoke-WebRequest -Uri "$serverUrl/api/debugger/break" -Method POST -Body $body -ContentType "application/json" -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
-                                        
-                                        if ($response.StatusCode -eq 200) {
+                                        # Use non-blocking pause function
+                                        $pauseSuccess = Invoke-PauseUnity -tableId $tableId -reason $reason
+                                        if ($pauseSuccess) {
                                             $stats.PauseMarkersWritten++
-                                            Write-ConsoleOutput -Message "  Debugger break triggered via API (despite logging failure)" -ForegroundColor "Yellow"
+                                            Write-ConsoleOutput -Message "  Unity paused via API (despite logging failure)" -ForegroundColor "Yellow"
+                                        } else {
+                                            Write-ConsoleOutput -Message "  WARNING: Failed to pause Unity (despite logging failure)" -ForegroundColor "Yellow"
                                         }
                                     } catch {
-                                        Write-ConsoleOutput -Message "  ERROR: Failed to trigger debugger break: $_" -ForegroundColor "Red"
+                                        Write-ConsoleOutput -Message "  ERROR: Failed to pause Unity: $_" -ForegroundColor "Red"
                                     }
                                 }
                                 
@@ -4682,10 +4872,13 @@ while ($monitoringActive) {
                             }
                         } else {
                             # Check if Unity is actually trying to connect (recent connection attempts in logs)
-                            # BUT: If server is down, Unity can't connect - restart Unity anyway
+                            # BUT: If server is down, Unity can't connect - restart Unity anyway - non-blocking
                             $serverIsDown = $false
                             try {
-                                $serverCheck = Invoke-WebRequest -Uri "$serverUrl/health" -TimeoutSec 2 -ErrorAction Stop
+                                $serverCheckResult = Invoke-WebRequestAsync -Uri "$serverUrl/health" -TimeoutSec 2 -JobTimeout 3
+                                if (-not $serverCheckResult.Success) {
+                                    $serverIsDown = $true
+                                }
                             } catch {
                                 $serverIsDown = $true
                             }
@@ -4770,14 +4963,18 @@ while ($monitoringActive) {
         $logWatcherStatus = Get-LogWatcherStatus
         $wasSimulationRunning = $stats.SimulationRunning
         
-        # FIRST: Get server's ACTUAL simulation count (not stale log data)
+        # FIRST: Get server's ACTUAL simulation count (not stale log data) - non-blocking
         $serverActualCount = 0
         $serverHealthCheckSucceeded = $false
         try {
-            $healthResponse = Invoke-WebRequest -Uri "$serverUrl/health" -Method GET -UseBasicParsing -TimeoutSec 3 -ErrorAction Stop
-            $healthData = $healthResponse.Content | ConvertFrom-Json
-            $serverActualCount = $healthData.activeSimulations
-            $serverHealthCheckSucceeded = $true
+            $healthResult = Invoke-WebRequestAsync -Uri "$serverUrl/health" -Method GET -TimeoutSec 3 -JobTimeout 4
+            if ($healthResult.Success) {
+                $healthData = $healthResult.Content | ConvertFrom-Json
+                $serverActualCount = $healthData.activeSimulations
+                $serverHealthCheckSucceeded = $true
+            } else {
+                throw $healthResult.Error
+            }
         } catch {
             # Health check failed - log the error but default to 0
             $healthErrorDetails = $_.Exception.Message
@@ -4917,13 +5114,17 @@ while ($monitoringActive) {
                     $orphanMsg = "[$(Get-Date -Format 'HH:mm:ss')] SIMULATION: Server has $serverActualCount active simulation(s) but Unity is NOT connected to it (orphaned simulation)"
                     Write-ConsoleOutput -Message $orphanMsg -ForegroundColor "Yellow"
                     
-                    # Step 1: Try to stop via API FIRST (while server is still running)
+                    # Step 1: Try to stop via API FIRST (while server is still running) - non-blocking
                     $apiStopSucceeded = $false
                     try {
                         $stopApiMsg = "[$(Get-Date -Format 'HH:mm:ss')] Stopping orphaned simulation(s) via API (while server is running)..."
                         Write-ConsoleOutput -Message $stopApiMsg -ForegroundColor "Cyan"
-                        $stopResponse = Invoke-WebRequest -Uri "$serverUrl/api/simulations/stop-all" -Method POST -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
-                        $stopResult = $stopResponse.Content | ConvertFrom-Json
+                        $stopResultObj = Invoke-WebRequestAsync -Uri "$serverUrl/api/simulations/stop-all" -Method POST -TimeoutSec 5 -JobTimeout 6
+                        if ($stopResultObj.Success) {
+                            $stopResult = $stopResultObj.Content | ConvertFrom-Json
+                        } else {
+                            throw $stopResultObj.Error
+                        }
                         $apiDiagMsg = "[$(Get-Date -Format 'HH:mm:ss')] DIAGNOSTIC: API response - success: $($stopResult.success), stopped: $($stopResult.stopped), failed: $($stopResult.failed)"
                         Write-ConsoleOutput -Message $apiDiagMsg -ForegroundColor "Cyan"
                         if ($stopResult.success) {
@@ -5058,13 +5259,17 @@ while ($monitoringActive) {
                 
                 # If there's an orphaned simulation, stop it before restarting Unity
                 if ($logWatcherStatus.ActiveSimulations -gt 0) {
-                    # Step 1: Try to stop via API FIRST (while server is still running)
+                    # Step 1: Try to stop via API FIRST (while server is still running) - non-blocking
                     $apiStopSucceeded = $false
                     try {
                         $stopOrphanMsg = "[$(Get-Date -Format 'HH:mm:ss')] Stopping orphaned simulation(s) via API (while server is running)..."
                         Write-ConsoleOutput -Message $stopOrphanMsg -ForegroundColor "Cyan"
-                        $stopResponse = Invoke-WebRequest -Uri "$serverUrl/api/simulations/stop-all" -Method POST -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop
-                        $stopResult = $stopResponse.Content | ConvertFrom-Json
+                        $stopResultObj = Invoke-WebRequestAsync -Uri "$serverUrl/api/simulations/stop-all" -Method POST -TimeoutSec 5 -JobTimeout 6
+                        if ($stopResultObj.Success) {
+                            $stopResult = $stopResultObj.Content | ConvertFrom-Json
+                        } else {
+                            throw $stopResultObj.Error
+                        }
                         if ($stopResult.success -and $stopResult.stopped -gt 0) {
                             $apiStopSucceeded = $true
                             $stoppedOrphanMsg = "[$(Get-Date -Format 'HH:mm:ss')] Stopped $($stopResult.stopped) orphaned simulation(s) via API"
@@ -5178,8 +5383,10 @@ while ($monitoringActive) {
                 # Ctrl+X to exit focus mode
                 $pendingInfo = Get-PendingIssuesInfo
                 if ($pendingInfo.InFocusMode) {
-                    $result = node $nodeScript --exit-focus 2>&1
-                    if ($LASTEXITCODE -eq 0) {
+                    # Use non-blocking async call
+                    $nodeResult = Invoke-NodeAsync -ScriptPath $nodeScript -Arguments @("--exit-focus") -JobTimeout 5
+                    $result = if ($nodeResult.Output) { $nodeResult.Output } else { "" }
+                    if ($nodeResult.Success -and $nodeResult.ExitCode -eq 0) {
                         $exitResult = $result | ConvertFrom-Json -ErrorAction SilentlyContinue
                         if ($exitResult -and $exitResult.success) {
                             Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] FOCUS MODE EXITED (Ctrl+X)" -ForegroundColor "Yellow"
