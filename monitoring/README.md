@@ -254,10 +254,11 @@ $status.verification.active       # Is verification running?
      "queuedIssues": [...]
    }
    ```
-5. **Investigation completes** → Monitor pauses Unity debugger
-   - Calls `/api/debugger/break` API
-   - Server emits `debugger_break` event to Unity
-   - Unity calls `Debug.Break()` (if debugger attached)
+5. **Investigation completes** → Monitor pauses Unity
+   - Calls `/api/simulation/pause` API (sets `table.isPaused = true`)
+   - Server broadcasts `table_state` event with `isPaused: true`
+   - Unity reads `isPaused` from `table_state` and sets `Time.timeScale = 0`
+   - More reliable than `Debug.Break()` (works even without debugger attached)
 6. **Monitor updates `monitor-status.json`** with current state
 
 #### Phase 2: User Notification (Manual - User)
@@ -623,7 +624,7 @@ Monitor uses `monitoring/monitor-config.json` for all settings. Edit this file t
     "autoConnectOnStartup": true,
     "serverUrl": "http://localhost:3000",
     "pauseDebuggerOnIssue": true,
-    "comment": "pauseDebuggerOnIssue: If true, Unity will receive debugger_break socket event and should call Debug.Break() to pause debugger when critical issues are detected"
+    "comment": "pauseDebuggerOnIssue: If true, Unity will pause when investigation completes. Monitor calls /api/simulation/pause which sets table.isPaused=true. Unity reads isPaused from table_state event and sets Time.timeScale=0"
   },
   "login": {
     "username": "monitor_user",
@@ -661,13 +662,15 @@ Monitor uses `monitoring/monitor-config.json` for all settings. Edit this file t
 
 3. **Server URL**: Use `http://localhost:3000` for local development, or your server's IP address for remote connections.
 
-4. **Debugger Pause on Issue** (`pauseDebuggerOnIssue`):
+4. **Pause on Issue** (`pauseDebuggerOnIssue`):
    - Default: `true`
-   - If enabled, Unity will receive a `debugger_break` socket event when investigation completes
-   - Unity must listen for this event and call `Debug.Break()` to pause execution in the debugger
-   - Requires debugger to be attached to Unity for the breakpoint to work
-   - Set to `false` to disable debugger pause (Unity will still pause via `Time.timeScale = 0`)
-   - **FIXED (2026-02-07)**: Monitor now calls `/api/debugger/break` API endpoint directly, which emits `debugger_break` event to Unity. Unity receives event and calls `Debug.Break()` correctly.
+   - If enabled, Unity will pause when investigation completes
+   - Monitor calls `/api/simulation/pause` which sets `table.isPaused = true`
+   - Server broadcasts `table_state` event with `isPaused: true`
+   - Unity reads `isPaused` from `table_state` event and sets `Time.timeScale = 0`
+   - Works even without debugger attached (more reliable than `Debug.Break()`)
+   - Set to `false` to disable automatic pausing
+   - **UPDATED (2026-02-07)**: Changed from `/api/debugger/break` (deprecated) to `/api/simulation/pause` for more reliable pausing
 
 5. **Investigation Phase** (`investigation`):
    - `enabled`: Default `true` - Enable investigation phase before pausing
@@ -767,13 +770,20 @@ if (autoMode == "normal") {
 }
 ```
 
-**7. Debugger Break Handler (Optional - if pauseDebuggerOnIssue is enabled):**
+**7. Table State Pause Handler (Required - if pauseDebuggerOnIssue is enabled):**
 ```csharp
-// Listen for debugger_break event from monitor
-_socket.On("debugger_break", (data) => {
-    Debug.Log("[MONITOR] Debugger break requested - pausing execution");
-    Debug.Break(); // Pauses execution in debugger if attached
-    // Unity will also pause via Time.timeScale = 0 from table_state.isPaused
+// Listen for table_state event from server
+_socket.On("table_state", (data) => {
+    var state = data.GetValue<TableState>();
+    if (state.isPaused && !_isPaused) {
+        _isPaused = true;
+        Time.timeScale = 0f; // Pauses all time-based updates
+        Debug.Log($"[MONITOR] Game paused: {state.pauseReason}");
+    } else if (!state.isPaused && _isPaused) {
+        _isPaused = false;
+        Time.timeScale = 1f; // Resumes game
+        Debug.Log("[MONITOR] Game resumed");
+    }
 });
 ```
 
@@ -1776,17 +1786,20 @@ Edit `monitoring/monitor.ps1`:
 - If verification fails, Monitor re-enters investigation mode
 - Fix attempts are recorded to help understand what didn't work
 
-### Direct Debugger Break API
-- Monitor calls `/api/debugger/break` endpoint directly
-- Server emits `debugger_break` socket event to Unity
-- Unity receives event and calls `Debug.Break()` correctly
-- More reliable than log marker approach
+### Unity Pause Mechanism (2026-02-07)
+- Monitor calls `/api/simulation/pause` endpoint (replaces deprecated `/api/debugger/break`)
+- Server sets `table.isPaused = true` and broadcasts table state
+- Unity reads `isPaused` from `table_state` event and sets `Time.timeScale = 0`
+- More reliable than `Debug.Break()` approach (works even without debugger attached)
+- Falls back to old method if new endpoint fails
 
 ### Investigation Completion Check Improvements (2026-02-07)
 - **Prioritizes Script Variables**: Completion check uses script variables as primary source, not status file
 - **Elapsed Time Primary**: Elapsed time calculation is the primary completion trigger (more reliable)
 - **Status File Fallback**: Falls back to status file if script variables not set
 - **Safety Check**: Automatically completes if investigation runs 2x timeout (30s for 15s timeout)
+- **Forced Completion**: If status file shows investigation active for 2x timeout but script variables are out of sync, forces completion
+- **TimeRemaining Check**: Also checks `timeRemaining <= 0` from status file as completion trigger
 - **Robust Error Handling**: Works even if status file read fails
 - **Better Diagnostics**: All completion check logic logged to `logs/monitor-diagnostics.log`
 - **Prevents Stuck Investigations**: Multiple completion triggers ensure investigation always completes
@@ -1794,8 +1807,8 @@ Edit `monitoring/monitor.ps1`:
 ---
 
 **Last Updated**: 2026-02-07
-**Version**: 2.1.0
-**Status**: Complete with Investigation Phase, Fix Verification System, Fix Attempt Tracking, Robust Completion Checks, and All Previous Features
+**Version**: 2.2.0
+**Status**: Complete with Investigation Phase, Fix Verification System, Fix Attempt Tracking, Robust Completion Checks, Unity Pause Improvements, and All Previous Features
 
 ### Recent Fixes (2026-02-07)
 
@@ -1803,6 +1816,26 @@ Edit `monitoring/monitor.ps1`:
 - Fixed investigation getting stuck by prioritizing script variables over status file
 - Added safety check to force completion if investigation runs 2x timeout
 - Made elapsed time calculation the primary completion trigger
+- Added forced completion check for `timeRemaining <= 0` when script variables are out of sync
 - Improved error handling for status file reads
 - Added comprehensive diagnostic logging to `logs/monitor-diagnostics.log`
 - Completion check now works even if status file read fails
+
+**Investigation Completion - Get-PendingIssuesInfo Fallback (2026-02-07)**:
+- Added fallback to read `pending-issues.json` directly if `Get-PendingIssuesInfo` returns false
+- Prevents Unity from not pausing when investigation completes due to function returning incorrect values
+- Ensures focused group is always detected even if function has timing/parsing issues
+- Similar fallback logic already existed in investigation start - now also in completion
+
+**Investigation Start Logic - Unity Pause Check (2026-02-07)**:
+- Fixed issue where new investigations would start even when Unity is paused
+- Now checks both local `$isPaused` variable AND status file's `paused` field
+- Prevents investigation loop when Unity is waiting for fix to be applied
+- Ensures monitor waits for `fix-applied.json` before starting new investigations
+
+**Unity Pause Mechanism Update (2026-02-07)**:
+- Changed from `/api/debugger/break` (deprecated) to `/api/simulation/pause`
+- New endpoint sets `table.isPaused = true` and broadcasts table state
+- Unity reads pause state from `table_state` event instead of `debugger_break` event
+- More reliable - works even without debugger attached
+- Falls back to old method if new endpoint fails
