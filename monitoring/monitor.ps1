@@ -1770,6 +1770,78 @@ function Show-Statistics {
     $dbStatus = $(if($stats.ServerStatus -eq "Online"){"CONNECTED"}else{"UNKNOWN"})
     $col1Lines += "Database: " + $dbStatus
     $col1Lines += ""
+    
+    # MONITOR STATE - Critical information about what monitor is doing
+    $col1Lines += "MONITOR STATE"
+    $col1Lines += ("-" * ($colWidth - 2))
+    
+    # Check if Unity is paused and waiting for fix
+    $pausedFromStatusFile = $false
+    $fixAppliedExists = Test-Path $fixAppliedFile
+    if (Test-Path $statusTextFilePath) {
+        try {
+            $statusData = Get-Content $statusTextFilePath -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+            $pausedFromStatusFile = if ($statusData.paused -is [bool]) { $statusData.paused } else { $false }
+        } catch {
+            $pausedFromStatusFile = $isPaused
+        }
+    } else {
+        $pausedFromStatusFile = $isPaused
+    }
+    
+    if ($pausedFromStatusFile) {
+        $col1Lines += "Unity Status: PAUSED"
+        if ($fixAppliedExists) {
+            $col1Lines += "Waiting: VERIFYING"
+            try {
+                $fixApplied = Get-FixAppliedInfo
+                if ($fixApplied) {
+                    $col1Lines += "Fix Applied: YES"
+                    if ($fixApplied.requiredRestarts -and $fixApplied.requiredRestarts.Count -gt 0) {
+                        $restartsText = ($fixApplied.requiredRestarts -join ",")
+                        if ($restartsText.Length -gt ($colWidth - 12)) {
+                            $restartsText = $restartsText.Substring(0, ($colWidth - 15)) + "..."
+                        }
+                        $col1Lines += "Restarts: " + $restartsText
+                    }
+                }
+            } catch {
+                $col1Lines += "Fix Applied: ERROR"
+            }
+        } else {
+            $col1Lines += "Waiting: FIX REQUIRED"
+            $col1Lines += "fix-applied.json: MISSING"
+            $col1Lines += ""
+            $col1Lines += "ACTION: Create fix-applied.json"
+            $col1Lines += "  with fix details"
+        }
+    } else {
+        $col1Lines += "Unity Status: ACTIVE"
+        $col1Lines += "Waiting: NONE"
+    }
+    
+    # Show what monitor is currently doing
+    $col1Lines += ""
+    $col1Lines += "Current Action:"
+    if ($isVerifyingFix) {
+        $col1Lines += "  VERIFYING FIX"
+        if ($verificationStartTimeValue) {
+            $verificationElapsed = (Get-Date) - $verificationStartTimeValue
+            $col1Lines += "  Elapsed: " + ("{0:N0}s" -f $verificationElapsed.TotalSeconds)
+        }
+    } elseif ($investigationActive) {
+        $col1Lines += "  INVESTIGATING"
+        if ($investigationStartTimeValue) {
+            $investigationElapsed = (Get-Date) - $investigationStartTimeValue
+            $col1Lines += "  Elapsed: " + ("{0:N0}s" -f $investigationElapsed.TotalSeconds)
+        }
+    } elseif ($pausedFromStatusFile) {
+        $col1Lines += "  WAITING FOR FIX"
+    } else {
+        $col1Lines += "  MONITORING LOGS"
+    }
+    
+    $col1Lines += ""
     $col1Lines += "AUTOMATION"
     $col1Lines += ("-" * ($colWidth - 2))
     $col1Lines += "Mode: " + $config.mode.ToUpper()
@@ -2073,7 +2145,23 @@ function Show-Statistics {
             $col3Lines += "Enabled: NO"
         }
         $col3Lines += ""
-        $col3Lines += "Waiting for new issues..."
+        
+        # Show what monitor is waiting for
+        if ($pausedFromStatusFile) {
+            $col3Lines += "WAITING FOR:"
+            if ($fixAppliedExists) {
+                $col3Lines += "  Verification to complete"
+            } else {
+                $col3Lines += "  fix-applied.json"
+                $col3Lines += ""
+                $col3Lines += "Next Step:"
+                $col3Lines += "  Create fix-applied.json"
+                $col3Lines += "  with fix details"
+            }
+        } else {
+            $col3Lines += "Waiting for:"
+            $col3Lines += "  New issues to detect"
+        }
     }
     
     # Add verification progress if verifying
