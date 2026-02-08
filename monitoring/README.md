@@ -192,14 +192,18 @@ $status.verification.active       # Is verification running?
 
 **Key Fields for AI Models to Check**:
 
-1. **`debuggerBreakStatus`** - Why debugger didn't pause:
-   - `"success"` - Debugger break worked, Unity should be paused
+1. **`paused`** - Unity pause state (primary):
+   - `true` - Unity is paused and waiting for fix (correct state after investigation completes)
+   - `false` - Unity is active (investigation may not have completed or Unity didn't receive pause)
+
+2. **`debuggerBreakStatus`** - Legacy/fallback pause mechanism status:
+   - `"success"` - Pause mechanism worked, Unity should be paused
    - `"verifying_unity"` - Monitor is checking Unity status (wait)
    - `"failed_unity_not_running"` - Unity not running (Monitor will auto-restart)
    - `"failed_no_tables"` - Unity not in table room (Monitor will wait)
    - `"failed_exception"` - API call failed (check server status)
 
-2. **`unityStatus.actualStatus`** - Real Unity state:
+3. **`unityStatus.actualStatus`** - Real Unity state:
    - `"ACTIVE"` - Unity connected and actively playing
    - `"CONNECTED"` - Unity connected but not in game scene
    - `"IDLE"` - Unity running but not connected to server
