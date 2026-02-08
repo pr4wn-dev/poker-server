@@ -210,6 +210,24 @@ app.post('/api/debugger/break', (req, res) => {
     });
 });
 
+// API endpoint to pause a simulation table (called by Monitor)
+app.post('/api/simulation/pause', (req, res) => {
+    if (!socketHandler || !socketHandler.simulationManager) {
+        return res.status(503).json({ success: false, error: 'Simulation manager not initialized' });
+    }
+    const { tableId, reason } = req.body || {};
+    if (!tableId) {
+        return res.status(400).json({ success: false, error: 'tableId is required' });
+    }
+
+    const result = socketHandler.simulationManager.pauseSimulation(tableId, reason);
+    if (result.success) {
+        return res.json({ success: true, message: `Simulation table ${tableId} paused.` });
+    } else {
+        return res.status(400).json(result);
+    }
+});
+
 // API endpoint to resume ALL paused simulations
 app.post('/api/simulations/resume-all', (req, res) => {
     if (!socketHandler) {

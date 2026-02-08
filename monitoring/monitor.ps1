@@ -3289,6 +3289,16 @@ while ($monitoringActive) {
             Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] Completion check SKIPPED: investigationStartTimeToUse is null (investigationIsActive=$investigationIsActive, script:startTime=$($script:investigationStartTime), statusFileStartTime=$statusFileInvestigationStartTime)" -ForegroundColor "Yellow"
         }
         
+        # CRITICAL FIX: If status file shows investigation active but we don't have startTime, try to get it from status file directly
+        if (-not $investigationIsActive -and $statusFileInvestigationActive -and $statusFileInvestigationStartTime) {
+            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] Status file shows active investigation but script variables not set - syncing and forcing completion check" -ForegroundColor "Cyan"
+            $investigationIsActive = $true
+            $investigationStartTimeToUse = $statusFileInvestigationStartTime
+            # Sync script variables
+            $script:isInvestigating = $true
+            $script:investigationStartTime = $statusFileInvestigationStartTime
+        }
+        
         if ($investigationIsActive -and $investigationStartTimeToUse) {
             Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] Investigation completion check: scriptActive=$($script:isInvestigating), statusFileActive=$statusFileInvestigationActive, startTime=$($investigationStartTimeToUse.ToString('HH:mm:ss')), statusFileReadSuccess=$statusFileReadSuccess" -ForegroundColor "Gray"
             
@@ -3367,11 +3377,47 @@ while ($monitoringActive) {
                     Write-ConsoleOutput -Message "" -ForegroundColor "White"
                     $tableId = if ($rootIssue.tableId) { $rootIssue.tableId } else { $null }
                     if (-not $isPaused -and $config.unity.pauseDebuggerOnIssue) {
-                        $pauseSuccess = Invoke-DebuggerBreakWithVerification -tableId $tableId -reason "$($rootIssue.type) - $($rootIssue.severity) severity (Investigation complete)" -message "Investigation complete. Root issue: $($rootIssue.type). Related issues: $relatedCount"
-                        if (-not $pauseSuccess) {
-                            Write-ConsoleOutput -Message "  WARNING: Debugger break may not have reached Unity" -ForegroundColor "Yellow"
+                        # CRITICAL FIX: Use /api/simulation/pause instead of /api/debugger/break for more reliable pausing
+                        # This sets table.isPaused=true and broadcasts state, which Unity reads via table_state event
+                        try {
+                            # Get the table from server first
+                            $serverHealth = Invoke-WebRequest -Uri "$serverUrl/health" -TimeoutSec 2 -ErrorAction Stop | ConvertFrom-Json
+                            if ($serverHealth.activeSimulations -gt 0) {
+                                $tablesResponse = Invoke-WebRequest -Uri "$serverUrl/api/tables" -TimeoutSec 2 -ErrorAction Stop
+                                $tables = $tablesResponse.Content | ConvertFrom-Json
+                                $targetTable = $tables | Where-Object { $_.id -eq $tableId -or ($null -eq $tableId -and $_.isSimulation -eq $true) } | Select-Object -First 1
+                                
+                                if ($targetTable) {
+                                    # Call the server API to pause the simulation table
+                                    $pauseBody = @{
+                                        tableId = $targetTable.id
+                                        reason = "$($rootIssue.type) - $($rootIssue.severity) severity (Investigation complete)"
+                                    } | ConvertTo-Json
+                                    Invoke-WebRequest -Uri "$serverUrl/api/simulation/pause" -Method POST -Body $pauseBody -ContentType "application/json" -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop | Out-Null
+                                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Paused via table state update for table $($targetTable.id)" -ForegroundColor "Green"
+                                    $isPaused = $true
+                                    $pauseSuccess = $true
+                                } else {
+                                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] WARNING: Could not find target simulation table to pause." -ForegroundColor "Yellow"
+                                    $pauseSuccess = $false
+                                }
+                            } else {
+                                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] WARNING: No active simulations found to pause." -ForegroundColor "Yellow"
+                                $pauseSuccess = $false
+                            }
+                        } catch {
+                            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ERROR: Failed to pause Unity via table state: $_" -ForegroundColor "Red"
+                            $pauseSuccess = $false
+                            # Fallback to old method if new one fails
+                            try {
+                                $pauseSuccess = Invoke-DebuggerBreakWithVerification -tableId $tableId -reason "$($rootIssue.type) - $($rootIssue.severity) severity (Investigation complete)" -message "Investigation complete. Root issue: $($rootIssue.type). Related issues: $relatedCount"
+                            } catch {
+                                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ERROR: Fallback pause method also failed: $_" -ForegroundColor "Red"
+                            }
                         }
-                        $isPaused = $true
+                        if (-not $pauseSuccess) {
+                            Write-ConsoleOutput -Message "  WARNING: Unity may not have paused - check Unity console and server logs" -ForegroundColor "Yellow"
+                        }
                     }
                 } else {
                     Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] INVESTIGATION COMPLETE: Timeout reached (no active focus group)" -ForegroundColor "Yellow"
@@ -3397,6 +3443,23 @@ while ($monitoringActive) {
             if (-not $statusFileInvestigationActive) { $whyNotActive += "statusFile:active=false" }
             if (-not $statusFileInvestigationStartTime) { $whyNotActive += "statusFile:startTime=null" }
             Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] Investigation not active - completion check skipped. Reasons: $($whyNotActive -join ', ')" -ForegroundColor "Gray"
+            
+            # CRITICAL SAFETY CHECK: If status file shows investigation active but script variables don't, force completion if timeout exceeded
+            # This prevents investigations from getting stuck when script variables are out of sync
+            if ($statusFileInvestigationActive -and $statusFileInvestigationStartTime) {
+                $timeoutValue = if ($investigationTimeout) { $investigationTimeout } else { 15 }
+                $elapsedFromStatusFile = ((Get-Date) - $statusFileInvestigationStartTime).TotalSeconds
+                if ($elapsedFromStatusFile -ge ($timeoutValue * 2)) {
+                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] FORCED COMPLETION: Status file shows investigation active for $([Math]::Round($elapsedFromStatusFile, 1))s (2x timeout=$($timeoutValue * 2)s) but script variables are out of sync - FORCING COMPLETION" -ForegroundColor "Red"
+                    # Force complete by syncing variables and triggering completion
+                    $script:isInvestigating = $false
+                    $script:investigationStartTime = $null
+                    $script:investigationCheckLogged = $false
+                    Update-MonitorStatus
+                    $lastStatusUpdate = Get-Date
+                    $script:lastInvestigationComplete = Get-Date
+                }
+            }
         }
         
         if ($shouldCheckInvestigation -and $investigationStartTimeValid) {
@@ -3638,7 +3701,7 @@ while ($monitoringActive) {
             
             while ($null -ne ($line = $reader.ReadLine())) {
                 try {
-                    $stats.TotalLinesProcessed++
+                $stats.TotalLinesProcessed++
                     $stats.LastLogActivity = Get-Date  # Update last activity timestamp
                     
                     # CRITICAL: Validate line is not null/empty and is a string
@@ -3648,21 +3711,21 @@ while ($monitoringActive) {
                     
                     # CRITICAL: Ensure line is a string (not an object)
                     $line = $line.ToString()
-                    
-                    # Skip our own monitoring logs and internal system logs
-                    if ($line -match '\[MONITORING\]|\[ISSUE_DETECTOR\]|\[LOG_WATCHER\]|\[TRACE\]|\[STATUS_REPORT\]|\[ACTIVE_MONITORING\]|\[WORKFLOW\]') {
-                        continue
-                    }
-                    
-                    # Skip FIX_ATTEMPT SUCCESS logs (these are good, not errors)
+                
+                # Skip our own monitoring logs and internal system logs
+                if ($line -match '\[MONITORING\]|\[ISSUE_DETECTOR\]|\[LOG_WATCHER\]|\[TRACE\]|\[STATUS_REPORT\]|\[ACTIVE_MONITORING\]|\[WORKFLOW\]') {
+                    continue
+                }
+                
+                # Skip FIX_ATTEMPT SUCCESS logs (these are good, not errors)
                     # Match both [FIX_ATTEMPT] and [FIX ATTEMPT] (with or without underscore)
                     if ($line -match '\[FIX[_\s]ATTEMPT\].*SUCCESS' -or $line -match 'FIX_ATTEMPT.*SUCCESS' -or $line -match 'FIX ATTEMPT.*SUCCESS') {
-                        continue
-                    }
-                    
-                    # Skip TRACE logs (informational only)
-                    # BUT: Don't skip [ROOT_TRACE] - these are important error indicators
-                    if ($line -match '\[TRACE\]' -and $line -notmatch '\[ROOT_TRACE\]') {
+                    continue
+                }
+                
+                # Skip TRACE logs (informational only)
+                # BUT: Don't skip [ROOT_TRACE] - these are important error indicators
+                if ($line -match '\[TRACE\]' -and $line -notmatch '\[ROOT_TRACE\]') {
                         continue
                     }
                 } catch {
