@@ -231,7 +231,16 @@ class AILiveStatistics {
         const stats = this.fixTracker.getStats();
         const recentAttempts = this.fixTracker.getRecentAttempts(10);
         const workingFixes = this.fixTracker.getWorkingFixes();
-        const failedFixes = this.fixTracker.getFailedFixes();
+        let failedFixes = [];
+        try {
+            failedFixes = this.fixTracker.getFailedFixes() || [];
+            // Ensure it's an array
+            if (!Array.isArray(failedFixes)) {
+                failedFixes = [];
+            }
+        } catch (error) {
+            failedFixes = [];
+        }
         
         return {
             attempts: {
