@@ -5845,7 +5845,6 @@ while ($monitoringActive) {
             Show-Statistics
             $lastStatsUpdate = $now
         }
-        
     } catch {
         $errorMsg = "Monitoring error: $_"
         $errorStackTrace = $_.ScriptStackTrace
