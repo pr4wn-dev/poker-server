@@ -74,11 +74,18 @@ class ErrorRecovery extends EventEmitter {
         
         this.componentHealth.set(component, health);
         
-        // Update state store
-        this.stateStore.updateState(`system.health.${component}`, {
-            status: 'healthy',
-            errorCount: health.errorCount,
-            timestamp: Date.now()
+        // Update state store ASYNC to avoid blocking/circular calls
+        // This prevents hangs when getState -> recordSuccess -> updateState -> getState
+        setImmediate(() => {
+            try {
+                this.stateStore.updateState(`system.health.${component}`, {
+                    status: 'healthy',
+                    errorCount: health.errorCount,
+                    timestamp: Date.now()
+                });
+            } catch (error) {
+                // Ignore errors in async update - non-critical
+            }
         });
         
         // Reset circuit breaker
