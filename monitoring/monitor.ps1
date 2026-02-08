@@ -3374,8 +3374,9 @@ while ($monitoringActive) {
             }
         }
         
-        # CRITICAL: Forced completion check - ALWAYS use direct read values (most recent)
+        # CRITICAL: Forced completion check - ALWAYS run EVERY loop iteration
         # This ensures we catch stuck investigations even if initial read failed or is stale
+        # CRITICAL: Always use direct read values (most recent) - they're the most recent
         # DIAGNOSTIC: Log what we found
         if ($statusFileDirectActive -or $statusFileDirectStartTime) {
             Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] Forced completion check: directReadActive=$statusFileDirectActive, directReadStartTime=$statusFileDirectStartTime, directReadTimeRemaining=$statusFileDirectTimeRemaining" -ForegroundColor "Gray"
@@ -3383,12 +3384,13 @@ while ($monitoringActive) {
         
         # CRITICAL: Use direct read values if available (they're more recent)
         # If direct read found active investigation, use those values for forced completion check
+        # CRITICAL: Always check direct read FIRST, then fall back to initial read
         $forcedCheckActive = $false
         $forcedCheckStartTime = $null
         $forcedCheckTimeRemaining = $null
         
         if ($statusFileDirectActive -and $statusFileDirectStartTime) {
-            # Direct read found active investigation - use these values
+            # Direct read found active investigation - use these values (most recent)
             $forcedCheckActive = $statusFileDirectActive
             $forcedCheckStartTime = $statusFileDirectStartTime
             $forcedCheckTimeRemaining = $statusFileDirectTimeRemaining
@@ -3399,7 +3401,8 @@ while ($monitoringActive) {
             $forcedCheckTimeRemaining = $statusFileTimeRemaining
         }
         
-        # Check if forced completion should trigger
+        # CRITICAL: ALWAYS check forced completion if we found ANY active investigation
+        # This ensures we catch stuck investigations even if the main completion check is skipped
         if ($forcedCheckActive -and $forcedCheckStartTime) {
             $timeoutValue = if ($investigationTimeout) { $investigationTimeout } else { 15 }
             $elapsedFromStatusFile = ((Get-Date) - $forcedCheckStartTime).TotalSeconds
@@ -3432,6 +3435,8 @@ while ($monitoringActive) {
                 Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] Forced completion check: NOT triggering (elapsed=$([Math]::Round($elapsedFromStatusFile, 1))s, timeout=$timeoutValue s, timeRemaining=$forcedCheckTimeRemaining)" -ForegroundColor "Gray"
             }
         } else {
+            # CRITICAL: Even if we didn't find an active investigation, log why for diagnostics
+            # This helps identify when the direct read is failing or not finding active investigations
             Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] Forced completion check: SKIPPED (no active investigation found - initialReadActive=$statusFileInvestigationActive, initialReadStartTime=$statusFileInvestigationStartTime, directReadActive=$statusFileDirectActive, directReadStartTime=$statusFileDirectStartTime)" -ForegroundColor "Gray"
         }
         
@@ -3633,10 +3638,12 @@ while ($monitoringActive) {
         # CRITICAL FIX: Allow investigations to start even when Unity is paused
         # This allows us to investigate new issues that occur while Unity is paused
         # The investigation will complete and pause Unity again if needed
+        # CRITICAL: Enforce 5-second cooldown to prevent immediate restart after completion
         if ($script:lastInvestigationComplete) {
             $timeSinceCompletion = ((Get-Date) - $script:lastInvestigationComplete).TotalSeconds
             if ($timeSinceCompletion -lt 5) {
                 $canStartNewInvestigation = $false
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] Cooldown active: $([Math]::Round($timeSinceCompletion, 1))s since last completion (need 5s)" -ForegroundColor "Gray"
             }
         }
         
