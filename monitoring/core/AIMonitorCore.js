@@ -44,6 +44,9 @@ class AIMonitorCore {
         this.errorRecovery = new ErrorRecovery(this.stateStore);
         this.performanceMonitor = new PerformanceMonitor(this.stateStore);
         
+        // Initialize process monitor (needs issueDetector, will be set after issueDetector is created)
+        this.processMonitor = null;
+        
         // Rules enforcer needs learningEngine for self-learning - will be initialized after learningEngine
         this.rulesEnforcer = null;
         this.workflowEnforcer = null;
