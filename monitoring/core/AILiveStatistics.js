@@ -135,8 +135,8 @@ class AILiveStatistics {
             currentPhase: game.phase || 'unknown',
             hands: {
                 current: game.hands?.current || null,
-                total: game.hands?.history?.length || 0,
-                recent: game.hands?.history?.slice(-10) || []
+                total: (Array.isArray(game.hands?.history) ? game.hands.history.length : 0),
+                recent: (Array.isArray(game.hands?.history) ? game.hands.history.slice(-10) : [])
             },
             recentActivity: this.getRecentActivity(10)
         };
