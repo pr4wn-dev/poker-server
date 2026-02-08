@@ -269,8 +269,14 @@ class AIFixTracker extends EventEmitter {
         
         knowledge.successRate = knowledge.successes / knowledge.attempts;
         
-        // Update state store
-        this.stateStore.updateState('fixes.knowledge', Array.from(this.knowledge.entries()));
+        // Update state store (ensure knowledge is a Map before converting)
+        if (this.knowledge instanceof Map) {
+            this.stateStore.updateState('fixes.knowledge', Array.from(this.knowledge.entries()));
+        } else {
+            // If knowledge is not a Map, convert it
+            this.knowledge = new Map(Object.entries(this.knowledge || {}));
+            this.stateStore.updateState('fixes.knowledge', Array.from(this.knowledge.entries()));
+        }
     }
     
     /**
@@ -383,8 +389,14 @@ class AIFixTracker extends EventEmitter {
             }
         }
         
-        // Update state store
-        this.stateStore.updateState('fixes.knowledge', Array.from(this.knowledge.entries()));
+        // Update state store (ensure knowledge is a Map before converting)
+        if (this.knowledge instanceof Map) {
+            this.stateStore.updateState('fixes.knowledge', Array.from(this.knowledge.entries()));
+        } else {
+            // If knowledge is not a Map, convert it
+            this.knowledge = new Map(Object.entries(this.knowledge || {}));
+            this.stateStore.updateState('fixes.knowledge', Array.from(this.knowledge.entries()));
+        }
         this.stateStore.updateState('learning.patterns', Array.from(this.knowledge.entries()));
     }
     
