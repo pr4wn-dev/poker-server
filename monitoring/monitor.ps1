@@ -3356,7 +3356,9 @@ while ($monitoringActive) {
         }
         
         # Use direct read values if they're more recent/accurate
+        # CRITICAL: Always prefer direct read if it shows active investigation (more accurate)
         if ($statusFileDirectActive -or $statusFileDirectStartTime) {
+            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] Direct status file read: active=$statusFileDirectActive, startTime=$statusFileDirectStartTime, timeRemaining=$statusFileDirectTimeRemaining" -ForegroundColor "Gray"
             $statusFileInvestigationActive = $statusFileDirectActive
             if ($statusFileDirectStartTime) {
                 $statusFileInvestigationStartTime = $statusFileDirectStartTime
@@ -3366,6 +3368,8 @@ while ($monitoringActive) {
             }
         }
         
+        # CRITICAL: Always check forced completion if direct read shows active investigation
+        # This ensures we catch stuck investigations even if initial read failed
         if ($statusFileInvestigationActive -and $statusFileInvestigationStartTime) {
             $timeoutValue = if ($investigationTimeout) { $investigationTimeout } else { 15 }
             $elapsedFromStatusFile = ((Get-Date) - $statusFileInvestigationStartTime).TotalSeconds
