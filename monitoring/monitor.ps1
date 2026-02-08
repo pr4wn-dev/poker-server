@@ -1761,11 +1761,7 @@ function Show-Statistics {
     # Column 1: System Status & Automation
     $col1Lines += "SYSTEM STATUS"
     $col1Lines += ("-" * ($colWidth - 2))
-    $logWatcherStatusText = $(if($logWatcherStatus.Active){"ACTIVE"}else{"INACTIVE"})
-    $col1Lines += "Log Watcher: " + $logWatcherStatusText
-    if ($logWatcherStatus.PausedTables -gt 0) {
-        $col1Lines += "  Paused: " + $logWatcherStatus.PausedTables
-    }
+    $col1Lines += "Server: " + $stats.ServerStatus
     $col1Lines += "Simulations: " + $logWatcherStatus.ActiveSimulations
     $dbStatus = $(if($stats.ServerStatus -eq "Online"){"CONNECTED"}else{"UNKNOWN"})
     $col1Lines += "Database: " + $dbStatus
@@ -2263,6 +2259,11 @@ function Show-Statistics {
         $col3Lines += "CURRENT ISSUE"
         $col3Lines += ("-" * ($colWidth - 2))
         $issuePreview = $currentIssue
+        # Remove timestamp prefix (e.g., "[2026-02-08 03:02:51.829] ") to show more of the actual issue
+        if ($issuePreview -match '^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d+)?\]\s*(.+)$') {
+            $issuePreview = $matches[1]
+        }
+        # Truncate to fit column width
         if ($issuePreview.Length -gt ($colWidth - 2)) {
             $issuePreview = $issuePreview.Substring(0, ($colWidth - 5)) + "..."
         }
