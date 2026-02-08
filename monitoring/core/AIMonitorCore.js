@@ -642,11 +642,11 @@ class AIMonitorCore {
         if (this.issueDetector) {
             this.issueDetector.stopStateVerification();
         }
-        if (this.stateVerificationContracts && this.stateVerificationContracts.stop) {
-            this.stateVerificationContracts.stop();
+        if (this.stateVerificationContracts && this.stateVerificationContracts.stopVerification) {
+            this.stateVerificationContracts.stopVerification();
         }
-        if (this.enhancedAnomalyDetection && this.enhancedAnomalyDetection.stop) {
-            this.enhancedAnomalyDetection.stop();
+        if (this.enhancedAnomalyDetection && this.enhancedAnomalyDetection.stopMonitoring) {
+            this.enhancedAnomalyDetection.stopMonitoring();
         }
         if (this.causalAnalysis && this.causalAnalysis.stop) {
             this.causalAnalysis.stop();
