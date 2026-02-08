@@ -46,6 +46,7 @@ class AIMonitorCore {
         
         // Rules enforcer needs learningEngine for self-learning - will be initialized after learningEngine
         this.rulesEnforcer = null;
+        this.workflowEnforcer = null;
         
         // Initialize universal error handler (needs to be early, but after errorRecovery)
         // Will be fully initialized after issueDetector and learningEngine are ready
@@ -580,6 +581,20 @@ class AIMonitorCore {
      */
     getAutoFixEngine() {
         return this.autoFixEngine;
+    }
+    
+    /**
+     * Get rules enforcer
+     */
+    getRulesEnforcer() {
+        return this.rulesEnforcer;
+    }
+    
+    /**
+     * Get workflow enforcer
+     */
+    getWorkflowEnforcer() {
+        return this.workflowEnforcer;
     }
     
     /**
