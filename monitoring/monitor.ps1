@@ -647,6 +647,7 @@ function Write-ConsoleOutput {
     )
     
     # CRITICAL: Always write diagnostic messages to a log file so AI can read them
+    # BUT DON'T SHOW THEM IN CONSOLE - user doesn't want to see them
     if ($Message -match "\[DIAGNOSTIC\]|\[SELF-DIAGNOSTIC\]") {
         $diagnosticLogFile = Join-Path $script:projectRoot "logs\monitor-diagnostics.log"
         try {
@@ -655,6 +656,8 @@ function Write-ConsoleOutput {
         } catch {
             # Ignore log write errors
         }
+        # DON'T display diagnostic messages in console - only log to file
+        return
     }
     
     # If console output area hasn't been initialized, skip
