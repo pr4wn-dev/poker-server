@@ -3465,8 +3465,19 @@ while ($monitoringActive) {
             if ($statusFileInvestigationActive -and $statusFileInvestigationStartTime) {
                 $timeoutValue = if ($investigationTimeout) { $investigationTimeout } else { 15 }
                 $elapsedFromStatusFile = ((Get-Date) - $statusFileInvestigationStartTime).TotalSeconds
+                $shouldForceComplete = $false
+                $forceReason = ""
+                
                 if ($elapsedFromStatusFile -ge ($timeoutValue * 2)) {
-                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] FORCED COMPLETION: Status file shows investigation active for $([Math]::Round($elapsedFromStatusFile, 1))s (2x timeout=$($timeoutValue * 2)s) but script variables are out of sync - FORCING COMPLETION" -ForegroundColor "Red"
+                    $shouldForceComplete = $true
+                    $forceReason = "elapsed=$([Math]::Round($elapsedFromStatusFile, 1))s >= 2x timeout=$($timeoutValue * 2)s"
+                } elseif ($statusFileTimeRemaining -ne $null -and $statusFileTimeRemaining -le 0) {
+                    $shouldForceComplete = $true
+                    $forceReason = "timeRemaining=$statusFileTimeRemaining <= 0"
+                }
+                
+                if ($shouldForceComplete) {
+                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] FORCED COMPLETION: Status file shows investigation active ($forceReason) but script variables are out of sync - FORCING COMPLETION" -ForegroundColor "Red"
                     # Force complete by syncing variables and triggering completion
                     $script:isInvestigating = $false
                     $script:investigationStartTime = $null
