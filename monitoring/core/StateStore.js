@@ -524,10 +524,15 @@ class StateStore extends EventEmitter {
      * Internal: Calculate issue state summary
      */
     _calculateIssueState() {
+        // Ensure arrays exist
+        const active = Array.isArray(this.state.issues.active) ? this.state.issues.active : [];
+        const resolved = Array.isArray(this.state.issues.resolved) ? this.state.issues.resolved : [];
+        const detected = Array.isArray(this.state.issues.detected) ? this.state.issues.detected : [];
+        
         return {
-            active: this.state.issues.active.length,
-            resolved: this.state.issues.resolved.length,
-            total: this.state.issues.detected.length,
+            active: active.length,
+            resolved: resolved.length,
+            total: detected.length,
             bySeverity: this._groupIssuesBySeverity()
         };
     }
@@ -601,7 +606,12 @@ class StateStore extends EventEmitter {
             low: 0
         };
         
-        this.state.issues.active.forEach(issue => {
+        // Ensure active is an array
+        const activeIssues = Array.isArray(this.state.issues.active) 
+            ? this.state.issues.active 
+            : [];
+        
+        activeIssues.forEach(issue => {
             const severity = issue.severity?.toLowerCase() || 'medium';
             if (groups[severity] !== undefined) {
                 groups[severity]++;
@@ -618,7 +628,8 @@ class StateStore extends EventEmitter {
         const recommendations = [];
         
         // Check if investigation should start
-        if (this.state.issues.active.length > 0 && 
+        const activeIssuesCheck = Array.isArray(this.state.issues.active) ? this.state.issues.active : [];
+        if (activeIssuesCheck.length > 0 && 
             this.state.monitoring.investigation.status === 'idle') {
             recommendations.push({
                 type: 'start_investigation',
