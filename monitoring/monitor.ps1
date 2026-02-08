@@ -3370,21 +3370,47 @@ $script:lastInvestigationComplete = $null  # Track when last investigation compl
 
 while ($monitoringActive) {
     try {
-        # Update monitor status file periodically (every 5 seconds)
-        if (-not $lastStatusUpdate) {
-            Update-MonitorStatus
-            $lastStatusUpdate = Get-Date
-        } else {
+        # NEW: Update monitor status using AI system (single source of truth)
+        # AI system syncs its state to monitor-status.json
+        if ($script:aiIntegrationEnabled) {
             try {
-                $timeSinceStatusUpdate = (Get-Date) - $lastStatusUpdate
-                if ($timeSinceStatusUpdate.TotalSeconds -ge 5) {
+                if (-not $lastStatusUpdate) {
+                    Update-AIMonitorStatus | Out-Null
+                    $lastStatusUpdate = Get-Date
+                } else {
+                    try {
+                        $timeSinceStatusUpdate = (Get-Date) - $lastStatusUpdate
+                        if ($timeSinceStatusUpdate.TotalSeconds -ge 5) {
+                            Update-AIMonitorStatus | Out-Null
+                            $lastStatusUpdate = Get-Date
+                        }
+                    } catch {
+                        Update-AIMonitorStatus | Out-Null
+                        $lastStatusUpdate = Get-Date
+                    }
+                }
+            } catch {
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] AI status update failed: $_" -ForegroundColor "Yellow"
+                # Fallback to legacy update
+                Update-MonitorStatus
+                $lastStatusUpdate = Get-Date
+            }
+        } else {
+            # FALLBACK: Legacy status update (if AI integration not available)
+            if (-not $lastStatusUpdate) {
+                Update-MonitorStatus
+                $lastStatusUpdate = Get-Date
+            } else {
+                try {
+                    $timeSinceStatusUpdate = (Get-Date) - $lastStatusUpdate
+                    if ($timeSinceStatusUpdate.TotalSeconds -ge 5) {
+                        Update-MonitorStatus
+                        $lastStatusUpdate = Get-Date
+                    }
+                } catch {
                     Update-MonitorStatus
                     $lastStatusUpdate = Get-Date
                 }
-            } catch {
-                # If date subtraction fails, just update anyway
-                Update-MonitorStatus
-                $lastStatusUpdate = Get-Date
             }
         }
         
@@ -3395,48 +3421,108 @@ while ($monitoringActive) {
             $lastServiceCheck = Get-Date
         }
         
-        # CRITICAL: Check for existing focused group FIRST (before investigation check)
-        # This ensures that if a focused group exists but no investigation is active, we start one
-        # BEFORE the investigation check runs (which might see isInvestigating=true but startTime=null)
-        if (-not $script:lastFocusedGroupCheck) {
-            $script:lastFocusedGroupCheck = Get-Date
-        }
-        $timeSinceLastCheck = ((Get-Date) - $script:lastFocusedGroupCheck).TotalSeconds
-        
-        if (-not $script:isInvestigating -and $timeSinceLastCheck -ge 5) {
-            $pendingInfo = Get-PendingIssuesInfo
-            # DIAGNOSTIC: Log why investigation isn't starting
-            if (-not $pendingInfo) {
-                # No pending info - skip
-            } elseif (-not $pendingInfo.InFocusMode) {
-                # Not in focus mode - skip
-            } elseif (-not $pendingInfo.RootIssue) {
-                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] Focused group exists but no root issue" -ForegroundColor "Yellow"
-            } elseif (-not $investigationEnabled) {
-                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] Investigation disabled in config" -ForegroundColor "Yellow"
-            } elseif (-not $investigationTimeout -or $investigationTimeout -le 0) {
-                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] Investigation timeout invalid: $investigationTimeout" -ForegroundColor "Yellow"
-            } else {
-                # All conditions met - start investigation
-                $script:isInvestigating = $true
-                $script:investigationStartTime = Get-Date
-                $script:investigationCheckLogged = $false
-                $script:investigationNullStartTimeLogged = $false
-                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] INVESTIGATION: Starting for existing focus group ($investigationTimeout seconds)" -ForegroundColor "Cyan"
-                Write-ConsoleOutput -Message "  Root Issue: $($pendingInfo.RootIssue.type) ($($pendingInfo.RootIssue.severity))" -ForegroundColor "White"
-                # CRITICAL: Force immediate status update to ensure status file reflects new investigation state
-                Update-MonitorStatus
-                $lastStatusUpdate = Get-Date
-                # CRITICAL: Force another status update after brief delay to ensure persistence
-                Start-Sleep -Milliseconds 100
-                Update-MonitorStatus
+        # NEW: Use AI system to decide if investigation should start
+        # AI makes the decision based on complete information
+        if ($script:aiIntegrationEnabled) {
+            try {
+                $aiDecision = Should-AIStartInvestigation
+                if ($aiDecision -and $aiDecision.Should) {
+                    $startResult = Start-AIInvestigation
+                    if ($startResult -and $startResult.Success) {
+                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] INVESTIGATION: AI started investigation - $($aiDecision.Reason)" -ForegroundColor "Cyan"
+                        # Sync local variables from AI state
+                        $aiStatus = Get-AIInvestigationStatus
+                        if ($aiStatus) {
+                            $script:isInvestigating = $aiStatus.Active
+                            $script:investigationStartTime = $aiStatus.StartTime
+                        }
+                        # Update status file
+                        Update-AIMonitorStatus | Out-Null
+                    }
+                }
+            } catch {
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] AI investigation check failed: $_" -ForegroundColor "Yellow"
             }
-            $script:lastFocusedGroupCheck = Get-Date
+        } else {
+            # FALLBACK: Legacy investigation start logic (if AI integration not available)
+            # CRITICAL: Check for existing focused group FIRST (before investigation check)
+            if (-not $script:lastFocusedGroupCheck) {
+                $script:lastFocusedGroupCheck = Get-Date
+            }
+            $timeSinceLastCheck = ((Get-Date) - $script:lastFocusedGroupCheck).TotalSeconds
+            
+            if (-not $script:isInvestigating -and $timeSinceLastCheck -ge 5) {
+                $pendingInfo = Get-PendingIssuesInfo
+                if ($pendingInfo -and $pendingInfo.InFocusMode -and $pendingInfo.RootIssue -and $investigationEnabled -and $investigationTimeout -gt 0) {
+                    $script:isInvestigating = $true
+                    $script:investigationStartTime = Get-Date
+                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] INVESTIGATION: Starting (legacy mode) - $($pendingInfo.RootIssue.type)" -ForegroundColor "Cyan"
+                    Update-MonitorStatus
+                    $lastStatusUpdate = Get-Date
+                }
+                $script:lastFocusedGroupCheck = Get-Date
+            }
         }
         
-        # Check if investigation phase is complete
-        # IMPORTANT: This check runs every loop iteration to ensure investigation completes on time
-        # SELF-DIAGNOSTIC: Monitor must be able to diagnose its own problems
+        # NEW: Use AI system to check investigation status and complete if needed
+        # AI manages investigation state - single source of truth
+        if ($script:aiIntegrationEnabled) {
+            try {
+                $aiStatus = Get-AIInvestigationStatus
+                if ($aiStatus -and $aiStatus.Active) {
+                    # Sync local variables from AI state
+                    $script:isInvestigating = $true
+                    $script:investigationStartTime = $aiStatus.StartTime
+                    
+                    # Check if investigation should complete (timeout reached)
+                    if ($aiStatus.TimeRemaining -ne $null -and $aiStatus.TimeRemaining -le 0) {
+                        # Investigation complete - use AI to complete it
+                        $completeResult = Complete-AIInvestigation
+                        if ($completeResult -and $completeResult.Success) {
+                            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] INVESTIGATION COMPLETE: AI completed investigation" -ForegroundColor "Yellow"
+                            
+                            # Get active issues for pause decision
+                            $activeIssues = Get-AIActiveIssues
+                            if ($activeIssues -and $activeIssues.Count -gt 0) {
+                                # Check if Unity should be paused
+                                $pauseDecision = Should-AIPauseUnity
+                                if ($pauseDecision -and $pauseDecision.Should) {
+                                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] INVESTIGATION COMPLETE: $($activeIssues.Count) issue(s) found - pausing Unity" -ForegroundColor "Cyan"
+                                    Write-ConsoleOutput -Message "  >>> ACTION REQUIRED: Ask the AI to analyze this investigation <<<" -ForegroundColor "Cyan"
+                                    # Pause Unity via API (non-blocking)
+                                    $tableId = if ($activeIssues.Issues -and $activeIssues.Issues.Count -gt 0 -and $activeIssues.Issues[0].details -and $activeIssues.Issues[0].details.tableId) {
+                                        $activeIssues.Issues[0].details.tableId
+                                    } else { $null }
+                                    if ($tableId) {
+                                        Invoke-WebRequestAsync -Uri "$serverUrl/api/simulation/pause" -Method POST -Body (@{ tableId = $tableId } | ConvertTo-Json) -ContentType "application/json" | Out-Null
+                                    } else {
+                                        Invoke-WebRequestAsync -Uri "$serverUrl/api/simulation/pause" -Method POST | Out-Null
+                                    }
+                                    $isPaused = $true
+                                }
+                            }
+                            
+                            # Reset local variables
+                            $script:isInvestigating = $false
+                            $script:investigationStartTime = $null
+                            
+                            # Update status
+                            Update-AIMonitorStatus | Out-Null
+                        }
+                    }
+                } else {
+                    # Investigation not active - sync local variables
+                    $script:isInvestigating = $false
+                    $script:investigationStartTime = $null
+                }
+            } catch {
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] AI investigation status check failed: $_" -ForegroundColor "Yellow"
+            }
+        } else {
+            # FALLBACK: Legacy investigation completion logic (if AI integration not available)
+            # Check if investigation phase is complete
+            # IMPORTANT: This check runs every loop iteration to ensure investigation completes on time
+            # SELF-DIAGNOSTIC: Monitor must be able to diagnose its own problems
         
         # ALWAYS log investigation state (every 10 seconds) to diagnose why check isn't running
         if (-not $script:lastInvestigationStateLog -or ((Get-Date) - $script:lastInvestigationStateLog).TotalSeconds -ge 10) {
