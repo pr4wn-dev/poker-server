@@ -684,6 +684,19 @@ class StateStore extends EventEmitter {
                 timestamp: Date.now()
             };
             
+            // FINAL SAFEGUARD: Force arrays into data object right before writing
+            if (knowledgeBackup || improvementsBackup) {
+                if (!data.state.learning) {
+                    data.state.learning = {};
+                }
+                if (knowledgeBackup) {
+                    data.state.learning.knowledge = knowledgeBackup;
+                }
+                if (improvementsBackup) {
+                    data.state.learning.improvements = improvementsBackup;
+                }
+            }
+            
             fs.writeFileSync(this.persistenceFile, JSON.stringify(data, null, 2), 'utf8');
         } catch (error) {
             // DO NOT log to console - errors are for AI only, not user

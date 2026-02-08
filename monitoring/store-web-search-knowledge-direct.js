@@ -93,14 +93,22 @@ async function storeWebSearchKnowledge() {
         // Store in learning.improvements
         stateStore.updateState('learning.improvements', currentImprovements);
         
-        // Disable auto-save temporarily to prevent overwriting
+        // CRITICAL: Disable auto-save BEFORE saving to prevent overwriting
         if (stateStore.autoSaveInterval) {
             clearInterval(stateStore.autoSaveInterval);
+            stateStore.autoSaveInterval = null;
         }
         
-        // Force save immediately
+        // Force save immediately with arrays
         stateStore.save();
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Wait for file write to complete
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        // Verify arrays are in memory before checking file
+        const memKnowledge = stateStore.getState('learning.knowledge') || [];
+        const memImprovements = stateStore.getState('learning.improvements') || [];
+        console.log(`   - Memory check: knowledge (${memKnowledge.length} entries), improvements (${memImprovements.length} entries)`);
         
         // Verify storage in memory
         const storedKnowledge = stateStore.getState('learning.knowledge') || [];
