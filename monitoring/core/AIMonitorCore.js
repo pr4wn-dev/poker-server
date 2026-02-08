@@ -7,6 +7,9 @@
  * Human just prompts. AI does everything.
  */
 
+// CRITICAL: Load console override FIRST to enforce logging rules
+require('./ConsoleOverride');
+
 const path = require('path');
 const StateStore = require('./StateStore');
 const AILogProcessor = require('./AILogProcessor');

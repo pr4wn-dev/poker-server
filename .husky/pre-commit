@@ -1,0 +1,12 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+# Check for console usage violations
+node scripts/check-console-usage.js
+
+# If check fails, commit is blocked
+if [ $? -ne 0 ]; then
+    echo "Commit blocked: Console usage violations detected"
+    echo "All output must go through gameLogger, not console.*"
+    exit 1
+fi
