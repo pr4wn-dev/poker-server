@@ -52,12 +52,11 @@ class AIMonitorCore {
         );
         
         // Server state capture (captures server health/metrics)
-        this.serverStateCapture = this._initWithRecovery('serverStateCapture', () =>
-            new ServerStateCapture(
-                this.stateStore,
-                process.env.SERVER_URL || 'http://localhost:3000'
-            )
+        this.serverStateCapture = new ServerStateCapture(
+            this.stateStore,
+            process.env.SERVER_URL || 'http://localhost:3000'
         );
+        this.errorRecovery.recordSuccess('serverStateCapture');
         
         // Start server state capture
         this.serverStateCapture.start();
@@ -77,20 +76,6 @@ class AIMonitorCore {
         console.log('[AI Monitor Core] Performance monitoring active - Tracking system performance');
     }
     
-    /**
-     * Initialize component with error recovery
-     */
-    _initWithRecovery(componentName, initFn) {
-        try {
-            const component = initFn();
-            this.errorRecovery.recordSuccess(componentName);
-            return component;
-        } catch (error) {
-            this.errorRecovery.recordError(componentName, error);
-            console.error(`[AI Monitor Core] Failed to initialize ${componentName}:`, error.message);
-            throw error;
-        }
-    }
     
     /**
      * Setup event listeners
