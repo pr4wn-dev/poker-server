@@ -8,14 +8,18 @@
 const http = require('http');
 
 class ServerStateCapture {
-    constructor(stateStore, serverUrl = 'http://localhost:3000') {
+    constructor(stateStore, serverUrl = 'http://localhost:3000', issueDetector = null, errorRecovery = null) {
         this.stateStore = stateStore;
         this.serverUrl = serverUrl;
+        this.issueDetector = issueDetector;
+        this.errorRecovery = errorRecovery;
         this.captureInterval = 5000; // Capture every 5 seconds
         this.captureIntervalId = null;
         this.lastCaptureTime = null;
         this.captureHistory = []; // Keep last 100 captures for trends
         this.maxHistorySize = 100;
+        this.consecutiveErrors = 0;
+        this.maxConsecutiveErrors = 3; // After 3 consecutive errors, report as issue
     }
     
     /**
@@ -176,8 +180,41 @@ class ServerStateCapture {
             
             this.lastCaptureTime = now;
             
+            // Reset consecutive errors on success
+            if (this.consecutiveErrors > 0) {
+                this.consecutiveErrors = 0;
+                // Record success with error recovery
+                if (this.errorRecovery) {
+                    this.errorRecovery.recordSuccess('serverStateCapture');
+                }
+            }
+            
         } catch (error) {
-            console.error('[ServerStateCapture] Error capturing state:', error.message);
+            this.consecutiveErrors++;
+            const errorMessage = error.message || 'Unknown error';
+            
+            console.error('[ServerStateCapture] Error capturing state:', errorMessage);
+            
+            // Record error with error recovery if available
+            if (this.errorRecovery) {
+                this.errorRecovery.recordError('serverStateCapture', error);
+            }
+            
+            // Report to issue detector if we have too many consecutive errors
+            if (this.consecutiveErrors >= this.maxConsecutiveErrors && this.issueDetector) {
+                this.issueDetector.detectIssue({
+                    type: 'SERVER_STATE_CAPTURE_FAILED',
+                    severity: this.consecutiveErrors >= 5 ? 'critical' : 'high',
+                    method: 'serverStateCapture',
+                    details: {
+                        error: errorMessage,
+                        consecutiveErrors: this.consecutiveErrors,
+                        serverUrl: this.serverUrl,
+                        lastCaptureTime: this.lastCaptureTime
+                    },
+                    timestamp: Date.now()
+                });
+            }
             
             // Update StateStore with error state
             this.stateStore.updateState('system.server', {
@@ -187,10 +224,11 @@ class ServerStateCapture {
                     uptime: 0,
                     requests: this.captureHistory.length,
                     errors: this.captureHistory.filter(c => c.status === 'error' || c.status === 'stopped').length + 1,
-                    responseTime: 0
+                    responseTime: 0,
+                    consecutiveErrors: this.consecutiveErrors
                 },
                 lastCheck: Date.now(),
-                error: error.message
+                error: errorMessage
             });
         }
     }

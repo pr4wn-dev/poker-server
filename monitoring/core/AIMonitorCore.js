@@ -101,7 +101,9 @@ class AIMonitorCore {
         try {
             this.serverStateCapture = new ServerStateCapture(
                 this.stateStore,
-                process.env.SERVER_URL || 'http://localhost:3000'
+                process.env.SERVER_URL || 'http://localhost:3000',
+                this.issueDetector, // Pass issue detector so it can report errors
+                this.errorRecovery  // Pass error recovery so it can track errors
             );
             this.errorRecovery.recordSuccess('serverStateCapture');
         } catch (error) {
