@@ -169,6 +169,20 @@ class GameLogger {
     }
     
     /**
+     * Log info message
+     */
+    info(tableName, message, data = null) {
+        this.writeLog('INFO', tableName, message, data);
+    }
+    
+    /**
+     * Log warning message
+     */
+    warn(tableName, message, data = null) {
+        this.writeLog('WARN', tableName, message, data);
+    }
+    
+    /**
      * Log debug info
      */
     debug(tableName, message, data = null) {

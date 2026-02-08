@@ -60,10 +60,13 @@ function recordViolationWithRulesEnforcer(method, message, stack) {
 function overrideConsole() {
     // Override console.log - route to gameLogger
     console.log = function(...args) {
-        // Check if this is CLI JSON output (allowed exception)
+        // Check if this is CLI JSON output or test file output (allowed exceptions)
         const isCLIOutput = process.argv && (
             process.argv[1] && process.argv[1].includes('cerberus-integration.js') ||
-            process.argv[1] && process.argv[1].includes('test-') && args.length === 1 && typeof args[0] === 'string' && args[0].startsWith('{')
+            process.argv[1] && process.argv[1].includes('test-') && (
+                args.length === 1 && typeof args[0] === 'string' && args[0].startsWith('{') ||
+                args.some(arg => typeof arg === 'string' && (arg.includes('✅') || arg.includes('❌') || arg.includes('Testing') || arg.includes('PASS') || arg.includes('FAIL')))
+            )
         );
         
         if (isCLIOutput) {
