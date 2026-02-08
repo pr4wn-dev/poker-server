@@ -1,0 +1,629 @@
+/**
+ * State Store - Single Source of Truth
+ * 
+ * This is the foundation of the AI-first monitoring system.
+ * All state lives here. AI can query anything, anytime.
+ * 
+ * NO MORE DUAL STATE MANAGEMENT (files + variables)
+ * NO MORE SYNC ISSUES
+ * NO MORE STALE DATA
+ * 
+ * Just ONE source of truth that AI can always trust.
+ */
+
+const fs = require('fs');
+const path = require('path');
+const EventEmitter = require('events');
+
+class StateStore extends EventEmitter {
+    constructor(projectRoot) {
+        super();
+        this.projectRoot = projectRoot;
+        this.persistenceFile = path.join(projectRoot, 'logs', 'ai-state-store.json');
+        
+        // Complete state - AI can query anything
+        this.state = {
+            // Game State - Complete visibility into game
+            game: {
+                tables: new Map(), // tableId -> complete table state
+                players: new Map(), // playerId -> complete player state
+                chips: {
+                    totalInSystem: 0,
+                    byTable: new Map(), // tableId -> chip count
+                    byPlayer: new Map(), // playerId -> chip count
+                    history: [] // Every chip movement with timestamp
+                },
+                hands: {
+                    current: null,
+                    history: [] // All hands played
+                },
+                phase: null, // Current game phase
+                lastUpdate: null
+            },
+            
+            // System State - Server, Database, Unity
+            system: {
+                server: {
+                    status: 'unknown', // unknown | starting | running | stopped | error
+                    health: null, // 0-100
+                    metrics: {
+                        uptime: 0,
+                        requests: 0,
+                        errors: 0,
+                        responseTime: 0
+                    },
+                    logs: [], // Recent server logs
+                    lastCheck: null
+                },
+                database: {
+                    status: 'unknown',
+                    health: null,
+                    metrics: {
+                        uptime: 0,
+                        queries: 0,
+                        errors: 0,
+                        responseTime: 0
+                    },
+                    logs: [],
+                    lastCheck: null
+                },
+                unity: {
+                    status: 'unknown', // unknown | starting | running | paused | stopped | error
+                    health: null,
+                    metrics: {
+                        uptime: 0,
+                        fps: 0,
+                        connected: false,
+                        lastActivity: null
+                    },
+                    uiState: {
+                        labels: new Map(), // labelId -> { text, visible, color }
+                        images: new Map(), // imageId -> { sprite, visible, color }
+                        sounds: new Map(), // soundId -> { playing, volume, clip }
+                        animations: new Map() // animationId -> { playing, progress }
+                    },
+                    logs: [],
+                    lastCheck: null
+                }
+            },
+            
+            // Monitoring State - Investigation, Verification, Detection
+            monitoring: {
+                investigation: {
+                    status: 'idle', // idle | starting | active | completing | completed | failed
+                    startTime: null,
+                    timeout: 15, // seconds
+                    issues: [], // Issues found during investigation
+                    history: [], // All past investigations
+                    progress: 0, // 0-100
+                    timeRemaining: null
+                },
+                verification: {
+                    status: 'idle', // idle | active | completed | failed
+                    startTime: null,
+                    period: 0, // seconds
+                    results: [], // Verification results
+                    history: [] // All past verifications
+                },
+                detection: {
+                    activeDetectors: [], // Which detectors are running
+                    detectionRate: 0, // Issues per minute
+                    falsePositives: 0,
+                    accuracy: 0, // 0-100
+                    lastDetection: null
+                }
+            },
+            
+            // Issue State - All issues, detected, active, resolved
+            issues: {
+                detected: [], // All issues ever detected
+                active: [], // Currently active issues
+                resolved: [], // Resolved issues
+                patterns: new Map(), // pattern -> [issueIds]
+                fixes: new Map() // issueId -> fixMethod
+            },
+            
+            // Fix State - All fix attempts, successes, failures
+            fixes: {
+                attempts: [], // All fix attempts
+                successes: [], // Successful fixes
+                failures: [], // Failed fixes
+                knowledge: new Map() // pattern -> { method, successRate, attempts }
+            },
+            
+            // Learning State - What AI has learned
+            learning: {
+                fixAttempts: new Map(), // issueId -> [attempts]
+                successRates: new Map(), // fixMethod -> successRate
+                patterns: new Map(), // issuePattern -> fixMethod
+                knowledge: [], // Learned rules
+                improvements: [] // System improvements over time
+            },
+            
+            // Metadata
+            metadata: {
+                version: '2.0.0',
+                started: Date.now(),
+                lastUpdate: Date.now(),
+                updateCount: 0
+            }
+        };
+        
+        // Event log - Complete history of all state changes
+        this.eventLog = [];
+        this.maxEventLogSize = 10000; // Keep last 10k events
+        
+        // Listeners for state changes
+        this.listeners = new Map(); // path -> [callbacks]
+        
+        // Load persisted state if exists
+        this.load();
+        
+        // Auto-save periodically
+        this.autoSaveInterval = setInterval(() => {
+            this.save();
+        }, 5000); // Save every 5 seconds
+    }
+    
+    /**
+     * Update state atomically
+     * This is the ONLY way state changes
+     */
+    updateState(path, value, metadata = {}) {
+        const oldValue = this.getState(path);
+        
+        // Update state atomically
+        this._setState(path, value);
+        
+        // Log event
+        const event = {
+            timestamp: Date.now(),
+            path,
+            oldValue,
+            newValue: value,
+            metadata
+        };
+        this.eventLog.push(event);
+        
+        // Trim event log if too large
+        if (this.eventLog.length > this.maxEventLogSize) {
+            this.eventLog = this.eventLog.slice(-this.maxEventLogSize);
+        }
+        
+        // Update metadata
+        this.state.metadata.lastUpdate = Date.now();
+        this.state.metadata.updateCount++;
+        
+        // Notify listeners
+        this.emit('stateChanged', event);
+        this._notifyListeners(path, oldValue, value);
+        
+        return event;
+    }
+    
+    /**
+     * Get state - AI can query anything
+     */
+    getState(path = null) {
+        if (!path) {
+            return this.state;
+        }
+        
+        const parts = path.split('.');
+        let current = this.state;
+        
+        for (const part of parts) {
+            if (current === null || current === undefined) {
+                return null;
+            }
+            current = current[part];
+        }
+        
+        return current;
+    }
+    
+    /**
+     * Query state with filters
+     * AI can ask complex questions
+     */
+    query(path, filters = {}) {
+        const data = this.getState(path);
+        
+        if (!data) {
+            return null;
+        }
+        
+        // If it's an array, apply filters
+        if (Array.isArray(data)) {
+            let result = data;
+            
+            if (filters.where) {
+                result = result.filter(filters.where);
+            }
+            
+            if (filters.orderBy) {
+                result = result.sort(filters.orderBy);
+            }
+            
+            if (filters.limit) {
+                result = result.slice(0, filters.limit);
+            }
+            
+            return result;
+        }
+        
+        return data;
+    }
+    
+    /**
+     * Get state history for a path
+     * AI can see how state changed over time
+     */
+    getStateHistory(path, timeRange = null) {
+        let events = this.eventLog.filter(e => e.path === path || e.path.startsWith(path + '.'));
+        
+        if (timeRange) {
+            const now = Date.now();
+            const start = now - timeRange;
+            events = events.filter(e => e.timestamp >= start);
+        }
+        
+        return events;
+    }
+    
+    /**
+     * Subscribe to state changes
+     * AI can get real-time updates
+     */
+    subscribe(path, callback) {
+        if (!this.listeners.has(path)) {
+            this.listeners.set(path, []);
+        }
+        this.listeners.get(path).push(callback);
+        
+        // Return unsubscribe function
+        return () => {
+            const callbacks = this.listeners.get(path);
+            const index = callbacks.indexOf(callback);
+            if (index > -1) {
+                callbacks.splice(index, 1);
+            }
+        };
+    }
+    
+    /**
+     * Get complete status report
+     * AI can get everything it needs to know
+     */
+    getStatusReport() {
+        return {
+            timestamp: Date.now(),
+            state: this.state,
+            summary: {
+                systemHealth: this._calculateSystemHealth(),
+                gameState: this._calculateGameState(),
+                monitoringState: this._calculateMonitoringState(),
+                issueState: this._calculateIssueState(),
+                fixState: this._calculateFixState(),
+                learningState: this._calculateLearningState()
+            },
+            recommendations: this._generateRecommendations()
+        };
+    }
+    
+    /**
+     * Internal: Set state value
+     */
+    _setState(path, value) {
+        const parts = path.split('.');
+        let current = this.state;
+        
+        for (let i = 0; i < parts.length - 1; i++) {
+            const part = parts[i];
+            if (!current[part]) {
+                current[part] = {};
+            }
+            current = current[part];
+        }
+        
+        current[parts[parts.length - 1]] = value;
+    }
+    
+    /**
+     * Internal: Notify listeners
+     */
+    _notifyListeners(path, oldValue, newValue) {
+        // Notify exact path listeners
+        if (this.listeners.has(path)) {
+            this.listeners.get(path).forEach(callback => {
+                try {
+                    callback(newValue, oldValue, path);
+                } catch (error) {
+                    console.error(`Error in state listener for ${path}:`, error);
+                }
+            });
+        }
+        
+        // Notify parent path listeners
+        const parts = path.split('.');
+        for (let i = parts.length - 1; i > 0; i--) {
+            const parentPath = parts.slice(0, i).join('.');
+            if (this.listeners.has(parentPath)) {
+                this.listeners.get(parentPath).forEach(callback => {
+                    try {
+                        callback(this.getState(path), oldValue, path);
+                    } catch (error) {
+                        console.error(`Error in state listener for ${parentPath}:`, error);
+                    }
+                });
+            }
+        }
+    }
+    
+    /**
+     * Internal: Calculate system health
+     */
+    _calculateSystemHealth() {
+        const server = this.state.system.server;
+        const database = this.state.system.database;
+        const unity = this.state.system.unity;
+        
+        const serverHealth = server.health || 0;
+        const dbHealth = database.health || 0;
+        const unityHealth = unity.health || 0;
+        
+        const overall = (serverHealth + dbHealth + unityHealth) / 3;
+        
+        return {
+            overall,
+            server: serverHealth,
+            database: dbHealth,
+            unity: unityHealth,
+            status: overall >= 80 ? 'healthy' : overall >= 50 ? 'degraded' : 'unhealthy'
+        };
+    }
+    
+    /**
+     * Internal: Calculate game state summary
+     */
+    _calculateGameState() {
+        return {
+            activeTables: this.state.game.tables.size,
+            activePlayers: this.state.game.players.size,
+            totalChips: this.state.game.chips.totalInSystem,
+            chipIntegrity: this._verifyChipIntegrity(),
+            currentPhase: this.state.game.phase
+        };
+    }
+    
+    /**
+     * Internal: Calculate monitoring state summary
+     */
+    _calculateMonitoringState() {
+        const investigation = this.state.monitoring.investigation;
+        const verification = this.state.monitoring.verification;
+        
+        return {
+            investigation: {
+                status: investigation.status,
+                progress: investigation.progress,
+                issuesFound: investigation.issues.length,
+                timeRemaining: investigation.timeRemaining
+            },
+            verification: {
+                status: verification.status,
+                progress: verification.progress || 0
+            },
+            detection: {
+                rate: this.state.monitoring.detection.detectionRate,
+                accuracy: this.state.monitoring.detection.accuracy
+            }
+        };
+    }
+    
+    /**
+     * Internal: Calculate issue state summary
+     */
+    _calculateIssueState() {
+        return {
+            active: this.state.issues.active.length,
+            resolved: this.state.issues.resolved.length,
+            total: this.state.issues.detected.length,
+            bySeverity: this._groupIssuesBySeverity()
+        };
+    }
+    
+    /**
+     * Internal: Calculate fix state summary
+     */
+    _calculateFixState() {
+        const attempts = this.state.fixes.attempts;
+        const successes = this.state.fixes.successes;
+        const failures = this.state.fixes.failures;
+        
+        const total = attempts.length;
+        const successCount = successes.length;
+        const successRate = total > 0 ? (successCount / total) * 100 : 0;
+        
+        return {
+            totalAttempts: total,
+            successes: successCount,
+            failures: failures.length,
+            successRate: Math.round(successRate * 100) / 100
+        };
+    }
+    
+    /**
+     * Internal: Calculate learning state summary
+     */
+    _calculateLearningState() {
+        return {
+            patternsLearned: this.state.learning.patterns.size,
+            knowledgeRules: this.state.learning.knowledge.length,
+            improvements: this.state.learning.improvements.length
+        };
+    }
+    
+    /**
+     * Internal: Verify chip integrity
+     */
+    _verifyChipIntegrity() {
+        // Verify total chips = sum of all table chips + sum of all player chips
+        // This is a critical invariant
+        let tableTotal = 0;
+        this.state.game.chips.byTable.forEach(count => {
+            tableTotal += count;
+        });
+        
+        let playerTotal = 0;
+        this.state.game.chips.byPlayer.forEach(count => {
+            playerTotal += count;
+        });
+        
+        const expected = tableTotal + playerTotal;
+        const actual = this.state.game.chips.totalInSystem;
+        
+        return {
+            valid: Math.abs(expected - actual) < 1, // Allow for floating point
+            expected,
+            actual,
+            difference: actual - expected
+        };
+    }
+    
+    /**
+     * Internal: Group issues by severity
+     */
+    _groupIssuesBySeverity() {
+        const groups = {
+            critical: 0,
+            high: 0,
+            medium: 0,
+            low: 0
+        };
+        
+        this.state.issues.active.forEach(issue => {
+            const severity = issue.severity?.toLowerCase() || 'medium';
+            if (groups[severity] !== undefined) {
+                groups[severity]++;
+            }
+        });
+        
+        return groups;
+    }
+    
+    /**
+     * Internal: Generate recommendations
+     */
+    _generateRecommendations() {
+        const recommendations = [];
+        
+        // Check if investigation should start
+        if (this.state.issues.active.length > 0 && 
+            this.state.monitoring.investigation.status === 'idle') {
+            recommendations.push({
+                type: 'start_investigation',
+                priority: 'high',
+                reason: `${this.state.issues.active.length} active issues detected`
+            });
+        }
+        
+        // Check if Unity should be paused
+        if (this.state.monitoring.investigation.status === 'completed' &&
+            !this.state.system.unity.metrics.connected) {
+            recommendations.push({
+                type: 'pause_unity',
+                priority: 'high',
+                reason: 'Investigation complete, issues found'
+            });
+        }
+        
+        return recommendations;
+    }
+    
+    /**
+     * Save state to disk
+     */
+    save() {
+        try {
+            const data = {
+                state: this._serializeState(this.state),
+                eventLog: this.eventLog.slice(-1000), // Save last 1000 events
+                timestamp: Date.now()
+            };
+            
+            fs.writeFileSync(this.persistenceFile, JSON.stringify(data, null, 2), 'utf8');
+        } catch (error) {
+            console.error('Error saving state store:', error);
+        }
+    }
+    
+    /**
+     * Load state from disk
+     */
+    load() {
+        try {
+            if (fs.existsSync(this.persistenceFile)) {
+                const data = JSON.parse(fs.readFileSync(this.persistenceFile, 'utf8'));
+                
+                // Restore state (basic restoration, Maps need special handling)
+                if (data.state) {
+                    this.state = this._deserializeState(data.state);
+                }
+                
+                if (data.eventLog) {
+                    this.eventLog = data.eventLog;
+                }
+            }
+        } catch (error) {
+            console.error('Error loading state store:', error);
+        }
+    }
+    
+    /**
+     * Serialize state (handle Maps)
+     */
+    _serializeState(state) {
+        const serialized = {};
+        for (const [key, value] of Object.entries(state)) {
+            if (value instanceof Map) {
+                serialized[key] = Array.from(value.entries());
+            } else if (typeof value === 'object' && value !== null) {
+                serialized[key] = this._serializeState(value);
+            } else {
+                serialized[key] = value;
+            }
+        }
+        return serialized;
+    }
+    
+    /**
+     * Deserialize state (restore Maps)
+     */
+    _deserializeState(serialized) {
+        const state = {};
+        for (const [key, value] of Object.entries(serialized)) {
+            if (Array.isArray(value) && key.includes('Map') || 
+                (key === 'tables' || key === 'players' || key === 'byTable' || key === 'byPlayer')) {
+                state[key] = new Map(value);
+            } else if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+                state[key] = this._deserializeState(value);
+            } else {
+                state[key] = value;
+            }
+        }
+        return state;
+    }
+    
+    /**
+     * Cleanup
+     */
+    destroy() {
+        if (this.autoSaveInterval) {
+            clearInterval(this.autoSaveInterval);
+        }
+        this.save();
+    }
+}
+
+module.exports = StateStore;
