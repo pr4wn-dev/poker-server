@@ -530,6 +530,283 @@ class IntegrityChecker extends EventEmitter {
     }
     
     /**
+     * Check server integrity
+     */
+    checkServerIntegrity() {
+        const results = {
+            passed: true,
+            issues: [],
+            files: {}
+        };
+        
+        for (const [filePath, requirements] of Object.entries(this.serverFiles)) {
+            const fullPath = path.join(this.projectRoot, filePath);
+            const fileResult = {
+                exists: false,
+                hasLogging: false,
+                hasIntegration: false,
+                issues: []
+            };
+            
+            if (!fs.existsSync(fullPath)) {
+                fileResult.issues.push(`File does not exist: ${filePath}`);
+                results.issues.push(`Missing server file: ${filePath}`);
+                results.passed = false;
+            } else {
+                fileResult.exists = true;
+                
+                try {
+                    const content = fs.readFileSync(fullPath, 'utf8');
+                    
+                    // Check for required logging
+                    if (requirements.requiredLogging) {
+                        const hasGameLogger = /GameLogger|gameLogger|require\(['"]\.\.\/utils\/GameLogger['"]\)/i.test(content);
+                        if (hasGameLogger) {
+                            fileResult.hasLogging = true;
+                        } else {
+                            fileResult.issues.push(`Missing GameLogger integration`);
+                            results.issues.push(`${filePath}: Missing GameLogger integration`);
+                            results.passed = false;
+                        }
+                    }
+                    
+                    // Check for required integration
+                    if (requirements.requiredIntegration.length > 0) {
+                        const hasAllIntegration = requirements.requiredIntegration.every(integration => {
+                            if (integration === 'GameLogger') {
+                                return /GameLogger|gameLogger/i.test(content);
+                            } else if (integration === 'UnityLogHandler') {
+                                return /UnityLogHandler|unityLogHandler/i.test(content);
+                            }
+                            return true;
+                        });
+                        
+                        if (hasAllIntegration) {
+                            fileResult.hasIntegration = true;
+                        } else {
+                            fileResult.issues.push(`Missing required integrations: ${requirements.requiredIntegration.join(', ')}`);
+                            results.issues.push(`${filePath}: Missing integrations`);
+                            results.passed = false;
+                        }
+                    }
+                    
+                    // Check if critical operations are logged
+                    if (requirements.criticalOperations.length > 0) {
+                        const loggedOperations = requirements.criticalOperations.filter(op => {
+                            const opPattern = new RegExp(op.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+                            return opPattern.test(content);
+                        });
+                        
+                        if (loggedOperations.length < requirements.criticalOperations.length) {
+                            const missing = requirements.criticalOperations.filter(op => !loggedOperations.includes(op));
+                            fileResult.issues.push(`Critical operations not logged: ${missing.join(', ')}`);
+                        }
+                    }
+                } catch (error) {
+                    fileResult.issues.push(`Failed to read file: ${error.message}`);
+                    results.issues.push(`${filePath}: ${error.message}`);
+                    results.passed = false;
+                }
+            }
+            
+            results.files[filePath] = fileResult;
+        }
+        
+        return results;
+    }
+    
+    /**
+     * Check Unity client integrity
+     */
+    checkUnityIntegrity() {
+        const results = {
+            passed: true,
+            issues: [],
+            accessible: this.unityClientAccessible,
+            files: {}
+        };
+        
+        if (!this.unityClientAccessible) {
+            results.issues.push('Unity client path not accessible (expected at ../poker-client-unity)');
+            return results;
+        }
+        
+        for (const [filePath, requirements] of Object.entries(this.unityFiles)) {
+            const fullPath = path.join(this.unityClientPath, filePath);
+            const fileResult = {
+                exists: false,
+                hasLogging: false,
+                hasIntegration: false,
+                issues: []
+            };
+            
+            if (!fs.existsSync(fullPath)) {
+                fileResult.issues.push(`File does not exist: ${filePath}`);
+                results.issues.push(`Missing Unity file: ${filePath}`);
+                results.passed = false;
+            } else {
+                fileResult.exists = true;
+                
+                try {
+                    const content = fs.readFileSync(fullPath, 'utf8');
+                    
+                    // Check for required logging
+                    if (requirements.requiredLogging) {
+                        const hasLogging = /Debug\.(Log|LogError|LogWarning)|UnityLogHandler|SocketIOClient\.Emit\(['"]report_unity_log['"]/i.test(content);
+                        if (hasLogging) {
+                            fileResult.hasLogging = true;
+                        } else {
+                            fileResult.issues.push(`Missing logging integration`);
+                            results.issues.push(`${filePath}: Missing logging integration`);
+                            results.passed = false;
+                        }
+                    }
+                    
+                    // Check for required integration
+                    if (requirements.requiredIntegration.length > 0) {
+                        const hasSocketIO = requirements.requiredIntegration.includes('Socket.IO') ? 
+                            /SocketIOClient|socket\.Emit|socket\.On/i.test(content) : true;
+                        const hasStateReporting = requirements.requiredIntegration.includes('State Reporting') ?
+                            /HandleTableStateUpdated|table_state|isPaused/i.test(content) : true;
+                        
+                        if (hasSocketIO && hasStateReporting) {
+                            fileResult.hasIntegration = true;
+                        } else {
+                            fileResult.issues.push(`Missing required integrations`);
+                            results.issues.push(`${filePath}: Missing integrations`);
+                            results.passed = false;
+                        }
+                    }
+                    
+                    // Check if critical operations exist
+                    if (requirements.criticalOperations.length > 0) {
+                        const foundOperations = requirements.criticalOperations.filter(op => {
+                            const opPattern = new RegExp(op.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+                            return opPattern.test(content);
+                        });
+                        
+                        if (foundOperations.length < requirements.criticalOperations.length) {
+                            const missing = requirements.criticalOperations.filter(op => !foundOperations.includes(op));
+                            fileResult.issues.push(`Missing critical operations: ${missing.join(', ')}`);
+                            results.issues.push(`${filePath}: Missing operations ${missing.join(', ')}`);
+                            results.passed = false;
+                        }
+                    }
+                } catch (error) {
+                    fileResult.issues.push(`Failed to read file: ${error.message}`);
+                    results.issues.push(`${filePath}: ${error.message}`);
+                    results.passed = false;
+                }
+            }
+            
+            results.files[filePath] = fileResult;
+        }
+        
+        return results;
+    }
+    
+    /**
+     * Check API integrity
+     */
+    checkAPIIntegrity() {
+        const results = {
+            passed: true,
+            issues: [],
+            endpoints: {}
+        };
+        
+        const requiredEndpoints = [
+            { path: '/api/simulation/pause', method: 'POST', file: 'src/server.js' },
+            { path: '/api/simulations/:tableId/resume', method: 'POST', file: 'src/server.js' },
+            { path: '/api/health', method: 'GET', file: 'src/server.js' }
+        ];
+        
+        const serverPath = path.join(this.projectRoot, 'src', 'server.js');
+        if (fs.existsSync(serverPath)) {
+            try {
+                const content = fs.readFileSync(serverPath, 'utf8');
+                
+                for (const endpoint of requiredEndpoints) {
+                    const endpointPattern = new RegExp(
+                        endpoint.path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/:tableId/g, '[^/]+'),
+                        'i'
+                    );
+                    const methodPattern = new RegExp(endpoint.method, 'i');
+                    
+                    const hasEndpoint = endpointPattern.test(content) && methodPattern.test(content);
+                    results.endpoints[endpoint.path] = {
+                        exists: hasEndpoint,
+                        method: endpoint.method
+                    };
+                    
+                    if (!hasEndpoint) {
+                        results.issues.push(`Missing API endpoint: ${endpoint.method} ${endpoint.path}`);
+                        results.passed = false;
+                    }
+                }
+            } catch (error) {
+                results.issues.push(`Failed to check API endpoints: ${error.message}`);
+                results.passed = false;
+            }
+        } else {
+            results.issues.push('server.js not found');
+            results.passed = false;
+        }
+        
+        return results;
+    }
+    
+    /**
+     * Check Socket.IO integrity
+     */
+    checkSocketIntegrity() {
+        const results = {
+            passed: true,
+            issues: [],
+            events: {}
+        };
+        
+        const requiredEvents = [
+            { name: 'table_state', direction: 'server->client', file: 'src/sockets/SocketHandler.js' },
+            { name: 'report_unity_log', direction: 'client->server', file: 'src/sockets/SocketHandler.js' },
+            { name: 'action', direction: 'client->server', file: 'src/sockets/SocketHandler.js' }
+        ];
+        
+        const socketHandlerPath = path.join(this.projectRoot, 'src', 'sockets', 'SocketHandler.js');
+        if (fs.existsSync(socketHandlerPath)) {
+            try {
+                const content = fs.readFileSync(socketHandlerPath, 'utf8');
+                
+                for (const event of requiredEvents) {
+                    const eventPattern = new RegExp(
+                        `(socket\\.on|socket\\.emit|io\\.emit|socket\\.to)\\(['"]${event.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}['"]`,
+                        'i'
+                    );
+                    
+                    const hasEvent = eventPattern.test(content);
+                    results.events[event.name] = {
+                        exists: hasEvent,
+                        direction: event.direction
+                    };
+                    
+                    if (!hasEvent) {
+                        results.issues.push(`Missing Socket.IO event: ${event.name} (${event.direction})`);
+                        results.passed = false;
+                    }
+                }
+            } catch (error) {
+                results.issues.push(`Failed to check Socket.IO events: ${error.message}`);
+                results.passed = false;
+            }
+        } else {
+            results.issues.push('SocketHandler.js not found');
+            results.passed = false;
+        }
+        
+        return results;
+    }
+    
+    /**
      * Calculate overall health
      */
     calculateOverallHealth(results) {
@@ -538,7 +815,11 @@ class IntegrityChecker extends EventEmitter {
             results.codeIntegrity,
             results.loggingIntegrity,
             results.integrationIntegrity,
-            results.dependencyIntegrity
+            results.dependencyIntegrity,
+            results.serverIntegrity,
+            results.unityIntegrity,
+            results.apiIntegrity,
+            results.socketIntegrity
         ];
         
         const passedChecks = checks.filter(c => c.passed).length;
