@@ -106,10 +106,22 @@ async function storeWebSearchKnowledge() {
         return improvements;
     });
     
+    // Wait for state to save
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    // Verify storage
+    const storedKnowledge = core.stateStore.getState('learning.knowledge') || [];
+    const storedImprovements = core.stateStore.getState('learning.improvements') || [];
+    
     console.log('✅ Web search findings stored permanently in learning system');
-    console.log('   - Stored in learning.knowledge');
-    console.log('   - Stored in learning.improvements');
+    console.log(`   - Stored in learning.knowledge (${storedKnowledge.length} entries)`);
+    console.log(`   - Stored in learning.improvements (${storedImprovements.length} entries)`);
     console.log('   - Will persist across sessions');
+    
+    if (storedKnowledge.length === 0 && storedImprovements.length === 0) {
+        console.error('❌ ERROR: Knowledge was not stored!');
+        process.exit(1);
+    }
     
     process.exit(0);
 }
