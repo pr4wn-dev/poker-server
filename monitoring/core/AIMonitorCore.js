@@ -8,7 +8,10 @@
  */
 
 // CRITICAL: Load console override FIRST to enforce logging rules
-require('./ConsoleOverride');
+// But don't call overrideConsole() immediately - let it happen lazily
+// This prevents blocking during module load
+const ConsoleOverrideModule = require('./ConsoleOverride');
+// Override will happen when the module loads (it calls overrideConsole() at module load time)
 
 const path = require('path');
 const StateStore = require('./StateStore');

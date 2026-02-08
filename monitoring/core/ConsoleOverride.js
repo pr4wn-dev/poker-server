@@ -7,7 +7,23 @@
  * This is loaded FIRST before any other code runs.
  */
 
-const gameLogger = require('../../src/utils/GameLogger');
+// Lazy load gameLogger to avoid circular dependencies and initialization issues
+let gameLogger = null;
+function getGameLogger() {
+    if (!gameLogger) {
+        try {
+            gameLogger = require('../../src/utils/GameLogger');
+        } catch (error) {
+            // If gameLogger isn't available, use a no-op logger
+            return {
+                warn: () => {},
+                error: () => {},
+                info: () => {}
+            };
+        }
+    }
+    return gameLogger;
+}
 
 // Store original console methods
 const originalConsole = {
@@ -78,7 +94,9 @@ function overrideConsole() {
                 typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
             ).join(' ');
             
-            gameLogger.warn('CERBERUS', '[CONSOLE_OVERRIDE] console.log violation detected', {
+            // Use lazy-loaded gameLogger
+            const logger = getGameLogger();
+            logger.warn('CERBERUS', '[CONSOLE_OVERRIDE] console.log violation detected', {
                 message,
                 stack: new Error().stack,
                 timestamp: Date.now()
@@ -96,7 +114,7 @@ function overrideConsole() {
             recordViolationWithRulesEnforcer('log', message, stack);
             
             // Also log to gameLogger as info (so Cerberus sees it)
-            gameLogger.info('CERBERUS', message, args.length > 1 ? args.slice(1) : null);
+            logger.info('CERBERUS', message, args.length > 1 ? args.slice(1) : null);
         }
     };
     
@@ -106,7 +124,8 @@ function overrideConsole() {
             typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
         ).join(' ');
         
-        gameLogger.error('CERBERUS', '[CONSOLE_OVERRIDE] console.error violation detected', {
+        const logger = getGameLogger();
+        logger.error('CERBERUS', '[CONSOLE_OVERRIDE] console.error violation detected', {
             message,
             stack: new Error().stack,
             timestamp: Date.now()
@@ -124,7 +143,7 @@ function overrideConsole() {
             recordViolationWithRulesEnforcer('error', message, stack);
             
             // Also log to gameLogger as error
-            gameLogger.error('CERBERUS', message, args.length > 1 ? args.slice(1) : null);
+            logger.error('CERBERUS', message, args.length > 1 ? args.slice(1) : null);
     };
     
     // Override console.warn - route to gameLogger
@@ -133,7 +152,8 @@ function overrideConsole() {
             typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
         ).join(' ');
         
-        gameLogger.warn('CERBERUS', '[CONSOLE_OVERRIDE] console.warn violation detected', {
+        const logger = getGameLogger();
+        logger.warn('CERBERUS', '[CONSOLE_OVERRIDE] console.warn violation detected', {
             message,
             stack: new Error().stack,
             timestamp: Date.now()
@@ -151,7 +171,7 @@ function overrideConsole() {
             recordViolationWithRulesEnforcer('warn', message, stack);
             
             // Also log to gameLogger as warn
-            gameLogger.warn('CERBERUS', message, args.length > 1 ? args.slice(1) : null);
+            logger.warn('CERBERUS', message, args.length > 1 ? args.slice(1) : null);
     };
     
     // Override console.info - route to gameLogger
@@ -160,7 +180,8 @@ function overrideConsole() {
             typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
         ).join(' ');
         
-        gameLogger.info('CERBERUS', '[CONSOLE_OVERRIDE] console.info violation detected', {
+        const logger = getGameLogger();
+        logger.info('CERBERUS', '[CONSOLE_OVERRIDE] console.info violation detected', {
             message,
             stack: new Error().stack,
             timestamp: Date.now()
@@ -178,7 +199,7 @@ function overrideConsole() {
             recordViolationWithRulesEnforcer('info', message, stack);
             
             // Also log to gameLogger as info
-            gameLogger.info('CERBERUS', message, args.length > 1 ? args.slice(1) : null);
+            logger.info('CERBERUS', message, args.length > 1 ? args.slice(1) : null);
     };
     
     // Override console.debug - route to gameLogger
@@ -187,7 +208,8 @@ function overrideConsole() {
             typeof arg === 'object' ? JSON.stringify(arg) : String(arg)
         ).join(' ');
         
-        gameLogger.info('CERBERUS', '[CONSOLE_OVERRIDE] console.debug violation detected', {
+        const logger = getGameLogger();
+        logger.info('CERBERUS', '[CONSOLE_OVERRIDE] console.debug violation detected', {
             message,
             stack: new Error().stack,
             timestamp: Date.now()
@@ -205,7 +227,7 @@ function overrideConsole() {
             recordViolationWithRulesEnforcer('debug', message, stack);
             
             // Also log to gameLogger as info
-            gameLogger.info('CERBERUS', message, args.length > 1 ? args.slice(1) : null);
+            logger.info('CERBERUS', message, args.length > 1 ? args.slice(1) : null);
     };
 }
 
@@ -223,8 +245,11 @@ function clearViolations() {
     violations.length = 0;
 }
 
-// Auto-override on load
-overrideConsole();
+// Auto-override on load - but do it asynchronously to avoid blocking
+// This prevents hangs during module initialization
+setImmediate(() => {
+    overrideConsole();
+});
 
 module.exports = {
     overrideConsole,
