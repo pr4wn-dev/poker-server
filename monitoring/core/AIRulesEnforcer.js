@@ -11,9 +11,10 @@ const EventEmitter = require('events');
 const gameLogger = require('../../src/utils/GameLogger');
 
 class AIRulesEnforcer extends EventEmitter {
-    constructor(stateStore) {
+    constructor(stateStore, learningEngine) {
         super();
         this.stateStore = stateStore;
+        this.learningEngine = learningEngine;
         
         // Define all critical rules
         this.rules = this.defineRules();
@@ -31,11 +32,29 @@ class AIRulesEnforcer extends EventEmitter {
             byRule: {}
         };
         
-        // Load violation history
+        // SELF-LEARNING: Violation patterns and learning
+        this.violationPatterns = new Map(); // pattern -> { frequency, contexts, relatedRules, impact }
+        this.ruleCooccurrence = new Map(); // ruleId -> { violatedWith: Map(ruleId -> count), contexts: [] }
+        this.compliancePatterns = new Map(); // pattern -> { frequency, contexts, successRate }
+        this.ruleEffectiveness = new Map(); // ruleId -> { violationsPrevented, impact, effectiveness }
+        this.contextualViolations = new Map(); // context -> { rules: [], frequency, patterns }
+        this.autoRefinements = []; // Auto-generated rule improvements
+        
+        // Learning metrics
+        this.learningMetrics = {
+            patternsLearned: 0,
+            refinementsGenerated: 0,
+            predictionsMade: 0,
+            predictionsAccurate: 0,
+            lastLearningUpdate: Date.now()
+        };
+        
+        // Load violation history and learning data
         this.load();
         
-        // Start periodic compliance check
+        // Start periodic compliance check and learning
         this.startComplianceMonitoring();
+        this.startLearningFromViolations();
     }
     
     /**
@@ -379,6 +398,14 @@ class AIRulesEnforcer extends EventEmitter {
             complianceRate: Math.round(this.complianceStats.complianceRate)
         });
         
+        // SELF-LEARNING: Learn from this violation
+        this.learnFromViolation(violation);
+        
+        // Advance learning engine (if available)
+        if (this.learningEngine) {
+            this.advanceLearningFromViolation(violation);
+        }
+        
         // Save
         this.save();
         
@@ -386,9 +413,474 @@ class AIRulesEnforcer extends EventEmitter {
     }
     
     /**
+     * Learn from a single violation - SELF-LEARNING
+     */
+    learnFromViolation(violation) {
+        // Extract violation pattern
+        const pattern = this.extractViolationPattern(violation);
+        
+        // Update violation patterns
+        if (!this.violationPatterns.has(pattern)) {
+            this.violationPatterns.set(pattern, {
+                frequency: 0,
+                contexts: [],
+                relatedRules: new Map(),
+                impact: 0,
+                firstSeen: Date.now(),
+                lastSeen: Date.now()
+            });
+        }
+        
+        const patternData = this.violationPatterns.get(pattern);
+        patternData.frequency++;
+        patternData.lastSeen = Date.now();
+        
+        // Track context
+        if (violation.context && !patternData.contexts.includes(violation.context)) {
+            patternData.contexts.push(violation.context);
+        }
+        
+        // Track related rules (rules violated together)
+        const recentViolations = this.violations.slice(-10);
+        for (const recent of recentViolations) {
+            if (recent.ruleId !== violation.ruleId && recent.timestamp > violation.timestamp - 60000) {
+                // Violated within 1 minute - likely related
+                if (!patternData.relatedRules.has(recent.ruleId)) {
+                    patternData.relatedRules.set(recent.ruleId, 0);
+                }
+                patternData.relatedRules.set(
+                    recent.ruleId,
+                    patternData.relatedRules.get(recent.ruleId) + 1
+                );
+            }
+        }
+        
+        // Calculate impact (based on severity and frequency)
+        const severityWeight = violation.severity === 'critical' ? 3 : violation.severity === 'high' ? 2 : 1;
+        patternData.impact = patternData.frequency * severityWeight;
+        
+        // Update rule co-occurrence
+        if (!this.ruleCooccurrence.has(violation.ruleId)) {
+            this.ruleCooccurrence.set(violation.ruleId, {
+                violatedWith: new Map(),
+                contexts: []
+            });
+        }
+        const cooccurrence = this.ruleCooccurrence.get(violation.ruleId);
+        if (violation.context) {
+            if (!cooccurrence.contexts.includes(violation.context)) {
+                cooccurrence.contexts.push(violation.context);
+            }
+        }
+        
+        // Track contextual violations
+        const contextKey = violation.context || 'unknown';
+        if (!this.contextualViolations.has(contextKey)) {
+            this.contextualViolations.set(contextKey, {
+                rules: [],
+                frequency: 0,
+                patterns: []
+            });
+        }
+        const contextual = this.contextualViolations.get(contextKey);
+        contextual.frequency++;
+        if (!contextual.rules.includes(violation.ruleId)) {
+            contextual.rules.push(violation.ruleId);
+        }
+        if (!contextual.patterns.includes(pattern)) {
+            contextual.patterns.push(pattern);
+        }
+        
+        // Update learning metrics
+        this.learningMetrics.patternsLearned++;
+        this.learningMetrics.lastLearningUpdate = Date.now();
+        
+        // Auto-refine rules if pattern is strong
+        if (patternData.frequency >= 5 && patternData.impact >= 10) {
+            this.autoRefineRule(violation.ruleId, patternData);
+        }
+        
+        // Emit learning event
+        this.emit('violationLearned', {
+            violation,
+            pattern,
+            patternData,
+            learningMetrics: this.learningMetrics
+        });
+    }
+    
+    /**
+     * Extract violation pattern for learning
+     */
+    extractViolationPattern(violation) {
+        // Pattern: ruleId + context + severity
+        const parts = [
+            violation.ruleId,
+            violation.context || 'unknown',
+            violation.severity
+        ];
+        return parts.join('_');
+    }
+    
+    /**
+     * Advance learning engine from violation
+     */
+    advanceLearningFromViolation(violation) {
+        if (!this.learningEngine) return;
+        
+        // Create a "fix attempt" record for the violation
+        // This allows the learning system to learn from rule violations
+        const violationAttempt = {
+            id: `rule-violation-${violation.id}`,
+            issueId: violation.id,
+            issueType: 'rule_violation',
+            fixMethod: 'rule_reminder', // Not a fix, but reminder
+            fixDetails: {
+                ruleId: violation.ruleId,
+                ruleName: violation.ruleName,
+                context: violation.context,
+                details: violation.details,
+                severity: violation.severity
+            },
+            result: 'violation', // Not success/failure, but violation
+            timestamp: violation.timestamp,
+            state: this.stateStore.getState('game'),
+            logs: [],
+            duration: 0
+        };
+        
+        // Learn from this violation
+        try {
+            this.learningEngine.learnFromAttempt(violationAttempt);
+        } catch (learnError) {
+            // DO NOT log to console - errors are for AI only, not user
+            gameLogger.error('CERBERUS', '[RULES_ENFORCER] Error learning from violation', {
+                error: learnError.message,
+                violationId: violation.id
+            });
+        }
+    }
+    
+    /**
+     * Auto-refine rule based on violation patterns
+     */
+    autoRefineRule(ruleId, patternData) {
+        const rule = this.rules.find(r => r.id === ruleId);
+        if (!rule) return;
+        
+        // Check if we already have a refinement for this rule
+        const existingRefinement = this.autoRefinements.find(r => r.ruleId === ruleId);
+        if (existingRefinement) {
+            // Update existing refinement
+            existingRefinement.frequency = patternData.frequency;
+            existingRefinement.impact = patternData.impact;
+            existingRefinement.lastUpdated = Date.now();
+            existingRefinement.suggestions = this.generateRuleSuggestions(rule, patternData);
+        } else {
+            // Create new refinement
+            const refinement = {
+                id: `refinement-${ruleId}-${Date.now()}`,
+                ruleId,
+                ruleName: rule.name,
+                frequency: patternData.frequency,
+                impact: patternData.impact,
+                contexts: patternData.contexts,
+                relatedRules: Array.from(patternData.relatedRules.entries()),
+                suggestions: this.generateRuleSuggestions(rule, patternData),
+                created: Date.now(),
+                lastUpdated: Date.now()
+            };
+            
+            this.autoRefinements.push(refinement);
+            this.learningMetrics.refinementsGenerated++;
+            
+            // Emit refinement event
+            this.emit('ruleRefined', refinement);
+            
+            gameLogger.info('CERBERUS', '[RULES_ENFORCER] Auto-refined rule based on violations', {
+                ruleId,
+                ruleName: rule.name,
+                frequency: patternData.frequency,
+                impact: patternData.impact,
+                suggestions: refinement.suggestions.length
+            });
+        }
+    }
+    
+    /**
+     * Generate rule suggestions based on violation patterns
+     */
+    generateRuleSuggestions(rule, patternData) {
+        const suggestions = [];
+        
+        // If violated in specific contexts, suggest context-specific examples
+        if (patternData.contexts.length > 0) {
+            suggestions.push({
+                type: 'context_specific',
+                description: `Rule is frequently violated in these contexts: ${patternData.contexts.join(', ')}`,
+                recommendation: `Add context-specific examples to rule description`
+            });
+        }
+        
+        // If violated with other rules, suggest grouping
+        if (patternData.relatedRules.size > 0) {
+            const relatedRuleIds = Array.from(patternData.relatedRules.keys());
+            suggestions.push({
+                type: 'related_rules',
+                description: `Rule is often violated together with: ${relatedRuleIds.join(', ')}`,
+                recommendation: `Consider grouping these rules or adding cross-rule reminders`
+            });
+        }
+        
+        // If high frequency, suggest making rule more prominent
+        if (patternData.frequency >= 10) {
+            suggestions.push({
+                type: 'prominence',
+                description: `Rule is violated frequently (${patternData.frequency} times)`,
+                recommendation: `Consider increasing rule priority or adding more prominent reminders`
+            });
+        }
+        
+        // If high impact, suggest rule clarification
+        if (patternData.impact >= 20) {
+            suggestions.push({
+                type: 'clarification',
+                description: `Rule has high violation impact (${patternData.impact})`,
+                recommendation: `Consider clarifying rule description or adding more examples`
+            });
+        }
+        
+        return suggestions;
+    }
+    
+    /**
+     * Learn from compliance (when rules are followed)
+     */
+    learnFromCompliance(ruleId, context) {
+        // Track compliance patterns
+        const compliancePattern = `${ruleId}_${context || 'unknown'}`;
+        
+        if (!this.compliancePatterns.has(compliancePattern)) {
+            this.compliancePatterns.set(compliancePattern, {
+                frequency: 0,
+                contexts: [],
+                successRate: 100,
+                lastSeen: Date.now()
+            });
+        }
+        
+        const patternData = this.compliancePatterns.get(compliancePattern);
+        patternData.frequency++;
+        patternData.lastSeen = Date.now();
+        
+        if (context && !patternData.contexts.includes(context)) {
+            patternData.contexts.push(context);
+        }
+        
+        // Update rule effectiveness
+        if (!this.ruleEffectiveness.has(ruleId)) {
+            this.ruleEffectiveness.set(ruleId, {
+                violationsPrevented: 0,
+                impact: 0,
+                effectiveness: 100
+            });
+        }
+        
+        const effectiveness = this.ruleEffectiveness.get(ruleId);
+        // Compliance means the rule is working
+        effectiveness.effectiveness = Math.min(100, effectiveness.effectiveness + 1);
+    }
+    
+    /**
+     * Predict likely violations based on patterns
+     */
+    predictLikelyViolations(context) {
+        const predictions = [];
+        
+        // Check contextual violations
+        const contextKey = context || 'unknown';
+        if (this.contextualViolations.has(contextKey)) {
+            const contextual = this.contextualViolations.get(contextKey);
+            for (const ruleId of contextual.rules) {
+                const rule = this.rules.find(r => r.id === ruleId);
+                if (rule) {
+                    predictions.push({
+                        ruleId,
+                        ruleName: rule.name,
+                        confidence: Math.min(100, contextual.frequency * 10),
+                        reason: `Frequently violated in this context (${contextual.frequency} times)`,
+                        prevention: this.generatePreventionAdvice(ruleId, contextKey)
+                    });
+                }
+            }
+        }
+        
+        // Check violation patterns
+        for (const [pattern, patternData] of this.violationPatterns.entries()) {
+            if (patternData.contexts.includes(contextKey) && patternData.frequency >= 3) {
+                const ruleId = pattern.split('_')[0];
+                const rule = this.rules.find(r => r.id === ruleId);
+                if (rule && !predictions.find(p => p.ruleId === ruleId)) {
+                    predictions.push({
+                        ruleId,
+                        ruleName: rule.name,
+                        confidence: Math.min(100, patternData.frequency * 5),
+                        reason: `Strong violation pattern detected (${patternData.frequency} occurrences)`,
+                        prevention: this.generatePreventionAdvice(ruleId, contextKey)
+                    });
+                }
+            }
+        }
+        
+        // Update learning metrics
+        this.learningMetrics.predictionsMade += predictions.length;
+        
+        return predictions.sort((a, b) => b.confidence - a.confidence);
+    }
+    
+    /**
+     * Generate prevention advice for a rule
+     */
+    generatePreventionAdvice(ruleId, context) {
+        const rule = this.rules.find(r => r.id === ruleId);
+        if (!rule) return null;
+        
+        const advice = {
+            ruleId,
+            ruleName: rule.name,
+            context,
+            reminders: [],
+            examples: rule.examples || []
+        };
+        
+        // Add context-specific reminders
+        if (this.contextualViolations.has(context)) {
+            const contextual = this.contextualViolations.get(context);
+            if (contextual.rules.includes(ruleId)) {
+                advice.reminders.push(`This rule is frequently violated in "${context}" context`);
+            }
+        }
+        
+        // Add pattern-based reminders
+        for (const [pattern, patternData] of this.violationPatterns.entries()) {
+            if (pattern.startsWith(ruleId + '_') && patternData.contexts.includes(context)) {
+                advice.reminders.push(`Violation pattern detected: ${patternData.frequency} occurrences`);
+            }
+        }
+        
+        return advice;
+    }
+    
+    /**
+     * Start learning from violations periodically
+     */
+    startLearningFromViolations() {
+        // Learn from violations every 5 minutes
+        this.learningInterval = setInterval(() => {
+            this.analyzeViolationPatterns();
+            this.updateRulePriorities();
+        }, 5 * 60 * 1000); // 5 minutes
+    }
+    
+    /**
+     * Analyze violation patterns for learning
+     */
+    analyzeViolationPatterns() {
+        const recentViolations = this.violations.slice(-100);
+        
+        // Group violations by time windows
+        const timeWindows = {};
+        for (const violation of recentViolations) {
+            const window = Math.floor(violation.timestamp / (60 * 1000)); // 1-minute windows
+            if (!timeWindows[window]) {
+                timeWindows[window] = [];
+            }
+            timeWindows[window].push(violation);
+        }
+        
+        // Find temporal patterns
+        for (const [window, violations] of Object.entries(timeWindows)) {
+            if (violations.length >= 3) {
+                // Multiple violations in same time window - pattern detected
+                const ruleIds = violations.map(v => v.ruleId);
+                const uniqueRules = [...new Set(ruleIds)];
+                
+                if (uniqueRules.length === 1) {
+                    // Same rule violated multiple times - strong pattern
+                    gameLogger.info('CERBERUS', '[RULES_ENFORCER] Temporal violation pattern detected', {
+                        ruleId: uniqueRules[0],
+                        violations: violations.length,
+                        window: new Date(parseInt(window) * 60 * 1000).toISOString()
+                    });
+                } else if (uniqueRules.length > 1) {
+                    // Multiple rules violated together - co-occurrence pattern
+                    gameLogger.info('CERBERUS', '[RULES_ENFORCER] Co-occurrence violation pattern detected', {
+                        rules: uniqueRules,
+                        violations: violations.length,
+                        window: new Date(parseInt(window) * 60 * 1000).toISOString()
+                    });
+                }
+            }
+        }
+    }
+    
+    /**
+     * Update rule priorities based on violation patterns
+     */
+    updateRulePriorities() {
+        for (const [pattern, patternData] of this.violationPatterns.entries()) {
+            const ruleId = pattern.split('_')[0];
+            const rule = this.rules.find(r => r.id === ruleId);
+            if (!rule) continue;
+            
+            // If rule is frequently violated with high impact, consider increasing priority
+            if (patternData.frequency >= 10 && patternData.impact >= 20) {
+                if (rule.priority === 'medium') {
+                    // Suggest upgrading to high
+                    gameLogger.info('CERBERUS', '[RULES_ENFORCER] Suggesting priority upgrade', {
+                        ruleId,
+                        ruleName: rule.name,
+                        currentPriority: rule.priority,
+                        suggestedPriority: 'high',
+                        reason: `Frequently violated (${patternData.frequency} times) with high impact (${patternData.impact})`
+                    });
+                } else if (rule.priority === 'high') {
+                    // Suggest upgrading to critical
+                    gameLogger.info('CERBERUS', '[RULES_ENFORCER] Suggesting priority upgrade', {
+                        ruleId,
+                        ruleName: rule.name,
+                        currentPriority: rule.priority,
+                        suggestedPriority: 'critical',
+                        reason: `Frequently violated (${patternData.frequency} times) with high impact (${patternData.impact})`
+                    });
+                }
+            }
+        }
+    }
+    
+    /**
+     * Generate learning report
+     */
+    generateLearningReport() {
+        return {
+            patternsLearned: this.learningMetrics.patternsLearned,
+            refinementsGenerated: this.learningMetrics.refinementsGenerated,
+            predictionsMade: this.learningMetrics.predictionsMade,
+            predictionsAccurate: this.learningMetrics.predictionsAccurate,
+            predictionAccuracy: this.learningMetrics.predictionsMade > 0 
+                ? (this.learningMetrics.predictionsAccurate / this.learningMetrics.predictionsMade) * 100 
+                : 0,
+            violationPatterns: this.violationPatterns.size,
+            ruleRefinements: this.autoRefinements.length,
+            contextualViolations: this.contextualViolations.size,
+            lastLearningUpdate: new Date(this.learningMetrics.lastLearningUpdate).toISOString()
+        };
+    }
+    
+    /**
      * Record rule compliance (when rule is followed)
      */
-    recordCompliance(ruleId) {
+    recordCompliance(ruleId, context) {
         this.complianceStats.totalInteractions++;
         this.complianceStats.complianceRate = 
             ((this.complianceStats.totalInteractions - this.complianceStats.violations) / 
@@ -405,6 +897,21 @@ class AIRulesEnforcer extends EventEmitter {
         this.complianceStats.byRule[ruleId].complianceRate = 
             ((this.complianceStats.byRule[ruleId].total - this.complianceStats.byRule[ruleId].violations) / 
              this.complianceStats.byRule[ruleId].total) * 100;
+        
+        // SELF-LEARNING: Learn from compliance
+        this.learnFromCompliance(ruleId, context);
+    }
+    
+    /**
+     * Stop monitoring and learning
+     */
+    stop() {
+        if (this.monitoringInterval) {
+            clearInterval(this.monitoringInterval);
+        }
+        if (this.learningInterval) {
+            clearInterval(this.learningInterval);
+        }
     }
     
     /**
@@ -433,7 +940,7 @@ class AIRulesEnforcer extends EventEmitter {
     }
     
     /**
-     * Get rule learning insights
+     * Get rule learning insights - ENHANCED with self-learning data
      */
     getRuleLearningInsights() {
         const frequentlyViolated = this.getFrequentlyViolatedRules();
@@ -451,6 +958,10 @@ class AIRulesEnforcer extends EventEmitter {
             .sort((a, b) => b[1] - a[1])
             .slice(0, 5);
         
+        // Get self-learning insights
+        const learningReport = this.generateLearningReport();
+        const autoRefinements = this.autoRefinements.slice(-5); // Recent refinements
+        
         return {
             overallCompliance: Math.round(this.complianceStats.complianceRate),
             frequentlyViolatedRules: frequentlyViolated.frequentlyViolated,
@@ -459,6 +970,34 @@ class AIRulesEnforcer extends EventEmitter {
                 frequency: count
             })),
             recommendations: this.generateRecommendations(),
+            // Self-learning insights
+            learning: {
+                patternsLearned: learningReport.patternsLearned,
+                refinementsGenerated: learningReport.refinementsGenerated,
+                predictionsMade: learningReport.predictionsMade,
+                predictionAccuracy: Math.round(learningReport.predictionAccuracy),
+                violationPatterns: learningReport.violationPatterns,
+                contextualViolations: learningReport.contextualViolations,
+                lastLearningUpdate: learningReport.lastLearningUpdate
+            },
+            autoRefinements: autoRefinements.map(r => ({
+                ruleId: r.ruleId,
+                ruleName: r.ruleName,
+                frequency: r.frequency,
+                impact: r.impact,
+                suggestions: r.suggestions.length,
+                lastUpdated: new Date(r.lastUpdated).toISOString()
+            })),
+            ruleEffectiveness: Array.from(this.ruleEffectiveness.entries()).map(([ruleId, data]) => {
+                const rule = this.rules.find(r => r.id === ruleId);
+                return {
+                    ruleId,
+                    ruleName: rule ? rule.name : ruleId,
+                    effectiveness: Math.round(data.effectiveness),
+                    violationsPrevented: data.violationsPrevented,
+                    impact: data.impact
+                };
+            }).sort((a, b) => b.effectiveness - a.effectiveness).slice(0, 10),
             timestamp: Date.now()
         };
     }
