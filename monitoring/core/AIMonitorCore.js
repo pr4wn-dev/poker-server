@@ -16,6 +16,7 @@ const AIDecisionEngine = require('./AIDecisionEngine');
 const AILiveStatistics = require('./AILiveStatistics');
 const AICommunicationInterface = require('./AICommunicationInterface');
 const IntegrityChecker = require('./IntegrityChecker');
+const ServerStateCapture = require('./ServerStateCapture');
 
 class AIMonitorCore {
     constructor(projectRoot) {
@@ -47,6 +48,15 @@ class AIMonitorCore {
             this.stateStore,
             this.issueDetector
         );
+        
+        // Server state capture (captures server health/metrics)
+        this.serverStateCapture = new ServerStateCapture(
+            this.stateStore,
+            process.env.SERVER_URL || 'http://localhost:3000'
+        );
+        
+        // Start server state capture
+        this.serverStateCapture.start();
         
         // Setup event listeners
         this.setupEventListeners();
@@ -178,6 +188,9 @@ class AIMonitorCore {
      */
     destroy() {
         // Stop all background intervals
+        if (this.serverStateCapture) {
+            this.serverStateCapture.stop();
+        }
         if (this.integrityChecker) {
             this.integrityChecker.stopPeriodicChecks();
         }
