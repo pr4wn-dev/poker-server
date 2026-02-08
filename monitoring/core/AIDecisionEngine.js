@@ -94,7 +94,13 @@ class AIDecisionEngine extends EventEmitter {
      * Should we start investigation?
      */
     shouldStartInvestigation() {
-        const activeIssues = this.issueDetector.getActiveIssues();
+        // Guard: Ensure issueDetector is ready
+        if (!this.issueDetector || typeof this.issueDetector.getActiveIssues !== 'function') {
+            return { should: false, reason: 'Issue detector not ready' };
+        }
+        
+        try {
+            const activeIssues = this.issueDetector.getActiveIssues();
         const investigation = this.stateStore.getState('monitoring.investigation');
         
         // Already investigating
