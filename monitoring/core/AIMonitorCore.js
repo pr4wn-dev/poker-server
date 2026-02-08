@@ -356,6 +356,9 @@ class AIMonitorCore {
         // Start server state capture
         this.serverStateCapture.start();
         
+        // Start decision engine (after all components are initialized)
+        this.decisionEngine.start();
+        
         // Start logging integrity checks (Phase 5)
         if (this.loggingIntegrityChecker) {
             this.loggingIntegrityChecker.startPeriodicChecks();

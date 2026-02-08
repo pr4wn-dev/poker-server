@@ -19,8 +19,8 @@ class AIDecisionEngine extends EventEmitter {
         // Decision history
         this.decisions = [];
         
-        // Start decision making
-        this.start();
+        // Don't start immediately - let AIMonitorCore call start() after all components are ready
+        // this.start();
     }
     
     /**
@@ -168,6 +168,9 @@ class AIDecisionEngine extends EventEmitter {
      * Should we pause Unity?
      */
     shouldPauseUnity() {
+        if (!this.stateStore || typeof this.stateStore.getState !== 'function') return false;
+        if (!this.issueDetector || typeof this.issueDetector.getActiveIssues !== 'function') return false;
+        
         const investigation = this.stateStore.getState('monitoring.investigation');
         const unity = this.stateStore.getState('system.unity');
         const activeIssues = this.issueDetector.getActiveIssues();

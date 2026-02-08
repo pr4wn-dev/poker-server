@@ -1524,10 +1524,20 @@ class AILearningEngine extends EventEmitter {
             this.debuggingPatterns = new Map(Object.entries(debuggingPatterns));
             
             const generalizedPatterns = this.stateStore.getState('learning.generalizedPatterns') || [];
-            this.generalizedPatterns = new Map(generalizedPatterns);
+            // Handle both array of entries and object format
+            if (Array.isArray(generalizedPatterns)) {
+                this.generalizedPatterns = new Map(generalizedPatterns);
+            } else {
+                this.generalizedPatterns = new Map(Object.entries(generalizedPatterns));
+            }
             
             const generalizationRules = this.stateStore.getState('learning.generalizationRules') || [];
-            this.generalizationRules = new Map(generalizationRules);
+            // Handle both array of entries and object format
+            if (Array.isArray(generalizationRules)) {
+                this.generalizationRules = new Map(generalizationRules);
+            } else {
+                this.generalizationRules = new Map(Object.entries(generalizationRules));
+            }
         } catch (error) {
             // DO NOT log to console - errors are for AI only, not user
             // Re-throw so UniversalErrorHandler can catch it
