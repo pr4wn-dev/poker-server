@@ -165,6 +165,52 @@ class AIMonitorCore {
     }
     
     /**
+     * Setup error recovery listeners
+     */
+    setupErrorRecoveryListeners() {
+        if (!this.errorRecovery) return;
+        
+        this.errorRecovery.on('error', ({ component, error }) => {
+            console.warn(`[Error Recovery] Component ${component} error: ${error.message}`);
+        });
+        
+        this.errorRecovery.on('success', ({ component }) => {
+            console.log(`[Error Recovery] Component ${component} recovered`);
+        });
+        
+        this.errorRecovery.on('retry', ({ component, attempt, delay }) => {
+            console.log(`[Error Recovery] Retrying ${component} (attempt ${attempt}) after ${delay}ms`);
+        });
+        
+        this.errorRecovery.on('circuitOpen', ({ component, failures }) => {
+            console.warn(`[Error Recovery] Circuit breaker opened for ${component} (${failures} failures)`);
+        });
+    }
+    
+    /**
+     * Setup performance monitoring listeners
+     */
+    setupPerformanceListeners() {
+        if (!this.performanceMonitor) return;
+        
+        this.performanceMonitor.on('slowOperation', ({ operation, duration, threshold }) => {
+            console.warn(`[Performance] Slow operation: ${operation} took ${duration.toFixed(2)}ms (threshold: ${threshold}ms)`);
+        });
+        
+        this.performanceMonitor.on('verySlowOperation', ({ operation, duration, threshold }) => {
+            console.error(`[Performance] Very slow operation: ${operation} took ${duration.toFixed(2)}ms (threshold: ${threshold}ms)`);
+        });
+        
+        this.performanceMonitor.on('highMemoryUsage', ({ usagePercent, threshold }) => {
+            console.warn(`[Performance] High memory usage: ${(usagePercent * 100).toFixed(2)}% (threshold: ${threshold * 100}%)`);
+        });
+        
+        this.performanceMonitor.on('highCpuUsage', ({ usagePercent, threshold }) => {
+            console.warn(`[Performance] High CPU usage: ${(usagePercent * 100).toFixed(2)}% (threshold: ${threshold * 100}%)`);
+        });
+    }
+    
+    /**
      * Get complete status - AI can see everything
      */
     getStatus() {
