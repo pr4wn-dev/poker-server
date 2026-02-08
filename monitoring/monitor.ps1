@@ -292,7 +292,7 @@ function Add-PendingIssue {
             while ($retryCount -lt $maxRetries) {
             try {
                 $result = node $nodeScript --add-issue-file $tempFile 2>&1 | Out-String
-                if ($LASTEXITCODE -eq 0 -and $result) {
+        if ($LASTEXITCODE -eq 0 -and $result) {
                     # Remove any non-JSON output (like warnings or errors)
                     $jsonLines = $result -split "`n" | Where-Object { $_ -match '^\s*\{' -or $_ -match '^\s*\[' }
                     $cleanResult = $jsonLines -join "`n"
@@ -301,7 +301,7 @@ function Add-PendingIssue {
                         $jsonResult = $cleanResult | ConvertFrom-Json -ErrorAction SilentlyContinue
                         if ($jsonResult -and $jsonResult.success) {
                             # Success - return result
-                            return $jsonResult
+            return $jsonResult
                         } elseif ($jsonResult -and -not $jsonResult.success) {
                             # JSON error response - check if retryable
                             $lastError = $jsonResult
@@ -355,8 +355,8 @@ function Add-PendingIssue {
                         
                         Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ISSUE DETECTOR ERROR: $errorMsg" -ForegroundColor "Red"
                         return @{ success = $false; error = $errorJson.error; reason = $errorJson.reason }
-                    }
-                } catch {
+        }
+    } catch {
                     # Not JSON, try retry
                     $retryCount++
                     if ($retryCount -lt $maxRetries) {
@@ -1667,7 +1667,7 @@ function Show-Statistics {
             $scriptRoot = $PSScriptRoot
         } elseif ($MyInvocation.MyCommand.Path) {
             $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
-        } else {
+    } else {
             $scriptRoot = if (Test-Path "monitoring\monitor.ps1") { "monitoring" } elseif (Test-Path "logs\monitor-status.json") { "." } else { Get-Location }
         }
         $statusTextFilePath = Join-Path $scriptRoot "..\logs\monitor-status.json" | Resolve-Path -ErrorAction SilentlyContinue
@@ -2998,14 +2998,73 @@ while ($monitoringActive) {
                 }
             } else {
                 # Investigation flag is true but startTime is null
-                # CRITICAL: Don't reset immediately - this might be a timing issue where startTime hasn't been set yet in the same loop iteration
-                # The investigation starts later in the loop (line 3224), so the check here might run before it's set
-                # Only log a warning, don't reset - let the next loop iteration handle it
+                # CRITICAL: If investigation has been "active" for more than 1 second without a startTime, it's stuck - reset it
+                # This prevents investigations from getting stuck indefinitely
                 if (-not $script:investigationNullStartTimeLogged) {
-                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] WARNING: isInvestigating=true but investigationStartTime is null (may be timing issue - will check next iteration)" -ForegroundColor "Yellow"
+                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] WARNING: isInvestigating=true but investigationStartTime is null - resetting stuck investigation" -ForegroundColor "Yellow"
                     $script:investigationNullStartTimeLogged = $true
+                    # Reset immediately - investigation is stuck
+                    $script:isInvestigating = $false
+                    $script:investigationStartTime = $null
+                    $script:investigationCheckLogged = $false
                 }
-                # Don't reset - allow investigation to start properly
+            }
+        }
+        
+        # CRITICAL: Also check status file if script variables are out of sync
+        # This handles cases where the script was restarted but status file still shows active investigation
+        $statusFileInvestigationActive = $false
+        $statusFileInvestigationStartTime = $null
+        try {
+            $statusFilePath = Join-Path $script:projectRoot "logs\monitor-status.json"
+            if (Test-Path $statusFilePath) {
+                $statusData = Get-Content $statusFilePath -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+                if ($statusData.investigation -and $statusData.investigation.active -is [bool] -and $statusData.investigation.active) {
+                    $statusFileInvestigationActive = $true
+                    if ($statusData.investigation.startTime) {
+                        try {
+                            $statusFileInvestigationStartTime = [DateTime]::Parse($statusData.investigation.startTime)
+                        } catch {
+                            # Invalid date - ignore
+                        }
+                    }
+                }
+            }
+        } catch {
+            # Status file read failed - ignore
+        }
+        
+        # If status file shows active investigation but script variables don't, sync them
+        if ($statusFileInvestigationActive -and $statusFileInvestigationStartTime -and -not $script:isInvestigating) {
+            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] Syncing investigation state from status file" -ForegroundColor "Cyan"
+            $script:isInvestigating = $true
+            $script:investigationStartTime = $statusFileInvestigationStartTime
+            $script:investigationCheckLogged = $false
+            $script:investigationNullStartTimeLogged = $false
+            $shouldCheckInvestigation = $true
+            $investigationStartTimeValid = $true
+        }
+        
+        # If status file shows investigation should have completed (timeRemaining <= 0), force check
+        if ($statusFileInvestigationActive -and $statusFileInvestigationStartTime) {
+            $elapsedFromStatus = ((Get-Date) - $statusFileInvestigationStartTime).TotalSeconds
+            $timeoutValue = if ($investigationTimeout) { $investigationTimeout } else { 15 }
+            if ($elapsedFromStatus -ge ($timeoutValue - 1)) {
+                # Investigation should have completed - force check
+                if (-not $shouldCheckInvestigation) {
+                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] Investigation in status file should have completed ($([Math]::Round($elapsedFromStatus, 1))s elapsed, timeout: $timeoutValue s) - forcing check" -ForegroundColor "Yellow"
+                    $shouldCheckInvestigation = $true
+                    if ($statusFileInvestigationStartTime) {
+                        $investigationStartTimeValid = $true
+                        # Sync script variables
+                        if (-not $script:isInvestigating) {
+                            $script:isInvestigating = $true
+                        }
+                        if (-not $script:investigationStartTime -or $script:investigationStartTime -ne $statusFileInvestigationStartTime) {
+                            $script:investigationStartTime = $statusFileInvestigationStartTime
+                        }
+                    }
+                }
             }
         }
         
@@ -3484,7 +3543,7 @@ while ($monitoringActive) {
                                 if (-not $script:isInvestigating) {
                                     # Pause debugger immediately (with automatic verification)
                                     if ($config.unity.pauseDebuggerOnIssue) {
-                                        $escapedMessage = $line.Replace('"','\"').Replace("`n"," ").Replace("`r"," ").Substring(0,[Math]::Min(200,$line.Length))
+                            $escapedMessage = $line.Replace('"','\"').Replace("`n"," ").Replace("`r"," ").Substring(0,[Math]::Min(200,$line.Length))
                                         $reason = "$($issue.type) - $($issue.severity) severity"
                                         $pauseSuccess = Invoke-DebuggerBreakWithVerification -tableId $tableId -reason $reason -message $escapedMessage
                                         if (-not $pauseSuccess) {
@@ -3516,7 +3575,7 @@ while ($monitoringActive) {
                                     }
                                     $isPaused = $true
                                     $currentIssue = $line
-                                } catch {
+                            } catch {
                                     Write-ConsoleOutput -Message "  ERROR: Failed to pause debugger: $_" -ForegroundColor "Red"
                                 }
                             }
@@ -3538,8 +3597,8 @@ while ($monitoringActive) {
                                     if (-not $pauseSuccess) {
                                         Write-ConsoleOutput -Message "  Monitor will automatically retry when Unity is ready" -ForegroundColor "Yellow"
                                     }
-                                    $isPaused = $true
-                                    $currentIssue = $line
+                            $isPaused = $true
+                            $currentIssue = $line
                                 } catch {
                                     Write-ConsoleOutput -Message "  ERROR: Failed to pause debugger: $_" -ForegroundColor "Red"
                                 }
