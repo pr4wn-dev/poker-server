@@ -1902,7 +1902,7 @@ function Show-Statistics {
     $col3Lines += "INVESTIGATION PHASE"
     $col3Lines += ("=" * ($colWidth - 2))
     if ($investigationActive -and $investigationStartTimeValue) {
-        $investigationElapsed = (Get-Date) - $script:investigationStartTime
+        $investigationElapsed = (Get-Date) - $investigationStartTimeValue
         # Use timeRemaining from status file if available, otherwise calculate
         if ($investigationTimeRemaining -ne $null) {
             $remaining = $investigationTimeRemaining
