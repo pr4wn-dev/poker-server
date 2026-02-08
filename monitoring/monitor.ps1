@@ -3194,6 +3194,13 @@ while ($monitoringActive) {
         
         # CRITICAL: Always run completion check if we have ANY indication of active investigation
         # This ensures we complete even if status file read failed
+        # DIAGNOSTIC: Log why completion check might not run
+        if (-not $investigationIsActive) {
+            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] Completion check SKIPPED: investigationIsActive=$investigationIsActive (script:isInvestigating=$($script:isInvestigating), script:startTime=$($script:investigationStartTime), statusFileActive=$statusFileInvestigationActive, statusFileStartTime=$statusFileInvestigationStartTime)" -ForegroundColor "Yellow"
+        } elseif (-not $investigationStartTimeToUse) {
+            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] Completion check SKIPPED: investigationStartTimeToUse is null (investigationIsActive=$investigationIsActive, script:startTime=$($script:investigationStartTime), statusFileStartTime=$statusFileInvestigationStartTime)" -ForegroundColor "Yellow"
+        }
+        
         if ($investigationIsActive -and $investigationStartTimeToUse) {
             Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] Investigation completion check: scriptActive=$($script:isInvestigating), statusFileActive=$statusFileInvestigationActive, startTime=$($investigationStartTimeToUse.ToString('HH:mm:ss')), statusFileReadSuccess=$statusFileReadSuccess" -ForegroundColor "Gray"
             
