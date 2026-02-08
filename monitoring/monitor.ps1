@@ -3120,53 +3120,41 @@ while ($monitoringActive) {
             $timeoutValue = if ($investigationTimeout) { $investigationTimeout } else { 15 }
             
             # If timeRemaining from status file is 0 or negative, OR elapsed time exceeds timeout, force check
+            # CRITICAL: This check runs BEFORE the normal investigation check, so it can complete immediately
             if (($statusFileTimeRemaining -ne $null -and $statusFileTimeRemaining -le 0) -or ($elapsedFromStatus -ge ($timeoutValue - 1))) {
-                # Investigation should have completed - force check and COMPLETE IMMEDIATELY
-                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] Investigation MUST complete (timeRemaining: $statusFileTimeRemaining, elapsed: $([Math]::Round($elapsedFromStatus, 1))s, timeout: $timeoutValue s) - FORCING COMPLETION" -ForegroundColor "Yellow"
-                $shouldCheckInvestigation = $true
-                $investigationStartTimeValid = $true
-                # Ensure script variables are synced
-                if (-not $script:isInvestigating) {
-                    $script:isInvestigating = $true
-                }
-                if (-not $script:investigationStartTime -or $script:investigationStartTime -ne $statusFileInvestigationStartTime) {
-                    $script:investigationStartTime = $statusFileInvestigationStartTime
-                }
-                # CRITICAL: Set shouldComplete flag BEFORE the check block so it completes immediately
-                # Calculate elapsed to determine if we should complete
-                $elapsedCheck = ((Get-Date) - $statusFileInvestigationStartTime).TotalSeconds
-                if ($elapsedCheck -ge ($timeoutValue - 1)) {
-                    # Skip the normal check block and complete immediately
-                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] Completing investigation immediately (elapsed: $([Math]::Round($elapsedCheck, 1))s >= timeout: $timeoutValue s)" -ForegroundColor "Cyan"
-                    $script:isInvestigating = $false
-                    $script:investigationStartTime = $null
-                    $script:investigationCheckLogged = $false
-                    $pendingInfo = Get-PendingIssuesInfo
-                    
-                    if ($pendingInfo -and $pendingInfo.InFocusMode -and $pendingInfo.RootIssue) {
-                        $rootIssue = $pendingInfo.RootIssue
-                        $relatedCount = $pendingInfo.RelatedIssuesCount
-                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] INVESTIGATION COMPLETE: Pausing debugger" -ForegroundColor "Yellow"
-                        Write-ConsoleOutput -Message "  Root Issue: $($rootIssue.type) ($($rootIssue.severity))" -ForegroundColor "White"
-                        if ($relatedCount -gt 0) {
-                            Write-ConsoleOutput -Message "  Related Issues Found: $relatedCount" -ForegroundColor "Cyan"
-                        }
-                        $tableId = if ($rootIssue.tableId) { $rootIssue.tableId } else { $null }
-                        if (-not $isPaused -and $config.unity.pauseDebuggerOnIssue) {
-                            $pauseSuccess = Invoke-DebuggerBreakWithVerification -tableId $tableId -reason "$($rootIssue.type) - $($rootIssue.severity) severity (Investigation complete)" -message "Investigation complete. Root issue: $($rootIssue.type). Related issues: $relatedCount"
-                            if (-not $pauseSuccess) {
-                                Write-ConsoleOutput -Message "  WARNING: Debugger break may not have reached Unity" -ForegroundColor "Yellow"
-                            }
-                            $isPaused = $true
-                        }
-                    } else {
-                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] INVESTIGATION COMPLETE: Timeout reached" -ForegroundColor "Yellow"
+                # Investigation should have completed - complete IMMEDIATELY
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] Investigation MUST complete NOW (timeRemaining: $statusFileTimeRemaining, elapsed: $([Math]::Round($elapsedFromStatus, 1))s, timeout: $timeoutValue s)" -ForegroundColor "Yellow"
+                
+                # Complete investigation immediately
+                $script:isInvestigating = $false
+                $script:investigationStartTime = $null
+                $script:investigationCheckLogged = $false
+                $pendingInfo = Get-PendingIssuesInfo
+                
+                if ($pendingInfo -and $pendingInfo.InFocusMode -and $pendingInfo.RootIssue) {
+                    $rootIssue = $pendingInfo.RootIssue
+                    $relatedCount = $pendingInfo.RelatedIssuesCount
+                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] INVESTIGATION COMPLETE: Pausing debugger" -ForegroundColor "Yellow"
+                    Write-ConsoleOutput -Message "  Root Issue: $($rootIssue.type) ($($rootIssue.severity))" -ForegroundColor "White"
+                    if ($relatedCount -gt 0) {
+                        Write-ConsoleOutput -Message "  Related Issues Found: $relatedCount" -ForegroundColor "Cyan"
                     }
-                    Update-MonitorStatus
-                    $lastStatusUpdate = Get-Date
-                    # Skip the normal check block since we already completed
-                    $shouldCheckInvestigation = $false
+                    $tableId = if ($rootIssue.tableId) { $rootIssue.tableId } else { $null }
+                    if (-not $isPaused -and $config.unity.pauseDebuggerOnIssue) {
+                        $pauseSuccess = Invoke-DebuggerBreakWithVerification -tableId $tableId -reason "$($rootIssue.type) - $($rootIssue.severity) severity (Investigation complete)" -message "Investigation complete. Root issue: $($rootIssue.type). Related issues: $relatedCount"
+                        if (-not $pauseSuccess) {
+                            Write-ConsoleOutput -Message "  WARNING: Debugger break may not have reached Unity" -ForegroundColor "Yellow"
+                        }
+                        $isPaused = $true
+                    }
+                } else {
+                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] INVESTIGATION COMPLETE: Timeout reached (no active focus group)" -ForegroundColor "Yellow"
                 }
+                Update-MonitorStatus
+                $lastStatusUpdate = Get-Date
+                # Skip the normal check block since we already completed
+                $shouldCheckInvestigation = $false
+                $investigationStartTimeValid = $false
             }
         }
         
