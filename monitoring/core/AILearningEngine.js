@@ -1152,6 +1152,97 @@ class AILearningEngine extends EventEmitter {
     /**
      * Learn from AI mistake (giving up, masking, etc.)
      */
+    /**
+     * Learn from syntax error (PowerShell, JavaScript, etc.)
+     */
+    learnFromSyntaxError(error) {
+        if (!error || !error.type) return;
+        
+        // Extract pattern
+        const pattern = this.extractSyntaxErrorPattern(error);
+        
+        // Track syntax error pattern
+        if (!this.patterns.has(pattern)) {
+            this.patterns.set(pattern, {
+                frequency: 0,
+                successRate: 0,
+                contexts: [],
+                solutions: []
+            });
+        }
+        
+        const patternData = this.patterns.get(pattern);
+        patternData.frequency++;
+        patternData.contexts.push({
+            file: error.filePath,
+            line: error.line,
+            message: error.message,
+            timestamp: Date.now()
+        });
+        
+        // Keep only last 10 contexts
+        if (patternData.contexts.length > 10) {
+            patternData.contexts.shift();
+        }
+        
+        // Learn solution if provided
+        if (error.solution) {
+            patternData.solutions.push({
+                solution: error.solution,
+                timestamp: Date.now()
+            });
+        }
+        
+        // Save
+        this.save();
+        
+        gameLogger.info('CERBERUS', '[LEARNING_ENGINE] Learned from syntax error', {
+            pattern,
+            file: error.filePath,
+            line: error.line
+        });
+    }
+    
+    /**
+     * Extract pattern from syntax error
+     */
+    extractSyntaxErrorPattern(error) {
+        let pattern = error.type || 'SYNTAX_ERROR';
+        
+        // Add key indicators
+        if (error.message) {
+            const keyPhrases = [
+                'brace', 'try', 'catch', 'quote', 'syntax', 'unexpected',
+                'missing', 'unmatched', 'parse', 'token'
+            ];
+            
+            for (const phrase of keyPhrases) {
+                if (error.message.toLowerCase().includes(phrase)) {
+                    pattern += `_${phrase}`;
+                }
+            }
+        }
+        
+        return pattern;
+    }
+    
+    /**
+     * Get suggestions for syntax error based on learned patterns
+     */
+    getSyntaxErrorSuggestions(error) {
+        const pattern = this.extractSyntaxErrorPattern(error);
+        const patternData = this.patterns.get(pattern);
+        
+        if (!patternData || patternData.solutions.length === 0) {
+            return [];
+        }
+        
+        // Return most recent solutions
+        return patternData.solutions
+            .slice(-5) // Last 5 solutions
+            .map(s => s.solution);
+    }
+    
     learnFromAIMistake(mistake) {
         // Track mistake pattern
         const mistakePattern = {

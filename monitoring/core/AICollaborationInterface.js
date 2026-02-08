@@ -16,7 +16,7 @@ const EventEmitter = require('events');
 const gameLogger = require('../../src/utils/GameLogger');
 
 class AICollaborationInterface extends EventEmitter {
-    constructor(stateStore, learningEngine, issueDetector, fixTracker, communicationInterface, solutionTemplateEngine, codeChangeTracker) {
+    constructor(stateStore, learningEngine, issueDetector, fixTracker, communicationInterface, solutionTemplateEngine, codeChangeTracker, powerShellSyntaxValidator = null) {
         super();
         this.stateStore = stateStore;
         this.learningEngine = learningEngine;
@@ -25,6 +25,7 @@ class AICollaborationInterface extends EventEmitter {
         this.communicationInterface = communicationInterface;
         this.solutionTemplateEngine = solutionTemplateEngine;
         this.codeChangeTracker = codeChangeTracker;
+        this.powerShellSyntaxValidator = powerShellSyntaxValidator;
         
         // AI action tracking
         this.aiActions = []; // Track all AI actions for learning
@@ -259,7 +260,7 @@ class AICollaborationInterface extends EventEmitter {
      * AI is about to take an action - get proactive suggestions
      * This is called BEFORE the AI does something
      */
-    beforeAIAction(action) {
+    async beforeAIAction(action) {
         const suggestions = {
             warnings: [],
             recommendations: [],
@@ -286,6 +287,22 @@ class AICollaborationInterface extends EventEmitter {
                             message: `Similar actions have low success rate (${(pattern.successRate * 100).toFixed(1)}%)`,
                             pattern: pattern.pattern,
                             recommendation: pattern.bestSolution || 'Consider alternative approach'
+                        });
+                    }
+                }
+            }
+            
+            // Check PowerShell syntax if editing PowerShell files
+            if (action.type === 'code_change' || action.type === 'fix_attempt') {
+                if (action.filePath && action.filePath.endsWith('.ps1') && this.powerShellSyntaxValidator) {
+                    const syntaxCheck = await this.checkPowerShellSyntax(action);
+                    if (syntaxCheck && !syntaxCheck.valid) {
+                        suggestions.warnings.push({
+                            type: 'POWERSHELL_SYNTAX_ERROR',
+                            message: `PowerShell syntax errors detected: ${syntaxCheck.errors.length} error(s), ${syntaxCheck.structuralIssues.length} structural issue(s)`,
+                            errors: syntaxCheck.errors.slice(0, 3), // First 3 errors
+                            structuralIssues: syntaxCheck.structuralIssues.slice(0, 3),
+                            recommendation: 'Fix syntax errors before applying changes'
                         });
                     }
                 }
@@ -1053,6 +1070,31 @@ class AICollaborationInterface extends EventEmitter {
         }
         
         return lowSuccess;
+    }
+    
+    /**
+     * Check PowerShell syntax before applying changes
+     */
+    async checkPowerShellSyntax(action) {
+        if (!this.powerShellSyntaxValidator || !action.filePath) {
+            return null;
+        }
+        
+        try {
+            // If action has newContent, validate that
+            if (action.newContent) {
+                return await this.powerShellSyntaxValidator.validateScript(action.filePath, action.newContent);
+            }
+            
+            // Otherwise validate the file as-is
+            return await this.powerShellSyntaxValidator.validateScript(action.filePath);
+        } catch (error) {
+            gameLogger.warn('CERBERUS', '[AI_COLLABORATION] Syntax check error', {
+                filePath: action.filePath,
+                error: error.message
+            });
+            return null;
+        }
     }
     
     getRecentFailures() {

@@ -16,11 +16,12 @@ const EventEmitter = require('events');
 const gameLogger = require('../../src/utils/GameLogger');
 
 class AIWorkflowEnforcer extends EventEmitter {
-    constructor(stateStore, rulesEnforcer, learningEngine) {
+    constructor(stateStore, rulesEnforcer, learningEngine, powerShellSyntaxValidator = null) {
         super();
         this.stateStore = stateStore;
         this.rulesEnforcer = rulesEnforcer;
         this.learningEngine = learningEngine;
+        this.powerShellSyntaxValidator = powerShellSyntaxValidator;
         
         // Track workflow actions
         this.actionHistory = [];
@@ -34,7 +35,73 @@ class AIWorkflowEnforcer extends EventEmitter {
      * Check action before execution - PROACTIVE ENFORCEMENT
      * This is called BEFORE any code change or fix
      */
-    checkBeforeAction(action, context) {
+    async checkBeforeAction(action, context) {
+        // Check PowerShell syntax if editing PowerShell files
+        if (action.type === 'code_change' || action.type === 'fix_attempt') {
+            if (action.filePath && action.filePath.endsWith('.ps1') && this.powerShellSyntaxValidator) {
+                try {
+                    const syntaxResult = await this.powerShellSyntaxValidator.validateScript(
+                        action.filePath,
+                        action.newContent || null
+                    );
+                    
+                    if (!syntaxResult.valid) {
+                        // Block action if syntax errors found
+                        const violation = {
+                            action,
+                            context,
+                            violations: [{
+                                ruleId: 'syntax_validation',
+                                ruleName: 'PowerShell Syntax Validation',
+                                severity: 'error',
+                                reason: `PowerShell syntax errors detected: ${syntaxResult.errors.length} error(s), ${syntaxResult.structuralIssues.length} structural issue(s)`,
+                                details: {
+                                    errors: syntaxResult.errors.slice(0, 3),
+                                    structuralIssues: syntaxResult.structuralIssues.slice(0, 3),
+                                    quoteIssues: syntaxResult.quoteIssues.slice(0, 3)
+                                }
+                            }],
+                            timestamp: Date.now()
+                        };
+                        
+                        // Track as AI mistake
+                        this.rulesEnforcer.trackAIMistake({
+                            type: 'syntax_error',
+                            context: context,
+                            details: `Attempted to apply changes with PowerShell syntax errors`,
+                            originalProblem: context.originalProblem || 'PowerShell syntax validation',
+                            whatHappened: `Changes contain syntax errors: ${syntaxResult.errors.map(e => e.message).join('; ')}`,
+                            whatShouldHaveHappened: 'Fix syntax errors before applying changes'
+                        });
+                        
+                        // Emit event
+                        this.emit('actionBlocked', violation);
+                        
+                        gameLogger.warn('CERBERUS', '[WORKFLOW_ENFORCER] Action blocked - syntax errors', {
+                            action: action.type,
+                            filePath: action.filePath,
+                            errorCount: syntaxResult.errors.length,
+                            structuralCount: syntaxResult.structuralIssues.length
+                        });
+                        
+                        return {
+                            allowed: false,
+                            blocked: true,
+                            violations: violation.violations,
+                            warnings: [],
+                            message: `Action blocked: PowerShell syntax errors detected. Fix errors before applying changes.`
+                        };
+                    }
+                } catch (error) {
+                    gameLogger.warn('CERBERUS', '[WORKFLOW_ENFORCER] Syntax check error', {
+                        filePath: action.filePath,
+                        error: error.message
+                    });
+                    // Don't block on validation error, but log it
+                }
+            }
+        }
+        
         // Get rule check results
         const ruleCheck = this.rulesEnforcer.checkActionBeforeExecution(action, context);
         

@@ -100,8 +100,9 @@ class AIMonitorCore {
             this.errorRecovery.recordSuccess('rulesEnforcer');
             
             // Initialize workflow enforcer (needs rulesEnforcer and learningEngine)
+            // Note: powerShellSyntaxValidator will be set after it's initialized
             const AIWorkflowEnforcer = require('./AIWorkflowEnforcer');
-            this.workflowEnforcer = new AIWorkflowEnforcer(this.stateStore, this.rulesEnforcer, this.learningEngine);
+            this.workflowEnforcer = null; // Will be set after powerShellSyntaxValidator is initialized
             this.errorRecovery.recordSuccess('workflowEnforcer');
             
             // Connect ConsoleOverride to rules enforcer (so violations are learned from)
@@ -188,9 +189,31 @@ class AIMonitorCore {
             this.fixTracker,
             this.communicationInterface,
             this.solutionTemplateEngine,
-            this.codeChangeTracker
+            this.codeChangeTracker,
+            this.powerShellSyntaxValidator
         );
         this.errorRecovery.recordSuccess('collaborationInterface');
+        
+        // Initialize PowerShell syntax validator (needs issueDetector and learningEngine)
+        const PowerShellSyntaxValidator = require('./PowerShellSyntaxValidator');
+        this.powerShellSyntaxValidator = new PowerShellSyntaxValidator(
+            this.projectRoot,
+            this.stateStore,
+            this.issueDetector,
+            this.learningEngine
+        );
+        this.errorRecovery.recordSuccess('powerShellSyntaxValidator');
+        
+        // NOW initialize workflow enforcer (needs powerShellSyntaxValidator)
+        if (!this.workflowEnforcer) {
+            const AIWorkflowEnforcer = require('./AIWorkflowEnforcer');
+            this.workflowEnforcer = new AIWorkflowEnforcer(
+                this.stateStore,
+                this.rulesEnforcer,
+                this.learningEngine,
+                this.powerShellSyntaxValidator
+            );
+        }
         
         this.integrityChecker = new IntegrityChecker(
             projectRoot,
@@ -1238,6 +1261,11 @@ class AIMonitorCore {
         // Stop performance analysis (Phase 7)
         if (this.performanceAnalyzer && this.performanceAnalyzer.stopPeriodicAnalysis) {
             this.performanceAnalyzer.stopPeriodicAnalysis();
+        }
+        
+        // Stop PowerShell syntax validator
+        if (this.powerShellSyntaxValidator && this.powerShellSyntaxValidator.stop) {
+            this.powerShellSyntaxValidator.stop();
         }
         
         // Run pattern learner improvements (Phase 7) before shutdown
