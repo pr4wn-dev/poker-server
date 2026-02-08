@@ -371,54 +371,74 @@ class ProcessMonitor extends EventEmitter {
     
     /**
      * Check for interval leaks (intervals that were created but never cleared)
+     * Made safe/non-blocking - returns empty array on any error
      */
     checkIntervalLeaks() {
-        const allIntervals = this.stateStore.getState('process.intervals') || {};
-        const leaks = [];
-        
-        const now = Date.now();
-        const maxIntervalAge = 5 * 60 * 1000; // 5 minutes
-        
-        for (const [intervalId, info] of Object.entries(allIntervals)) {
-            if (!info.cleared) {
-                const age = now - info.createdAt;
-                
-                // If interval is old and not cleared, it's a leak
-                if (age > maxIntervalAge) {
-                    leaks.push({
-                        intervalId,
-                        component: info.component,
-                        description: info.description,
-                        age: age,
-                        createdAt: info.createdAt
-                    });
+        try {
+            // Use a timeout to prevent hanging
+            const startTime = Date.now();
+            const allIntervals = this.stateStore.getState('process.intervals') || {};
+            
+            // If getState took too long, abort
+            if (Date.now() - startTime > 100) {
+                getGameLogger().warn('CERBERUS', '[PROCESS_MONITOR] getState for intervals took too long, skipping check');
+                return [];
+            }
+            
+            const leaks = [];
+            const now = Date.now();
+            const maxIntervalAge = 5 * 60 * 1000; // 5 minutes
+            
+            for (const [intervalId, info] of Object.entries(allIntervals)) {
+                if (!info || !info.cleared) {
+                    const age = info && info.createdAt ? now - info.createdAt : 0;
+                    
+                    // If interval is old and not cleared, it's a leak
+                    if (age > maxIntervalAge) {
+                        leaks.push({
+                            intervalId,
+                            component: info.component || 'unknown',
+                            description: info.description || 'unknown',
+                            age: age,
+                            createdAt: info.createdAt || now
+                        });
+                    }
                 }
             }
-        }
-        
-        if (leaks.length > 0) {
-            const issue = {
-                type: 'INTERVAL_LEAK',
-                severity: 'high',
-                message: `${leaks.length} interval leak(s) detected - intervals created but never cleared`,
-                leaks: leaks
-            };
             
-            if (this.issueDetector) {
-                this.issueDetector.detectIssue({
+            if (leaks.length > 0) {
+                const issue = {
                     type: 'INTERVAL_LEAK',
                     severity: 'high',
-                    method: 'processMonitor',
-                    details: issue
+                    message: `${leaks.length} interval leak(s) detected - intervals created but never cleared`,
+                    leaks: leaks
+                };
+                
+                // Report asynchronously to avoid blocking
+                setImmediate(() => {
+                    if (this.issueDetector) {
+                        this.issueDetector.detectIssue({
+                            type: 'INTERVAL_LEAK',
+                            severity: 'high',
+                            method: 'processMonitor',
+                            details: issue
+                        });
+                    }
+                    
+                    this.emit('intervalLeak', issue);
+                    
+                    getGameLogger().warn('CERBERUS', '[PROCESS_MONITOR] Interval leak detected', issue);
                 });
             }
             
-            this.emit('intervalLeak', issue);
-            
-            getGameLogger().warn('CERBERUS', '[PROCESS_MONITOR] Interval leak detected', issue);
+            return leaks;
+        } catch (error) {
+            // If anything fails, return empty array - don't block
+            getGameLogger().warn('CERBERUS', '[PROCESS_MONITOR] checkIntervalLeaks error', {
+                error: error.message
+            });
+            return [];
         }
-        
-        return leaks;
     }
     
     /**
@@ -450,10 +470,18 @@ class ProcessMonitor extends EventEmitter {
             issues.push(`${zombieProcesses.length} zombie process(es) detected`);
         }
         
-        // Check interval leaks
-        const intervalLeaks = this.checkIntervalLeaks();
-        if (intervalLeaks.length > 0) {
-            issues.push(`${intervalLeaks.length} interval leak(s) detected`);
+        // Check interval leaks - make it safe/non-blocking
+        let intervalLeaks = [];
+        try {
+            intervalLeaks = this.checkIntervalLeaks();
+            if (intervalLeaks.length > 0) {
+                issues.push(`${intervalLeaks.length} interval leak(s) detected`);
+            }
+        } catch (error) {
+            // If checkIntervalLeaks fails, don't block the report
+            getGameLogger().warn('CERBERUS', '[PROCESS_MONITOR] checkIntervalLeaks failed', {
+                error: error.message
+            });
         }
         
         return {
