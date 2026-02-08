@@ -387,6 +387,10 @@ class AILiveStatistics {
     getChipAnomalies() {
         // Check for anomalies in chip movements
         const history = this.stateStore.getState('game.chips.history') || [];
+        // Ensure history is an array
+        if (!Array.isArray(history)) {
+            return [];
+        }
         const recent = history.slice(-20);
         
         const anomalies = [];
@@ -404,6 +408,10 @@ class AILiveStatistics {
      */
     getChipHistory(limit = 20) {
         const history = this.stateStore.getState('game.chips.history') || [];
+        // Ensure history is an array
+        if (!Array.isArray(history)) {
+            return [];
+        }
         return history.slice(-limit).reverse();
     }
     
@@ -439,6 +447,10 @@ class AILiveStatistics {
      */
     getRecentActivity(limit = 10) {
         const history = this.stateStore.getState('game.chips.history') || [];
+        // Ensure history is an array
+        if (!Array.isArray(history)) {
+            return [];
+        }
         return history.slice(-limit).reverse();
     }
     
