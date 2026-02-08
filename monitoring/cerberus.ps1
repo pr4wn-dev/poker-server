@@ -35,6 +35,15 @@ if (Test-Path $aiIntegrationPath) {
     $script:aiIntegrationEnabled = $false
 }
 
+# Source Show-CerberusStatistics function (AI-powered display)
+$showStatsPath = Join-Path $scriptDir "Show-CerberusStatistics.ps1"
+if (Test-Path $showStatsPath) {
+    . $showStatsPath
+    Write-Info "AI Statistics Display loaded"
+} else {
+    Write-Warning "Show-CerberusStatistics.ps1 not found at $showStatsPath - display may not work correctly"
+}
+
 # Colors for output (define FIRST before any use)
 function Write-Status { param($message, $color = "White") Write-Host "[$(Get-Date -Format 'HH:mm:ss')] $message" -ForegroundColor $color }
 function Write-Info { param($message) Write-Status $message "Cyan" }
@@ -5762,21 +5771,21 @@ while ($monitoringActive) {
         # BUT: Skip check if server was just restarted (within cooldown period)
         if (($now - $lastServerCheck).TotalSeconds -ge $serverCheckInterval) {
             if (-not $serverJustRestarted) {
-            if (-not (Test-ServerRunning)) {
-                # Don't write to console - update stats display instead
-                # Write-Warning "Server is offline. Attempting to restart..."
-                $restartResult = Start-ServerIfNeeded
-                if (-not $restartResult) {
+                if (-not (Test-ServerRunning)) {
                     # Don't write to console - update stats display instead
-                    # Write-Error "Failed to restart server. Will retry in $serverCheckInterval seconds..."
-                } else {
-                    # Re-check after restart attempt
-                    Start-Sleep -Seconds 2
-                    if (Test-ServerRunning) {
+                    # Write-Warning "Server is offline. Attempting to restart..."
+                    $restartResult = Start-ServerIfNeeded
+                    if (-not $restartResult) {
                         # Don't write to console - update stats display instead
-                        # Write-Success "Server restarted successfully!"
+                        # Write-Error "Failed to restart server. Will retry in $serverCheckInterval seconds..."
+                    } else {
+                        # Re-check after restart attempt
+                        Start-Sleep -Seconds 2
+                        if (Test-ServerRunning) {
+                            # Don't write to console - update stats display instead
+                            # Write-Success "Server restarted successfully!"
+                        }
                     }
-                }
                 }
             } else {
                 # Server was just restarted - skip health check during cooldown
@@ -5861,4 +5870,3 @@ while ($monitoringActive) {
 }
 
 Write-Info "Monitoring stopped"
-}
