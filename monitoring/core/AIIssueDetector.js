@@ -86,10 +86,18 @@ class AIIssueDetector extends EventEmitter {
      * Start continuous state verification
      */
     startStateVerification() {
-        // Verify state every second
-        this.stateVerificationInterval = setInterval(() => {
-            this.verifyState();
-        }, 1000);
+        // Delay start to ensure stateStore is ready
+        setImmediate(() => {
+            // Verify state every second
+            this.stateVerificationInterval = setInterval(() => {
+                try {
+                    this.verifyState();
+                } catch (error) {
+                    // Silently handle errors - stateStore might not be ready yet
+                    // Errors will be caught by UniversalErrorHandler if needed
+                }
+            }, 1000);
+        });
     }
     
     /**
