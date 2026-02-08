@@ -13,6 +13,45 @@ This document describes how the AI (you) and the Learning System (Cerberus) work
 
 ## 🔄 Core Workflow
 
+### **0. Search Online First (NEW - Permanent Learning)**
+
+**CRITICAL**: Before exhaustive local debugging, **search online for solutions**. The learning system is a **permanent learner** - it should store web-sourced solutions, not just runtime fixes.
+
+**When to Search**:
+- When stuck on syntax errors (PowerShell, JavaScript, etc.)
+- When encountering unfamiliar error messages
+- When local debugging loops without progress
+- When official documentation might have answers
+
+**How to Search**:
+1. Use web search with specific error messages
+2. Check official documentation (Microsoft Learn, MDN, etc.)
+3. Look for Stack Overflow solutions
+4. Find GitHub issues with similar problems
+
+**What to Store in Learning System**:
+- Official documentation links and key syntax rules
+- Proven solutions from authoritative sources
+- Search terms that worked well
+- Refined search strategies over time
+
+**Example**:
+```javascript
+// Instead of looping locally, search first:
+// "PowerShell try catch missing closing brace"
+// Found: Microsoft Learn documentation
+// Store: Official syntax rules + proven fixes
+// Result: Permanent knowledge for future similar issues
+```
+
+**The Symbiotic Principle**:
+- **You search** → Find authoritative solutions
+- **Learning system stores** → Permanent knowledge base
+- **Next time** → Faster resolution using stored knowledge
+- **System improves** → Better search terms, better results
+
+---
+
 ### **1. Before AI Takes Action**
 
 When you're about to fix an issue, call `beforeAIAction()`:
