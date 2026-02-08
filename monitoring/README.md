@@ -213,6 +213,8 @@ $status.verification.active       # Is verification running?
 4. **`investigation.active`** / **`investigation.timeRemaining`** - Investigation phase:
    - If `active: true` - Monitor is gathering related issues
    - Check `timeRemaining` to see how long until pause
+   - **Completion Check**: Monitor uses script variables as primary source of truth, with status file as fallback
+   - **Safety Check**: Investigation automatically completes if running 2x timeout (prevents stuck investigations)
 
 5. **`verification.active`** / **`verification.timeRemaining`** - Verification phase:
    - If `active: true` - Monitor is verifying a fix
@@ -381,7 +383,11 @@ Write-Host "Issue Detector Status: $($status.issueDetectorStatus)"
 - If `debuggerBreakStatus = "failed_unity_not_running"`: Monitor will auto-restart Unity, but you can verify Unity path in config
 - If `debuggerBreakStatus = "failed_no_tables"`: Unity not in table room - Monitor will wait, but you can check if Unity should join table
 - If `issueDetectorStatus = "failed"`: Check `lastIssueDetectorError` - fix the root cause (file permissions, Node.js, etc.)
-- If `investigation.active = true` but stuck: Check `investigation.timeRemaining` - should complete automatically
+- If `investigation.active = true` but stuck: 
+  - Check `investigation.timeRemaining` - should complete automatically when <= 0
+  - Monitor uses script variables as primary source (more reliable than status file)
+  - Safety check forces completion if investigation runs 2x timeout (30s for 15s timeout)
+  - Check `logs/monitor-diagnostics.log` for detailed completion check diagnostics
 
 **Fix automatically**:
 - Don't ask user to check things
@@ -669,6 +675,9 @@ Monitor uses `monitoring/monitor-config.json` for all settings. Edit this file t
    - Set `timeoutSeconds: 0` to pause immediately (skip investigation)
    - During investigation, Monitor groups related issues together
    - Investigation completes → Monitor pauses debugger and shows summary
+   - **Completion Check**: Uses script variables as primary source, status file as fallback
+   - **Safety Check**: Automatically completes if investigation runs 2x timeout (prevents stuck investigations)
+   - **Elapsed Time Check**: Primary completion trigger (more reliable than status file `timeRemaining`)
 
 ---
 
@@ -1747,6 +1756,12 @@ Edit `monitoring/monitor.ps1`:
 - Groups related issues by pattern, tableId, stack trace, keywords
 - Shows investigation summary when complete
 - Queues unrelated issues until current investigation is resolved
+- **Robust Completion Check** (2026-02-07):
+  - Uses script variables as primary source of truth (more reliable)
+  - Falls back to status file if script variables not set
+  - Elapsed time calculation is primary completion trigger
+  - Safety check forces completion if investigation runs 2x timeout
+  - Works even if status file read fails
 
 ### Fix Verification System
 - Monitor verifies fixes actually work before moving on
@@ -1767,8 +1782,27 @@ Edit `monitoring/monitor.ps1`:
 - Unity receives event and calls `Debug.Break()` correctly
 - More reliable than log marker approach
 
+### Investigation Completion Check Improvements (2026-02-07)
+- **Prioritizes Script Variables**: Completion check uses script variables as primary source, not status file
+- **Elapsed Time Primary**: Elapsed time calculation is the primary completion trigger (more reliable)
+- **Status File Fallback**: Falls back to status file if script variables not set
+- **Safety Check**: Automatically completes if investigation runs 2x timeout (30s for 15s timeout)
+- **Robust Error Handling**: Works even if status file read fails
+- **Better Diagnostics**: All completion check logic logged to `logs/monitor-diagnostics.log`
+- **Prevents Stuck Investigations**: Multiple completion triggers ensure investigation always completes
+
 ---
 
 **Last Updated**: 2026-02-07
-**Version**: 2.0.0
-**Status**: Complete with Investigation Phase, Fix Verification System, Fix Attempt Tracking, and All Previous Features
+**Version**: 2.1.0
+**Status**: Complete with Investigation Phase, Fix Verification System, Fix Attempt Tracking, Robust Completion Checks, and All Previous Features
+
+### Recent Fixes (2026-02-07)
+
+**Investigation Completion Check Fixes**:
+- Fixed investigation getting stuck by prioritizing script variables over status file
+- Added safety check to force completion if investigation runs 2x timeout
+- Made elapsed time calculation the primary completion trigger
+- Improved error handling for status file reads
+- Added comprehensive diagnostic logging to `logs/monitor-diagnostics.log`
+- Completion check now works even if status file read fails
