@@ -160,7 +160,7 @@ class AILiveStatistics {
                 startTime: investigation.startTime,
                 timeout: investigation.timeout || 15,
                 history: investigation.history || [],
-                recentHistory: (investigation.history || []).slice(-5)
+                recentHistory: (Array.isArray(investigation.history) ? investigation.history.slice(-5) : [])
             },
             verification: {
                 status: verification.status || 'idle',
@@ -272,7 +272,7 @@ class AILiveStatistics {
             patternsLearned: learning.patterns?.size || 0,
             knowledgeRules: learning.knowledge?.length || 0,
             improvements: learning.improvements?.length || 0,
-            recentImprovements: (learning.improvements || []).slice(-5),
+            recentImprovements: (Array.isArray(learning.improvements) ? learning.improvements.slice(-5) : []),
             fixAttempts: {
                 total: Object.keys(learning.fixAttempts || {}).length,
                 byIssue: this.getFixAttemptsByIssue()
