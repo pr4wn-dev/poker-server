@@ -446,65 +446,91 @@ class ProcessMonitor extends EventEmitter {
      * Returns cached data immediately - doesn't block on process enumeration
      */
     getProcessReport() {
-        // Return cached data - don't block on process enumeration
-        const currentProcesses = Array.from(this.processSnapshots.values());
-        const processCount = currentProcesses.length;
-        
-        // Calculate statistics
-        const totalMemory = currentProcesses.reduce((sum, p) => sum + (p.memory || 0), 0);
-        const avgMemory = processCount > 0 ? totalMemory / processCount : 0;
-        const maxMemory = currentProcesses.length > 0 ? Math.max(...currentProcesses.map(p => p.memory || 0)) : 0;
-        
-        // Check for issues
-        const issues = [];
-        if (processCount > this.maxProcesses) {
-            issues.push(`Too many processes: ${processCount} (max: ${this.maxProcesses})`);
-        }
-        
-        const zombieProcesses = currentProcesses.filter(p => {
-            const age = Date.now() - (p.firstSeen || Date.now());
-            return age > this.maxProcessAge;
-        });
-        
-        if (zombieProcesses.length > 0) {
-            issues.push(`${zombieProcesses.length} zombie process(es) detected`);
-        }
-        
-        // Check interval leaks - make it safe/non-blocking
-        let intervalLeaks = [];
         try {
-            intervalLeaks = this.checkIntervalLeaks();
-            if (intervalLeaks.length > 0) {
-                issues.push(`${intervalLeaks.length} interval leak(s) detected`);
+            // Return cached data - don't block on process enumeration
+            // Use try-catch around Map operations in case they somehow block
+            let currentProcesses = [];
+            try {
+                currentProcesses = Array.from(this.processSnapshots.values());
+            } catch (error) {
+                getGameLogger().warn('CERBERUS', '[PROCESS_MONITOR] Error getting process snapshots', {
+                    error: error.message
+                });
             }
+            const processCount = currentProcesses.length;
+            
+            // Calculate statistics
+            const totalMemory = currentProcesses.reduce((sum, p) => sum + (p.memory || 0), 0);
+            const avgMemory = processCount > 0 ? totalMemory / processCount : 0;
+            const maxMemory = currentProcesses.length > 0 ? Math.max(...currentProcesses.map(p => p.memory || 0)) : 0;
+            
+            // Check for issues
+            const issues = [];
+            if (processCount > this.maxProcesses) {
+                issues.push(`Too many processes: ${processCount} (max: ${this.maxProcesses})`);
+            }
+            
+            const zombieProcesses = currentProcesses.filter(p => {
+                const age = Date.now() - (p.firstSeen || Date.now());
+                return age > this.maxProcessAge;
+            });
+            
+            if (zombieProcesses.length > 0) {
+                issues.push(`${zombieProcesses.length} zombie process(es) detected`);
+            }
+            
+            // Check interval leaks - make it safe/non-blocking
+            let intervalLeaks = [];
+            try {
+                intervalLeaks = this.checkIntervalLeaks();
+                if (intervalLeaks.length > 0) {
+                    issues.push(`${intervalLeaks.length} interval leak(s) detected`);
+                }
+            } catch (error) {
+                // If checkIntervalLeaks fails, don't block the report
+                getGameLogger().warn('CERBERUS', '[PROCESS_MONITOR] checkIntervalLeaks failed', {
+                    error: error.message
+                });
+            }
+            
+            return {
+                timestamp: Date.now(),
+                processCount,
+                totalMemory: Math.round(totalMemory / 1024 / 1024) + 'MB',
+                avgMemory: Math.round(avgMemory / 1024 / 1024) + 'MB',
+                maxMemory: Math.round(maxMemory / 1024 / 1024) + 'MB',
+                processes: currentProcesses.map(p => ({
+                    pid: p.pid || 'unknown',
+                    memory: Math.round((p.memory || 0) / 1024 / 1024) + 'MB',
+                    age: Math.round((Date.now() - (p.firstSeen || Date.now())) / 1000 / 60) + ' minutes',
+                    command: p.command || 'unknown'
+                })),
+                issues,
+                intervalLeaks: intervalLeaks.length,
+                history: {
+                    recent: this.processHistory.slice(-10).map(h => ({
+                        timestamp: h.timestamp,
+                        count: h.count
+                    }))
+                }
+            };
         } catch (error) {
-            // If checkIntervalLeaks fails, don't block the report
-            getGameLogger().warn('CERBERUS', '[PROCESS_MONITOR] checkIntervalLeaks failed', {
+            // If anything fails, return minimal report - don't block
+            getGameLogger().warn('CERBERUS', '[PROCESS_MONITOR] getProcessReport error', {
                 error: error.message
             });
+            return {
+                timestamp: Date.now(),
+                processCount: 0,
+                totalMemory: '0MB',
+                avgMemory: '0MB',
+                maxMemory: '0MB',
+                processes: [],
+                issues: ['Error generating report'],
+                intervalLeaks: 0,
+                history: { recent: [] }
+            };
         }
-        
-        return {
-            timestamp: Date.now(),
-            processCount,
-            totalMemory: Math.round(totalMemory / 1024 / 1024) + 'MB',
-            avgMemory: Math.round(avgMemory / 1024 / 1024) + 'MB',
-            maxMemory: Math.round(maxMemory / 1024 / 1024) + 'MB',
-            processes: currentProcesses.map(p => ({
-                pid: p.pid || 'unknown',
-                memory: Math.round((p.memory || 0) / 1024 / 1024) + 'MB',
-                age: Math.round((Date.now() - (p.firstSeen || Date.now())) / 1000 / 60) + ' minutes',
-                command: p.command || 'unknown'
-            })),
-            issues,
-            intervalLeaks: intervalLeaks.length,
-            history: {
-                recent: this.processHistory.slice(-10).map(h => ({
-                    timestamp: h.timestamp,
-                    count: h.count
-                }))
-            }
-        };
     }
     
     /**
