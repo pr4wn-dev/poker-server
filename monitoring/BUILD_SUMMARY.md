@@ -28,6 +28,23 @@ A comprehensive AI-first system built FOR the AI, BY the AI. Cerberus sees every
 - CPU usage tracking
 - Performance alerts
 
+### **NEW: Rules Enforcement & Self-Learning** ✅
+- **AIRulesEnforcer.js** - Rules enforcement and self-learning
+- Tracks 18 critical Cerberus-specific rules
+- Records violations with context
+- Learns from violations automatically
+- Auto-refines rules based on patterns
+- Predicts violations before they occur
+- Learning confidence tracking (anti-masking safeguards)
+
+### **NEW: Automated Console Enforcement** ✅
+- **ConsoleOverride.js** - Automated console.* enforcement
+- Runtime override (intercepts console.* and routes to gameLogger)
+- Pre-commit hooks (blocks commits with violations)
+- ESLint rules (fails on console.* usage)
+- Integration tests (verifies no violations exist)
+- Learning integration (every violation advances learning)
+
 ---
 
 ## 📦 Original Core Components (All Complete ✅)
