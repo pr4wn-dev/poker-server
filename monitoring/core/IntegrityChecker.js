@@ -177,7 +177,11 @@ class IntegrityChecker extends EventEmitter {
             codeIntegrity: this.checkCodeIntegrity(),
             loggingIntegrity: this.checkLoggingIntegrity(),
             integrationIntegrity: this.checkIntegrationIntegrity(),
-            dependencyIntegrity: this.checkDependencyIntegrity()
+            dependencyIntegrity: this.checkDependencyIntegrity(),
+            serverIntegrity: this.checkServerIntegrity(),
+            unityIntegrity: this.checkUnityIntegrity(),
+            apiIntegrity: this.checkAPIIntegrity(),
+            socketIntegrity: this.checkSocketIntegrity()
         };
         
         // Calculate overall health
@@ -820,9 +824,18 @@ class IntegrityChecker extends EventEmitter {
             results.unityIntegrity,
             results.apiIntegrity,
             results.socketIntegrity
-        ];
+        ].filter(c => c !== undefined && c !== null); // Filter out undefined/null checks
         
-        const passedChecks = checks.filter(c => c.passed).length;
+        if (checks.length === 0) {
+            return {
+                percent: 0,
+                passed: 0,
+                total: 0,
+                status: 'unhealthy'
+            };
+        }
+        
+        const passedChecks = checks.filter(c => c && c.passed).length;
         const totalChecks = checks.length;
         const healthPercent = (passedChecks / totalChecks) * 100;
         

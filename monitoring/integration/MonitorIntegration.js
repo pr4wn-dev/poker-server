@@ -251,26 +251,48 @@ class MonitorIntegration {
     detectIssue(logLine) {
         try {
             // Process log line through AI log processor
-            const processed = this.aiCore.logProcessor.processLogLine(logLine);
+            // This parses the line and emits events if it's an error
+            let detectedIssue = null;
+            let detectionMethod = 'pattern';
+            let confidence = 0.5;
             
-            // Detect issue using AI detector
-            const detected = this.aiCore.issueDetector.detectFromLogLine(processed);
+            // Set up one-time listener for error detection
+            const errorHandler = (parsedLog) => {
+                // Try to detect issue from parsed log
+                const detected = this.aiCore.issueDetector.detectFromLog(parsedLog);
+                if (detected && detected.issue) {
+                    detectedIssue = detected.issue;
+                    detectionMethod = detected.method || 'pattern';
+                    confidence = detected.confidence || 0.8;
+                }
+            };
             
-            if (detected && detected.issue) {
+            // Listen for error events
+            this.aiCore.logProcessor.once('error', errorHandler);
+            
+            // Process the line (this will parse it and emit events)
+            this.aiCore.logProcessor.processLine(logLine);
+            
+            // Remove listener after processing
+            this.aiCore.logProcessor.removeListener('error', errorHandler);
+            
+            // If issue was detected, return it
+            if (detectedIssue) {
                 return {
                     issue: {
-                        type: detected.issue.type,
-                        severity: detected.issue.severity,
-                        source: detected.issue.source || 'log',
-                        message: detected.issue.message || logLine,
-                        confidence: detected.confidence || 0.8,
-                        method: detected.method || 'pattern'
+                        type: detectedIssue.type,
+                        severity: detectedIssue.severity,
+                        source: detectedIssue.source || 'log',
+                        message: detectedIssue.message || logLine,
+                        confidence: confidence,
+                        method: detectionMethod
                     },
-                    confidence: detected.confidence || 0.8,
-                    method: detected.method || 'pattern'
+                    confidence: confidence,
+                    method: detectionMethod
                 };
             }
             
+            // No issue detected by AI - return null (fallback to pattern matching in monitor.ps1)
             return null;
         } catch (error) {
             console.error('[Monitor Integration] Detect issue error:', error);

@@ -426,22 +426,43 @@ class AIDecisionEngine extends EventEmitter {
      * Check investigation state
      */
     checkInvestigationState(event) {
-        const investigation = this.stateStore.getState('monitoring.investigation');
+        // Prevent infinite loops - don't update state in response to state changes
+        if (this._checkingState) {
+            return;
+        }
         
-        // Check if investigation should complete
-        if (investigation.status === 'active' && investigation.startTime) {
-            const elapsed = (Date.now() - investigation.startTime) / 1000;
-            const timeout = investigation.timeout || 15;
+        this._checkingState = true;
+        
+        try {
+            const investigation = this.stateStore.getState('monitoring.investigation');
             
-            if (elapsed >= timeout) {
-                // Investigation complete
-                this.completeInvestigation();
-            } else {
-                // Update progress
-                const progress = (elapsed / timeout) * 100;
-                this.stateStore.updateState('monitoring.investigation.progress', progress);
-                this.stateStore.updateState('monitoring.investigation.timeRemaining', timeout - elapsed);
+            // Check if investigation should complete
+            if (investigation.status === 'active' && investigation.startTime) {
+                const elapsed = (Date.now() - investigation.startTime) / 1000;
+                const timeout = investigation.timeout || 15;
+                
+                if (elapsed >= timeout) {
+                    // Investigation complete
+                    this.completeInvestigation();
+                } else {
+                    // Only update if values actually changed to prevent loops
+                    const currentProgress = investigation.progress || 0;
+                    const currentTimeRemaining = investigation.timeRemaining || timeout;
+                    const newProgress = (elapsed / timeout) * 100;
+                    const newTimeRemaining = timeout - elapsed;
+                    
+                    // Only update if changed significantly (avoid micro-updates causing loops)
+                    if (Math.abs(currentProgress - newProgress) > 1 || Math.abs(currentTimeRemaining - newTimeRemaining) > 0.5) {
+                        // Use setTimeout to break the synchronous update chain
+                        setTimeout(() => {
+                            this.stateStore.updateState('monitoring.investigation.progress', newProgress);
+                            this.stateStore.updateState('monitoring.investigation.timeRemaining', newTimeRemaining);
+                        }, 0);
+                    }
+                }
             }
+        } finally {
+            this._checkingState = false;
         }
     }
     
