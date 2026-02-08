@@ -3367,7 +3367,16 @@ while ($monitoringActive) {
         
         # CRITICAL FIX: Check for focused group and start investigation if needed
         # Check EVERY loop iteration (not just every 5 seconds) to catch issues immediately
-        if (-not $script:isInvestigating) {
+        # BUT: Don't start immediately after completion - wait 5 seconds cooldown
+        $canStartNewInvestigation = $true
+        if ($script:lastInvestigationComplete) {
+            $timeSinceCompletion = ((Get-Date) - $script:lastInvestigationComplete).TotalSeconds
+            if ($timeSinceCompletion -lt 5) {
+                $canStartNewInvestigation = $false
+            }
+        }
+        
+        if (-not $script:isInvestigating -and $canStartNewInvestigation) {
             $pendingInfo = Get-PendingIssuesInfo
             # Check if there's actually a focused group in the file (even if Get-PendingIssuesInfo says InFocusMode=false)
             $hasFocusedGroup = $false
