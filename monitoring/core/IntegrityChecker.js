@@ -27,6 +27,54 @@ class IntegrityChecker extends EventEmitter {
         this.checkResults = null;
         this.checkInterval = 300000; // Check every 5 minutes
         
+        // Unity client path (if accessible)
+        this.unityClientPath = path.join(path.dirname(projectRoot), 'poker-client-unity');
+        this.unityClientAccessible = fs.existsSync(this.unityClientPath);
+        
+        // Server files that need to integrate with AI system
+        this.serverFiles = {
+            'src/server.js': {
+                type: 'module',
+                requiredLogging: true,
+                requiredIntegration: ['GameLogger', 'SocketHandler'],
+                criticalOperations: ['server_start', 'server_stop', 'health_check']
+            },
+            'src/sockets/SocketHandler.js': {
+                type: 'module',
+                requiredLogging: true,
+                requiredIntegration: ['GameLogger', 'UnityLogHandler'],
+                criticalOperations: ['socket_connect', 'socket_disconnect', 'player_action', 'table_state']
+            },
+            'src/game/Table.js': {
+                type: 'module',
+                requiredLogging: true,
+                requiredIntegration: ['GameLogger'],
+                criticalOperations: ['bet', 'call', 'raise', 'fold', 'check', 'allin', 'pot_update', 'phase_change']
+            },
+            'src/game/GameManager.js': {
+                type: 'module',
+                requiredLogging: true,
+                requiredIntegration: ['GameLogger'],
+                criticalOperations: ['table_create', 'table_join', 'table_leave']
+            },
+            'src/utils/GameLogger.js': {
+                type: 'module',
+                requiredLogging: false, // This IS the logger
+                requiredIntegration: [],
+                criticalOperations: []
+            }
+        };
+        
+        // Unity client files (if accessible)
+        this.unityFiles = {
+            'Assets/Scripts/GameController.cs': {
+                type: 'csharp',
+                requiredLogging: true,
+                requiredIntegration: ['Socket.IO', 'State Reporting'],
+                criticalOperations: ['HandleTableStateUpdated', 'PauseGame', 'ResumeGame']
+            }
+        };
+        
         // Required files and their expected exports/functions
         this.requiredFiles = {
             // Core AI files
@@ -513,20 +561,32 @@ class IntegrityChecker extends EventEmitter {
             // Collect all issues
             const allIssues = [];
             
-            if (results.fileIntegrity.issues.length > 0) {
+            if (results.fileIntegrity && results.fileIntegrity.issues.length > 0) {
                 allIssues.push(...results.fileIntegrity.issues.map(i => `File Integrity: ${i}`));
             }
-            if (results.codeIntegrity.issues.length > 0) {
+            if (results.codeIntegrity && results.codeIntegrity.issues.length > 0) {
                 allIssues.push(...results.codeIntegrity.issues.map(i => `Code Integrity: ${i}`));
             }
-            if (results.loggingIntegrity.issues.length > 0) {
+            if (results.loggingIntegrity && results.loggingIntegrity.issues.length > 0) {
                 allIssues.push(...results.loggingIntegrity.issues.map(i => `Logging Integrity: ${i}`));
             }
-            if (results.integrationIntegrity.issues.length > 0) {
+            if (results.integrationIntegrity && results.integrationIntegrity.issues.length > 0) {
                 allIssues.push(...results.integrationIntegrity.issues.map(i => `Integration Integrity: ${i}`));
             }
-            if (results.dependencyIntegrity.issues.length > 0) {
+            if (results.dependencyIntegrity && results.dependencyIntegrity.issues.length > 0) {
                 allIssues.push(...results.dependencyIntegrity.issues.map(i => `Dependency Integrity: ${i}`));
+            }
+            if (results.serverIntegrity && results.serverIntegrity.issues.length > 0) {
+                allIssues.push(...results.serverIntegrity.issues.map(i => `Server Integrity: ${i}`));
+            }
+            if (results.unityIntegrity && results.unityIntegrity.issues.length > 0) {
+                allIssues.push(...results.unityIntegrity.issues.map(i => `Unity Integrity: ${i}`));
+            }
+            if (results.apiIntegrity && results.apiIntegrity.issues.length > 0) {
+                allIssues.push(...results.apiIntegrity.issues.map(i => `API Integrity: ${i}`));
+            }
+            if (results.socketIntegrity && results.socketIntegrity.issues.length > 0) {
+                allIssues.push(...results.socketIntegrity.issues.map(i => `Socket Integrity: ${i}`));
             }
             
             if (allIssues.length > 0) {
