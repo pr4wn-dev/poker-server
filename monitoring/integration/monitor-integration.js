@@ -18,13 +18,20 @@ const integration = new MonitorIntegration(projectRoot, { startSyncLoop: false }
 const command = process.argv[2];
 const args = process.argv.slice(3);
 
+// Set a global timeout to force exit if command takes too long (5 seconds max)
+const globalTimeout = setTimeout(() => {
+    console.error('Error: Command timed out');
+    if (integration && integration.aiCore) {
+        try {
+            integration.aiCore.destroy();
+        } catch (e) {
+            // Ignore cleanup errors
+        }
+    }
+    process.exit(1);
+}, 5000);
+
 async function handleCommand() {
-    // Set a timeout to force exit if command takes too long (5 seconds max)
-    const timeout = setTimeout(() => {
-        console.error('Error: Command timed out');
-        process.exit(1);
-    }, 5000);
-    
     try {
         switch (command) {
             case 'should-start-investigation':
@@ -44,12 +51,8 @@ async function handleCommand() {
                 
             case 'get-investigation-status':
                 const investigationStatus = integration.getInvestigationStatus();
-                console.log(JSON.stringify(investigationStatus));
-                // Force cleanup and exit immediately
-                if (integration && integration.aiCore) {
-                    integration.aiCore.destroy();
-                }
-                process.exit(0);
+                // Use stdout.write to ensure output is flushed
+                process.stdout.write(JSON.stringify(investigationStatus) + '\n');
                 break;
                 
             case 'start-investigation':
