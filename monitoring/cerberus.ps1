@@ -5871,4 +5871,3 @@ while ($monitoringActive) {
 
 Write-Info "Monitoring stopped"
 }
-}
