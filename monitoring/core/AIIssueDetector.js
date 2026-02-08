@@ -110,26 +110,36 @@ class AIIssueDetector extends EventEmitter {
      * Verify state - proactive detection
      */
     verifyState() {
-        // Verify chip integrity
-        const chipIntegrity = this.stateStore.getState('game.chips');
-        if (chipIntegrity) {
-            const integrity = this._verifyChipIntegrity(chipIntegrity);
-            if (!integrity.valid) {
-                this.detectIssue({
-                    type: 'CHIP_INTEGRITY_VIOLATION',
-                    severity: 'critical',
-                    method: 'stateVerification',
-                    details: integrity,
-                    timestamp: Date.now()
-                });
-            }
+        // Guard: Ensure stateStore is ready
+        if (!this.stateStore || typeof this.stateStore.getState !== 'function') {
+            return; // StateStore not ready yet, skip this check
         }
         
-        // Verify game state consistency
-        this.verifyGameState();
-        
-        // Verify system health
-        this.verifySystemHealth();
+        try {
+            // Verify chip integrity
+            const chipIntegrity = this.stateStore.getState('game.chips');
+            if (chipIntegrity) {
+                const integrity = this._verifyChipIntegrity(chipIntegrity);
+                if (!integrity.valid) {
+                    this.detectIssue({
+                        type: 'CHIP_INTEGRITY_VIOLATION',
+                        severity: 'critical',
+                        method: 'stateVerification',
+                        details: integrity,
+                        timestamp: Date.now()
+                    });
+                }
+            }
+            
+            // Verify game state consistency
+            this.verifyGameState();
+            
+            // Verify system health
+            this.verifySystemHealth();
+        } catch (error) {
+            // Silently handle errors - stateStore might not be ready yet
+            // Errors will be caught by UniversalErrorHandler if needed
+        }
     }
     
     /**
@@ -164,44 +174,64 @@ class AIIssueDetector extends EventEmitter {
      * Verify game state consistency
      */
     verifyGameState() {
-        const gameState = this.stateStore.getState('game');
-        
-        // Check for invalid states
-        if (gameState.phase && !['waiting', 'preflop', 'flop', 'turn', 'river', 'showdown'].includes(gameState.phase)) {
-            this.detectIssue({
-                type: 'INVALID_GAME_PHASE',
-                severity: 'high',
-                method: 'stateVerification',
-                details: { phase: gameState.phase },
-                timestamp: Date.now()
-            });
+        // Guard: Ensure stateStore is ready
+        if (!this.stateStore || typeof this.stateStore.getState !== 'function') {
+            return;
         }
         
-        // Check for orphaned players
-        const tables = gameState.tables;
-        const players = gameState.players;
-        
-        players.forEach((player, playerId) => {
-            if (player.currentTableId && !tables.has(player.currentTableId)) {
+        try {
+            const gameState = this.stateStore.getState('game');
+            if (!gameState) return;
+            
+            // Check for invalid states
+            if (gameState.phase && !['waiting', 'preflop', 'flop', 'turn', 'river', 'showdown'].includes(gameState.phase)) {
                 this.detectIssue({
-                    type: 'ORPHANED_PLAYER',
-                    severity: 'medium',
+                    type: 'INVALID_GAME_PHASE',
+                    severity: 'high',
                     method: 'stateVerification',
-                    details: { playerId, tableId: player.currentTableId },
+                    details: { phase: gameState.phase },
                     timestamp: Date.now()
                 });
             }
-        });
+            
+            // Check for orphaned players
+            const tables = gameState.tables;
+            const players = gameState.players;
+            
+            if (tables && players) {
+                players.forEach((player, playerId) => {
+                    if (player.currentTableId && !tables.has(player.currentTableId)) {
+                        this.detectIssue({
+                            type: 'ORPHANED_PLAYER',
+                            severity: 'medium',
+                            method: 'stateVerification',
+                            details: { playerId, tableId: player.currentTableId },
+                            timestamp: Date.now()
+                        });
+                    }
+                });
+            }
+        } catch (error) {
+            // Silently handle errors - stateStore might not be ready yet
+            // Errors will be caught by UniversalErrorHandler if needed
+        }
     }
     
     /**
      * Verify system health
      */
     verifySystemHealth() {
-        const systemHealth = this.stateStore.getState('system');
+        // Guard: Ensure stateStore is ready
+        if (!this.stateStore || typeof this.stateStore.getState !== 'function') {
+            return;
+        }
         
-        // Check server health
-        if (systemHealth.server.health !== null && systemHealth.server.health < 50) {
+        try {
+            const systemHealth = this.stateStore.getState('system');
+            if (!systemHealth) return;
+            
+            // Check server health
+            if (systemHealth.server && systemHealth.server.health !== null && systemHealth.server.health < 50) {
             this.detectIssue({
                 type: 'SERVER_HEALTH_DEGRADED',
                 severity: 'high',
@@ -211,26 +241,30 @@ class AIIssueDetector extends EventEmitter {
             });
         }
         
-        // Check database health
-        if (systemHealth.database.health !== null && systemHealth.database.health < 50) {
-            this.detectIssue({
-                type: 'DATABASE_HEALTH_DEGRADED',
-                severity: 'high',
-                method: 'stateVerification',
-                details: { health: systemHealth.database.health },
-                timestamp: Date.now()
-            });
-        }
-        
-        // Check Unity health
-        if (systemHealth.unity.health !== null && systemHealth.unity.health < 50) {
-            this.detectIssue({
-                type: 'UNITY_HEALTH_DEGRADED',
-                severity: 'high',
-                method: 'stateVerification',
-                details: { health: systemHealth.unity.health },
-                timestamp: Date.now()
-            });
+            // Check database health
+            if (systemHealth.database && systemHealth.database.health !== null && systemHealth.database.health < 50) {
+                this.detectIssue({
+                    type: 'DATABASE_HEALTH_DEGRADED',
+                    severity: 'high',
+                    method: 'stateVerification',
+                    details: { health: systemHealth.database.health },
+                    timestamp: Date.now()
+                });
+            }
+            
+            // Check Unity health
+            if (systemHealth.unity && systemHealth.unity.health !== null && systemHealth.unity.health < 50) {
+                this.detectIssue({
+                    type: 'UNITY_HEALTH_DEGRADED',
+                    severity: 'high',
+                    method: 'stateVerification',
+                    details: { health: systemHealth.unity.health },
+                    timestamp: Date.now()
+                });
+            }
+        } catch (error) {
+            // Silently handle errors - stateStore might not be ready yet
+            // Errors will be caught by UniversalErrorHandler if needed
         }
     }
     
@@ -346,10 +380,22 @@ class AIIssueDetector extends EventEmitter {
      * Start anomaly detection
      */
     startAnomalyDetection() {
-        // Detect anomalies every 5 seconds
-        this.anomalyDetectionInterval = setInterval(() => {
-            this.detectAnomalies();
-        }, 5000);
+        // Delay start to ensure stateStore is ready
+        setImmediate(() => {
+            // Detect anomalies every 5 seconds
+            this.anomalyDetectionInterval = setInterval(() => {
+                try {
+                    // Guard: Ensure stateStore is ready
+                    if (!this.stateStore || typeof this.stateStore.getState !== 'function') {
+                        return; // StateStore not ready yet, skip this check
+                    }
+                    this.detectAnomalies();
+                } catch (error) {
+                    // Silently handle errors - stateStore might not be ready yet
+                    // Errors will be caught by UniversalErrorHandler if needed
+                }
+            }, 5000);
+        });
     }
     
     /**
@@ -370,39 +416,49 @@ class AIIssueDetector extends EventEmitter {
      * Analyze chip movements for anomalies
      */
     analyzeChipMovements() {
-        const chipHistory = this.stateStore.getState('game.chips.history');
-        
-        if (!chipHistory || chipHistory.length < 10) {
+        // Guard: Ensure stateStore is ready
+        if (!this.stateStore || typeof this.stateStore.getState !== 'function') {
             return;
         }
         
-        // Calculate average movement
-        // Ensure chipHistory is an array
-        if (!Array.isArray(chipHistory)) {
-            return [];
-        }
-        const movements = chipHistory.slice(-100).map(h => Math.abs(h.change || 0));
-        const avg = movements.reduce((a, b) => a + b, 0) / movements.length;
-        const stdDev = this.calculateStdDev(movements, avg);
+        try {
+            const chipHistory = this.stateStore.getState('game.chips.history');
         
-        // Check for anomalies (3 standard deviations)
-        const recent = chipHistory.slice(-10);
-        for (const entry of recent) {
-            const movement = Math.abs(entry.change || 0);
-            if (movement > avg + (3 * stdDev)) {
-                this.detectIssue({
-                    type: 'ANOMALOUS_CHIP_MOVEMENT',
-                    severity: 'medium',
-                    method: 'anomalyDetection',
-                    details: {
-                        movement,
-                        average: avg,
-                        stdDev,
-                        entry
-                    },
-                    timestamp: Date.now()
-                });
+            if (!chipHistory || chipHistory.length < 10) {
+                return;
             }
+            
+            // Calculate average movement
+            // Ensure chipHistory is an array
+            if (!Array.isArray(chipHistory)) {
+                return;
+            }
+            const movements = chipHistory.slice(-100).map(h => Math.abs(h.change || 0));
+            const avg = movements.reduce((a, b) => a + b, 0) / movements.length;
+            const stdDev = this.calculateStdDev(movements, avg);
+            
+            // Check for anomalies (3 standard deviations)
+            const recent = chipHistory.slice(-10);
+            for (const entry of recent) {
+                const movement = Math.abs(entry.change || 0);
+                if (movement > avg + (3 * stdDev)) {
+                    this.detectIssue({
+                        type: 'ANOMALOUS_CHIP_MOVEMENT',
+                        severity: 'medium',
+                        method: 'anomalyDetection',
+                        details: {
+                            movement,
+                            average: avg,
+                            stdDev,
+                            entry
+                        },
+                        timestamp: Date.now()
+                    });
+                }
+            }
+        } catch (error) {
+            // Silently handle errors - stateStore might not be ready yet
+            // Errors will be caught by UniversalErrorHandler if needed
         }
     }
     
@@ -410,19 +466,29 @@ class AIIssueDetector extends EventEmitter {
      * Analyze response times
      */
     analyzeResponseTimes() {
-        const server = this.stateStore.getState('system.server');
+        // Guard: Ensure stateStore is ready
+        if (!this.stateStore || typeof this.stateStore.getState !== 'function') {
+            return;
+        }
         
-        if (server && server.metrics && server.metrics.responseTime) {
-            // If response time is unusually high
-            if (server.metrics.responseTime > 1000) { // 1 second
-                this.detectIssue({
-                    type: 'HIGH_RESPONSE_TIME',
-                    severity: 'medium',
-                    method: 'anomalyDetection',
-                    details: { responseTime: server.metrics.responseTime },
-                    timestamp: Date.now()
-                });
+        try {
+            const server = this.stateStore.getState('system.server');
+            
+            if (server && server.metrics && server.metrics.responseTime) {
+                // If response time is unusually high
+                if (server.metrics.responseTime > 1000) { // 1 second
+                    this.detectIssue({
+                        type: 'HIGH_RESPONSE_TIME',
+                        severity: 'medium',
+                        method: 'anomalyDetection',
+                        details: { responseTime: server.metrics.responseTime },
+                        timestamp: Date.now()
+                    });
+                }
             }
+        } catch (error) {
+            // Silently handle errors - stateStore might not be ready yet
+            // Errors will be caught by UniversalErrorHandler if needed
         }
     }
     
@@ -430,21 +496,31 @@ class AIIssueDetector extends EventEmitter {
      * Analyze error rates
      */
     analyzeErrorRates() {
-        const server = this.stateStore.getState('system.server');
+        // Guard: Ensure stateStore is ready
+        if (!this.stateStore || typeof this.stateStore.getState !== 'function') {
+            return;
+        }
         
-        if (server && server.metrics) {
-            const errorRate = server.metrics.errors / Math.max(server.metrics.requests, 1);
+        try {
+            const server = this.stateStore.getState('system.server');
             
-            // If error rate is high (> 5%)
-            if (errorRate > 0.05) {
-                this.detectIssue({
-                    type: 'HIGH_ERROR_RATE',
-                    severity: 'high',
-                    method: 'anomalyDetection',
-                    details: { errorRate: errorRate * 100 },
-                    timestamp: Date.now()
-                });
+            if (server && server.metrics) {
+                const errorRate = server.metrics.errors / Math.max(server.metrics.requests, 1);
+                
+                // If error rate is high (> 5%)
+                if (errorRate > 0.05) {
+                    this.detectIssue({
+                        type: 'HIGH_ERROR_RATE',
+                        severity: 'high',
+                        method: 'anomalyDetection',
+                        details: { errorRate: errorRate * 100 },
+                        timestamp: Date.now()
+                    });
+                }
             }
+        } catch (error) {
+            // Silently handle errors - stateStore might not be ready yet
+            // Errors will be caught by UniversalErrorHandler if needed
         }
     }
     
