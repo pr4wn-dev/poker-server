@@ -653,68 +653,51 @@ class StateStore extends EventEmitter {
     
     /**
      * Save state to disk
+     * FIXED: Based on web search findings - explicit data selection, structured validation, single write
+     * Search findings: State persistence requires explicit handling, verify JSON structure, write once
      */
     save() {
         try {
-            // CRITICAL: Capture learning arrays BEFORE serialization (they can be lost)
-            const knowledgeBackup = this.state.learning?.knowledge && Array.isArray(this.state.learning.knowledge) && this.state.learning.knowledge.length > 0
-                ? [...this.state.learning.knowledge] : null;
-            const improvementsBackup = this.state.learning?.improvements && Array.isArray(this.state.learning.improvements) && this.state.learning.improvements.length > 0
-                ? [...this.state.learning.improvements] : null;
+            // CRITICAL: Capture learning arrays from memory BEFORE any serialization
+            // Search finding: Explicit data selection prevents loss during serialization
+            const knowledgeArray = this.state.learning?.knowledge && Array.isArray(this.state.learning.knowledge)
+                ? JSON.parse(JSON.stringify(this.state.learning.knowledge)) : [];
+            const improvementsArray = this.state.learning?.improvements && Array.isArray(this.state.learning.improvements)
+                ? JSON.parse(JSON.stringify(this.state.learning.improvements)) : [];
             
-            // Serialize state
+            // Serialize entire state (learning arrays should be preserved by _serializeState)
             const serializedState = this._serializeState(this.state);
             
-            // CRITICAL: Always restore learning arrays if they exist (they can be lost during serialization)
-            if (knowledgeBackup || improvementsBackup) {
-                if (!serializedState.learning) {
-                    serializedState.learning = {};
-                }
-                if (knowledgeBackup) {
-                    serializedState.learning.knowledge = knowledgeBackup;
-                }
-                if (improvementsBackup) {
-                    serializedState.learning.improvements = improvementsBackup;
-                }
+            // CRITICAL: Verify learning object exists and has arrays
+            // Search finding: Structured JSON validation before write
+            if (!serializedState.learning) {
+                serializedState.learning = {};
             }
+            // Force arrays into serialized state - explicit preservation
+            serializedState.learning.knowledge = knowledgeArray;
+            serializedState.learning.improvements = improvementsArray;
             
-            // CRITICAL: Create deep copy of serializedState to avoid reference issues
-            // Then force arrays into the copy BEFORE creating data object
-            const stateCopy = JSON.parse(JSON.stringify(serializedState));
-            if (knowledgeBackup || improvementsBackup) {
-                if (!stateCopy.learning) {
-                    stateCopy.learning = {};
-                }
-                if (knowledgeBackup) {
-                    stateCopy.learning.knowledge = knowledgeBackup;
-                }
-                if (improvementsBackup) {
-                    stateCopy.learning.improvements = improvementsBackup;
-                }
-            }
-            
+            // Create data object with arrays already in place
             const data = {
-                state: stateCopy,
+                state: serializedState,
                 eventLog: this.eventLog.slice(-1000), // Save last 1000 events
-                timestamp: Date.now()
+                timestamp: Date.now(),
+                version: '2.0.0' // Schema version for migration tracking
             };
             
-            // FINAL SAFEGUARD: Force arrays into data object right before writing
-            // This MUST happen - arrays can be lost during JSON.stringify if they're empty objects
-            if (knowledgeBackup || improvementsBackup) {
-                if (!data.state.learning) {
-                    data.state.learning = {};
-                }
-                // ALWAYS overwrite - don't check, just force it
-                if (knowledgeBackup) {
-                    data.state.learning.knowledge = knowledgeBackup;
-                }
-                if (improvementsBackup) {
-                    data.state.learning.improvements = improvementsBackup;
-                }
+            // CRITICAL: Validate structure before stringify
+            // Search finding: Verify data shape before writing
+            if (!Array.isArray(data.state.learning.knowledge)) {
+                data.state.learning.knowledge = knowledgeArray;
+            }
+            if (!Array.isArray(data.state.learning.improvements)) {
+                data.state.learning.improvements = improvementsArray;
             }
             
-            fs.writeFileSync(this.persistenceFile, JSON.stringify(data, null, 2), 'utf8');
+            // Write to file - single write operation
+            // Search finding: Write once, not continuously during auto-save
+            const jsonString = JSON.stringify(data, null, 2);
+            fs.writeFileSync(this.persistenceFile, jsonString, 'utf8');
         } catch (error) {
             // DO NOT log to console - errors are for AI only, not user
             // Re-throw so UniversalErrorHandler can catch it
@@ -856,6 +839,28 @@ class StateStore extends EventEmitter {
             } else if (Array.isArray(value)) {
                 // Preserve arrays as arrays (don't recurse into them)
                 serialized[key] = value;
+            } else if (key === 'learning' && typeof value === 'object' && value !== null) {
+                // CRITICAL: Explicitly handle learning object to preserve arrays
+                // Based on search findings: explicit data selection prevents loss during serialization
+                const learningSerialized = {};
+                for (const [learningKey, learningValue] of Object.entries(value)) {
+                    if (learningKey === 'knowledge' || learningKey === 'improvements') {
+                        // These MUST be arrays - preserve them explicitly with deep copy
+                        // Search finding: arrays must be explicitly cloned to avoid reference issues
+                        learningSerialized[learningKey] = Array.isArray(learningValue) 
+                            ? JSON.parse(JSON.stringify(learningValue))  // Deep clone to ensure independence
+                            : [];
+                    } else if (learningValue instanceof Map) {
+                        learningSerialized[learningKey] = Array.from(learningValue.entries());
+                    } else if (Array.isArray(learningValue)) {
+                        learningSerialized[learningKey] = JSON.parse(JSON.stringify(learningValue));
+                    } else if (typeof learningValue === 'object' && learningValue !== null) {
+                        learningSerialized[learningKey] = this._serializeState(learningValue);
+                    } else {
+                        learningSerialized[learningKey] = learningValue;
+                    }
+                }
+                serialized[key] = learningSerialized;
             } else if (typeof value === 'object' && value !== null) {
                 serialized[key] = this._serializeState(value);
             } else {

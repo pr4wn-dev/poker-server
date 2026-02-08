@@ -99,11 +99,26 @@ async function storeWebSearchKnowledge() {
             stateStore.autoSaveInterval = null;
         }
         
+        // CRITICAL: Verify arrays are in memory before save
+        const memKnowledgeBefore = stateStore.getState('learning.knowledge') || [];
+        const memImprovementsBefore = stateStore.getState('learning.improvements') || [];
+        console.log(`   - Before save: knowledge (${memKnowledgeBefore.length} entries), improvements (${memImprovementsBefore.length} entries)`);
+        
+        if (memKnowledgeBefore.length === 0 && memImprovementsBefore.length === 0) {
+            console.error('❌ ERROR: Arrays are empty in memory before save!');
+            process.exit(1);
+        }
+        
         // Force save immediately with arrays - use sync write to ensure it completes
         stateStore.save();
         
+        // CRITICAL: Verify arrays are still in memory after save (should not change)
+        const memKnowledgeAfter = stateStore.getState('learning.knowledge') || [];
+        const memImprovementsAfter = stateStore.getState('learning.improvements') || [];
+        console.log(`   - After save: knowledge (${memKnowledgeAfter.length} entries), improvements (${memImprovementsAfter.length} entries)`);
+        
         // Wait for file write to complete and verify immediately
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise(resolve => setTimeout(resolve, 500));
         
         // Read file directly to verify (don't create new StateStore - it might load old state)
         const fs = require('fs');
