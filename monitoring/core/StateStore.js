@@ -656,26 +656,25 @@ class StateStore extends EventEmitter {
      */
     save() {
         try {
+            // CRITICAL: Capture learning arrays BEFORE serialization (they can be lost)
+            const knowledgeBackup = this.state.learning?.knowledge && Array.isArray(this.state.learning.knowledge) && this.state.learning.knowledge.length > 0
+                ? [...this.state.learning.knowledge] : null;
+            const improvementsBackup = this.state.learning?.improvements && Array.isArray(this.state.learning.improvements) && this.state.learning.improvements.length > 0
+                ? [...this.state.learning.improvements] : null;
+            
             // Serialize state
             const serializedState = this._serializeState(this.state);
             
-            // CRITICAL: Ensure learning arrays are preserved (they can be lost during serialization)
-            if (this.state.learning) {
-                if (Array.isArray(this.state.learning.knowledge) && this.state.learning.knowledge.length > 0) {
-                    if (!serializedState.learning) {
-                        serializedState.learning = {};
-                    }
-                    if (!Array.isArray(serializedState.learning.knowledge) || serializedState.learning.knowledge.length === 0) {
-                        serializedState.learning.knowledge = this.state.learning.knowledge;
-                    }
+            // CRITICAL: Always restore learning arrays if they exist (they can be lost during serialization)
+            if (knowledgeBackup || improvementsBackup) {
+                if (!serializedState.learning) {
+                    serializedState.learning = {};
                 }
-                if (Array.isArray(this.state.learning.improvements) && this.state.learning.improvements.length > 0) {
-                    if (!serializedState.learning) {
-                        serializedState.learning = {};
-                    }
-                    if (!Array.isArray(serializedState.learning.improvements) || serializedState.learning.improvements.length === 0) {
-                        serializedState.learning.improvements = this.state.learning.improvements;
-                    }
+                if (knowledgeBackup) {
+                    serializedState.learning.knowledge = knowledgeBackup;
+                }
+                if (improvementsBackup) {
+                    serializedState.learning.improvements = improvementsBackup;
                 }
             }
             
