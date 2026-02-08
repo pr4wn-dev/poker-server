@@ -3018,7 +3018,45 @@ while ($monitoringActive) {
         }
         
         # CRITICAL FIX: Check investigation state more robustly
-        # Don't require both to be truthy - check them separately and handle invalid states
+        # ALWAYS check status file FIRST to ensure we have the truth
+        $statusFileInvestigationActive = $false
+        $statusFileInvestigationStartTime = $null
+        $statusFileTimeRemaining = $null
+        try {
+            $statusFilePath = Join-Path $script:projectRoot "logs\monitor-status.json"
+            if (Test-Path $statusFilePath) {
+                $statusData = Get-Content $statusFilePath -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+                if ($statusData.investigation -and $statusData.investigation.active -is [bool] -and $statusData.investigation.active) {
+                    $statusFileInvestigationActive = $true
+                    if ($statusData.investigation.startTime) {
+                        try {
+                            $statusFileInvestigationStartTime = [DateTime]::Parse($statusData.investigation.startTime)
+                        } catch {
+                            # Invalid date - ignore
+                        }
+                    }
+                    if ($statusData.investigation.timeRemaining -ne $null) {
+                        $statusFileTimeRemaining = $statusData.investigation.timeRemaining
+                    }
+                }
+            }
+        } catch {
+            # Status file read failed - ignore
+        }
+        
+        # CRITICAL: If status file shows investigation active, ALWAYS sync script variables
+        # This ensures script variables match the status file (source of truth)
+        if ($statusFileInvestigationActive -and $statusFileInvestigationStartTime) {
+            # Sync script variables to match status file
+            if (-not $script:isInvestigating) {
+                $script:isInvestigating = $true
+            }
+            if (-not $script:investigationStartTime -or $script:investigationStartTime -ne $statusFileInvestigationStartTime) {
+                $script:investigationStartTime = $statusFileInvestigationStartTime
+            }
+        }
+        
+        # Now check script variables (which should be synced from status file)
         $shouldCheckInvestigation = $false
         $investigationStartTimeValid = $false
         
@@ -3040,9 +3078,13 @@ while ($monitoringActive) {
                 }
             } else {
                 # Investigation flag is true but startTime is null
-                # CRITICAL: If investigation has been "active" for more than 1 second without a startTime, it's stuck - reset it
-                # This prevents investigations from getting stuck indefinitely
-                if (-not $script:investigationNullStartTimeLogged) {
+                # CRITICAL: If status file shows active but script has no startTime, sync from status file
+                if ($statusFileInvestigationActive -and $statusFileInvestigationStartTime) {
+                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] Syncing investigation startTime from status file" -ForegroundColor "Cyan"
+                    $script:investigationStartTime = $statusFileInvestigationStartTime
+                    $shouldCheckInvestigation = $true
+                    $investigationStartTimeValid = $true
+                } elseif (-not $script:investigationNullStartTimeLogged) {
                     Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] WARNING: isInvestigating=true but investigationStartTime is null - resetting stuck investigation" -ForegroundColor "Yellow"
                     $script:investigationNullStartTimeLogged = $true
                     # Reset immediately - investigation is stuck
@@ -3051,34 +3093,9 @@ while ($monitoringActive) {
                     $script:investigationCheckLogged = $false
                 }
             }
-        }
-        
-        # CRITICAL: Also check status file if script variables are out of sync
-        # This handles cases where the script was restarted but status file still shows active investigation
-        $statusFileInvestigationActive = $false
-        $statusFileInvestigationStartTime = $null
-        try {
-            $statusFilePath = Join-Path $script:projectRoot "logs\monitor-status.json"
-            if (Test-Path $statusFilePath) {
-                $statusData = Get-Content $statusFilePath -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
-                if ($statusData.investigation -and $statusData.investigation.active -is [bool] -and $statusData.investigation.active) {
-                    $statusFileInvestigationActive = $true
-                    if ($statusData.investigation.startTime) {
-                        try {
-                            $statusFileInvestigationStartTime = [DateTime]::Parse($statusData.investigation.startTime)
-                        } catch {
-                            # Invalid date - ignore
-                        }
-                    }
-                }
-            }
-        } catch {
-            # Status file read failed - ignore
-        }
-        
-        # If status file shows active investigation but script variables don't, sync them
-        if ($statusFileInvestigationActive -and $statusFileInvestigationStartTime -and -not $script:isInvestigating) {
-            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] Syncing investigation state from status file" -ForegroundColor "Cyan"
+        } elseif ($statusFileInvestigationActive -and $statusFileInvestigationStartTime) {
+            # Script says not investigating but status file says it is - sync from status file
+            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] Syncing investigation state from status file (script was out of sync)" -ForegroundColor "Cyan"
             $script:isInvestigating = $true
             $script:investigationStartTime = $statusFileInvestigationStartTime
             $script:investigationCheckLogged = $false
@@ -3087,24 +3104,25 @@ while ($monitoringActive) {
             $investigationStartTimeValid = $true
         }
         
-        # If status file shows investigation should have completed (timeRemaining <= 0), force check
+        # CRITICAL: If status file shows timeRemaining <= 0, investigation MUST complete
+        # This is the ultimate check - if status file says timeRemaining is 0 or negative, force completion
         if ($statusFileInvestigationActive -and $statusFileInvestigationStartTime) {
             $elapsedFromStatus = ((Get-Date) - $statusFileInvestigationStartTime).TotalSeconds
             $timeoutValue = if ($investigationTimeout) { $investigationTimeout } else { 15 }
-            if ($elapsedFromStatus -ge ($timeoutValue - 1)) {
+            
+            # If timeRemaining from status file is 0 or negative, OR elapsed time exceeds timeout, force check
+            if (($statusFileTimeRemaining -ne $null -and $statusFileTimeRemaining -le 0) -or ($elapsedFromStatus -ge ($timeoutValue - 1))) {
                 # Investigation should have completed - force check
                 if (-not $shouldCheckInvestigation) {
-                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] Investigation in status file should have completed ($([Math]::Round($elapsedFromStatus, 1))s elapsed, timeout: $timeoutValue s) - forcing check" -ForegroundColor "Yellow"
+                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] Investigation in status file should have completed (timeRemaining: $statusFileTimeRemaining, elapsed: $([Math]::Round($elapsedFromStatus, 1))s, timeout: $timeoutValue s) - forcing check" -ForegroundColor "Yellow"
                     $shouldCheckInvestigation = $true
-                    if ($statusFileInvestigationStartTime) {
-                        $investigationStartTimeValid = $true
-                        # Sync script variables
-                        if (-not $script:isInvestigating) {
-                            $script:isInvestigating = $true
-                        }
-                        if (-not $script:investigationStartTime -or $script:investigationStartTime -ne $statusFileInvestigationStartTime) {
-                            $script:investigationStartTime = $statusFileInvestigationStartTime
-                        }
+                    $investigationStartTimeValid = $true
+                    # Ensure script variables are synced
+                    if (-not $script:isInvestigating) {
+                        $script:isInvestigating = $true
+                    }
+                    if (-not $script:investigationStartTime -or $script:investigationStartTime -ne $statusFileInvestigationStartTime) {
+                        $script:investigationStartTime = $statusFileInvestigationStartTime
                     }
                 }
             }
