@@ -3318,6 +3318,54 @@ while ($monitoringActive) {
         # CRITICAL SAFETY CHECK: If status file shows investigation active for too long, force completion check
         # This prevents investigations from getting stuck when the normal check isn't running
         # CRITICAL: Also check if timeRemaining is 0 or negative - this is a direct indicator it should complete
+        # CRITICAL: Re-read status file directly if initial read failed or shows inactive but file has active data
+        $statusFileDirectRead = $null
+        $statusFileDirectActive = $false
+        $statusFileDirectStartTime = $null
+        $statusFileDirectTimeRemaining = $null
+        try {
+            $statusFilePath = Join-Path $script:projectRoot "logs\monitor-status.json"
+            if (Test-Path $statusFilePath) {
+                $statusFileDirectRead = Get-Content $statusFilePath -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+                if ($statusFileDirectRead.investigation) {
+                    $activeValue = $statusFileDirectRead.investigation.active
+                    if ($activeValue -is [bool]) {
+                        $statusFileDirectActive = $activeValue
+                    } elseif ($activeValue -is [string]) {
+                        $statusFileDirectActive = ($activeValue -eq "True" -or $activeValue -eq "true" -or $activeValue -eq "1")
+                    } else {
+                        $statusFileDirectActive = [bool]$activeValue
+                    }
+                    if ($statusFileDirectRead.investigation.startTime) {
+                        try {
+                            $statusFileDirectStartTime = [DateTime]::Parse($statusFileDirectRead.investigation.startTime)
+                        } catch {
+                            # Invalid date - ignore
+                        }
+                    }
+                    if ($statusFileDirectRead.investigation.timeRemaining -ne $null) {
+                        $statusFileDirectTimeRemaining = $statusFileDirectRead.investigation.timeRemaining
+                    }
+                }
+            }
+        } catch {
+            # Direct read failed - use values from initial read
+            $statusFileDirectActive = $statusFileInvestigationActive
+            $statusFileDirectStartTime = $statusFileInvestigationStartTime
+            $statusFileDirectTimeRemaining = $statusFileTimeRemaining
+        }
+        
+        # Use direct read values if they're more recent/accurate
+        if ($statusFileDirectActive -or $statusFileDirectStartTime) {
+            $statusFileInvestigationActive = $statusFileDirectActive
+            if ($statusFileDirectStartTime) {
+                $statusFileInvestigationStartTime = $statusFileDirectStartTime
+            }
+            if ($statusFileDirectTimeRemaining -ne $null) {
+                $statusFileTimeRemaining = $statusFileDirectTimeRemaining
+            }
+        }
+        
         if ($statusFileInvestigationActive -and $statusFileInvestigationStartTime) {
             $timeoutValue = if ($investigationTimeout) { $investigationTimeout } else { 15 }
             $elapsedFromStatusFile = ((Get-Date) - $statusFileInvestigationStartTime).TotalSeconds
