@@ -501,9 +501,28 @@ class AILiveStatistics {
         if (!patterns) return {};
         
         const result = {};
-        patterns.forEach((issueIds, pattern) => {
-            result[pattern] = issueIds.length;
-        });
+        
+        // Handle Map
+        if (patterns instanceof Map) {
+            patterns.forEach((issueIds, pattern) => {
+                result[pattern] = Array.isArray(issueIds) ? issueIds.length : 0;
+            });
+        }
+        // Handle array
+        else if (Array.isArray(patterns)) {
+            patterns.forEach(p => {
+                const pattern = p.pattern || p;
+                const issueIds = p.issueIds || [];
+                result[pattern] = Array.isArray(issueIds) ? issueIds.length : 0;
+            });
+        }
+        // Handle object
+        else if (typeof patterns === 'object') {
+            for (const [pattern, issueIds] of Object.entries(patterns)) {
+                result[pattern] = Array.isArray(issueIds) ? issueIds.length : 0;
+            }
+        }
+        
         return result;
     }
     
