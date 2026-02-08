@@ -6,7 +6,23 @@
 
 ## 📊 Current State Analysis
 
-### What We Have ✅ (ALL PRESERVED IN EVOLUTION - NOTHING REMOVED)
+### ⚠️ CRITICAL: Fixing Broken Functionality
+
+**Important**: Some current functionality doesn't work correctly. The evolution plan will:
+- ✅ **Fix broken functionality** (investigation system, file sync, etc.)
+- ✅ **Preserve working functionality** (Unity management, service restart, etc.)
+- ✅ **Replace broken patterns** with working implementations
+- ✅ **Ensure new systems actually work** (not just preserve broken behavior)
+
+### What's Broken ❌ (WILL BE FIXED IN EVOLUTION)
+1. **Investigation system** - Gets stuck, doesn't start properly, sync issues
+2. **Status file sync** - Stale data, race conditions between script variables and file
+3. **Unity pausing** - Sometimes doesn't pause correctly (we've been fixing this)
+4. **File integrity checks** - Some edge cases not handled properly
+5. **Timing/race conditions** - Various timing issues causing state mismatches
+6. **Blocking operations** - Some operations still block (we've been fixing these)
+
+### What Works ✅ (PRESERVED AND ENHANCED)
 
 #### **Unity Management** (100% Preserved)
 1. ✅ **Unity auto-start** - `Start-UnityIfNeeded()` function - **KEPT AS-IS**
