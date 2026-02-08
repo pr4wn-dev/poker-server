@@ -3476,9 +3476,13 @@ while ($monitoringActive) {
                 $script:isInvestigating = $false
                 $script:investigationStartTime = $null
                 $script:investigationCheckLogged = $false
+                # Force immediate status update to ensure status file reflects completion
                 Update-MonitorStatus
                 $lastStatusUpdate = Get-Date
-                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] Update-MonitorStatus completed, investigation state: isInvestigating=$($script:isInvestigating), startTime=$($script:investigationStartTime)" -ForegroundColor "Cyan"
+                # CRITICAL: Force another status update after a brief delay to ensure it's written
+                Start-Sleep -Milliseconds 100
+                Update-MonitorStatus
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] Update-MonitorStatus completed (called twice), investigation state: isInvestigating=$($script:isInvestigating), startTime=$($script:investigationStartTime)" -ForegroundColor "Cyan"
                 # CRITICAL: Set cooldown to prevent immediate restart - wait 5 seconds before allowing new investigation
                 $script:lastInvestigationComplete = Get-Date
                 # Skip the normal check block since we already completed
@@ -3681,11 +3685,10 @@ while ($monitoringActive) {
         } catch {
             # Status file read failed - use local variable
         }
-        if ($unityIsPaused) {
-            # Unity is paused - don't start new investigations until current issue is fixed
-            $canStartNewInvestigation = $false
-            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] Unity is paused - waiting for fix to be applied (checking for fix-applied.json)" -ForegroundColor "Gray"
-        } elseif ($script:lastInvestigationComplete) {
+        # CRITICAL FIX: Allow investigations to start even when Unity is paused
+        # This allows us to investigate new issues that occur while Unity is paused
+        # The investigation will complete and pause Unity again if needed
+        if ($script:lastInvestigationComplete) {
             $timeSinceCompletion = ((Get-Date) - $script:lastInvestigationComplete).TotalSeconds
             if ($timeSinceCompletion -lt 5) {
                 $canStartNewInvestigation = $false
