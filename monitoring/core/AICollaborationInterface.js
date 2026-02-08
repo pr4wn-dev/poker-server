@@ -326,6 +326,36 @@ class AICollaborationInterface extends EventEmitter {
                         confidence: bestSolution.confidence || bestSolution.successRate || 0.8
                     });
                 }
+                
+                // Check if AI has failed on this before
+                const aiFailures = this.sharedKnowledge.failures.filter(f => 
+                    f.action.issueType === action.issueType &&
+                    f.action.method === action.method
+                );
+                
+                if (aiFailures.length > 0) {
+                    suggestions.warnings.push({
+                        type: 'AI_FAILED_BEFORE',
+                        message: `AI tried ${action.method} for ${action.issueType} before and it failed ${aiFailures.length} time(s)`,
+                        failures: aiFailures.slice(0, 3),
+                        recommendation: bestSolution ? `Try learning system's suggestion instead: ${bestSolution.method}` : 'Consider alternative approach'
+                    });
+                }
+                
+                // Check if learning system failed on this before
+                const learningFailures = (this.stateStore.getState('ai.knowledge.learningSystemFailures') || []).filter(f =>
+                    f.action.issueType === action.issueType &&
+                    f.action.method === action.method
+                );
+                
+                if (learningFailures.length > 0) {
+                    suggestions.warnings.push({
+                        type: 'LEARNING_FAILED_BEFORE',
+                        message: `Learning system tried ${action.method} for ${action.issueType} before and it failed`,
+                        failures: learningFailures.slice(0, 3),
+                        recommendation: 'Both of us failed - need new approach'
+                    });
+                }
             }
             
             // Get manual debugging approach if needed
@@ -669,12 +699,49 @@ class AICollaborationInterface extends EventEmitter {
             
             // Generate suggestions
             assistance.suggestions = this.generateHelpSuggestions(context, similarProblems, relevantPatterns);
+            
+            // Learning system predicts what AI might do wrong
+            const prediction = this.generateAIMistakePrediction(context);
+            if (prediction) {
+                assistance.predictions = [prediction];
+                this.learningSystemPredictsAI(context, prediction);
+            }
         }
+        
+        // Start working together on this problem
+        const collaboration = this.workTogetherOnProblem(context);
+        assistance.collaboration = collaboration;
         
         // Emit event
         this.emit('aiNeedsHelp', { context, assistance });
         
         return assistance;
+    }
+    
+    /**
+     * Generate prediction of what AI might do wrong
+     */
+    generateAIMistakePrediction(context) {
+        if (!this.learningEngine) return null;
+        
+        // Check if similar problems were solved before
+        const aiFailures = this.sharedKnowledge.failures.filter(f => 
+            f.action.issueType === context.issue ||
+            f.action.component === context.component
+        );
+        
+        if (aiFailures.length > 0) {
+            // AI has failed on similar problems before
+            const commonMistake = aiFailures[0];
+            return {
+                whatAIMightDo: commonMistake.action.method,
+                whyItMightFail: commonMistake.failure.reason,
+                betterApproach: this.learningEngine.getBestSolution(context.issue)?.method || 'Try learned solution',
+                confidence: 0.8
+            };
+        }
+        
+        return null;
     }
     
     /**
@@ -797,6 +864,7 @@ class AICollaborationInterface extends EventEmitter {
     
     /**
      * Proactive check - learning system looks for opportunities to help
+     * We work together proactively
      */
     proactiveCheck() {
         if (!this.learningEngine || !this.issueDetector) {
@@ -818,6 +886,15 @@ class AICollaborationInterface extends EventEmitter {
                     message: `Learning system has a solution for this issue: ${solution.description || solution.method}`
                 });
                 
+                // Learning system predicts what AI might do wrong for this issue
+                const prediction = this.generateAIMistakePrediction({
+                    issue: issue.type,
+                    component: issue.component
+                });
+                if (prediction) {
+                    this.learningSystemPredictsAI(issue, prediction);
+                }
+                
                 // Cache to avoid spam
                 this.suggestionCache.set(`issue_${issue.id}`, solution);
             }
@@ -832,6 +909,22 @@ class AICollaborationInterface extends EventEmitter {
                 message: 'Learning system confidence is critically low - focus on successful fixes',
                 confidence
             });
+        }
+        
+        // Check for recent failures that need joint analysis
+        const recentFailures = this.sharedKnowledge.failures
+            .filter(f => Date.now() - f.timestamp < 60000) // Last minute
+            .slice(-5);
+        
+        if (recentFailures.length > 0) {
+            // Proactively analyze failures together
+            for (const failure of recentFailures) {
+                if (!failure.analyzed) {
+                    const analysis = this.analyzeFailureTogether(failure);
+                    failure.analyzed = true;
+                    this.emit('proactiveFailureAnalysis', analysis);
+                }
+            }
         }
     }
     
