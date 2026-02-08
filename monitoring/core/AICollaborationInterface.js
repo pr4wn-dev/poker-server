@@ -43,6 +43,133 @@ class AICollaborationInterface extends EventEmitter {
         
         // Start proactive monitoring
         this.startProactiveMonitoring();
+        
+        // Listen to AutoFixEngine - when learning system tries something and it works, teach AI
+        this.setupLearningSystemListener();
+    }
+    
+    /**
+     * Setup listener for learning system actions
+     * When learning system (AutoFixEngine) tries something and it works, it teaches AI
+     * Note: This is set up in AIMonitorCore.setupEventListeners() after both are initialized
+     */
+    setupLearningSystemListener() {
+        // Listener is set up in AIMonitorCore.setupEventListeners()
+        // This method exists for future use if needed
+    }
+    
+    /**
+     * Learning system tried something and it worked - teach AI
+     * This is called when AutoFixEngine successfully fixes something
+     */
+    learningSystemSucceeded(action, result) {
+        // Create a knowledge update for AI
+        const knowledgeUpdate = {
+            type: 'LEARNING_SYSTEM_SUCCESS',
+            timestamp: Date.now(),
+            action: {
+                type: action.type || 'auto_fix',
+                method: action.method || action.fixMethod,
+                issueType: action.issueType,
+                component: action.component,
+                details: action.details
+            },
+            result: {
+                success: result.success !== false,
+                description: result.description || result.reason,
+                confidence: result.confidence || 0.9
+            },
+            lesson: this.extractLesson(action, result)
+        };
+        
+        // Store in state so AI can query it
+        this.stateStore.updateState('ai.knowledge.learningSystemSuccesses', (successes = []) => {
+            successes.push(knowledgeUpdate);
+            // Keep only last 100
+            if (successes.length > 100) {
+                successes.shift();
+            }
+            return successes;
+        });
+        
+        // Emit event so AI can listen
+        this.emit('learningSystemTaughtAI', knowledgeUpdate);
+        
+        gameLogger.info('CERBERUS', '[AI_COLLABORATION] Learning system taught AI', {
+            method: action.method || action.fixMethod,
+            issueType: action.issueType,
+            success: result.success !== false
+        });
+    }
+    
+    /**
+     * Learning system tried something and it failed - teach AI what not to do
+     */
+    learningSystemFailed(action, result) {
+        const knowledgeUpdate = {
+            type: 'LEARNING_SYSTEM_FAILURE',
+            timestamp: Date.now(),
+            action: {
+                type: action.type || 'auto_fix',
+                method: action.method || action.fixMethod,
+                issueType: action.issueType,
+                component: action.component,
+                details: action.details
+            },
+            result: {
+                success: false,
+                reason: result.reason || result.description,
+                error: result.error
+            },
+            lesson: `Don't use ${action.method || action.fixMethod} for ${action.issueType} - it failed: ${result.reason || 'unknown reason'}`
+        };
+        
+        // Store in state
+        this.stateStore.updateState('ai.knowledge.learningSystemFailures', (failures = []) => {
+            failures.push(knowledgeUpdate);
+            if (failures.length > 100) {
+                failures.shift();
+            }
+            return failures;
+        });
+        
+        // Emit event
+        this.emit('learningSystemTaughtAI', knowledgeUpdate);
+        
+        gameLogger.info('CERBERUS', '[AI_COLLABORATION] Learning system taught AI (failure)', {
+            method: action.method || action.fixMethod,
+            issueType: action.issueType,
+            reason: result.reason
+        });
+    }
+    
+    /**
+     * Extract lesson from learning system action
+     */
+    extractLesson(action, result) {
+        if (result.success !== false) {
+            return `Learning system successfully fixed ${action.issueType || 'issue'} using ${action.method || action.fixMethod}. ${result.description || 'This method works for this type of issue.'}`;
+        } else {
+            return `Learning system tried ${action.method || action.fixMethod} for ${action.issueType || 'issue'} but it failed: ${result.reason || 'unknown reason'}. Don't use this method for similar issues.`;
+        }
+    }
+    
+    /**
+     * Get what learning system has taught AI
+     */
+    getLearningSystemKnowledge() {
+        const successes = this.stateStore.getState('ai.knowledge.learningSystemSuccesses') || [];
+        const failures = this.stateStore.getState('ai.knowledge.learningSystemFailures') || [];
+        
+        return {
+            successes: successes.slice(-20), // Last 20 successes
+            failures: failures.slice(-20), // Last 20 failures
+            totalSuccesses: successes.length,
+            totalFailures: failures.length,
+            recentLessons: [...successes, ...failures]
+                .sort((a, b) => b.timestamp - a.timestamp)
+                .slice(0, 10) // Last 10 lessons
+        };
     }
     
     /**
@@ -283,6 +410,14 @@ class AICollaborationInterface extends EventEmitter {
         }
         
         const lower = question.toLowerCase();
+        
+        // "What did learning system teach me?"
+        if (lower.includes('what did learning') || lower.includes('learning system taught') || lower.includes('what worked for learning')) {
+            return {
+                type: 'learning_system_knowledge',
+                knowledge: this.getLearningSystemKnowledge()
+            };
+        }
         
         // "What patterns match this problem?"
         if (lower.includes('pattern') || lower.includes('similar')) {

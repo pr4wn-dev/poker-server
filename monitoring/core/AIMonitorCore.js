@@ -259,6 +259,10 @@ class AIMonitorCore {
             throw error;
         }
         
+        // Connect AutoFixEngine to collaboration interface - when learning system succeeds, it teaches AI
+        // This happens after collaborationInterface is created (which happens after communicationInterface)
+        // So we'll set this up in setupEventListeners()
+        
         // Wrap all components with error handler (AFTER all components are created)
         this.wrapAllComponents();
         
