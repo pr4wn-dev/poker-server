@@ -462,6 +462,92 @@ class UniversalErrorHandler extends EventEmitter {
             // DO NOT log to console - errors are for AI only, not user
         }
     }
+    
+    /**
+     * Start error rate monitoring
+     */
+    startErrorRateMonitoring() {
+        // Clean up old error timestamps every 30 seconds
+        setInterval(() => {
+            const now = Date.now();
+            this.errorRateHistory = this.errorRateHistory.filter(
+                timestamp => now - timestamp < this.errorRateWindow
+            );
+        }, 30000);
+    }
+    
+    /**
+     * Check error rate and alert on spikes
+     */
+    checkErrorRate() {
+        const now = Date.now();
+        const windowStart = now - this.errorRateWindow;
+        
+        // Count errors in the window
+        const errorsInWindow = this.errorRateHistory.filter(
+            timestamp => timestamp >= windowStart
+        ).length;
+        
+        // Calculate error rate (errors per minute)
+        const errorRate = (errorsInWindow / this.errorRateWindow) * 60000;
+        
+        // Check if we've exceeded the threshold
+        if (errorRate > this.errorRateThreshold) {
+            // Only alert once per minute to prevent spam
+            if (now - this.lastSpikeAlert > 60000) {
+                this.lastSpikeAlert = now;
+                
+                // Report error spike to issue detector
+                if (this.issueDetector) {
+                    try {
+                        this.issueDetector.detectIssue({
+                            type: 'ERROR_RATE_SPIKE',
+                            severity: errorRate > 50 ? 'critical' : 'high',
+                            method: 'universalErrorHandler',
+                            details: {
+                                errorRate: errorRate.toFixed(2),
+                                errorsInWindow: errorsInWindow,
+                                threshold: this.errorRateThreshold,
+                                window: this.errorRateWindow + 'ms'
+                            },
+                            timestamp: now
+                        });
+                    } catch (reportError) {
+                        // DO NOT log to console - errors are for AI only, not user
+                    }
+                }
+            }
+        }
+        
+        // Update state store with current error rate
+        try {
+            this.stateStore.updateState('system.errorRate', {
+                current: errorRate,
+                threshold: this.errorRateThreshold,
+                errorsInWindow: errorsInWindow,
+                timestamp: now
+            });
+        } catch (error) {
+            // DO NOT log to console - errors are for AI only, not user
+        }
+    }
+    
+    /**
+     * Get current error rate
+     */
+    getErrorRate() {
+        const now = Date.now();
+        const windowStart = now - this.errorRateWindow;
+        const errorsInWindow = this.errorRateHistory.filter(
+            timestamp => timestamp >= windowStart
+        ).length;
+        return {
+            errorsPerMinute: (errorsInWindow / this.errorRateWindow) * 60000,
+            errorsInWindow: errorsInWindow,
+            windowMs: this.errorRateWindow,
+            threshold: this.errorRateThreshold
+        };
+    }
 }
 
 module.exports = UniversalErrorHandler;
