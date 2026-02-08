@@ -2953,6 +2953,7 @@ $script:investigationCheckLogged = $false  # Track if we've logged the investiga
 $script:lastInvestigationStateLog = $null  # Track last investigation state log time
 $script:investigationNullStartTimeLogged = $false  # Track if we've logged the null startTime warning (to avoid spam)
 $script:lastFocusedGroupCheck = $null  # Track last time we checked for focused group without investigation
+$script:lastInvestigationComplete = $null  # Track when last investigation completed (for cooldown)
 
 while ($monitoringActive) {
     try {
