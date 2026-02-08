@@ -678,6 +678,20 @@ class StateStore extends EventEmitter {
                 }
             }
             
+            // CRITICAL: Force arrays into serializedState BEFORE creating data object
+            // This ensures arrays are in the state from the start
+            if (knowledgeBackup || improvementsBackup) {
+                if (!serializedState.learning) {
+                    serializedState.learning = {};
+                }
+                if (knowledgeBackup) {
+                    serializedState.learning.knowledge = knowledgeBackup;
+                }
+                if (improvementsBackup) {
+                    serializedState.learning.improvements = improvementsBackup;
+                }
+            }
+            
             const data = {
                 state: serializedState,
                 eventLog: this.eventLog.slice(-1000), // Save last 1000 events
@@ -697,34 +711,6 @@ class StateStore extends EventEmitter {
                 if (improvementsBackup) {
                     data.state.learning.improvements = improvementsBackup;
                 }
-            }
-            
-            // CRITICAL: Verify and force arrays ONE MORE TIME right before JSON.stringify
-            // Sometimes arrays get lost even after setting them above
-            if (knowledgeBackup) {
-                if (!data.state.learning) {
-                    data.state.learning = {};
-                }
-                // Force overwrite - don't trust what's there
-                data.state.learning.knowledge = knowledgeBackup;
-            }
-            if (improvementsBackup) {
-                if (!data.state.learning) {
-                    data.state.learning = {};
-                }
-                // Force overwrite - don't trust what's there
-                data.state.learning.improvements = improvementsBackup;
-            }
-            
-            // Final verification before writing
-            const jsonString = JSON.stringify(data, null, 2);
-            const parsedCheck = JSON.parse(jsonString);
-            if (knowledgeBackup && (!parsedCheck.state?.learning?.knowledge || parsedCheck.state.learning.knowledge.length === 0)) {
-                // If arrays are still empty after JSON.stringify, force them again
-                data.state.learning.knowledge = knowledgeBackup;
-            }
-            if (improvementsBackup && (!parsedCheck.state?.learning?.improvements || parsedCheck.state.learning.improvements.length === 0)) {
-                data.state.learning.improvements = improvementsBackup;
             }
             
             fs.writeFileSync(this.persistenceFile, JSON.stringify(data, null, 2), 'utf8');
