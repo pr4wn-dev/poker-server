@@ -619,15 +619,18 @@ function Add-PendingIssue {
                     break
                 }
             }
-            }
-        } finally {
-            # Clean up temp file
-            if (Test-Path $tempFile) {
-                Remove-Item $tempFile -Force -ErrorAction SilentlyContinue
-            }
         }
     } catch {
-        Write-Warning "Add-PendingIssue error: $_"
+        Write-Warning "Add-PendingIssue inner try error: $_"
+        # Continue to cleanup
+    } finally {
+        # Clean up temp file
+        if (Test-Path $tempFile) {
+            Remove-Item $tempFile -Force -ErrorAction SilentlyContinue
+        }
+    }
+    } catch {
+        Write-Warning "Add-PendingIssue outer try error: $_"
         return $null
     }
     return $null
@@ -5846,8 +5849,7 @@ while ($monitoringActive) {
             $lastStatsUpdate = $now
         }
     } catch {
-        # Catch for nested try blocks - this catch is for try blocks inside the main try
-        # The main try at 3484 needs its own catch below
+        # Main catch for try block at line 3487 (while loop main try)
         $errorMsg = "Monitoring error: $_"
         $errorStackTrace = $_.ScriptStackTrace
         Write-Error $errorMsg
@@ -5858,24 +5860,6 @@ while ($monitoringActive) {
             Add-Content -Path $diagnosticsLog -Value $errorLogEntry -ErrorAction SilentlyContinue
         } catch {
             # If logging fails, at least try to write to console
-            Write-Host "[$(Get-Date -Format 'HH:mm:ss')] CRITICAL: Failed to log error to diagnostics: $_" -ForegroundColor "Red"
-        }
-        # Update status file with error
-        Update-MonitorStatus -statusUpdate @{
-            lastError = $errorMsg
-            lastErrorTime = (Get-Date).ToUniversalTime().ToString("o")
-        } -ErrorAction SilentlyContinue
-    } catch {
-        # Main catch for try block at line 3484 (while loop main try)
-        $errorMsg = "Main monitoring loop error: $_"
-        $errorStackTrace = $_.ScriptStackTrace
-        Write-Error $errorMsg
-        # Log to diagnostics
-        try {
-            $diagnosticsLog = Join-Path $script:projectRoot "logs\monitor-diagnostics.log"
-            $errorLogEntry = "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] [ERROR] $errorMsg`nStack trace: $errorStackTrace`n"
-            Add-Content -Path $diagnosticsLog -Value $errorLogEntry -ErrorAction SilentlyContinue
-        } catch {
             Write-Host "[$(Get-Date -Format 'HH:mm:ss')] CRITICAL: Failed to log error to diagnostics: $_" -ForegroundColor "Red"
         }
         # Update status file with error
