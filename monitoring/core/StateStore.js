@@ -801,6 +801,9 @@ class StateStore extends EventEmitter {
         for (const [key, value] of Object.entries(state)) {
             if (value instanceof Map) {
                 serialized[key] = Array.from(value.entries());
+            } else if (Array.isArray(value)) {
+                // Preserve arrays as arrays (don't recurse into them)
+                serialized[key] = value;
             } else if (typeof value === 'object' && value !== null) {
                 serialized[key] = this._serializeState(value);
             } else {
@@ -819,6 +822,9 @@ class StateStore extends EventEmitter {
             if (Array.isArray(value) && key.includes('Map') || 
                 (key === 'tables' || key === 'players' || key === 'byTable' || key === 'byPlayer')) {
                 state[key] = new Map(value);
+            } else if (Array.isArray(value)) {
+                // Preserve arrays as arrays
+                state[key] = value;
             } else if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
                 state[key] = this._deserializeState(value);
             } else {
