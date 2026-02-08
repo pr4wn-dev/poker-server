@@ -3376,6 +3376,11 @@ while ($monitoringActive) {
         # CRITICAL: Always check forced completion if direct read shows active investigation
         # This ensures we catch stuck investigations even if initial read failed
         # CRITICAL: Also check if direct read found active but we're not using it
+        # DIAGNOSTIC: Log what we found
+        if ($statusFileDirectActive -or $statusFileDirectStartTime) {
+            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] Forced completion check: directReadActive=$statusFileDirectActive, directReadStartTime=$statusFileDirectStartTime, directReadTimeRemaining=$statusFileDirectTimeRemaining" -ForegroundColor "Gray"
+        }
+        
         if (($statusFileInvestigationActive -and $statusFileInvestigationStartTime) -or ($statusFileDirectActive -and $statusFileDirectStartTime)) {
             # Use direct read values if they're available and show active investigation
             if ($statusFileDirectActive -and $statusFileDirectStartTime) {
@@ -3389,6 +3394,8 @@ while ($monitoringActive) {
             $elapsedFromStatusFile = ((Get-Date) - $statusFileInvestigationStartTime).TotalSeconds
             $shouldForceCompletion = $false
             $forceReason = ""
+            
+            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] Forced completion evaluation: elapsed=$([Math]::Round($elapsedFromStatusFile, 1))s, timeout=$timeoutValue s, timeRemaining=$statusFileTimeRemaining" -ForegroundColor "Gray"
             
             # Force if elapsed time exceeds 2x timeout
             if ($elapsedFromStatusFile -ge ($timeoutValue * 2)) {
@@ -3414,7 +3421,11 @@ while ($monitoringActive) {
                 # Sync script variables
                 $script:isInvestigating = $true
                 $script:investigationStartTime = $statusFileInvestigationStartTime
+            } else {
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] Forced completion check: NOT triggering (elapsed=$([Math]::Round($elapsedFromStatusFile, 1))s, timeout=$timeoutValue s, timeRemaining=$statusFileTimeRemaining)" -ForegroundColor "Gray"
             }
+        } else {
+            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] Forced completion check: SKIPPED (no active investigation found - initialReadActive=$statusFileInvestigationActive, initialReadStartTime=$statusFileInvestigationStartTime, directReadActive=$statusFileDirectActive, directReadStartTime=$statusFileDirectStartTime)" -ForegroundColor "Gray"
         }
         
         if ($investigationIsActive -and $investigationStartTimeToUse) {
