@@ -707,7 +707,7 @@ function Calculate-VerificationPeriod {
     return $total
 }
 
-# Function to check if services are ready (for verification)
+# Function to check if services are ready (for verification) - non-blocking
 function Test-ServicesReady {
     param(
         [array]$requiredRestarts
@@ -716,11 +716,11 @@ function Test-ServicesReady {
     $allReady = $true
     $notReady = @()
     
-    # Check server
+    # Check server (non-blocking)
     if ($requiredRestarts -contains "server" -or $requiredRestarts.Count -eq 0) {
         try {
-            $healthResponse = Invoke-WebRequest -Uri "$serverUrl/health" -TimeoutSec 2 -ErrorAction Stop
-            if ($healthResponse.StatusCode -ne 200) {
+            $healthResult = Invoke-WebRequestAsync -Uri "$serverUrl/health" -TimeoutSec 2 -JobTimeout 3
+            if (-not $healthResult.Success -or $healthResult.StatusCode -ne 200) {
                 $allReady = $false
                 $notReady += "server"
             }
@@ -730,12 +730,17 @@ function Test-ServicesReady {
         }
     }
     
-    # Check database
+    # Check database (non-blocking)
     if ($requiredRestarts -contains "database") {
         try {
-            $healthResponse = Invoke-WebRequest -Uri "$serverUrl/health" -TimeoutSec 2 -ErrorAction Stop
-            $health = $healthResponse.Content | ConvertFrom-Json
-            if ($health.database -ne $true) {
+            $healthResult = Invoke-WebRequestAsync -Uri "$serverUrl/health" -TimeoutSec 2 -JobTimeout 3
+            if ($healthResult.Success) {
+                $health = $healthResult.Content | ConvertFrom-Json
+                if ($health.database -ne $true) {
+                    $allReady = $false
+                    $notReady += "database"
+                }
+            } else {
                 $allReady = $false
                 $notReady += "database"
             }
@@ -745,20 +750,25 @@ function Test-ServicesReady {
         }
     }
     
-    # Check Unity
+    # Check Unity (non-blocking)
     if ($requiredRestarts -contains "unity") {
         $unityProcess = Get-Process -Name "Unity" -ErrorAction SilentlyContinue
         if (-not $unityProcess) {
             $allReady = $false
             $notReady += "unity"
         } else {
-            # Check if Unity is connected
+            # Check if Unity is connected (non-blocking)
             try {
-                $healthResponse = Invoke-WebRequest -Uri "$serverUrl/health" -TimeoutSec 2 -ErrorAction Stop
-                $health = $healthResponse.Content | ConvertFrom-Json
-                if ($health.onlinePlayers -eq 0) {
+                $healthResult = Invoke-WebRequestAsync -Uri "$serverUrl/health" -TimeoutSec 2 -JobTimeout 3
+                if ($healthResult.Success) {
+                    $health = $healthResult.Content | ConvertFrom-Json
+                    if ($health.onlinePlayers -eq 0) {
+                        $allReady = $false
+                        $notReady += "unity (not connected)"
+                    }
+                } else {
                     $allReady = $false
-                    $notReady += "unity (not connected)"
+                    $notReady += "unity (connection check failed)"
                 }
             } catch {
                 $allReady = $false
