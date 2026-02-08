@@ -281,6 +281,29 @@ class AIMonitorCore {
     }
     
     /**
+     * Get error recovery status
+     */
+    getErrorRecoveryStatus() {
+        if (!this.errorRecovery) {
+            return { componentHealth: {}, timestamp: Date.now() };
+        }
+        return {
+            componentHealth: this.errorRecovery.getAllHealth(),
+            timestamp: Date.now()
+        };
+    }
+    
+    /**
+     * Get performance report
+     */
+    getPerformanceReport() {
+        if (!this.performanceMonitor) {
+            return { system: {}, operations: {}, thresholds: {}, timestamp: Date.now() };
+        }
+        return this.performanceMonitor.getPerformanceReport();
+    }
+    
+    /**
      * Cleanup - Stop all background processes
      */
     destroy() {
