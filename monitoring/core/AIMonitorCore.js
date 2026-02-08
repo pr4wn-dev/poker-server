@@ -87,6 +87,14 @@ class AIMonitorCore {
             this.rulesEnforcer = new AIRulesEnforcer(this.stateStore, this.learningEngine);
             this.errorRecovery.recordSuccess('rulesEnforcer');
             
+            // Connect ConsoleOverride to rules enforcer (so violations are learned from)
+            const ConsoleOverride = require('./ConsoleOverride');
+            ConsoleOverride.setViolationCallback((ruleId, context, details) => {
+                if (this.rulesEnforcer) {
+                    this.rulesEnforcer.recordViolation(ruleId, context, details);
+                }
+            });
+            
             // NOW initialize universal error handler (needs issueDetector, errorRecovery, learningEngine)
             this.universalErrorHandler = new UniversalErrorHandler(
                 this.stateStore,
