@@ -21,12 +21,13 @@ const args = process.argv.slice(3);
 
 // Set a global timeout to force exit if command takes too long (5 seconds max)
 const globalTimeout = setTimeout(() => {
-    const errorMsg = 'Error: Command timed out';
-    console.error(errorMsg); // CLI user feedback
+    // All errors go to gameLogger - Cerberus sees everything
     gameLogger.error('MONITORING', '[MONITOR_INTEGRATION_CLI] Command timeout', {
         command: command,
         timeout: '5000ms'
     });
+    // Output JSON error for CLI (PowerShell needs this)
+    console.log(JSON.stringify({ error: 'Command timed out', command }));
     if (integration && integration.aiCore) {
         try {
             integration.aiCore.destroy();
@@ -74,10 +75,10 @@ async function handleCommand() {
             case 'detect-issue':
                 const logLine = args.join(' ');
                 if (!logLine) {
-                    console.error('Error: logLine required'); // CLI user feedback
                     gameLogger.error('MONITORING', '[MONITOR_INTEGRATION_CLI] Missing logLine', {
                         command: 'detect-issue'
                     });
+                    console.log(JSON.stringify({ error: 'logLine required' }));
                     process.exit(1);
                 }
                 const detected = integration.detectIssue(logLine);
@@ -87,10 +88,10 @@ async function handleCommand() {
             case 'add-issue':
                 const issueDataJson = args.join(' ');
                 if (!issueDataJson) {
-                    console.error('Error: issueData JSON required'); // CLI user feedback
                     gameLogger.error('MONITORING', '[MONITOR_INTEGRATION_CLI] Missing issueData', {
                         command: 'add-issue'
                     });
+                    console.log(JSON.stringify({ error: 'issueData JSON required' }));
                     process.exit(1);
                 }
                 try {
@@ -98,11 +99,11 @@ async function handleCommand() {
                     const addResult = integration.addIssue(issueData);
                     console.log(JSON.stringify(addResult));
                 } catch (error) {
-                    console.error('Error: Invalid JSON'); // CLI user feedback
                     gameLogger.error('MONITORING', '[MONITOR_INTEGRATION_CLI] Invalid JSON', {
                         command: 'add-issue',
                         error: error.message
                     });
+                    console.log(JSON.stringify({ error: 'Invalid JSON', details: error.message }));
                     process.exit(1);
                 }
                 break;
@@ -111,10 +112,10 @@ async function handleCommand() {
                 const fs = require('fs');
                 const issueFilePath = args[0];
                 if (!issueFilePath) {
-                    console.error('Error: issue file path required'); // CLI user feedback
                     gameLogger.error('MONITORING', '[MONITOR_INTEGRATION_CLI] Missing file path', {
                         command: 'add-issue-file'
                     });
+                    console.log(JSON.stringify({ error: 'issue file path required' }));
                     process.exit(1);
                 }
                 try {
@@ -129,11 +130,11 @@ async function handleCommand() {
                         // Ignore cleanup errors
                     }
                 } catch (error) {
-                    console.error('Error: Failed to read or parse issue file'); // CLI user feedback
                     gameLogger.error('MONITORING', '[MONITOR_INTEGRATION_CLI] File read error', {
                         command: 'add-issue-file',
                         error: error.message
                     });
+                    console.log(JSON.stringify({ error: 'Failed to read or parse issue file', details: error.message }));
                     process.exit(1);
                 }
                 break;
@@ -146,10 +147,10 @@ async function handleCommand() {
             case 'get-suggested-fixes':
                 const issueId = args[0];
                 if (!issueId) {
-                    console.error('Error: issueId required'); // CLI user feedback
                     gameLogger.error('MONITORING', '[MONITOR_INTEGRATION_CLI] Missing issueId', {
                         command: 'get-suggested-fixes'
                     });
+                    console.log(JSON.stringify({ error: 'issueId required' }));
                     process.exit(1);
                 }
                 const fixes = integration.getSuggestedFixes(issueId);
@@ -159,11 +160,11 @@ async function handleCommand() {
             case 'record-fix-attempt':
                 const [issueId2, fixMethod, result] = args;
                 if (!issueId2 || !fixMethod || !result) {
-                    console.error('Error: issueId, fixMethod, and result required'); // CLI user feedback
                     gameLogger.error('MONITORING', '[MONITOR_INTEGRATION_CLI] Missing required args', {
                         command: 'record-fix-attempt',
                         provided: { issueId: !!issueId2, fixMethod: !!fixMethod, result: !!result }
                     });
+                    console.log(JSON.stringify({ error: 'issueId, fixMethod, and result required' }));
                     process.exit(1);
                 }
                 const fixDetails = args[3] ? JSON.parse(args[3]) : {};
@@ -189,10 +190,10 @@ async function handleCommand() {
             case 'query':
                 const question = args.join(' ');
                 if (!question) {
-                    console.error('Error: question required'); // CLI user feedback
                     gameLogger.error('MONITORING', '[MONITOR_INTEGRATION_CLI] Missing question', {
                         command: 'query'
                     });
+                    console.log(JSON.stringify({ error: 'question required' }));
                     process.exit(1);
                 }
                 const answer = integration.query(question);
@@ -207,10 +208,10 @@ async function handleCommand() {
             case 'get-issue':
                 const issueId3 = args[0];
                 if (!issueId3) {
-                    console.error('Error: issueId required'); // CLI user feedback
                     gameLogger.error('MONITORING', '[MONITOR_INTEGRATION_CLI] Missing issueId', {
                         command: 'get-issue'
                     });
+                    console.log(JSON.stringify({ error: 'issueId required' }));
                     process.exit(1);
                 }
                 const issue = integration.getIssue(issueId3);
@@ -230,10 +231,10 @@ async function handleCommand() {
             case 'attempt-auto-fix':
                 const issueId4 = args[0];
                 if (!issueId4) {
-                    console.error('Error: issueId required'); // CLI user feedback
                     gameLogger.error('MONITORING', '[MONITOR_INTEGRATION_CLI] Missing issueId', {
                         command: 'attempt-auto-fix'
                     });
+                    console.log(JSON.stringify({ error: 'issueId required' }));
                     process.exit(1);
                 }
                 const fixResult = await integration.attemptAutoFix(issueId4);
@@ -248,10 +249,10 @@ async function handleCommand() {
             case 'get-auto-fix-suggestions':
                 const issueId5 = args[0];
                 if (!issueId5) {
-                    console.error('Error: issueId required'); // CLI user feedback
                     gameLogger.error('MONITORING', '[MONITOR_INTEGRATION_CLI] Missing issueId', {
                         command: 'get-auto-fix-suggestions'
                     });
+                    console.log(JSON.stringify({ error: 'issueId required' }));
                     process.exit(1);
                 }
                 const suggestions = integration.getAutoFixSuggestions(issueId5);
@@ -265,43 +266,48 @@ async function handleCommand() {
                 break;
                 
             default:
-                console.error(`Unknown command: ${command}`); // CLI user feedback
                 gameLogger.warn('MONITORING', '[MONITOR_INTEGRATION_CLI] Unknown command', {
                     command: command
                 });
-                console.log('Available commands:');
-                console.log('  should-start-investigation');
-                console.log('  should-pause-unity');
-                console.log('  should-resume-unity');
-                console.log('  get-investigation-status');
-                console.log('  start-investigation');
-                console.log('  complete-investigation');
-                console.log('  detect-issue <logLine>');
-                console.log('  get-active-issues');
-                console.log('  get-suggested-fixes <issueId>');
-                console.log('  record-fix-attempt <issueId> <fixMethod> <result> [fixDetails]');
-                console.log('  get-live-statistics');
-                console.log('  get-formatted-statistics');
-                console.log('  update-monitor-status');
-                console.log('  query <question>');
-                console.log('  get-status-report');
-                console.log('  get-issue <issueId>');
-                console.log('  get-system-report');
-                console.log('  get-component-health');
-                console.log('  attempt-auto-fix <issueId>');
-                console.log('  get-auto-fix-statistics');
-                console.log('  get-auto-fix-suggestions <issueId>');
-                console.log('  set-auto-fix-enabled <true|false>');
+                // Output JSON error with available commands
+                console.log(JSON.stringify({
+                    error: `Unknown command: ${command}`,
+                    availableCommands: [
+                        'should-start-investigation',
+                        'should-pause-unity',
+                        'should-resume-unity',
+                        'get-investigation-status',
+                        'start-investigation',
+                        'complete-investigation',
+                        'detect-issue <logLine>',
+                        'get-active-issues',
+                        'get-suggested-fixes <issueId>',
+                        'record-fix-attempt <issueId> <fixMethod> <result> [fixDetails]',
+                        'get-live-statistics',
+                        'get-formatted-statistics',
+                        'update-monitor-status',
+                        'query <question>',
+                        'get-status-report',
+                        'get-issue <issueId>',
+                        'get-system-report',
+                        'get-component-health',
+                        'attempt-auto-fix <issueId>',
+                        'get-auto-fix-statistics',
+                        'get-auto-fix-suggestions <issueId>',
+                        'set-auto-fix-enabled <true|false>'
+                    ]
+                }));
                 process.exit(1);
         }
     } catch (error) {
-        console.error('Error:', error.message); // CLI user feedback
-        console.error(error.stack); // CLI user feedback
+        // All errors go to gameLogger - Cerberus sees everything
         gameLogger.error('MONITORING', '[MONITOR_INTEGRATION_CLI] Command error', {
             command: command,
             error: error.message,
             stack: error.stack
         });
+        // Output JSON error for CLI (PowerShell needs this)
+        console.log(JSON.stringify({ error: error.message, stack: error.stack }));
         process.exit(1);
     }
 }
@@ -321,11 +327,13 @@ handleCommand().then(() => {
     if (integration && integration.aiCore) {
         integration.aiCore.destroy();
     }
-    console.error('Fatal error:', error); // CLI user feedback
+    // All errors go to gameLogger - Cerberus sees everything
     gameLogger.error('MONITORING', '[MONITOR_INTEGRATION_CLI] Fatal error', {
         error: error.message,
         stack: error.stack
     });
+    // Output JSON error for CLI (PowerShell needs this)
+    console.log(JSON.stringify({ error: 'Fatal error', message: error.message, stack: error.stack }));
     setTimeout(() => {
         process.exit(1);
     }, 100);
