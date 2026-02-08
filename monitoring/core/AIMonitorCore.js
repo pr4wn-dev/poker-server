@@ -877,6 +877,15 @@ class AIMonitorCore {
         if (this.causalAnalysis && this.causalAnalysis.stop) {
             this.causalAnalysis.stop();
         }
+        if (this.performanceMonitor && this.performanceMonitor.stop) {
+            this.performanceMonitor.stop();
+        }
+        if (this.rulesEnforcer && this.rulesEnforcer.stop) {
+            this.rulesEnforcer.stop();
+        }
+        if (this.learningEngine && this.learningEngine.stopConfidenceMonitoring) {
+            this.learningEngine.stopConfidenceMonitoring();
+        }
         if (this.stateStore) {
             this.stateStore.destroy();
         }

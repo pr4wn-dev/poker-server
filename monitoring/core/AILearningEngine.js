@@ -859,9 +859,19 @@ class AILearningEngine extends EventEmitter {
      */
     startConfidenceMonitoring() {
         // Check confidence every 5 minutes
-        setInterval(() => {
+        this.confidenceInterval = setInterval(() => {
             this.getLearningConfidence(); // This triggers detection and auto-adjustment
         }, 5 * 60 * 1000);
+    }
+    
+    /**
+     * Stop confidence monitoring
+     */
+    stopConfidenceMonitoring() {
+        if (this.confidenceInterval) {
+            clearInterval(this.confidenceInterval);
+            this.confidenceInterval = null;
+        }
     }
     
     /**

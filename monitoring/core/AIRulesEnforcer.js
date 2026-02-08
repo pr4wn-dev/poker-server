@@ -151,6 +151,20 @@ class AIRulesEnforcer extends EventEmitter {
                 ]
             },
             {
+                id: 'cerberus_never_give_up',
+                name: 'Never Give Up - Solve Problems Completely',
+                description: 'Cerberus NEVER gives up on problems. If a test fails, a bug appears, or an issue is found, it MUST be solved completely. No workarounds, no "good enough", no moving on. Every problem is solved to completion. If something is hanging, find the root cause. If something is broken, fix it. Giving up is a violation that Cerberus learns from.',
+                priority: 'critical',
+                category: 'problem_solving',
+                examples: [
+                    'If a test hangs, find WHY it hangs and fix the root cause',
+                    'If a bug appears, trace it to the source and fix it completely',
+                    'No "workarounds" or "good enough" - only complete solutions',
+                    'If something seems impossible, break it down and solve each part',
+                    'Giving up on a problem is tracked as a violation and learned from'
+                ]
+            },
+            {
                 id: 'cerberus_auto_adjustment',
                 name: 'Automatic Self-Improvement When Confidence Low',
                 description: 'When learning confidence is low (<50%), Cerberus automatically adjusts. Suggests specific improvements (increase pattern collection, improve causal tracking, etc.). System self-improves when it detects low confidence.',
