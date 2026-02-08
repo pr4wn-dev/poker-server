@@ -88,6 +88,10 @@ class AIMonitorCore {
                 this.learningEngine.learnFromAttempt(attempt);
             });
             
+            // NOW initialize rules enforcer (needs learningEngine for self-learning)
+            this.rulesEnforcer = new AIRulesEnforcer(this.stateStore, this.learningEngine);
+            this.errorRecovery.recordSuccess('rulesEnforcer');
+            
             // NOW initialize universal error handler (needs issueDetector, errorRecovery, learningEngine)
             this.universalErrorHandler = new UniversalErrorHandler(
                 this.stateStore,
