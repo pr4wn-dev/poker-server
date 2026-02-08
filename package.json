@@ -12,7 +12,9 @@
     "test:coverage": "jest --coverage",
     "compare-states": "node scripts/compare-states.js",
     "analyze-state": "node scripts/analyze-state.js",
-    "test-comparison": "node scripts/run-comparison-test.js"
+    "test-comparison": "node scripts/run-comparison-test.js",
+    "check-console": "node scripts/check-console-usage.js",
+    "test:no-console": "node monitoring/test-no-console-violations.js"
   },
   "keywords": [
     "poker",
