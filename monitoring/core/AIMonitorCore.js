@@ -153,6 +153,27 @@ class AIMonitorCore {
     }
     
     /**
+     * Get integrity status
+     */
+    getIntegrityStatus() {
+        return this.integrityChecker.getIntegrityStatus();
+    }
+    
+    /**
+     * Run integrity checks
+     */
+    runIntegrityChecks() {
+        return this.integrityChecker.runAllChecks();
+    }
+    
+    /**
+     * Get last integrity check results
+     */
+    getIntegrityCheckResults() {
+        return this.integrityChecker.getLastCheckResults();
+    }
+    
+    /**
      * Cleanup
      */
     destroy() {
