@@ -26,6 +26,7 @@ class UniversalErrorHandler extends EventEmitter {
         this.errorRateHistory = []; // Timestamps of recent errors for rate calculation
         this.errorRateThreshold = 10; // Alert if more than 10 errors per minute
         this.lastSpikeAlert = 0; // Prevent spam - only alert once per minute
+        this.errorRateInterval = null; // Store interval ID for cleanup
         
         // Setup global error handlers
         this.setupGlobalHandlers();
@@ -468,12 +469,22 @@ class UniversalErrorHandler extends EventEmitter {
      */
     startErrorRateMonitoring() {
         // Clean up old error timestamps every 30 seconds
-        setInterval(() => {
+        this.errorRateInterval = setInterval(() => {
             const now = Date.now();
             this.errorRateHistory = this.errorRateHistory.filter(
                 timestamp => now - timestamp < this.errorRateWindow
             );
         }, 30000);
+    }
+    
+    /**
+     * Stop error rate monitoring
+     */
+    stopErrorRateMonitoring() {
+        if (this.errorRateInterval) {
+            clearInterval(this.errorRateInterval);
+            this.errorRateInterval = null;
+        }
     }
     
     /**

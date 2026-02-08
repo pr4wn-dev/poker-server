@@ -886,6 +886,9 @@ class AIMonitorCore {
         if (this.learningEngine && this.learningEngine.stopConfidenceMonitoring) {
             this.learningEngine.stopConfidenceMonitoring();
         }
+        if (this.universalErrorHandler && this.universalErrorHandler.stopErrorRateMonitoring) {
+            this.universalErrorHandler.stopErrorRateMonitoring();
+        }
         if (this.stateStore) {
             this.stateStore.destroy();
         }
