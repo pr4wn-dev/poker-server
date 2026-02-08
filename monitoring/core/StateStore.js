@@ -678,22 +678,23 @@ class StateStore extends EventEmitter {
                 }
             }
             
-            // CRITICAL: Force arrays into serializedState BEFORE creating data object
-            // This ensures arrays are in the state from the start
+            // CRITICAL: Create deep copy of serializedState to avoid reference issues
+            // Then force arrays into the copy BEFORE creating data object
+            const stateCopy = JSON.parse(JSON.stringify(serializedState));
             if (knowledgeBackup || improvementsBackup) {
-                if (!serializedState.learning) {
-                    serializedState.learning = {};
+                if (!stateCopy.learning) {
+                    stateCopy.learning = {};
                 }
                 if (knowledgeBackup) {
-                    serializedState.learning.knowledge = knowledgeBackup;
+                    stateCopy.learning.knowledge = knowledgeBackup;
                 }
                 if (improvementsBackup) {
-                    serializedState.learning.improvements = improvementsBackup;
+                    stateCopy.learning.improvements = improvementsBackup;
                 }
             }
             
             const data = {
-                state: serializedState,
+                state: stateCopy,
                 eventLog: this.eventLog.slice(-1000), // Save last 1000 events
                 timestamp: Date.now()
             };
