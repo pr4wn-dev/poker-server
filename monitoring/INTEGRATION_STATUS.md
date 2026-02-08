@@ -78,6 +78,27 @@ monitoring/
 
 ## 🚀 How to Use
 
+### **AI-Learning System Workflow**
+
+**IMPORTANT**: The AI and Learning System work together as one unified entity. See **[WORKFLOW.md](WORKFLOW.md)** for complete workflow documentation.
+
+**Quick Reference:**
+- **Before Action**: `core.beforeAIAction(action)` - Get warnings, recommendations, solution templates
+- **When Stuck**: `core.aiNeedsHelp(context)` - Get similar problems and solutions  
+- **After Action**: `core.afterAIAction(action, result)` - Teach learning system (success or failure)
+
+**CLI Examples:**
+```bash
+# Get suggestions before fixing
+node monitoring/ai-collaborate.js before-action '{"type":"fix_attempt","issueType":"syntax_error"}'
+
+# Get help when stuck
+node monitoring/ai-collaborate.js help '{"component":"PowerShell","issue":"syntax_error"}'
+
+# Learn from action result
+node monitoring/ai-collaborate.js after-action '{"type":"fix_attempt"}' '{"success":true}'
+```
+
 ### **From PowerShell Monitor**
 
 The AI system is now integrated into `cerberus.ps1`. You can use it like this:
@@ -118,6 +139,35 @@ $report = Get-AIStatusReport
 ```
 
 ### **From Node.js**
+
+**For AI-Learning System Workflow**, use `AIMonitorCore` directly:
+
+```javascript
+const AIMonitorCore = require('./monitoring/core/AIMonitorCore');
+
+const core = new AIMonitorCore(projectRoot);
+
+// Before action - get suggestions
+const suggestions = core.beforeAIAction({
+    type: 'fix_attempt',
+    issueType: 'syntax_error',
+    file: 'monitoring/cerberus.ps1'
+});
+
+// When stuck - get help
+const help = core.aiNeedsHelp({
+    component: 'PowerShell',
+    issue: 'syntax_error'
+});
+
+// After action - teach learning system
+core.afterAIAction(action, {
+    success: true,
+    codeChanges: [/* actual changes */]
+});
+```
+
+**For Standard Integration**, use `CerberusIntegration`:
 
 ```javascript
 const CerberusIntegration = require('./monitoring/integration/CerberusIntegration');

@@ -67,6 +67,51 @@ cd C:\Projects\poker-server
 .\monitoring\cerberus.ps1
 ```
 
+### **AI-Learning System Workflow**
+
+The AI and Learning System work together as one unified entity. **See [WORKFLOW.md](WORKFLOW.md) for complete details.**
+
+**Quick Overview:**
+- **Before Action**: Call `beforeAIAction()` to get warnings, recommendations, and solution templates
+- **When Stuck**: Call `aiNeedsHelp()` to get similar problems and solutions
+- **After Action**: Call `afterAIAction()` to teach the learning system (success or failure)
+
+**From Node.js:**
+```javascript
+const core = new AIMonitorCore(projectRoot);
+
+// Before fixing - get suggestions
+const suggestions = core.beforeAIAction({
+    type: 'fix_attempt',
+    issueType: 'syntax_error',
+    file: 'monitoring/cerberus.ps1'
+});
+
+// When stuck - get help
+const help = core.aiNeedsHelp({
+    component: 'PowerShell',
+    issue: 'syntax_error'
+});
+
+// After fixing - teach learning system
+core.afterAIAction(action, {
+    success: true,
+    codeChanges: [/* actual changes */]
+});
+```
+
+**From CLI:**
+```bash
+# Get suggestions before action
+node monitoring/ai-collaborate.js before-action '{"type":"fix_attempt","issueType":"syntax_error"}'
+
+# Get help when stuck
+node monitoring/ai-collaborate.js help '{"component":"PowerShell","issue":"syntax_error"}'
+
+# Learn from action
+node monitoring/ai-collaborate.js after-action '{"type":"fix_attempt"}' '{"success":true}'
+```
+
 ### **Use AI Functions from PowerShell**
 
 ```powershell
@@ -154,6 +199,7 @@ monitoring/
 - **Self-learning rules enforcement** - Learns from rule violations automatically
 - **Learning confidence tracking** - Quantifies learning effectiveness (cannot be masked)
 - **Automatic self-improvement** - Adjusts when confidence is low
+- **Symbiotic Workflow** - AI and Learning System work together as one unified entity (see **WORKFLOW.md**)
 
 ### **Comprehensive Integrity**
 - Checks monitoring files
@@ -210,6 +256,8 @@ See `PROGRESS_REPORT.md` for detailed status.
 - **EVOLUTION_PLAN.md** - Complete evolution plan
 - **BUILD_SUMMARY.md** - What we built
 - **INTEGRATION_STATUS.md** - How to use the system
+- **WORKFLOW.md** - **AI-Learning System Workflow** - Complete guide for symbiotic collaboration
+- **WE_ARE_ONE.md** - Symbiotic relationship documentation
 - **AI_FIRST_DESIGN.md** - AI-first design philosophy
 - **FUNDAMENTAL_REDESIGN.md** - Fundamental redesign approach
 
