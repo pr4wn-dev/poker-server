@@ -35,7 +35,7 @@ class AIMonitorCore {
             this.decisionEngine,
             this.logProcessor
         );
-        this.communication = new AICommunicationInterface(
+        this.communicationInterface = new AICommunicationInterface(
             this.stateStore,
             this.issueDetector,
             this.fixTracker,
@@ -117,14 +117,14 @@ class AIMonitorCore {
      * Get complete status - AI can see everything
      */
     getStatus() {
-        return this.communication.getStatusReport();
+        return this.communicationInterface.getStatusReport();
     }
     
     /**
      * Query system - AI can ask anything
      */
     query(question) {
-        return this.communication.query(question);
+        return this.communicationInterface.query(question);
     }
     
     /**
@@ -159,7 +159,7 @@ class AIMonitorCore {
      * Get detailed analysis - AI understands everything
      */
     getDetailedAnalysis(issueId) {
-        return this.communication.getDetailedAnalysis(issueId);
+        return this.communicationInterface.getDetailedAnalysis(issueId);
     }
     
     /**

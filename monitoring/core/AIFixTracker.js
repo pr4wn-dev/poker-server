@@ -571,7 +571,7 @@ class AIFixTracker extends EventEmitter {
             attempts.splice(0, attempts.length - 1000);
         }
         
-        this.stateStore.updateState('fixes.attempts', attempts);
+        this.stateStore.updateState('fixes.attempts', attemptsArray);
         
         // Update learning state
         const learningAttempts = this.stateStore.getState('learning.fixAttempts') || new Map();

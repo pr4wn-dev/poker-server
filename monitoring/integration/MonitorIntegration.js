@@ -309,9 +309,11 @@ class MonitorIntegration {
      */
     getActiveIssues() {
         const issues = this.aiCore.issueDetector.getActiveIssues();
+        // Ensure issues is an array
+        const issuesArray = Array.isArray(issues) ? issues : [];
         return {
-            count: issues.length,
-            issues: issues.map(i => ({
+            count: issuesArray.length,
+            issues: issuesArray.map(i => ({
                 id: i.id,
                 type: i.type,
                 severity: i.severity,

@@ -440,6 +440,22 @@ class AIIssueDetector extends EventEmitter {
     }
     
     /**
+     * Detect issue from log line (alias for detectIssue for compatibility)
+     */
+    detectFromLogLine(logLine) {
+        // Parse log line and detect issue
+        const issue = this.analyzeLog({ message: logLine, level: 'error', timestamp: Date.now() });
+        if (issue) {
+            return this.detectIssue({
+                ...issue,
+                method: 'patternAnalysis',
+                log: logLine
+            });
+        }
+        return null;
+    }
+    
+    /**
      * Detect an issue
      */
     detectIssue(issueData) {

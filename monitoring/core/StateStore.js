@@ -576,7 +576,23 @@ class StateStore extends EventEmitter {
                 }
             }
         } catch (error) {
-            console.error('Error loading state store:', error);
+            console.error('Error loading state store:', error.message);
+            // If state file is corrupted, start fresh
+            if (error instanceof SyntaxError) {
+                console.warn('[StateStore] Corrupted state file detected, starting fresh');
+                // Backup corrupted file
+                try {
+                    if (fs.existsSync(this.persistenceFile)) {
+                        const backupFile = this.persistenceFile + '.corrupted.' + Date.now();
+                        fs.copyFileSync(this.persistenceFile, backupFile);
+                        console.log(`[StateStore] Corrupted file backed up to: ${backupFile}`);
+                    }
+                } catch (backupError) {
+                    // Ignore backup errors
+                }
+                // Start with fresh state
+                this.state = this._getInitialState();
+            }
         }
     }
     

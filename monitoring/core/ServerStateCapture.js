@@ -44,6 +44,13 @@ class ServerStateCapture {
     }
     
     /**
+     * Destroy - alias for stop (for consistency with other components)
+     */
+    destroy() {
+        this.stop();
+    }
+    
+    /**
      * Capture current server state
      */
     async captureState() {
