@@ -216,6 +216,45 @@ class CerberusIntegration {
     }
     
     /**
+     * Get AI decision for server start
+     */
+    shouldStartServer() {
+        const decision = this.aiCore.decisionEngine.shouldStartServer();
+        return {
+            should: decision.should,
+            reason: decision.reason,
+            confidence: decision.confidence,
+            priority: decision.priority
+        };
+    }
+    
+    /**
+     * Get AI decision for Unity start
+     */
+    shouldStartUnity() {
+        const decision = this.aiCore.decisionEngine.shouldStartUnity();
+        return {
+            should: decision.should,
+            reason: decision.reason,
+            confidence: decision.confidence,
+            priority: decision.priority
+        };
+    }
+    
+    /**
+     * Get AI decision for simulation start
+     */
+    shouldStartSimulation() {
+        const decision = this.aiCore.decisionEngine.shouldStartSimulation();
+        return {
+            should: decision.should,
+            reason: decision.reason,
+            confidence: decision.confidence,
+            priority: decision.priority
+        };
+    }
+    
+    /**
      * Get investigation status from AI core
      * Replaces reading from monitor-status.json
      */

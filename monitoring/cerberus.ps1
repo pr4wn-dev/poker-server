@@ -1852,20 +1852,25 @@ function Kill-Port3000Processes {
 
 # Function to display statistics in a formatted layout
 function Show-Statistics {
-    # NEW: Try AI-powered statistics first, fallback to legacy if unavailable
+    # AI-FIRST: Always use AI-powered statistics (no fallback to legacy)
     if ($script:aiIntegrationEnabled) {
         try {
             $aiStats = Get-AILiveStatistics
             if ($aiStats) {
                 Show-CerberusStatistics -LegacyStats $stats -LogFile $logFile -ServerUrl $serverUrl
                 return
+            } else {
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [ERROR] AI statistics unavailable - display may be incomplete" -ForegroundColor "Red"
+                # Still show basic info even if AI stats fail
             }
         } catch {
-            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] AI statistics failed, using legacy: $_" -ForegroundColor "Yellow"
+            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [ERROR] AI statistics failed: $_" -ForegroundColor "Red"
+            # Still show basic info even if AI stats fail
         }
     }
     
-    # LEGACY: Original Show-Statistics implementation (fallback)
+    # FALLBACK: Only if AI integration is completely disabled
+    # (This should never happen in normal operation)
     $fixStats = Get-FixAttemptsStats
     $pendingInfo = Get-PendingIssuesInfo
     $stats.PendingIssues = $pendingInfo.TotalIssues
@@ -3040,17 +3045,85 @@ function Maintain-Services {
         return  # All automation disabled
     }
     
-    # Check and restart services as needed
-    if ($config.automation.autoRestartServer) {
-        Start-ServerIfNeeded | Out-Null
-    }
-    
-    if ($config.automation.autoRestartDatabase) {
-        Restart-DatabaseIfNeeded | Out-Null
-    }
-    
-    if ($config.automation.autoRestartUnity) {
-        Restart-UnityIfNeeded | Out-Null
+    # AI-FIRST: Use AI decisions for all service management
+    if ($script:aiIntegrationEnabled) {
+        try {
+            # Server management (AI decision)
+            if ($config.automation.autoRestartServer) {
+                $serverDecision = Should-AIStartServer
+                if ($serverDecision -and $serverDecision.Should) {
+                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] AI DECISION: Starting server - $($serverDecision.Reason)" -ForegroundColor "Cyan"
+                    Start-ServerIfNeeded | Out-Null
+                }
+            }
+            
+            # Unity management (AI decision)
+            if ($config.automation.autoRestartUnity) {
+                $unityDecision = Should-AIStartUnity
+                if ($unityDecision -and $unityDecision.Should) {
+                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] AI DECISION: Starting Unity - $($unityDecision.Reason)" -ForegroundColor "Cyan"
+                    Restart-UnityIfNeeded | Out-Null
+                }
+            }
+            
+            # Simulation management (AI decision)
+            if ($config.simulation.enabled -and $config.simulation.autoStartSimulation) {
+                $simDecision = Should-AIStartSimulation
+                if ($simDecision -and $simDecision.Should) {
+                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] AI DECISION: Starting simulation - $($simDecision.Reason)" -ForegroundColor "Cyan"
+                    # Start simulation via API (if not already running)
+                    try {
+                        $healthResult = Invoke-WebRequestAsync -Uri "$serverUrl/health" -TimeoutSec 2 -JobTimeout 3
+                        if ($healthResult.Success) {
+                            $health = $healthResult.Content | ConvertFrom-Json
+                            if ($health.activeSimulations -eq 0) {
+                                # Start simulation via API
+                                $simParams = @{
+                                    tableName = $config.simulation.tableName
+                                    maxPlayers = $config.simulation.maxPlayers
+                                    startingChips = $config.simulation.startingChips
+                                    smallBlind = $config.simulation.smallBlind
+                                    bigBlind = $config.simulation.bigBlind
+                                    itemAnteEnabled = if ($config.simulation.itemAnteEnabled) { $true } else { $false }
+                                } | ConvertTo-Json
+                                Invoke-WebRequestAsync -Uri "$serverUrl/api/simulation/create" -Method POST -Body $simParams -ContentType "application/json" -TimeoutSec 5 -JobTimeout 6 | Out-Null
+                            }
+                        }
+                    } catch {
+                        # Simulation start failed - log but continue
+                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [WARNING] Simulation start failed: $_" -ForegroundColor "Yellow"
+                    }
+                }
+            }
+            
+            # Database management (still use legacy for now - AI decision can be added later)
+            if ($config.automation.autoRestartDatabase) {
+                Restart-DatabaseIfNeeded | Out-Null
+            }
+        } catch {
+            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [ERROR] AI service management failed: $_" -ForegroundColor "Red"
+            # Fallback to legacy if AI fails
+            if ($config.automation.autoRestartServer) {
+                Start-ServerIfNeeded | Out-Null
+            }
+            if ($config.automation.autoRestartUnity) {
+                Restart-UnityIfNeeded | Out-Null
+            }
+            if ($config.automation.autoRestartDatabase) {
+                Restart-DatabaseIfNeeded | Out-Null
+            }
+        }
+    } else {
+        # FALLBACK: Legacy service management (if AI integration disabled)
+        if ($config.automation.autoRestartServer) {
+            Start-ServerIfNeeded | Out-Null
+        }
+        if ($config.automation.autoRestartDatabase) {
+            Restart-DatabaseIfNeeded | Out-Null
+        }
+        if ($config.automation.autoRestartUnity) {
+            Restart-UnityIfNeeded | Out-Null
+        }
     }
 }
 
@@ -3449,6 +3522,45 @@ while ($monitoringActive) {
         if ($timeSinceServiceCheck.TotalSeconds -ge $serviceCheckInterval) {
             Maintain-Services
             $lastServiceCheck = Get-Date
+        }
+        
+        # NEW: Use AI system to check pause/resume decisions (every 5 seconds)
+        if ($script:aiIntegrationEnabled) {
+            try {
+                # Check if Unity should be paused
+                if (-not $isPaused) {
+                    $pauseDecision = Should-AIPauseUnity
+                    if ($pauseDecision -and $pauseDecision.Should) {
+                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] AI DECISION: Pausing Unity - $($pauseDecision.Reason)" -ForegroundColor "Cyan"
+                        # Pause Unity via API
+                        $activeIssues = Get-AIActiveIssues
+                        $tableId = if ($activeIssues -and $activeIssues.Issues -and $activeIssues.Issues.Count -gt 0 -and $activeIssues.Issues[0].details -and $activeIssues.Issues[0].details.tableId) {
+                            $activeIssues.Issues[0].details.tableId
+                        } else { $null }
+                        Invoke-PauseUnity -tableId $tableId -reason $pauseDecision.Reason | Out-Null
+                        $isPaused = $true
+                        Update-AIMonitorStatus | Out-Null
+                    }
+                }
+                
+                # Check if Unity should be resumed
+                if ($isPaused) {
+                    $resumeDecision = Should-AIResumeUnity
+                    if ($resumeDecision -and $resumeDecision.Should) {
+                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] AI DECISION: Resuming Unity - $($resumeDecision.Reason)" -ForegroundColor "Green"
+                        # Resume Unity via API
+                        try {
+                            Invoke-WebRequestAsync -Uri "$serverUrl/api/simulation/resume" -Method POST -TimeoutSec 2 -JobTimeout 3 | Out-Null
+                            $isPaused = $false
+                            Update-AIMonitorStatus | Out-Null
+                        } catch {
+                            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [WARNING] Resume Unity failed: $_" -ForegroundColor "Yellow"
+                        }
+                    }
+                }
+            } catch {
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] AI pause/resume check failed: $_" -ForegroundColor "Yellow"
+            }
         }
         
         # NEW: Use AI system to decide if investigation should start

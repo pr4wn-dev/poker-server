@@ -92,6 +92,48 @@ function Should-AIResumeUnity {
     return @{ Should = $false; Reason = "AI integration unavailable" }
 }
 
+# Should start server? (AI decision)
+function Should-AIStartServer {
+    $result = Invoke-AIIntegration -Command "should-start-server"
+    if ($result) {
+        return @{
+            Should = $result.should
+            Reason = $result.reason
+            Confidence = $result.confidence
+            Priority = $result.priority
+        }
+    }
+    return @{ Should = $false; Reason = "AI integration unavailable" }
+}
+
+# Should start Unity? (AI decision)
+function Should-AIStartUnity {
+    $result = Invoke-AIIntegration -Command "should-start-unity"
+    if ($result) {
+        return @{
+            Should = $result.should
+            Reason = $result.reason
+            Confidence = $result.confidence
+            Priority = $result.priority
+        }
+    }
+    return @{ Should = $false; Reason = "AI integration unavailable" }
+}
+
+# Should start simulation? (AI decision)
+function Should-AIStartSimulation {
+    $result = Invoke-AIIntegration -Command "should-start-simulation"
+    if ($result) {
+        return @{
+            Should = $result.should
+            Reason = $result.reason
+            Confidence = $result.confidence
+            Priority = $result.priority
+        }
+    }
+    return @{ Should = $false; Reason = "AI integration unavailable" }
+}
+
 # Start investigation (via AI)
 function Start-AIInvestigation {
     $result = Invoke-AIIntegration -Command "start-investigation"

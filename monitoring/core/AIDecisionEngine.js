@@ -343,6 +343,183 @@ class AIDecisionEngine extends EventEmitter {
     }
     
     /**
+     * Should we start the server?
+     */
+    shouldStartServer() {
+        // Guard: Ensure stateStore is ready
+        if (!this.stateStore || typeof this.stateStore.getState !== 'function') {
+            return { should: false, reason: 'State store not ready' };
+        }
+        
+        try {
+            const server = this.stateStore.getState('system.server') || {};
+            const unity = this.stateStore.getState('system.unity') || {};
+            const activeIssues = this.issueDetector.getActiveIssues();
+            
+            // Server is already online
+            if (server.status === 'online') {
+                return {
+                    should: false,
+                    reason: 'Server already online',
+                    confidence: 1.0
+                };
+            }
+            
+            // Check if Unity needs server (Unity is running or should be running)
+            const unityNeedsServer = unity.status === 'running' || unity.status === 'starting' || unity.status === 'connected';
+            
+            // Check if there are critical issues that might require server restart
+            const criticalIssues = activeIssues.filter(i => i.severity === 'critical' && i.source === 'server');
+            
+            // Should start if Unity needs it or if there are critical server issues
+            if (unityNeedsServer || criticalIssues.length > 0) {
+                return {
+                    should: true,
+                    reason: unityNeedsServer ? 'Unity needs server' : `${criticalIssues.length} critical server issue(s)`,
+                    confidence: 0.9,
+                    priority: criticalIssues.length > 0 ? 'critical' : 'high'
+                };
+            }
+            
+            return {
+                should: false,
+                reason: 'No need to start server',
+                confidence: 0.8
+            };
+        } catch (error) {
+            return {
+                should: false,
+                reason: `Error checking server status: ${error.message}`,
+                confidence: 0.0
+            };
+        }
+    }
+    
+    /**
+     * Should we start Unity?
+     */
+    shouldStartUnity() {
+        // Guard: Ensure stateStore is ready
+        if (!this.stateStore || typeof this.stateStore.getState !== 'function') {
+            return { should: false, reason: 'State store not ready' };
+        }
+        
+        try {
+            const unity = this.stateStore.getState('system.unity') || {};
+            const server = this.stateStore.getState('system.server') || {};
+            const monitoring = this.stateStore.getState('monitoring') || {};
+            
+            // Unity is already running
+            if (unity.status === 'running' || unity.status === 'connected') {
+                return {
+                    should: false,
+                    reason: 'Unity already running',
+                    confidence: 1.0
+                };
+            }
+            
+            // Unity is paused (don't start if paused - wait for resume)
+            if (monitoring.unity && monitoring.unity.paused) {
+                return {
+                    should: false,
+                    reason: 'Unity is paused (waiting for fix)',
+                    confidence: 1.0
+                };
+            }
+            
+            // Server must be online for Unity to connect
+            if (server.status !== 'online') {
+                return {
+                    should: false,
+                    reason: 'Server is not online',
+                    confidence: 0.9
+                };
+            }
+            
+            // Should start Unity if server is ready
+            return {
+                should: true,
+                reason: 'Server is online, Unity should start',
+                confidence: 0.85,
+                priority: 'medium'
+            };
+        } catch (error) {
+            return {
+                should: false,
+                reason: `Error checking Unity status: ${error.message}`,
+                confidence: 0.0
+            };
+        }
+    }
+    
+    /**
+     * Should we start simulation?
+     */
+    shouldStartSimulation() {
+        // Guard: Ensure stateStore is ready
+        if (!this.stateStore || typeof this.stateStore.getState !== 'function') {
+            return { should: false, reason: 'State store not ready' };
+        }
+        
+        try {
+            const game = this.stateStore.getState('game') || {};
+            const unity = this.stateStore.getState('system.unity') || {};
+            const server = this.stateStore.getState('system.server') || {};
+            const monitoring = this.stateStore.getState('monitoring') || {};
+            
+            // Simulation already running
+            if (game.activeSimulations && game.activeSimulations > 0) {
+                return {
+                    should: false,
+                    reason: 'Simulation already running',
+                    confidence: 1.0
+                };
+            }
+            
+            // Unity must be connected
+            if (unity.status !== 'connected' && unity.status !== 'running') {
+                return {
+                    should: false,
+                    reason: 'Unity not connected',
+                    confidence: 0.9
+                };
+            }
+            
+            // Server must be online
+            if (server.status !== 'online') {
+                return {
+                    should: false,
+                    reason: 'Server not online',
+                    confidence: 0.9
+                };
+            }
+            
+            // Unity must not be paused
+            if (monitoring.unity && monitoring.unity.paused) {
+                return {
+                    should: false,
+                    reason: 'Unity is paused',
+                    confidence: 1.0
+                };
+            }
+            
+            // Should start simulation if all conditions met
+            return {
+                should: true,
+                reason: 'All conditions met for simulation',
+                confidence: 0.9,
+                priority: 'medium'
+            };
+        } catch (error) {
+            return {
+                should: false,
+                reason: `Error checking simulation status: ${error.message}`,
+                confidence: 0.0
+            };
+        }
+    }
+    
+    /**
      * Execute decisions
      */
     executeDecisions(decisions) {

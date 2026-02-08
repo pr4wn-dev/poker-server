@@ -56,6 +56,21 @@ async function handleCommand() {
                 console.log(JSON.stringify(resumeDecision));
                 break;
                 
+            case 'should-start-server':
+                const serverDecision = integration.shouldStartServer();
+                console.log(JSON.stringify(serverDecision));
+                break;
+                
+            case 'should-start-unity':
+                const unityStartDecision = integration.shouldStartUnity();
+                console.log(JSON.stringify(unityStartDecision));
+                break;
+                
+            case 'should-start-simulation':
+                const simDecision = integration.shouldStartSimulation();
+                console.log(JSON.stringify(simDecision));
+                break;
+                
             case 'get-investigation-status':
                 const investigationStatus = integration.getInvestigationStatus();
                 // Use stdout.write to ensure output is flushed
@@ -276,6 +291,9 @@ async function handleCommand() {
                         'should-start-investigation',
                         'should-pause-unity',
                         'should-resume-unity',
+                        'should-start-server',
+                        'should-start-unity',
+                        'should-start-simulation',
                         'get-investigation-status',
                         'start-investigation',
                         'complete-investigation',
