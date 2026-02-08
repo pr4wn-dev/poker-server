@@ -116,6 +116,23 @@ function Complete-AIInvestigation {
     return @{ Success = $false }
 }
 
+# Detect issue from log line (AI detection)
+function Detect-AIIssue {
+    param(
+        [string]$LogLine
+    )
+    
+    $result = Invoke-AIIntegration -Command "detect-issue" -Arguments @($LogLine)
+    if ($result -and $result.issue) {
+        return @{
+            Issue = $result.issue
+            Confidence = $result.confidence
+            Method = $result.method  # pattern | state | anomaly | causal
+        }
+    }
+    return $null
+}
+
 # Get active issues from AI detector
 function Get-AIActiveIssues {
     $result = Invoke-AIIntegration -Command "get-active-issues"

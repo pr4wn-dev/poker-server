@@ -51,6 +51,16 @@ async function handleCommand() {
                 console.log(JSON.stringify(completeResult));
                 break;
                 
+            case 'detect-issue':
+                const logLine = args.join(' ');
+                if (!logLine) {
+                    console.error('Error: logLine required');
+                    process.exit(1);
+                }
+                const detected = integration.detectIssue(logLine);
+                console.log(JSON.stringify(detected || { issue: null }));
+                break;
+                
             case 'get-active-issues':
                 const issues = integration.getActiveIssues();
                 console.log(JSON.stringify(issues));
@@ -116,6 +126,7 @@ async function handleCommand() {
                 console.log('  get-investigation-status');
                 console.log('  start-investigation');
                 console.log('  complete-investigation');
+                console.log('  detect-issue <logLine>');
                 console.log('  get-active-issues');
                 console.log('  get-suggested-fixes <issueId>');
                 console.log('  record-fix-attempt <issueId> <fixMethod> <result> [fixDetails]');

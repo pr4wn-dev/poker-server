@@ -4283,8 +4283,27 @@ while ($monitoringActive) {
                     }
                 }
                 
-                # Check for issues using Node.js detector
-                $issue = Invoke-IssueDetector $line
+                # NEW: Check for issues using AI system first (if enabled), then fallback to pattern matching
+                $issue = $null
+                if ($script:aiIntegrationEnabled) {
+                    try {
+                        # Send log line to AI system for detection
+                        $aiDetected = Detect-AIIssue -LogLine $line
+                        if ($aiDetected -and $aiDetected.Issue) {
+                            $issue = $aiDetected.Issue
+                            # AI detected issue - use it
+                        } else {
+                            # AI didn't detect issue - try pattern matching as fallback
+                            $issue = Invoke-IssueDetector $line
+                        }
+                    } catch {
+                        # AI detection failed - fallback to pattern matching
+                        $issue = Invoke-IssueDetector $line
+                    }
+                } else {
+                    # AI not enabled - use pattern matching only
+                    $issue = Invoke-IssueDetector $line
+                }
                 
                 if ($issue) {
                     # Throttle duplicate issue detections - only show message once per 5 seconds per issue pattern

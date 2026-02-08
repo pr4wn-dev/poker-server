@@ -245,6 +245,40 @@ class MonitorIntegration {
     }
     
     /**
+     * Detect issue from log line (AI detection)
+     * Uses AI system for detection, falls back to pattern matching
+     */
+    detectIssue(logLine) {
+        try {
+            // Process log line through AI log processor
+            const processed = this.aiCore.logProcessor.processLogLine(logLine);
+            
+            // Detect issue using AI detector
+            const detected = this.aiCore.issueDetector.detectFromLogLine(processed);
+            
+            if (detected && detected.issue) {
+                return {
+                    issue: {
+                        type: detected.issue.type,
+                        severity: detected.issue.severity,
+                        source: detected.issue.source || 'log',
+                        message: detected.issue.message || logLine,
+                        confidence: detected.confidence || 0.8,
+                        method: detected.method || 'pattern'
+                    },
+                    confidence: detected.confidence || 0.8,
+                    method: detected.method || 'pattern'
+                };
+            }
+            
+            return null;
+        } catch (error) {
+            console.error('[Monitor Integration] Detect issue error:', error);
+            return null;
+        }
+    }
+    
+    /**
      * Get active issues from AI detector
      * Replaces reading from pending-issues.json
      */
