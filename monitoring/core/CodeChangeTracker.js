@@ -311,14 +311,19 @@ class CodeChangeTracker extends EventEmitter {
         const data = this.stateStore.getState('learning.codeChanges');
         if (!data) return;
         
-        if (data.codeChanges) {
-            this.codeChanges = new Map(data.codeChanges);
-        }
-        if (data.codePatterns) {
-            this.codePatterns = new Map(data.codePatterns);
-        }
-        if (data.filePatterns) {
-            this.filePatterns = new Map(data.filePatterns);
+        try {
+            if (data.codeChanges && Array.isArray(data.codeChanges)) {
+                this.codeChanges = new Map(data.codeChanges);
+            }
+            if (data.codePatterns && Array.isArray(data.codePatterns)) {
+                this.codePatterns = new Map(data.codePatterns);
+            }
+            if (data.filePatterns && Array.isArray(data.filePatterns)) {
+                this.filePatterns = new Map(data.filePatterns);
+            }
+        } catch (error) {
+            // If load fails, start with empty maps
+            gameLogger.error('CERBERUS', '[CODE_CHANGE_TRACKER] Load error', { error: error.message });
         }
     }
 }

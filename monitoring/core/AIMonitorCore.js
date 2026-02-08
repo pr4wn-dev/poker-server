@@ -152,6 +152,32 @@ class AIMonitorCore {
             this.rulesEnforcer // Pass rules enforcer - AI must never forget rules
         );
         
+        // Solution Template Engine (reusable solution templates)
+        try {
+            const SolutionTemplateEngine = require('./SolutionTemplateEngine');
+            this.solutionTemplateEngine = new SolutionTemplateEngine(
+                this.stateStore,
+                this.learningEngine
+            );
+            this.errorRecovery.recordSuccess('solutionTemplateEngine');
+        } catch (error) {
+            this.errorRecovery.recordError('solutionTemplateEngine', error);
+            throw error;
+        }
+        
+        // Code Change Tracker (learn from actual code changes)
+        try {
+            const CodeChangeTracker = require('./CodeChangeTracker');
+            this.codeChangeTracker = new CodeChangeTracker(
+                this.stateStore,
+                this.projectRoot
+            );
+            this.errorRecovery.recordSuccess('codeChangeTracker');
+        } catch (error) {
+            this.errorRecovery.recordError('codeChangeTracker', error);
+            throw error;
+        }
+        
         // AI Collaboration Interface - WE ARE ONE
         // This makes AI and Learning System completely symbiotic
         const AICollaborationInterface = require('./AICollaborationInterface');
@@ -160,7 +186,9 @@ class AIMonitorCore {
             this.learningEngine,
             this.issueDetector,
             this.fixTracker,
-            this.communicationInterface
+            this.communicationInterface,
+            this.solutionTemplateEngine,
+            this.codeChangeTracker
         );
         this.errorRecovery.recordSuccess('collaborationInterface');
         
@@ -1102,6 +1130,16 @@ class AIMonitorCore {
         // Stop collaboration interface (remove listeners to prevent memory leaks)
         if (this.collaborationInterface) {
             this.collaborationInterface.removeAllListeners();
+        }
+        
+        // Save solution templates
+        if (this.solutionTemplateEngine) {
+            this.solutionTemplateEngine.save();
+        }
+        
+        // Save code changes
+        if (this.codeChangeTracker) {
+            this.codeChangeTracker.save();
         }
         
         if (this.stateStore) {

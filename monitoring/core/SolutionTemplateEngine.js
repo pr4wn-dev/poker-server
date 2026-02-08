@@ -537,14 +537,19 @@ processData() {
         const data = this.stateStore.getState('learning.solutionTemplates');
         if (!data) return;
         
-        if (data.templates) {
-            this.templates = new Map(data.templates);
-        }
-        if (data.templatePatterns) {
-            this.templatePatterns = new Map(data.templatePatterns);
-        }
-        if (data.templateUsage) {
-            this.templateUsage = new Map(data.templateUsage);
+        try {
+            if (data.templates && Array.isArray(data.templates)) {
+                this.templates = new Map(data.templates);
+            }
+            if (data.templatePatterns && Array.isArray(data.templatePatterns)) {
+                this.templatePatterns = new Map(data.templatePatterns);
+            }
+            if (data.templateUsage && Array.isArray(data.templateUsage)) {
+                this.templateUsage = new Map(data.templateUsage);
+            }
+        } catch (error) {
+            // If load fails, start with empty maps (will be initialized with common templates)
+            gameLogger.error('CERBERUS', '[SOLUTION_TEMPLATE] Load error', { error: error.message });
         }
     }
 }

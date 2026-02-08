@@ -81,8 +81,139 @@ class AILearningEngine extends EventEmitter {
         // Cross-issue learning
         this.learnCrossIssue(attempt);
         
+        // Generalize patterns
+        this.generalizePattern(attempt);
+        
         // Save learning
         this.save();
+    }
+    
+    /**
+     * Generalize pattern - abstract specific pattern to general principle
+     */
+    generalizePattern(attempt) {
+        if (attempt.result !== 'success') return;
+        
+        // Detect specific pattern
+        const specificPattern = this.detectSpecificPattern(attempt);
+        if (!specificPattern) return;
+        
+        // Map to general pattern
+        const generalPattern = this.mapToGeneralPattern(specificPattern);
+        
+        // Update generalized pattern
+        if (!this.generalizedPatterns.has(generalPattern)) {
+            this.generalizedPatterns.set(generalPattern, {
+                generalPattern,
+                specificInstances: [],
+                generalSolution: this.extractGeneralSolution(attempt),
+                successRate: 1.0,
+                attempts: 1,
+                successes: 1,
+                applicableTo: []
+            });
+        }
+        
+        const generalized = this.generalizedPatterns.get(generalPattern);
+        
+        // Add specific instance if not already there
+        if (!generalized.specificInstances.includes(specificPattern)) {
+            generalized.specificInstances.push(specificPattern);
+        }
+        
+        // Update success rate
+        generalized.attempts++;
+        generalized.successes++;
+        generalized.successRate = generalized.successes / generalized.attempts;
+        
+        // Update applicable components
+        const component = attempt.component || attempt.issueType?.split('.')[0] || 'unknown';
+        if (!generalized.applicableTo.includes(component)) {
+            generalized.applicableTo.push(component);
+        }
+        
+        // Store generalization rule
+        this.generalizationRules.set(specificPattern, generalPattern);
+    }
+    
+    /**
+     * Detect specific pattern from attempt
+     */
+    detectSpecificPattern(attempt) {
+        const issueType = attempt.issueType || '';
+        const fixMethod = attempt.fixMethod || '';
+        
+        // Specific patterns
+        if (issueType.includes('AIIssueDetector') && issueType.includes('timing')) {
+            return 'AIIssueDetector.timing_issue';
+        }
+        if (issueType.includes('ProcessMonitor') && issueType.includes('initialization')) {
+            return 'ProcessMonitor.initialization_hang';
+        }
+        if (issueType.includes('circular') || fixMethod.includes('setImmediate')) {
+            return 'circular_dependency.synchronous_loop';
+        }
+        if (issueType.includes('undefined') || fixMethod.includes('guard')) {
+            return 'undefined_access.missing_guard';
+        }
+        
+        return null;
+    }
+    
+    /**
+     * Map specific pattern to general pattern
+     */
+    mapToGeneralPattern(specificPattern) {
+        // Mapping rules
+        if (specificPattern.includes('timing') || specificPattern.includes('initialization')) {
+            return 'initialization_race_condition';
+        }
+        if (specificPattern.includes('circular') || specificPattern.includes('loop')) {
+            return 'synchronous_loop_pattern';
+        }
+        if (specificPattern.includes('undefined') || specificPattern.includes('guard')) {
+            return 'missing_dependency_guard';
+        }
+        if (specificPattern.includes('hang') || specificPattern.includes('blocking')) {
+            return 'blocking_operation_pattern';
+        }
+        
+        return 'general_fix_pattern';
+    }
+    
+    /**
+     * Extract general solution from attempt
+     */
+    extractGeneralSolution(attempt) {
+        const fixMethod = attempt.fixMethod || '';
+        
+        if (fixMethod.includes('setImmediate')) {
+            return 'Delay async operations with setImmediate and add guards';
+        }
+        if (fixMethod.includes('guard')) {
+            return 'Add guards before accessing dependencies';
+        }
+        if (fixMethod.includes('try') || fixMethod.includes('catch')) {
+            return 'Wrap operations in try-catch blocks';
+        }
+        if (fixMethod.includes('async')) {
+            return 'Make operations async to break blocking chains';
+        }
+        
+        return 'Apply learned solution pattern';
+    }
+    
+    /**
+     * Get generalized pattern for a specific issue
+     */
+    getGeneralizedPattern(specificIssue) {
+        const specificPattern = this.detectSpecificPattern({ issueType: specificIssue });
+        if (!specificPattern) return null;
+        
+        const generalPattern = this.generalizationRules.get(specificPattern);
+        if (!generalPattern) return null;
+        
+        return this.generalizedPatterns.get(generalPattern);
     }
     
     /**
@@ -1391,6 +1522,12 @@ class AILearningEngine extends EventEmitter {
             
             const debuggingPatterns = this.stateStore.getState('learning.debuggingPatterns') || {};
             this.debuggingPatterns = new Map(Object.entries(debuggingPatterns));
+            
+            const generalizedPatterns = this.stateStore.getState('learning.generalizedPatterns') || [];
+            this.generalizedPatterns = new Map(generalizedPatterns);
+            
+            const generalizationRules = this.stateStore.getState('learning.generalizationRules') || [];
+            this.generalizationRules = new Map(generalizationRules);
         } catch (error) {
             // DO NOT log to console - errors are for AI only, not user
             // Re-throw so UniversalErrorHandler can catch it
