@@ -606,6 +606,13 @@ class AIMonitorCore {
     }
     
     /**
+     * Get process monitor
+     */
+    getProcessMonitor() {
+        return this.processMonitor;
+    }
+    
+    /**
      * Get state verification contracts
      */
     getStateVerificationContracts() {
@@ -738,7 +745,9 @@ class AIMonitorCore {
                 learningEngine: !!this.learningEngine,
                 errorRecovery: !!this.errorRecovery,
                 performanceMonitor: !!this.performanceMonitor,
-                universalErrorHandler: !!this.universalErrorHandler
+                universalErrorHandler: !!this.universalErrorHandler,
+                processMonitor: !!this.processMonitor,
+                workflowEnforcer: !!this.workflowEnforcer
             };
             
             // Calculate overall health
@@ -780,7 +789,8 @@ class AIMonitorCore {
             performance: this.getPerformanceReport(),
             learning: this.getLearningReport(),
             autoFix: this.getAutoFixStatistics(),
-            componentHealth: this.getComponentHealth()
+            componentHealth: this.getComponentHealth(),
+            processes: this.processMonitor ? this.processMonitor.getProcessReport() : null
         };
     }
     
@@ -916,6 +926,9 @@ class AIMonitorCore {
         }
         if (this.universalErrorHandler && this.universalErrorHandler.stopErrorRateMonitoring) {
             this.universalErrorHandler.stopErrorRateMonitoring();
+        }
+        if (this.processMonitor && this.processMonitor.stopMonitoring) {
+            this.processMonitor.stopMonitoring();
         }
         if (this.stateStore) {
             this.stateStore.destroy();
