@@ -1864,11 +1864,24 @@ function Show-Statistics {
     $investigationStartTimeValue = $null
     $investigationTimeRemaining = $null
     # Use script root directory (where monitor.ps1 is located)
-    $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+    # Try multiple methods to get script path
+    $scriptRoot = $null
+    if ($PSScriptRoot) {
+        $scriptRoot = $PSScriptRoot
+    } elseif ($MyInvocation.MyCommand.Path) {
+        $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+    } else {
+        # Fallback: assume we're in the monitoring directory or project root
+        $scriptRoot = if (Test-Path "monitoring\monitor.ps1") { "monitoring" } elseif (Test-Path "logs\monitor-status.json") { "." } else { Get-Location }
+    }
     $statusFilePath = Join-Path $scriptRoot "..\logs\monitor-status.json" | Resolve-Path -ErrorAction SilentlyContinue
     if (-not $statusFilePath) {
-        # Fallback to relative path
+        # Fallback to relative path from current location
         $statusFilePath = Join-Path (Get-Location) "logs\monitor-status.json"
+        if (-not (Test-Path $statusFilePath)) {
+            # Last resort: try absolute path from known project structure
+            $statusFilePath = "C:\Projects\poker-server\logs\monitor-status.json"
+        }
     }
     if (Test-Path $statusFilePath) {
         try {
