@@ -408,6 +408,101 @@ class AIMonitorCore {
     }
     
     /**
+     * Wrap all components with error handler
+     * Ensures all errors are caught, reported, and learned from
+     */
+    wrapAllComponents() {
+        if (!this.universalErrorHandler) return;
+        
+        const handler = this.universalErrorHandler;
+        
+        // Wrap StateStore methods
+        if (this.stateStore) {
+            const originalUpdateState = this.stateStore.updateState.bind(this.stateStore);
+            this.stateStore.updateState = handler.wrapSyncFunction('stateStore', 'updateState', originalUpdateState);
+            
+            const originalGetState = this.stateStore.getState.bind(this.stateStore);
+            this.stateStore.getState = handler.wrapSyncFunction('stateStore', 'getState', originalGetState);
+            
+            const originalSave = this.stateStore.save.bind(this.stateStore);
+            this.stateStore.save = handler.wrapFunction('stateStore', 'save', originalSave);
+            
+            const originalLoad = this.stateStore.load.bind(this.stateStore);
+            this.stateStore.load = handler.wrapFunction('stateStore', 'load', originalLoad);
+        }
+        
+        // Wrap AILogProcessor methods
+        if (this.logProcessor) {
+            const originalProcessLine = this.logProcessor.processLine.bind(this.logProcessor);
+            this.logProcessor.processLine = handler.wrapSyncFunction('logProcessor', 'processLine', originalProcessLine);
+            
+            const originalCheckForNewLogs = this.logProcessor.checkForNewLogs.bind(this.logProcessor);
+            this.logProcessor.checkForNewLogs = handler.wrapFunction('logProcessor', 'checkForNewLogs', originalCheckForNewLogs);
+        }
+        
+        // Wrap AIIssueDetector methods
+        if (this.issueDetector) {
+            const originalDetectIssue = this.issueDetector.detectIssue.bind(this.issueDetector);
+            this.issueDetector.detectIssue = handler.wrapSyncFunction('issueDetector', 'detectIssue', originalDetectIssue);
+            
+            const originalVerifyState = this.issueDetector.verifyState.bind(this.issueDetector);
+            this.issueDetector.verifyState = handler.wrapFunction('issueDetector', 'verifyState', originalVerifyState);
+            
+            const originalGetActiveIssues = this.issueDetector.getActiveIssues.bind(this.issueDetector);
+            this.issueDetector.getActiveIssues = handler.wrapSyncFunction('issueDetector', 'getActiveIssues', originalGetActiveIssues);
+        }
+        
+        // Wrap AIFixTracker methods
+        if (this.fixTracker) {
+            const originalRecordAttempt = this.fixTracker.recordAttempt.bind(this.fixTracker);
+            this.fixTracker.recordAttempt = handler.wrapSyncFunction('fixTracker', 'recordAttempt', originalRecordAttempt);
+            
+            const originalGetSuggestedFixes = this.fixTracker.getSuggestedFixes.bind(this.fixTracker);
+            this.fixTracker.getSuggestedFixes = handler.wrapSyncFunction('fixTracker', 'getSuggestedFixes', originalGetSuggestedFixes);
+        }
+        
+        // Wrap AIDecisionEngine methods
+        if (this.decisionEngine) {
+            const originalShouldStartInvestigation = this.decisionEngine.shouldStartInvestigation.bind(this.decisionEngine);
+            this.decisionEngine.shouldStartInvestigation = handler.wrapSyncFunction('decisionEngine', 'shouldStartInvestigation', originalShouldStartInvestigation);
+            
+            const originalStartInvestigation = this.decisionEngine.startInvestigation.bind(this.decisionEngine);
+            this.decisionEngine.startInvestigation = handler.wrapFunction('decisionEngine', 'startInvestigation', originalStartInvestigation);
+            
+            const originalCompleteInvestigation = this.decisionEngine.completeInvestigation.bind(this.decisionEngine);
+            this.decisionEngine.completeInvestigation = handler.wrapFunction('decisionEngine', 'completeInvestigation', originalCompleteInvestigation);
+        }
+        
+        // Wrap AILiveStatistics methods
+        if (this.liveStatistics) {
+            const originalGetStatistics = this.liveStatistics.getStatistics.bind(this.liveStatistics);
+            this.liveStatistics.getStatistics = handler.wrapSyncFunction('liveStatistics', 'getStatistics', originalGetStatistics);
+        }
+        
+        // Wrap AICommunicationInterface methods
+        if (this.communicationInterface) {
+            const originalQuery = this.communicationInterface.query.bind(this.communicationInterface);
+            this.communicationInterface.query = handler.wrapFunction('communicationInterface', 'query', originalQuery);
+            
+            const originalGetStatusReport = this.communicationInterface.getStatusReport.bind(this.communicationInterface);
+            this.communicationInterface.getStatusReport = handler.wrapSyncFunction('communicationInterface', 'getStatusReport', originalGetStatusReport);
+        }
+        
+        // Wrap AILearningEngine methods
+        if (this.learningEngine) {
+            const originalLearnFromAttempt = this.learningEngine.learnFromAttempt.bind(this.learningEngine);
+            this.learningEngine.learnFromAttempt = handler.wrapSyncFunction('learningEngine', 'learnFromAttempt', originalLearnFromAttempt);
+            
+            const originalGetBestSolution = this.learningEngine.getBestSolution.bind(this.learningEngine);
+            this.learningEngine.getBestSolution = handler.wrapSyncFunction('learningEngine', 'getBestSolution', originalGetBestSolution);
+        }
+        
+        // Note: ErrorRecovery and PerformanceMonitor don't need wrapping as they're already error-aware
+        // IntegrityChecker already reports to issueDetector
+        // ServerStateCapture already reports errors
+    }
+    
+    /**
      * Cleanup - Stop all background processes
      */
     destroy() {
