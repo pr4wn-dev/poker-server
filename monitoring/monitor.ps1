@@ -1930,8 +1930,9 @@ function Show-Statistics {
     }
     
     $col3Lines += ""
-    $col3Lines += "INVESTIGATION PHASE"
-    $col3Lines += ("=" * ($colWidth - 2))
+    $col3Lines += "═══════════════════════════"
+    $col3Lines += "  INVESTIGATION PHASE"
+    $col3Lines += "═══════════════════════════"
     if ($investigationActive -and $investigationStartTimeValue) {
         $investigationElapsed = (Get-Date) - $investigationStartTimeValue
         # Use timeRemaining from status file if available, otherwise calculate
@@ -1944,58 +1945,99 @@ function Show-Statistics {
             $elapsed = [Math]::Min($investigationTimeout, $investigationElapsed.TotalSeconds)
         }
         $progressPercent = [Math]::Round(($elapsed / $investigationTimeout) * 100)
+        $elapsedSeconds = $investigationElapsed.TotalSeconds
         
-        # Progress bar visualization (text-based)
-        $progressBarWidth = $colWidth - 12
+        # Progress bar visualization (text-based, wider)
+        $progressBarWidth = $colWidth - 8
         $filled = [Math]::Round(($elapsed / $investigationTimeout) * $progressBarWidth)
         $empty = $progressBarWidth - $filled
-        $progressBar = "[" + ("#" * $filled) + ("-" * $empty) + "]"
-        $col3Lines += "Status: ACTIVE"
-        $col3Lines += "Progress: $progressBar $progressPercent%"
-        $col3Lines += "Time Left: " + ("{0:N0}s" -f $remaining) + " / " + ("{0:N0}s" -f $investigationTimeout)
+        $progressBar = "[" + ("█" * $filled) + ("░" * $empty) + "]"
+        
+        $col3Lines += ""
+        $col3Lines += "Status: ● ACTIVE"
+        $col3Lines += "Elapsed: " + ("{0:N1}s" -f $elapsedSeconds) + " / " + ("{0:N0}s" -f $investigationTimeout)
+        $col3Lines += "Remaining: " + ("{0:N1}s" -f $remaining)
+        $col3Lines += ""
+        $col3Lines += $progressBar
+        $col3Lines += "Progress: " + ("{0:N1}%" -f $progressPercent)
+        $col3Lines += ""
+        
+        # Show start time
+        $startTimeStr = $investigationStartTimeValue.ToString("HH:mm:ss")
+        $col3Lines += "Started: $startTimeStr"
         
         # Show what's being investigated
-        if ($pendingInfo.RootIssue) {
+        $col3Lines += ""
+        $col3Lines += "─ Root Issue ─"
+        if ($pendingInfo -and $pendingInfo.RootIssue) {
             $rootIssue = $pendingInfo.RootIssue
-            $col3Lines += ""
-            $col3Lines += "Root Issue: " + $rootIssue.type
+            $col3Lines += "Type: " + $rootIssue.type
             $col3Lines += "Severity: " + $rootIssue.severity.ToUpper()
             if ($rootIssue.source) {
                 $col3Lines += "Source: " + $rootIssue.source
             }
+            if ($rootIssue.tableId) {
+                $col3Lines += "Table: " + $rootIssue.tableId
+            }
+        } else {
+            $col3Lines += "No root issue found"
+            $col3Lines += "(Focus group may have cleared)"
         }
         
         # Show related issues found so far
         $col3Lines += ""
-        if ($pendingInfo.RelatedIssuesCount -gt 0) {
-            $col3Lines += "Related Found: " + $pendingInfo.RelatedIssuesCount
-            # Show breakdown if available
-            if ($pendingInfo.RelatedIssues -and $pendingInfo.RelatedIssues.Count -gt 0) {
-                $relatedTypes = @{}
-                foreach ($related in $pendingInfo.RelatedIssues) {
-                    $type = if ($related.type) { $related.type } else { "unknown" }
-                    if (-not $relatedTypes.ContainsKey($type)) {
-                        $relatedTypes[$type] = 0
+        $col3Lines += "─ Related Issues ─"
+        if ($pendingInfo -and $pendingInfo.InFocusMode) {
+            if ($pendingInfo.RelatedIssuesCount -gt 0) {
+                $col3Lines += "Count: " + $pendingInfo.RelatedIssuesCount
+                # Show breakdown if available
+                if ($pendingInfo.RelatedIssues -and $pendingInfo.RelatedIssues.Count -gt 0) {
+                    $relatedTypes = @{}
+                    foreach ($related in $pendingInfo.RelatedIssues) {
+                        $type = if ($related.type) { $related.type } else { "unknown" }
+                        if (-not $relatedTypes.ContainsKey($type)) {
+                            $relatedTypes[$type] = 0
+                        }
+                        $relatedTypes[$type]++
                     }
-                    $relatedTypes[$type]++
+                    $relatedSorted = $relatedTypes.GetEnumerator() | Sort-Object Value -Descending | Select-Object -First 5
+                    foreach ($typeEntry in $relatedSorted) {
+                        $col3Lines += "  • " + $typeEntry.Key + ": " + $typeEntry.Value
+                    }
                 }
-                $relatedSorted = $relatedTypes.GetEnumerator() | Sort-Object Value -Descending | Select-Object -First 2
-                foreach ($typeEntry in $relatedSorted) {
-                    $col3Lines += "  - " + $typeEntry.Key + ": " + $typeEntry.Value
-                }
+            } else {
+                $col3Lines += "Gathering related issues..."
             }
         } else {
-            $col3Lines += "Status: Gathering related issues..."
+            $col3Lines += "Focus mode: INACTIVE"
+            $col3Lines += "(No active focus group)"
+        }
+        
+        # Show focus mode status
+        $col3Lines += ""
+        $col3Lines += "─ Focus Mode ─"
+        if ($pendingInfo -and $pendingInfo.InFocusMode) {
+            $col3Lines += "Status: ACTIVE"
+            if ($pendingInfo.GroupId) {
+                $col3Lines += "Group ID: " + $pendingInfo.GroupId
+            }
+        } else {
+            $col3Lines += "Status: INACTIVE"
+            $col3Lines += "(Will complete soon)"
         }
     } else {
         # Not investigating - show status
-        $col3Lines += "Status: NOT ACTIVE"
+        $col3Lines += ""
+        $col3Lines += "Status: ○ NOT ACTIVE"
+        $col3Lines += ""
         $col3Lines += "Timeout: " + ("{0:N0}s" -f $investigationTimeout)
         if ($investigationEnabled) {
-            $col3Lines += "Enabled: YES"
+            $col3Lines += "Enabled: ✓ YES"
         } else {
-            $col3Lines += "Enabled: NO"
+            $col3Lines += "Enabled: ✗ NO"
         }
+        $col3Lines += ""
+        $col3Lines += "Waiting for new issues..."
     }
     
     # Add verification progress if verifying
@@ -3153,7 +3195,20 @@ while ($monitoringActive) {
                             }
                         } else {
                             # No pending info or root issue - investigation complete anyway
-                            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] INVESTIGATION COMPLETE: No pending issues found" -ForegroundColor "Yellow"
+                            # This happens when focus group was cleared or investigation timed out
+                            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] INVESTIGATION COMPLETE: Timeout reached" -ForegroundColor "Yellow"
+                            if ($pendingInfo) {
+                                if (-not $pendingInfo.InFocusMode) {
+                                    Write-ConsoleOutput -Message "  Focus group was cleared - investigation complete" -ForegroundColor "Cyan"
+                                } elseif (-not $pendingInfo.RootIssue) {
+                                    Write-ConsoleOutput -Message "  No root issue found - investigation complete" -ForegroundColor "Cyan"
+                                }
+                            } else {
+                                Write-ConsoleOutput -Message "  No pending issues found - investigation complete" -ForegroundColor "Cyan"
+                            }
+                            # Force status update to clear investigation state
+                            Update-MonitorStatus
+                            $lastStatusUpdate = Get-Date
                         }
                     } else {
                         # Still investigating - no console spam, all info is in statistics
