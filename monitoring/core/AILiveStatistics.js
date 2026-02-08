@@ -208,7 +208,7 @@ class AILiveStatistics {
             },
             resolved: {
                 count: resolvedIssues.length,
-                recent: resolvedIssues.slice(-10)
+                recent: (Array.isArray(resolvedIssues) ? resolvedIssues.slice(-10) : [])
             },
             total: {
                 count: allIssues.length,

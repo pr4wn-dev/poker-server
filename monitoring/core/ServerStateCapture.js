@@ -76,6 +76,24 @@ class ServerStateCapture {
                 health = 0;
             }
             
+            // Get detailed table information
+            let tablesInfo = [];
+            try {
+                const tablesData = await this.getTablesData();
+                if (tablesData && Array.isArray(tablesData)) {
+                    tablesInfo = tablesData.map(table => ({
+                        id: table.id,
+                        name: table.name,
+                        playerCount: table.playerCount || 0,
+                        maxPlayers: table.maxPlayers || 0,
+                        isPrivate: table.isPrivate || false,
+                        isSimulation: table.isSimulation || false
+                    }));
+                }
+            } catch (error) {
+                // Tables endpoint might not be available, continue without it
+            }
+            
             // Update StateStore
             const now = Date.now();
             this.stateStore.updateState('system.server', {
@@ -91,8 +109,48 @@ class ServerStateCapture {
                 activeTables: healthData?.activeTables || 0,
                 onlinePlayers: healthData?.onlinePlayers || 0,
                 activeSimulations: healthData?.activeSimulations || 0,
-                database: healthData?.database || false
+                database: healthData?.database || false,
+                tables: tablesInfo // Detailed table information
             });
+            
+            // Update game state with table information
+            if (tablesInfo.length > 0) {
+                const gameState = this.stateStore.getState('game') || {};
+                const tablesMap = gameState.tables || new Map();
+                
+                // Update tables map
+                for (const tableInfo of tablesInfo) {
+                    const existingTable = tablesMap.get(tableInfo.id);
+                    if (existingTable) {
+                        // Update existing table
+                        existingTable.playerCount = tableInfo.playerCount;
+                        existingTable.maxPlayers = tableInfo.maxPlayers;
+                        existingTable.lastUpdate = now;
+                    } else {
+                        // Add new table
+                        tablesMap.set(tableInfo.id, {
+                            id: tableInfo.id,
+                            name: tableInfo.name,
+                            playerCount: tableInfo.playerCount,
+                            maxPlayers: tableInfo.maxPlayers,
+                            isPrivate: tableInfo.isPrivate,
+                            isSimulation: tableInfo.isSimulation,
+                            firstSeen: now,
+                            lastUpdate: now
+                        });
+                    }
+                }
+                
+                // Remove tables that no longer exist
+                for (const [tableId, table] of tablesMap.entries()) {
+                    if (!tablesInfo.find(t => t.id === tableId)) {
+                        tablesMap.delete(tableId);
+                    }
+                }
+                
+                this.stateStore.updateState('game.tables', tablesMap);
+                this.stateStore.updateState('game.lastUpdate', now);
+            }
             
             // Add to history
             this.captureHistory.push({
@@ -128,6 +186,43 @@ class ServerStateCapture {
                 error: error.message
             });
         }
+    }
+    
+    /**
+     * Get tables data from server
+     */
+    async getTablesData() {
+        return new Promise((resolve, reject) => {
+            const url = new URL('/api/tables', this.serverUrl);
+            
+            const req = http.get(url, { timeout: 2000 }, (res) => {
+                let data = '';
+                
+                res.on('data', (chunk) => {
+                    data += chunk;
+                });
+                
+                res.on('end', () => {
+                    try {
+                        const tablesData = JSON.parse(data);
+                        resolve(tablesData);
+                    } catch (error) {
+                        reject(new Error(`Failed to parse tables response: ${error.message}`));
+                    }
+                });
+            });
+            
+            req.on('error', (error) => {
+                reject(error);
+            });
+            
+            req.on('timeout', () => {
+                req.destroy();
+                reject(new Error('Tables check timeout'));
+            });
+            
+            req.setTimeout(2000);
+        });
     }
     
     /**
