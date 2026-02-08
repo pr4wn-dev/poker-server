@@ -315,17 +315,21 @@ async function handleCommand() {
 handleCommand().then(() => {
     // Cleanup before exiting
     clearTimeout(globalTimeout);
-    if (integration && integration.aiCore) {
-        integration.aiCore.destroy();
+    if (integration) {
+        // Destroy integration (stops all intervals)
+        integration.destroy();
     }
-    // Small delay to allow cleanup to complete
-    setTimeout(() => {
+    // CRITICAL: Force exit after cleanup - don't wait for intervals
+    // Use setImmediate to allow destroy() to complete, then force exit
+    setImmediate(() => {
+        // Force exit - intervals may keep process alive otherwise
         process.exit(0);
-    }, 100);
+    });
 }).catch(error => {
     clearTimeout(globalTimeout);
-    if (integration && integration.aiCore) {
-        integration.aiCore.destroy();
+    if (integration) {
+        // Destroy integration even on error
+        integration.destroy();
     }
     // All errors go to gameLogger - Cerberus sees everything
     gameLogger.error('MONITORING', '[MONITOR_INTEGRATION_CLI] Fatal error', {
@@ -334,7 +338,8 @@ handleCommand().then(() => {
     });
     // Output JSON error for CLI (PowerShell needs this)
     console.log(JSON.stringify({ error: 'Fatal error', message: error.message, stack: error.stack }));
-    setTimeout(() => {
+    // CRITICAL: Force exit after cleanup
+    setImmediate(() => {
         process.exit(1);
-    }, 100);
+    });
 });

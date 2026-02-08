@@ -912,9 +912,18 @@ class AIMonitorCore {
         if (this.stateStore) {
             this.stateStore.destroy();
         }
+        
+        // CRITICAL: Also stop workflow enforcer if it has any intervals
+        if (this.workflowEnforcer && this.workflowEnforcer.stop) {
+            this.workflowEnforcer.stop();
+        }
+        
         gameLogger.info('MONITORING', '[AI_MONITOR_CORE] Destroyed', {
             message: 'All background processes stopped'
         });
+        
+        // Emit destroyed event
+        this.emit('destroyed');
     }
 }
 

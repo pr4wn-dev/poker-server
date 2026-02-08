@@ -333,9 +333,12 @@ if (failed > 0) {
     tests.filter(t => t.status === 'FAIL').forEach(t => {
         console.log(`  - ${t.name}: ${t.error || 'Unknown error'}`);
     });
-    process.exit(1);
-} else {
-    console.log('\n🎉 All tests passed!');
-    process.exit(0);
 }
+
+// CRITICAL: Force exit after cleanup to prevent zombie processes
+// Give a small delay for any final cleanup, then force exit
+setTimeout(() => {
+    // Force exit - don't wait for any remaining intervals
+    process.exit(failed > 0 ? 1 : 0);
+}, 200);
 })();
