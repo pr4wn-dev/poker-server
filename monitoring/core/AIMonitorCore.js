@@ -41,6 +41,15 @@ class AIMonitorCore {
         this.errorRecovery = new ErrorRecovery(this.stateStore);
         this.performanceMonitor = new PerformanceMonitor(this.stateStore);
         
+        // Initialize rules enforcer FIRST - AI must always know the rules
+        try {
+            this.rulesEnforcer = new AIRulesEnforcer(this.stateStore);
+            this.errorRecovery.recordSuccess('rulesEnforcer');
+        } catch (error) {
+            this.errorRecovery.recordError('rulesEnforcer', error);
+            throw error;
+        }
+        
         // Initialize universal error handler (needs to be early, but after errorRecovery)
         // Will be fully initialized after issueDetector and learningEngine are ready
         this.universalErrorHandler = null; // Will be set after components are ready
