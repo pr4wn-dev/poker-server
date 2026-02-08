@@ -359,6 +359,10 @@ class AIIssueDetector extends EventEmitter {
         }
         
         // Calculate average movement
+        // Ensure chipHistory is an array
+        if (!Array.isArray(chipHistory)) {
+            return [];
+        }
         const movements = chipHistory.slice(-100).map(h => Math.abs(h.change || 0));
         const avg = movements.reduce((a, b) => a + b, 0) / movements.length;
         const stdDev = this.calculateStdDev(movements, avg);
