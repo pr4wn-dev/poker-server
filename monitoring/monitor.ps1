@@ -3299,6 +3299,22 @@ while ($monitoringActive) {
             $script:investigationStartTime = $statusFileInvestigationStartTime
         }
         
+        # CRITICAL SAFETY CHECK: If status file shows investigation active for too long, force completion check
+        # This prevents investigations from getting stuck when the normal check isn't running
+        if ($statusFileInvestigationActive -and $statusFileInvestigationStartTime) {
+            $timeoutValue = if ($investigationTimeout) { $investigationTimeout } else { 15 }
+            $elapsedFromStatusFile = ((Get-Date) - $statusFileInvestigationStartTime).TotalSeconds
+            if ($elapsedFromStatusFile -ge ($timeoutValue * 2)) {
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] FORCED COMPLETION CHECK: Status file shows investigation active for $([Math]::Round($elapsedFromStatusFile, 1))s (2x timeout=$($timeoutValue * 2)s) - FORCING COMPLETION CHECK" -ForegroundColor "Red"
+                # Force investigation to be active so completion check runs
+                $investigationIsActive = $true
+                $investigationStartTimeToUse = $statusFileInvestigationStartTime
+                # Sync script variables
+                $script:isInvestigating = $true
+                $script:investigationStartTime = $statusFileInvestigationStartTime
+            }
+        }
+        
         if ($investigationIsActive -and $investigationStartTimeToUse) {
             Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] Investigation completion check: scriptActive=$($script:isInvestigating), statusFileActive=$statusFileInvestigationActive, startTime=$($investigationStartTimeToUse.ToString('HH:mm:ss')), statusFileReadSuccess=$statusFileReadSuccess" -ForegroundColor "Gray"
             
