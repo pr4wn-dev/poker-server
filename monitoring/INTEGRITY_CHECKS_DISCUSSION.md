@@ -1,4 +1,6 @@
-# File & Code Integrity Checks - Discussion
+# Cerberus - File & Code Integrity Checks
+
+**Cerberus** - The three-headed guardian verifies its own integrity and hunts down ALL errors.
 
 ## Current State
 

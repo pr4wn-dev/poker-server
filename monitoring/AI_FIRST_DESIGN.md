@@ -1,6 +1,8 @@
-# AI-First Monitoring System Design
+# Cerberus - AI-First Design
 
-**Philosophy**: This system is built FOR the AI, BY the AI. The human's only job is to prompt the AI. The AI sees everything, knows everything, and acts on everything.
+**Philosophy**: Cerberus is built FOR the AI, BY the AI. The human's only job is to prompt the AI. Cerberus sees everything, knows everything, and acts on everything.
+
+**Cerberus** - The three-headed guardian that hunts down and eliminates ALL errors.
 
 ---
 
