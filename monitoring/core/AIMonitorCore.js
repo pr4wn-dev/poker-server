@@ -78,9 +78,6 @@ class AIMonitorCore {
                 this.learningEngine
             );
             this.errorRecovery.recordSuccess('universalErrorHandler');
-            
-            // Wrap all components with error handler
-            this.wrapAllComponents();
         } catch (error) {
             this.errorRecovery.recordError('fixTracker', error);
             throw error;
@@ -128,6 +125,9 @@ class AIMonitorCore {
             this.errorRecovery.recordError('serverStateCapture', error);
             throw error;
         }
+        
+        // Wrap all components with error handler (AFTER all components are created)
+        this.wrapAllComponents();
         
         // Start server state capture
         this.serverStateCapture.start();
