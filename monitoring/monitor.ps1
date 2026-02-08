@@ -949,7 +949,14 @@ function Update-MonitorStatus {
             $statusFile = Join-Path $script:projectRoot "logs\monitor-status.json"
         }
         $statusJson = $status | ConvertTo-Json -Depth 10
-        [System.IO.File]::WriteAllText($statusFile, $statusJson, [System.Text.UTF8Encoding]::new($false))
+        # CRITICAL: Use FileStream with Flush to ensure data is written immediately
+        $fileStream = [System.IO.File]::Open($statusFile, [System.IO.FileMode]::Create, [System.IO.FileAccess]::Write, [System.IO.FileShare]::Read)
+        $writer = New-Object System.IO.StreamWriter($fileStream, [System.Text.UTF8Encoding]::new($false))
+        $writer.Write($statusJson)
+        $writer.Flush()
+        $fileStream.Flush()
+        $writer.Close()
+        $fileStream.Close()
     } catch {
         # Don't fail if status update fails - but log error for debugging
         # Write-Host "Update-MonitorStatus error: $_" -ForegroundColor Yellow
