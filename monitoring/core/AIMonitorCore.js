@@ -1039,7 +1039,11 @@ class AIMonitorCore {
                 performanceMonitor: !!this.performanceMonitor,
                 universalErrorHandler: !!this.universalErrorHandler,
                 processMonitor: !!this.processMonitor,
-                workflowEnforcer: !!this.workflowEnforcer
+                workflowEnforcer: !!this.workflowEnforcer,
+                loggingIntegrityChecker: !!this.loggingIntegrityChecker,
+                loggingAutoFix: !!this.loggingAutoFix,
+                codeEnhancementSystem: !!this.codeEnhancementSystem,
+                performanceAnalyzer: !!this.performanceAnalyzer
             };
             
             // Calculate overall health
