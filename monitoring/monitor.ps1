@@ -3128,9 +3128,12 @@ while ($monitoringActive) {
                 $script:investigationNullStartTimeLogged = $false
                 Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] INVESTIGATION: Starting for existing focus group ($investigationTimeout seconds)" -ForegroundColor "Cyan"
                 Write-ConsoleOutput -Message "  Root Issue: $($pendingInfo.RootIssue.type) ($($pendingInfo.RootIssue.severity))" -ForegroundColor "White"
-                # Force immediate status update
+                # CRITICAL: Force immediate status update to ensure status file reflects new investigation state
                 Update-MonitorStatus
                 $lastStatusUpdate = Get-Date
+                # CRITICAL: Force another status update after brief delay to ensure persistence
+                Start-Sleep -Milliseconds 100
+                Update-MonitorStatus
             }
             $script:lastFocusedGroupCheck = Get-Date
         }
@@ -3217,25 +3220,24 @@ while ($monitoringActive) {
             }
         }
         
-        # Now check script variables (which should be synced from status file)
-        $shouldCheckInvestigation = $false
-        $investigationStartTimeValid = $false
-        
+        # CRITICAL: Validate and sync script variables from status file
+        # This ensures script variables are always in sync with status file (source of truth)
         if ($script:isInvestigating) {
-            # Investigation flag is true - check if startTime is valid
+            # Investigation flag is true - validate startTime
             if ($script:investigationStartTime) {
-                if ($script:investigationStartTime -is [DateTime]) {
-                    $shouldCheckInvestigation = $true
-                    $investigationStartTimeValid = $true
-                    # Reset the null startTime warning flag if it was set
-                    $script:investigationNullStartTimeLogged = $false
-                } else {
+                if ($script:investigationStartTime -isnot [DateTime]) {
                     # StartTime exists but is wrong type - log and reset
                     Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] ERROR: investigationStartTime is not DateTime (type: $($script:investigationStartTime.GetType().Name)) - resetting investigation" -ForegroundColor "Red"
                     $script:isInvestigating = $false
                     $script:investigationStartTime = $null
                     $script:investigationCheckLogged = $false
-                    $script:investigationNullStartTime = $null
+                    $script:investigationNullStartTimeLogged = $false
+                    # Force status update to clear invalid state
+                    Update-MonitorStatus
+                    $lastStatusUpdate = Get-Date
+                } else {
+                    # Reset the null startTime warning flag if it was set
+                    $script:investigationNullStartTimeLogged = $false
                 }
             } else {
                 # Investigation flag is true but startTime is null
@@ -3243,8 +3245,6 @@ while ($monitoringActive) {
                 if ($statusFileInvestigationActive -and $statusFileInvestigationStartTime) {
                     Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] Syncing investigation startTime from status file" -ForegroundColor "Cyan"
                     $script:investigationStartTime = $statusFileInvestigationStartTime
-                    $shouldCheckInvestigation = $true
-                    $investigationStartTimeValid = $true
                 } elseif (-not $script:investigationNullStartTimeLogged) {
                     Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] WARNING: isInvestigating=true but investigationStartTime is null - resetting stuck investigation" -ForegroundColor "Yellow"
                     $script:investigationNullStartTimeLogged = $true
@@ -3252,6 +3252,9 @@ while ($monitoringActive) {
                     $script:isInvestigating = $false
                     $script:investigationStartTime = $null
                     $script:investigationCheckLogged = $false
+                    # Force status update to clear stuck state
+                    Update-MonitorStatus
+                    $lastStatusUpdate = Get-Date
                 }
             }
         } elseif ($statusFileInvestigationActive -and $statusFileInvestigationStartTime) {
@@ -3261,8 +3264,6 @@ while ($monitoringActive) {
             $script:investigationStartTime = $statusFileInvestigationStartTime
             $script:investigationCheckLogged = $false
             $script:investigationNullStartTimeLogged = $false
-            $shouldCheckInvestigation = $true
-            $investigationStartTimeValid = $true
         }
         
         # CRITICAL: Investigation completion check - use SCRIPT VARIABLES as PRIMARY source of truth
@@ -3373,58 +3374,62 @@ while ($monitoringActive) {
             }
         }
         
-        # CRITICAL: Always check forced completion if direct read shows active investigation
-        # This ensures we catch stuck investigations even if initial read failed
-        # CRITICAL: Also check if direct read found active but we're not using it
+        # CRITICAL: Forced completion check - ALWAYS use direct read values (most recent)
+        # This ensures we catch stuck investigations even if initial read failed or is stale
         # DIAGNOSTIC: Log what we found
         if ($statusFileDirectActive -or $statusFileDirectStartTime) {
             Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] Forced completion check: directReadActive=$statusFileDirectActive, directReadStartTime=$statusFileDirectStartTime, directReadTimeRemaining=$statusFileDirectTimeRemaining" -ForegroundColor "Gray"
         }
         
-        if (($statusFileInvestigationActive -and $statusFileInvestigationStartTime) -or ($statusFileDirectActive -and $statusFileDirectStartTime)) {
-            # Use direct read values if they're available and show active investigation
-            if ($statusFileDirectActive -and $statusFileDirectStartTime) {
-                $statusFileInvestigationActive = $statusFileDirectActive
-                $statusFileInvestigationStartTime = $statusFileDirectStartTime
-                if ($statusFileDirectTimeRemaining -ne $null) {
-                    $statusFileTimeRemaining = $statusFileDirectTimeRemaining
-                }
-            }
+        # CRITICAL: Use direct read values if available (they're more recent)
+        # If direct read found active investigation, use those values for forced completion check
+        $forcedCheckActive = $false
+        $forcedCheckStartTime = $null
+        $forcedCheckTimeRemaining = $null
+        
+        if ($statusFileDirectActive -and $statusFileDirectStartTime) {
+            # Direct read found active investigation - use these values
+            $forcedCheckActive = $statusFileDirectActive
+            $forcedCheckStartTime = $statusFileDirectStartTime
+            $forcedCheckTimeRemaining = $statusFileDirectTimeRemaining
+        } elseif ($statusFileInvestigationActive -and $statusFileInvestigationStartTime) {
+            # Fall back to initial read values
+            $forcedCheckActive = $statusFileInvestigationActive
+            $forcedCheckStartTime = $statusFileInvestigationStartTime
+            $forcedCheckTimeRemaining = $statusFileTimeRemaining
+        }
+        
+        # Check if forced completion should trigger
+        if ($forcedCheckActive -and $forcedCheckStartTime) {
             $timeoutValue = if ($investigationTimeout) { $investigationTimeout } else { 15 }
-            $elapsedFromStatusFile = ((Get-Date) - $statusFileInvestigationStartTime).TotalSeconds
+            $elapsedFromStatusFile = ((Get-Date) - $forcedCheckStartTime).TotalSeconds
             $shouldForceCompletion = $false
             $forceReason = ""
             
-            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] Forced completion evaluation: elapsed=$([Math]::Round($elapsedFromStatusFile, 1))s, timeout=$timeoutValue s, timeRemaining=$statusFileTimeRemaining" -ForegroundColor "Gray"
+            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] Forced completion evaluation: elapsed=$([Math]::Round($elapsedFromStatusFile, 1))s, timeout=$timeoutValue s, timeRemaining=$forcedCheckTimeRemaining" -ForegroundColor "Gray"
             
             # CRITICAL: Check elapsed time FIRST - this is the primary indicator
             # If elapsed >= timeout, investigation should complete regardless of timeRemaining
-            # Force if elapsed time exceeds timeout (normal completion) - CHECK THIS FIRST
             if ($elapsedFromStatusFile -ge $timeoutValue) {
                 $shouldForceCompletion = $true
                 $forceReason = "elapsed=$([Math]::Round($elapsedFromStatusFile, 1))s >= timeout=$timeoutValue s"
             }
-            # Force if elapsed time exceeds 2x timeout (safety check for stuck investigations)
-            elseif ($elapsedFromStatusFile -ge ($timeoutValue * 2)) {
+            # Force if timeRemaining is 0 or negative (direct indicator)
+            elseif ($forcedCheckTimeRemaining -ne $null -and $forcedCheckTimeRemaining -le 0) {
                 $shouldForceCompletion = $true
-                $forceReason = "elapsed=$([Math]::Round($elapsedFromStatusFile, 1))s >= 2x timeout=$($timeoutValue * 2)s"
-            }
-            # Force if timeRemaining is 0 or negative (direct indicator - but elapsed check takes priority)
-            elseif ($statusFileTimeRemaining -ne $null -and $statusFileTimeRemaining -le 0) {
-                $shouldForceCompletion = $true
-                $forceReason = "timeRemaining=$statusFileTimeRemaining <= 0"
+                $forceReason = "timeRemaining=$forcedCheckTimeRemaining <= 0"
             }
             
             if ($shouldForceCompletion) {
                 Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] FORCED COMPLETION CHECK: Status file shows investigation active ($forceReason) - FORCING COMPLETION CHECK" -ForegroundColor "Red"
                 # Force investigation to be active so completion check runs
                 $investigationIsActive = $true
-                $investigationStartTimeToUse = $statusFileInvestigationStartTime
-                # Sync script variables
+                $investigationStartTimeToUse = $forcedCheckStartTime
+                # Sync script variables from direct read (most recent)
                 $script:isInvestigating = $true
-                $script:investigationStartTime = $statusFileInvestigationStartTime
+                $script:investigationStartTime = $forcedCheckStartTime
             } else {
-                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] Forced completion check: NOT triggering (elapsed=$([Math]::Round($elapsedFromStatusFile, 1))s, timeout=$timeoutValue s, timeRemaining=$statusFileTimeRemaining)" -ForegroundColor "Gray"
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] Forced completion check: NOT triggering (elapsed=$([Math]::Round($elapsedFromStatusFile, 1))s, timeout=$timeoutValue s, timeRemaining=$forcedCheckTimeRemaining)" -ForegroundColor "Gray"
             }
         } else {
             Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] Forced completion check: SKIPPED (no active investigation found - initialReadActive=$statusFileInvestigationActive, initialReadStartTime=$statusFileInvestigationStartTime, directReadActive=$statusFileDirectActive, directReadStartTime=$statusFileDirectStartTime)" -ForegroundColor "Gray"
@@ -3591,9 +3596,6 @@ while ($monitoringActive) {
                 Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] Update-MonitorStatus completed (called twice), investigation state: isInvestigating=$($script:isInvestigating), startTime=$($script:investigationStartTime)" -ForegroundColor "Cyan"
                 # CRITICAL: Set cooldown to prevent immediate restart - wait 5 seconds before allowing new investigation
                 $script:lastInvestigationComplete = Get-Date
-                # Skip the normal check block since we already completed
-                $shouldCheckInvestigation = $false
-                $investigationStartTimeValid = $false
             } else {
                 Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] shouldCompleteNow is FALSE - investigation will continue" -ForegroundColor "Gray"
             }
@@ -3606,169 +3608,6 @@ while ($monitoringActive) {
             if (-not $statusFileInvestigationActive) { $whyNotActive += "statusFile:active=false" }
             if (-not $statusFileInvestigationStartTime) { $whyNotActive += "statusFile:startTime=null" }
             Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] Investigation not active - completion check skipped. Reasons: $($whyNotActive -join ', ')" -ForegroundColor "Gray"
-            
-            # CRITICAL SAFETY CHECK: If status file shows investigation active but script variables don't, force completion if timeout exceeded
-            # This prevents investigations from getting stuck when script variables are out of sync
-            if ($statusFileInvestigationActive -and $statusFileInvestigationStartTime) {
-                $timeoutValue = if ($investigationTimeout) { $investigationTimeout } else { 15 }
-                $elapsedFromStatusFile = ((Get-Date) - $statusFileInvestigationStartTime).TotalSeconds
-                $shouldForceComplete = $false
-                $forceReason = ""
-                
-                if ($elapsedFromStatusFile -ge ($timeoutValue * 2)) {
-                    $shouldForceComplete = $true
-                    $forceReason = "elapsed=$([Math]::Round($elapsedFromStatusFile, 1))s >= 2x timeout=$($timeoutValue * 2)s"
-                } elseif ($statusFileTimeRemaining -ne $null -and $statusFileTimeRemaining -le 0) {
-                    $shouldForceComplete = $true
-                    $forceReason = "timeRemaining=$statusFileTimeRemaining <= 0"
-                }
-                
-                if ($shouldForceComplete) {
-                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] FORCED COMPLETION: Status file shows investigation active ($forceReason) but script variables are out of sync - FORCING COMPLETION" -ForegroundColor "Red"
-                    # Force complete by syncing variables and triggering completion
-                    $script:isInvestigating = $false
-                    $script:investigationStartTime = $null
-                    $script:investigationCheckLogged = $false
-                    Update-MonitorStatus
-                    $lastStatusUpdate = Get-Date
-                    $script:lastInvestigationComplete = Get-Date
-                }
-            }
-        }
-        
-        if ($shouldCheckInvestigation -and $investigationStartTimeValid) {
-            try {
-                # SELF-DIAGNOSTIC: Log if investigation check is running (only once per investigation to avoid spam)
-                if (-not $script:investigationCheckLogged) {
-                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] Investigation check is running (isInvestigating: $($script:isInvestigating), startTime: $($script:investigationStartTime))" -ForegroundColor "Cyan"
-                    $script:investigationCheckLogged = $true
-                }
-                
-                # At this point, we know investigationStartTime is a valid DateTime (validated above)
-                # Calculate elapsed time and check if investigation should complete
-                $investigationElapsed = (Get-Date) - $script:investigationStartTime
-                $elapsedSeconds = $investigationElapsed.TotalSeconds
-                
-                # CRITICAL FIX: Ensure investigationTimeout is accessible (use script scope if needed)
-                $timeoutValue = if ($investigationTimeout) { $investigationTimeout } else { 15 }
-                
-                # SELF-DIAGNOSTIC: Log if timeout is invalid
-                if (-not $investigationTimeout -or $investigationTimeout -eq 0) {
-                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] WARNING: investigationTimeout is null or 0, using default 15s" -ForegroundColor "Yellow"
-                }
-                
-                # Force complete if elapsed time exceeds timeout (with 1 second buffer for timing)
-                # Also force complete if investigation has been running for more than 2x timeout (safety check)
-                $shouldComplete = ($elapsedSeconds -ge ($timeoutValue - 1)) -or ($elapsedSeconds -ge ($timeoutValue * 2))
-                
-                # SELF-DIAGNOSTIC: Log every 5 seconds if investigation is running longer than expected
-                if ($elapsedSeconds -gt $timeoutValue -and ([Math]::Floor($elapsedSeconds) % 5 -eq 0)) {
-                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] Investigation running: $([Math]::Round($elapsedSeconds, 1))s (timeout: $timeoutValue s, shouldComplete: $shouldComplete)" -ForegroundColor "Yellow"
-                }
-                
-                # SELF-DIAGNOSTIC: If investigation is running too long, report detailed diagnostic info
-                if ($elapsedSeconds -ge ($timeoutValue * 2)) {
-                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] INVESTIGATION STUCK - Diagnostic Report:" -ForegroundColor "Red"
-                    Write-ConsoleOutput -Message "  - Elapsed: $([Math]::Round($elapsedSeconds, 1))s" -ForegroundColor "White"
-                    Write-ConsoleOutput -Message "  - Timeout: $timeoutValue s (raw: $investigationTimeout)" -ForegroundColor "White"
-                    Write-ConsoleOutput -Message "  - Should Complete: $shouldComplete" -ForegroundColor "White"
-                    Write-ConsoleOutput -Message "  - isInvestigating: $script:isInvestigating" -ForegroundColor "White"
-                    Write-ConsoleOutput -Message "  - investigationStartTime: $($script:investigationStartTime.ToString('yyyy-MM-dd HH:mm:ss'))" -ForegroundColor "White"
-                    Write-ConsoleOutput -Message "  - Current Time: $((Get-Date).ToString('yyyy-MM-dd HH:mm:ss'))" -ForegroundColor "White"
-                    Write-ConsoleOutput -Message "  - Condition Check: elapsed >= (timeout-1) OR elapsed >= (timeout*2)" -ForegroundColor "White"
-                    Write-ConsoleOutput -Message "  - Condition Result: $($elapsedSeconds -ge ($timeoutValue - 1)) OR $($elapsedSeconds -ge ($timeoutValue * 2))" -ForegroundColor "White"
-                    Write-ConsoleOutput -Message "  - FORCING COMPLETION NOW" -ForegroundColor "Yellow"
-                    # Force complete immediately
-                    $shouldComplete = $true
-                }
-                
-                if ($shouldComplete) {
-                        # Investigation complete - pause debugger now
-                        $script:isInvestigating = $false
-                        $script:investigationStartTime = $null
-                        $script:investigationCheckLogged = $false  # Reset for next investigation
-                        $pendingInfo = Get-PendingIssuesInfo
-                        
-                        # Always complete investigation after timeout, even if pending info is missing
-                        # This prevents investigation from getting stuck
-                        if ($pendingInfo -and $pendingInfo.InFocusMode -and $pendingInfo.RootIssue) {
-                            $rootIssue = $pendingInfo.RootIssue
-                            $relatedCount = $pendingInfo.RelatedIssuesCount
-                            
-                            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] INVESTIGATION COMPLETE: Pausing debugger" -ForegroundColor "Yellow"
-                            Write-ConsoleOutput -Message "  Root Issue: $($rootIssue.type) ($($rootIssue.severity))" -ForegroundColor "White"
-                            if ($relatedCount -gt 0) {
-                                Write-ConsoleOutput -Message "  Related Issues Found: $relatedCount" -ForegroundColor "Cyan"
-                            }
-                            Write-ConsoleOutput -Message "  Please review and fix the issue(s)" -ForegroundColor "Cyan"
-                            
-                            # Extract tableId from root issue
-                            $tableId = $null
-                            if ($rootIssue.tableId) {
-                                $tableId = $rootIssue.tableId
-                            }
-                            
-                            # Pause debugger (with automatic verification and retry)
-                            # Only pause if not already paused (avoid duplicate pauses)
-                            if (-not $isPaused -and $config.unity.pauseDebuggerOnIssue) {
-                                $pauseSuccess = Invoke-DebuggerBreakWithVerification -tableId $tableId -reason "$($rootIssue.type) - $($rootIssue.severity) severity (Investigation complete)" -message "Investigation complete. Root issue: $($rootIssue.type). Related issues: $relatedCount"
-                                if (-not $pauseSuccess) {
-                                    Write-ConsoleOutput -Message "  WARNING: Debugger break may not have reached Unity - will retry automatically" -ForegroundColor "Yellow"
-                                }
-                                $isPaused = $true
-                            } elseif ($isPaused) {
-                                Write-ConsoleOutput -Message "  Unity already paused - investigation complete" -ForegroundColor "Cyan"
-                            }
-                        } else {
-                            # No pending info or root issue - investigation complete anyway
-                            # This happens when focus group was cleared or investigation timed out
-                            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] INVESTIGATION COMPLETE: Timeout reached" -ForegroundColor "Yellow"
-                            if ($pendingInfo) {
-                                if (-not $pendingInfo.InFocusMode) {
-                                    Write-ConsoleOutput -Message "  Focus group was cleared - investigation complete" -ForegroundColor "Cyan"
-                                } elseif (-not $pendingInfo.RootIssue) {
-                                    Write-ConsoleOutput -Message "  No root issue found - investigation complete" -ForegroundColor "Cyan"
-                                }
-                            } else {
-                                Write-ConsoleOutput -Message "  No pending issues found - investigation complete" -ForegroundColor "Cyan"
-                            }
-                            # Force status update to clear investigation state
-                            Update-MonitorStatus
-                            $lastStatusUpdate = Get-Date
-                        }
-                    } else {
-                        # Still investigating - no console spam, all info is in statistics
-                        # Statistics will show the countdown and progress
-                        # BUT: If investigation has been running way too long, force complete it
-                        if ($investigationElapsed.TotalSeconds -gt 60) {
-                            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] WARNING: Investigation has been running for $([Math]::Round($investigationElapsed.TotalSeconds, 1))s (timeout: $timeoutValue) - FORCING COMPLETION" -ForegroundColor "Red"
-                            # Force complete investigation
-                            $script:isInvestigating = $false
-                            $script:investigationStartTime = $null
-                            $pendingInfo = Get-PendingIssuesInfo
-                            if ($pendingInfo -and $pendingInfo.InFocusMode -and $pendingInfo.RootIssue) {
-                                $rootIssue = $pendingInfo.RootIssue
-                                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] INVESTIGATION FORCE COMPLETE: Pausing debugger" -ForegroundColor "Yellow"
-                                Write-ConsoleOutput -Message "  Root Issue: $($rootIssue.type) ($($rootIssue.severity))" -ForegroundColor "White"
-                                $tableId = if ($rootIssue.tableId) { $rootIssue.tableId } else { $null }
-                                if (-not $isPaused -and $config.unity.pauseDebuggerOnIssue) {
-                                    $pauseSuccess = Invoke-DebuggerBreakWithVerification -tableId $tableId -reason "$($rootIssue.type) - $($rootIssue.severity) severity (Investigation force complete)" -message "Investigation force complete after timeout"
-                                    if (-not $pauseSuccess) {
-                                        Write-ConsoleOutput -Message "  WARNING: Debugger break may not have reached Unity" -ForegroundColor "Yellow"
-                                    }
-                                    $isPaused = $true
-                                }
-                            }
-                        }
-                    }
-            } catch {
-                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ERROR: Investigation completion check failed: $_" -ForegroundColor "Red"
-                Write-ConsoleOutput -Message "  Stack trace: $($_.ScriptStackTrace)" -ForegroundColor "Yellow"
-                # Force complete investigation on error to prevent getting stuck
-                $script:isInvestigating = $false
-                $script:investigationStartTime = $null
-                $script:investigationCheckLogged = $false  # Reset for next investigation
-            }
         }
         
         # CRITICAL FIX: Check for focused group and start investigation if needed
