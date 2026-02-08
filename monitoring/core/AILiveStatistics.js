@@ -189,12 +189,17 @@ class AILiveStatistics {
         const allIssues = this.stateStore.getState('issues.detected') || [];
         const resolvedIssues = this.stateStore.getState('issues.resolved') || [];
         
+        // Ensure all are arrays
+        const activeIssuesArray = Array.isArray(activeIssues) ? activeIssues : [];
+        const allIssuesArray = Array.isArray(allIssues) ? allIssues : [];
+        const resolvedIssuesArray = Array.isArray(resolvedIssues) ? resolvedIssues : [];
+        
         return {
             active: {
-                count: activeIssues.length,
-                bySeverity: this.groupIssuesBySeverity(activeIssues),
-                byType: this.groupIssuesByType(activeIssues),
-                issues: activeIssues.map(i => ({
+                count: activeIssuesArray.length,
+                bySeverity: this.groupIssuesBySeverity(activeIssuesArray),
+                byType: this.groupIssuesByType(activeIssuesArray),
+                issues: activeIssuesArray.map(i => ({
                     id: i.id,
                     type: i.type,
                     severity: i.severity,
@@ -207,13 +212,13 @@ class AILiveStatistics {
                 }))
             },
             resolved: {
-                count: resolvedIssues.length,
-                recent: (Array.isArray(resolvedIssues) ? resolvedIssues.slice(-10) : [])
+                count: resolvedIssuesArray.length,
+                recent: resolvedIssuesArray.slice(-10)
             },
             total: {
-                count: allIssues.length,
-                bySeverity: this.groupIssuesBySeverity(allIssues),
-                byType: this.groupIssuesByType(allIssues)
+                count: allIssuesArray.length,
+                bySeverity: this.groupIssuesBySeverity(allIssuesArray),
+                byType: this.groupIssuesByType(allIssuesArray)
             },
             patterns: this.getIssuePatterns()
         };
@@ -459,6 +464,10 @@ class AILiveStatistics {
      */
     groupIssuesBySeverity(issues) {
         const groups = { critical: 0, high: 0, medium: 0, low: 0 };
+        // Ensure issues is an array
+        if (!Array.isArray(issues)) {
+            return groups;
+        }
         issues.forEach(issue => {
             const severity = issue.severity?.toLowerCase() || 'medium';
             if (groups[severity] !== undefined) {
@@ -473,6 +482,10 @@ class AILiveStatistics {
      */
     groupIssuesByType(issues) {
         const groups = {};
+        // Ensure issues is an array
+        if (!Array.isArray(issues)) {
+            return groups;
+        }
         issues.forEach(issue => {
             const type = issue.type || 'UNKNOWN';
             groups[type] = (groups[type] || 0) + 1;
