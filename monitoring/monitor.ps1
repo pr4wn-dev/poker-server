@@ -3113,15 +3113,29 @@ while ($monitoringActive) {
             $investigationStartTimeValid = $true
         }
         
-        # CRITICAL: If status file shows timeRemaining <= 0, investigation MUST complete
-        # This is the ultimate check - if status file says timeRemaining is 0 or negative, force completion IMMEDIATELY
-        if ($statusFileInvestigationActive -and $statusFileInvestigationStartTime) {
-            $elapsedFromStatus = ((Get-Date) - $statusFileInvestigationStartTime).TotalSeconds
+        # CRITICAL: If status file shows timeRemaining <= 0, investigation MUST complete IMMEDIATELY
+        # This check runs FIRST and completes immediately, bypassing all other logic
+        # Only check if investigation is active - don't require startTime (it might be missing)
+        if ($statusFileInvestigationActive) {
             $timeoutValue = if ($investigationTimeout) { $investigationTimeout } else { 15 }
+            $shouldCompleteNow = $false
+            $completionReason = ""
             
-            # If timeRemaining from status file is 0 or negative, OR elapsed time exceeds timeout, force check
-            # CRITICAL: This check runs BEFORE the normal investigation check, so it can complete immediately
-            if (($statusFileTimeRemaining -ne $null -and $statusFileTimeRemaining -le 0) -or ($elapsedFromStatus -ge ($timeoutValue - 1))) {
+            # Check timeRemaining first (most direct indicator) - if it's <= 0, complete immediately
+            if ($statusFileTimeRemaining -ne $null -and $statusFileTimeRemaining -le 0) {
+                $shouldCompleteNow = $true
+                $completionReason = "timeRemaining=$statusFileTimeRemaining <= 0"
+            }
+            # Also check elapsed time if we have startTime
+            elseif ($statusFileInvestigationStartTime) {
+                $elapsedFromStatus = ((Get-Date) - $statusFileInvestigationStartTime).TotalSeconds
+                if ($elapsedFromStatus -ge ($timeoutValue - 1)) {
+                    $shouldCompleteNow = $true
+                    $completionReason = "elapsed=$([Math]::Round($elapsedFromStatus, 1))s >= timeout=$timeoutValue s"
+                }
+            }
+            
+            if ($shouldCompleteNow) {
                 # Investigation should have completed - complete IMMEDIATELY
                 Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] Investigation MUST complete NOW (timeRemaining: $statusFileTimeRemaining, elapsed: $([Math]::Round($elapsedFromStatus, 1))s, timeout: $timeoutValue s)" -ForegroundColor "Yellow"
                 
