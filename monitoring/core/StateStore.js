@@ -14,6 +14,7 @@
 const fs = require('fs');
 const path = require('path');
 const EventEmitter = require('events');
+const gameLogger = require('../../src/utils/GameLogger');
 
 class StateStore extends EventEmitter {
     constructor(projectRoot) {
@@ -177,7 +178,10 @@ class StateStore extends EventEmitter {
         // Validate nested paths
         const parts = path.split('.');
         if (parts.length > 10) {
-            console.warn(`[StateStore] Deep nesting detected at path: ${path} (${parts.length} levels)`);
+            gameLogger.warn('MONITORING', '[STATESTORE] Deep nesting detected', {
+                path: path,
+                levels: parts.length
+            });
         }
         
         // Validate value types for known paths

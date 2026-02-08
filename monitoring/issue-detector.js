@@ -435,7 +435,11 @@ class IssueDetector {
             return data;
         } catch (parseError) {
             // File is corrupted - return default structure
-            console.error(`Failed to parse ${this.pendingIssuesFile}: ${parseError.message}. Using default structure.`);
+            gameLogger.error('MONITORING', '[ISSUE_DETECTOR] Failed to parse pending issues file', {
+                file: this.pendingIssuesFile,
+                error: parseError.message,
+                action: 'Using default structure'
+            });
             return defaultData;
         }
     }

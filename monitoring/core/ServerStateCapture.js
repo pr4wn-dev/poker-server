@@ -6,6 +6,7 @@
  */
 
 const http = require('http');
+const gameLogger = require('../../src/utils/GameLogger');
 
 class ServerStateCapture {
     constructor(stateStore, serverUrl = 'http://localhost:3000', issueDetector = null, errorRecovery = null) {
@@ -34,7 +35,10 @@ class ServerStateCapture {
             this.captureState();
         }, this.captureInterval);
         
-        console.log('[ServerStateCapture] Started - Capturing server state every 5s');
+        gameLogger.info('MONITORING', '[SERVER_STATE_CAPTURE] Started', {
+            message: 'Capturing server state every 5s',
+            interval: this.captureInterval + 'ms'
+        });
     }
     
     /**

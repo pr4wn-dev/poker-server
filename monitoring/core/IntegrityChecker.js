@@ -962,8 +962,8 @@ class IntegrityChecker extends EventEmitter {
                         timestamp: Date.now()
                     });
                 } catch (error) {
-                    // Issue detector not available or error - just log
-                    console.error('[IntegrityChecker] Failed to report issue:', error.message);
+                    // DO NOT log to console - errors are for AI only, not user
+                    // Issue detector not available or error - will be caught by UniversalErrorHandler
                 }
             }
         }

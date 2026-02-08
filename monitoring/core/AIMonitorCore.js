@@ -21,6 +21,7 @@ const ErrorRecovery = require('./ErrorRecovery');
 const PerformanceMonitor = require('./PerformanceMonitor');
 const AILearningEngine = require('./AILearningEngine');
 const UniversalErrorHandler = require('./UniversalErrorHandler');
+const gameLogger = require('../../src/utils/GameLogger');
 
 class AIMonitorCore {
     constructor(projectRoot) {
@@ -140,10 +141,13 @@ class AIMonitorCore {
         // Setup performance monitoring listeners
         this.setupPerformanceListeners();
         
-        console.log('[AI Monitor Core] Initialized - AI sees everything, knows everything, acts on everything');
-        console.log('[AI Monitor Core] Integrity checker active - AI verifies its own integrity');
-        console.log('[AI Monitor Core] Error recovery active - System can self-heal');
-        console.log('[AI Monitor Core] Performance monitoring active - Tracking system performance');
+        // Log initialization - all debug goes to log, not console
+        gameLogger.info('MONITORING', '[AI_MONITOR_CORE] Initialized', {
+            message: 'AI sees everything, knows everything, acts on everything',
+            integrityChecker: 'active',
+            errorRecovery: 'active',
+            performanceMonitoring: 'active'
+        });
     }
     
     
@@ -153,45 +157,71 @@ class AIMonitorCore {
     setupEventListeners() {
         // Issue detected
         this.issueDetector.on('issueDetected', (issue) => {
-            console.log(`[AI Monitor] Issue detected: ${issue.type} (${issue.severity})`);
+            gameLogger.info('MONITORING', '[AI_MONITOR] Issue detected', {
+                type: issue.type,
+                severity: issue.severity,
+                issueId: issue.id
+            });
         });
         
         // Fix attempt recorded
         this.fixTracker.on('attemptRecorded', (attempt) => {
-            console.log(`[AI Monitor] Fix attempt recorded: ${attempt.fixMethod} - ${attempt.result}`);
+            gameLogger.info('MONITORING', '[AI_MONITOR] Fix attempt recorded', {
+                fixMethod: attempt.fixMethod,
+                result: attempt.result,
+                issueId: attempt.issueId
+            });
         });
         
         // Fix succeeded
         this.fixTracker.on('fixSucceeded', (data) => {
-            console.log(`[AI Monitor] Fix succeeded: ${data.fixMethod} for issue ${data.issueId}`);
+            gameLogger.info('MONITORING', '[AI_MONITOR] Fix succeeded', {
+                fixMethod: data.fixMethod,
+                issueId: data.issueId
+            });
         });
         
         // Fix failed
         this.fixTracker.on('fixFailed', (data) => {
-            console.log(`[AI Monitor] Fix failed: ${data.fixMethod} for issue ${data.issueId} - won't try again`);
+            gameLogger.info('MONITORING', '[AI_MONITOR] Fix failed', {
+                fixMethod: data.fixMethod,
+                issueId: data.issueId,
+                note: 'Won\'t try again'
+            });
         });
         
         // Decisions made
         this.decisionEngine.on('decisionsMade', (decisions) => {
             if (decisions.investigation.should) {
-                console.log(`[AI Monitor] Decision: Start investigation - ${decisions.investigation.reason}`);
+                gameLogger.info('MONITORING', '[AI_MONITOR] Decision: Start investigation', {
+                    reason: decisions.investigation.reason
+                });
             }
             if (decisions.pause.should) {
-                console.log(`[AI Monitor] Decision: Pause Unity - ${decisions.pause.reason}`);
+                gameLogger.info('MONITORING', '[AI_MONITOR] Decision: Pause Unity', {
+                    reason: decisions.pause.reason
+                });
             }
             if (decisions.resume.should) {
-                console.log(`[AI Monitor] Decision: Resume Unity - ${decisions.resume.reason}`);
+                gameLogger.info('MONITORING', '[AI_MONITOR] Decision: Resume Unity', {
+                    reason: decisions.resume.reason
+                });
             }
         });
         
         // Investigation started
         this.decisionEngine.on('investigationStarted', (decision) => {
-            console.log(`[AI Monitor] Investigation started: ${decision.reason}`);
+            gameLogger.info('MONITORING', '[AI_MONITOR] Investigation started', {
+                reason: decision.reason
+            });
         });
         
         // Investigation completed
         this.decisionEngine.on('investigationCompleted', (data) => {
-            console.log(`[AI Monitor] Investigation completed: ${data.issues.length} issue(s) found in ${data.duration.toFixed(1)}s`);
+            gameLogger.info('MONITORING', '[AI_MONITOR] Investigation completed', {
+                issuesFound: data.issues.length,
+                duration: data.duration.toFixed(1) + 's'
+            });
         });
     }
     
@@ -207,11 +237,17 @@ class AIMonitorCore {
         });
         
         this.errorRecovery.on('success', ({ component }) => {
-            console.log(`[Error Recovery] Component ${component} recovered`);
+            gameLogger.info('MONITORING', '[ERROR_RECOVERY] Component recovered', {
+                component: component
+            });
         });
         
         this.errorRecovery.on('retry', ({ component, attempt, delay }) => {
-            console.log(`[Error Recovery] Retrying ${component} (attempt ${attempt}) after ${delay}ms`);
+            gameLogger.info('MONITORING', '[ERROR_RECOVERY] Retrying component', {
+                component: component,
+                attempt: attempt,
+                delay: delay + 'ms'
+            });
         });
         
         this.errorRecovery.on('circuitOpen', ({ component, failures }) => {
@@ -391,7 +427,9 @@ class AIMonitorCore {
         if (this.stateStore) {
             this.stateStore.destroy();
         }
-        console.log('[AI Monitor Core] Destroyed - All background processes stopped');
+        gameLogger.info('MONITORING', '[AI_MONITOR_CORE] Destroyed', {
+            message: 'All background processes stopped'
+        });
     }
 }
 

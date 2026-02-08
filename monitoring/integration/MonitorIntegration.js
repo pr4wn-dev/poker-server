@@ -7,6 +7,7 @@
 
 const path = require('path');
 const AIMonitorCore = require('../core/AIMonitorCore');
+const gameLogger = require('../../src/utils/GameLogger');
 
 class MonitorIntegration {
     constructor(projectRoot, options = {}) {
@@ -24,7 +25,9 @@ class MonitorIntegration {
             this.startSyncLoop();
         }
         
-        console.log('[Monitor Integration] Initialized - Bridging PowerShell monitor with AI core');
+        gameLogger.info('MONITORING', '[MONITOR_INTEGRATION] Initialized', {
+            message: 'Bridging PowerShell monitor with AI core'
+        });
     }
     
     /**
@@ -68,7 +71,10 @@ class MonitorIntegration {
             
             this.lastSync = Date.now();
         } catch (error) {
-            console.error('[Monitor Integration] Sync error:', error);
+            gameLogger.error('MONITORING', '[MONITOR_INTEGRATION] Sync error', {
+                error: error.message,
+                stack: error.stack
+            });
         }
     }
     
@@ -298,7 +304,10 @@ class MonitorIntegration {
             // No issue detected by AI - return null (fallback to pattern matching in monitor.ps1)
             return null;
         } catch (error) {
-            console.error('[Monitor Integration] Detect issue error:', error);
+            gameLogger.error('MONITORING', '[MONITOR_INTEGRATION] Detect issue error', {
+                error: error.message,
+                stack: error.stack
+            });
             return null;
         }
     }
@@ -433,7 +442,10 @@ class MonitorIntegration {
             
             return status;
         } catch (error) {
-            console.error('[Monitor Integration] Update status error:', error);
+            gameLogger.error('MONITORING', '[MONITOR_INTEGRATION] Update status error', {
+                error: error.message,
+                stack: error.stack
+            });
             return null;
         }
     }

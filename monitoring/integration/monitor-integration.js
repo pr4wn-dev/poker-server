@@ -7,6 +7,7 @@
 
 const path = require('path');
 const MonitorIntegration = require('./MonitorIntegration');
+const gameLogger = require('../../src/utils/GameLogger');
 
 // Get project root (parent of monitoring directory)
 const projectRoot = path.resolve(__dirname, '../..');
@@ -20,7 +21,12 @@ const args = process.argv.slice(3);
 
 // Set a global timeout to force exit if command takes too long (5 seconds max)
 const globalTimeout = setTimeout(() => {
-    console.error('Error: Command timed out');
+    const errorMsg = 'Error: Command timed out';
+    console.error(errorMsg); // CLI user feedback
+    gameLogger.error('MONITORING', '[MONITOR_INTEGRATION_CLI] Command timeout', {
+        command: command,
+        timeout: '5000ms'
+    });
     if (integration && integration.aiCore) {
         try {
             integration.aiCore.destroy();
@@ -68,7 +74,10 @@ async function handleCommand() {
             case 'detect-issue':
                 const logLine = args.join(' ');
                 if (!logLine) {
-                    console.error('Error: logLine required');
+                    console.error('Error: logLine required'); // CLI user feedback
+                    gameLogger.error('MONITORING', '[MONITOR_INTEGRATION_CLI] Missing logLine', {
+                        command: 'detect-issue'
+                    });
                     process.exit(1);
                 }
                 const detected = integration.detectIssue(logLine);
@@ -83,7 +92,10 @@ async function handleCommand() {
             case 'get-suggested-fixes':
                 const issueId = args[0];
                 if (!issueId) {
-                    console.error('Error: issueId required');
+                    console.error('Error: issueId required'); // CLI user feedback
+                    gameLogger.error('MONITORING', '[MONITOR_INTEGRATION_CLI] Missing issueId', {
+                        command: 'get-suggested-fixes'
+                    });
                     process.exit(1);
                 }
                 const fixes = integration.getSuggestedFixes(issueId);
@@ -93,7 +105,11 @@ async function handleCommand() {
             case 'record-fix-attempt':
                 const [issueId2, fixMethod, result] = args;
                 if (!issueId2 || !fixMethod || !result) {
-                    console.error('Error: issueId, fixMethod, and result required');
+                    console.error('Error: issueId, fixMethod, and result required'); // CLI user feedback
+                    gameLogger.error('MONITORING', '[MONITOR_INTEGRATION_CLI] Missing required args', {
+                        command: 'record-fix-attempt',
+                        provided: { issueId: !!issueId2, fixMethod: !!fixMethod, result: !!result }
+                    });
                     process.exit(1);
                 }
                 const fixDetails = args[3] ? JSON.parse(args[3]) : {};
@@ -119,7 +135,10 @@ async function handleCommand() {
             case 'query':
                 const question = args.join(' ');
                 if (!question) {
-                    console.error('Error: question required');
+                    console.error('Error: question required'); // CLI user feedback
+                    gameLogger.error('MONITORING', '[MONITOR_INTEGRATION_CLI] Missing question', {
+                        command: 'query'
+                    });
                     process.exit(1);
                 }
                 const answer = integration.query(question);
@@ -132,7 +151,10 @@ async function handleCommand() {
                 break;
                 
             default:
-                console.error(`Unknown command: ${command}`);
+                console.error(`Unknown command: ${command}`); // CLI user feedback
+                gameLogger.warn('MONITORING', '[MONITOR_INTEGRATION_CLI] Unknown command', {
+                    command: command
+                });
                 console.log('Available commands:');
                 console.log('  should-start-investigation');
                 console.log('  should-pause-unity');
@@ -152,8 +174,13 @@ async function handleCommand() {
                 process.exit(1);
         }
     } catch (error) {
-        console.error('Error:', error.message);
-        console.error(error.stack);
+        console.error('Error:', error.message); // CLI user feedback
+        console.error(error.stack); // CLI user feedback
+        gameLogger.error('MONITORING', '[MONITOR_INTEGRATION_CLI] Command error', {
+            command: command,
+            error: error.message,
+            stack: error.stack
+        });
         process.exit(1);
     }
 }
@@ -173,7 +200,11 @@ handleCommand().then(() => {
     if (integration && integration.aiCore) {
         integration.aiCore.destroy();
     }
-    console.error('Fatal error:', error);
+    console.error('Fatal error:', error); // CLI user feedback
+    gameLogger.error('MONITORING', '[MONITOR_INTEGRATION_CLI] Fatal error', {
+        error: error.message,
+        stack: error.stack
+    });
     setTimeout(() => {
         process.exit(1);
     }, 100);
