@@ -3217,6 +3217,8 @@ while ($monitoringActive) {
                 Update-MonitorStatus
                 $lastStatusUpdate = Get-Date
                 Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] Update-MonitorStatus completed, skipping normal check block" -ForegroundColor "Cyan"
+                # CRITICAL: Set cooldown to prevent immediate restart - wait 5 seconds before allowing new investigation
+                $script:lastInvestigationComplete = Get-Date
                 # Skip the normal check block since we already completed
                 $shouldCheckInvestigation = $false
                 $investigationStartTimeValid = $false
