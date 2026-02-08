@@ -310,9 +310,9 @@ A comprehensive AI-first system built FOR the AI, BY the AI. Cerberus sees every
 - ✅ Non-blocking execution
 - ✅ Status: **WORKING** ✅ (Fixed: CLI hanging issues)
 
-### **AIIntegration.ps1** - PowerShell Helpers
+### **CerberusIntegration.ps1** - PowerShell Helpers
 - ✅ All helper functions for PowerShell
-- ✅ Easy to use from monitor.ps1
+- ✅ Easy to use from cerberus.ps1
 - ✅ Status: **WORKING** ✅
 
 ### **Show-CerberusStatistics.ps1** - Cerberus Statistics Display

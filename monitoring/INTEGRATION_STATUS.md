@@ -142,25 +142,25 @@ const report = integration.getStatusReport();
 node monitoring/integration/cerberus-integration.js get-investigation-status
 
 # Should start investigation?
-node monitoring/integration/monitor-integration.js should-start-investigation
+node monitoring/integration/cerberus-integration.js should-start-investigation
 
 # Get active issues
-node monitoring/integration/monitor-integration.js get-active-issues
+node monitoring/integration/cerberus-integration.js get-active-issues
 
 # Get suggested fixes
-node monitoring/integration/monitor-integration.js get-suggested-fixes <issueId>
+node monitoring/integration/cerberus-integration.js get-suggested-fixes <issueId>
 
 # Record fix attempt
-node monitoring/integration/monitor-integration.js record-fix-attempt <issueId> <fixMethod> <result>
+node monitoring/integration/cerberus-integration.js record-fix-attempt <issueId> <fixMethod> <result>
 
 # Get live statistics
-node monitoring/integration/monitor-integration.js get-live-statistics
+node monitoring/integration/cerberus-integration.js get-live-statistics
 
 # Query AI system
-node monitoring/integration/monitor-integration.js query "What errors occurred in the last hour?"
+node monitoring/integration/cerberus-integration.js query "What errors occurred in the last hour?"
 
 # Get complete status report
-node monitoring/integration/monitor-integration.js get-status-report
+node monitoring/integration/cerberus-integration.js get-status-report
 ```
 
 ---
@@ -216,7 +216,6 @@ node monitoring/integration/monitor-integration.js get-status-report
 ### **Phase 4: Integrate Fix Tracking** ✅ **COMPLETE**
 
 **What Was Done**:
-- ✅ Enhanced existing `fix-tracker.js` with AI capabilities
 - ✅ Using `AIFixTracker` for learning
 - ✅ Preserved existing fix attempt tracking
 

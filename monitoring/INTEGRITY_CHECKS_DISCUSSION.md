@@ -17,8 +17,6 @@
 ### ❌ What We DON'T Have (But Should)
 1. **File Integrity Checks** - Not built yet
    - Does `cerberus.ps1` have required functions?
-   - Does `issue-detector.js` have required exports?
-   - Does `fix-tracker.js` have required methods?
    - Are integration files present and correct?
 
 2. **Code Integrity Checks** - Not built yet

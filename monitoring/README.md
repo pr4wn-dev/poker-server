@@ -30,8 +30,16 @@
 8. **AIMonitorCore.js** - Orchestrator (brings everything together)
 9. **IntegrityChecker.js** - AI verifies its own integrity (checks entire system)
 10. **ServerStateCapture.js** - Captures server state in real-time
-11. **ErrorRecovery.js** - Self-healing system (NEW - error recovery & resilience)
-12. **PerformanceMonitor.js** - Performance tracking (NEW - operation timing, memory, CPU)
+11. **ErrorRecovery.js** - Self-healing system (error recovery & resilience)
+12. **PerformanceMonitor.js** - Performance tracking (operation timing, memory, CPU)
+13. **AILearningEngine.js** - Advanced learning and pattern recognition
+14. **UniversalErrorHandler.js** - Catches all errors, reports and learns from them
+15. **UnityStateReporter.js** - Receives and verifies Unity client state
+16. **StateVerificationContracts.js** - Defines what "correct" state looks like
+17. **DependencyGraph.js** - Maps component relationships for cascading failure detection
+18. **EnhancedAnomalyDetection.js** - Statistical analysis and pattern learning
+19. **CausalAnalysis.js** - Traces state changes backwards to find root causes
+20. **AutoFixEngine.js** - Automatically tries fixes from knowledge base
 
 ### **Integration Layer** (`monitoring/integration/`)
 
