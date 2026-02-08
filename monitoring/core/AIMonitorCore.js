@@ -204,6 +204,15 @@ class AIMonitorCore {
         );
         this.errorRecovery.recordSuccess('powerShellSyntaxValidator');
         
+        // Initialize command execution monitor (needs issueDetector and learningEngine)
+        const CommandExecutionMonitor = require('./CommandExecutionMonitor');
+        this.commandExecutionMonitor = new CommandExecutionMonitor(
+            this.stateStore,
+            this.issueDetector,
+            this.learningEngine
+        );
+        this.errorRecovery.recordSuccess('commandExecutionMonitor');
+        
         // NOW initialize workflow enforcer (needs powerShellSyntaxValidator)
         if (!this.workflowEnforcer) {
             const AIWorkflowEnforcer = require('./AIWorkflowEnforcer');
@@ -1266,6 +1275,11 @@ class AIMonitorCore {
         // Stop PowerShell syntax validator
         if (this.powerShellSyntaxValidator && this.powerShellSyntaxValidator.stop) {
             this.powerShellSyntaxValidator.stop();
+        }
+        
+        // Stop command execution monitor
+        if (this.commandExecutionMonitor && this.commandExecutionMonitor.stop) {
+            this.commandExecutionMonitor.stop();
         }
         
         // Run pattern learner improvements (Phase 7) before shutdown
