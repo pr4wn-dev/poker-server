@@ -693,29 +693,37 @@ class StateStore extends EventEmitter {
                 // ALWAYS overwrite - don't check, just force it
                 if (knowledgeBackup) {
                     data.state.learning.knowledge = knowledgeBackup;
-                    // Double-check it's actually an array
-                    if (!Array.isArray(data.state.learning.knowledge)) {
-                        data.state.learning.knowledge = knowledgeBackup;
-                    }
                 }
                 if (improvementsBackup) {
                     data.state.learning.improvements = improvementsBackup;
-                    // Double-check it's actually an array
-                    if (!Array.isArray(data.state.learning.improvements)) {
-                        data.state.learning.improvements = improvementsBackup;
-                    }
                 }
             }
             
-            // Verify arrays are arrays before writing
-            const finalKnowledge = data.state.learning?.knowledge;
-            const finalImprovements = data.state.learning?.improvements;
-            if (knowledgeBackup && (!Array.isArray(finalKnowledge) || finalKnowledge.length === 0)) {
-                data.state.learning = data.state.learning || {};
+            // CRITICAL: Verify and force arrays ONE MORE TIME right before JSON.stringify
+            // Sometimes arrays get lost even after setting them above
+            if (knowledgeBackup) {
+                if (!data.state.learning) {
+                    data.state.learning = {};
+                }
+                // Force overwrite - don't trust what's there
                 data.state.learning.knowledge = knowledgeBackup;
             }
-            if (improvementsBackup && (!Array.isArray(finalImprovements) || finalImprovements.length === 0)) {
-                data.state.learning = data.state.learning || {};
+            if (improvementsBackup) {
+                if (!data.state.learning) {
+                    data.state.learning = {};
+                }
+                // Force overwrite - don't trust what's there
+                data.state.learning.improvements = improvementsBackup;
+            }
+            
+            // Final verification before writing
+            const jsonString = JSON.stringify(data, null, 2);
+            const parsedCheck = JSON.parse(jsonString);
+            if (knowledgeBackup && (!parsedCheck.state?.learning?.knowledge || parsedCheck.state.learning.knowledge.length === 0)) {
+                // If arrays are still empty after JSON.stringify, force them again
+                data.state.learning.knowledge = knowledgeBackup;
+            }
+            if (improvementsBackup && (!parsedCheck.state?.learning?.improvements || parsedCheck.state.learning.improvements.length === 0)) {
                 data.state.learning.improvements = improvementsBackup;
             }
             
