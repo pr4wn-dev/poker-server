@@ -646,6 +646,17 @@ function Write-ConsoleOutput {
         [string]$ForegroundColor = "White"
     )
     
+    # CRITICAL: Always write diagnostic messages to a log file so AI can read them
+    if ($Message -match "\[DIAGNOSTIC\]|\[SELF-DIAGNOSTIC\]") {
+        $diagnosticLogFile = Join-Path $script:projectRoot "logs\monitor-diagnostics.log"
+        try {
+            $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+            "$timestamp $Message" | Out-File -FilePath $diagnosticLogFile -Append -Encoding UTF8 -ErrorAction SilentlyContinue
+        } catch {
+            # Ignore log write errors
+        }
+    }
+    
     # If console output area hasn't been initialized, skip
     if ($script:consoleOutputStartLine -eq 0) {
         return
