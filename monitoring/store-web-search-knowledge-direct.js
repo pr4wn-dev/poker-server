@@ -93,17 +93,17 @@ async function storeWebSearchKnowledge() {
         // Store in learning.improvements
         stateStore.updateState('learning.improvements', currentImprovements);
         
-        // Wait for state to save
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        // Force save immediately
+        stateStore.save();
+        await new Promise(resolve => setTimeout(resolve, 1000));
         
-        // Verify storage
+        // Verify storage in memory
         const storedKnowledge = stateStore.getState('learning.knowledge') || [];
         const storedImprovements = stateStore.getState('learning.improvements') || [];
         
         console.log('✅ Web search findings stored permanently in learning system');
         console.log(`   - Stored in learning.knowledge (${storedKnowledge.length} entries)`);
         console.log(`   - Stored in learning.improvements (${storedImprovements.length} entries)`);
-        console.log('   - Will persist across sessions');
         
         if (storedKnowledge.length === 0 && storedImprovements.length === 0) {
             console.error('❌ ERROR: Knowledge was not stored!');
@@ -112,11 +112,20 @@ async function storeWebSearchKnowledge() {
             process.exit(1);
         }
         
-        // Force save
-        stateStore.save();
+        // Verify saved to disk by loading a new instance
         await new Promise(resolve => setTimeout(resolve, 1000));
+        const verifyStore = new StateStore(projectRoot);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        const diskKnowledge = verifyStore.getState('learning.knowledge') || [];
+        const diskImprovements = verifyStore.getState('learning.improvements') || [];
         
-        console.log('✅ State saved to disk');
+        console.log(`   - Verified on disk: knowledge (${diskKnowledge.length} entries), improvements (${diskImprovements.length} entries)`);
+        console.log('   - Will persist across sessions');
+        
+        if (diskKnowledge.length === 0 && diskImprovements.length === 0) {
+            console.error('❌ ERROR: Knowledge was not persisted to disk!');
+            process.exit(1);
+        }
         process.exit(0);
     } catch (error) {
         console.error('❌ Error storing web search knowledge:', error);
