@@ -3059,8 +3059,12 @@ while ($monitoringActive) {
                 }
             }
         } catch {
-            # Status file read failed - ignore
+            # Status file read failed - log error
+            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] Failed to read status file: $_" -ForegroundColor "Red"
         }
+        
+        # DIAGNOSTIC: Always log what we read from status file
+        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] Status file read: active=$statusFileInvestigationActive, timeRemaining=$statusFileTimeRemaining, startTime=$statusFileInvestigationStartTime" -ForegroundColor "Gray"
         
         # CRITICAL: If status file shows investigation active, ALWAYS sync script variables
         # This ensures script variables match the status file (source of truth)
