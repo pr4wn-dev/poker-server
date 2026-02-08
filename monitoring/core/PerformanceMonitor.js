@@ -24,8 +24,10 @@ class PerformanceMonitor extends EventEmitter {
             highCpuUsage: 0.8 // 80% CPU
         };
         
-        // Start monitoring
-        this.startMonitoring();
+        // Start monitoring - ASYNC, don't block initialization
+        setImmediate(() => {
+            this.startMonitoring();
+        });
     }
     
     /**
@@ -37,8 +39,10 @@ class PerformanceMonitor extends EventEmitter {
             this.captureSystemMetrics();
         }, 5000);
         
-        // Initial capture
-        this.captureSystemMetrics();
+        // Initial capture - async, don't block
+        setImmediate(() => {
+            this.captureSystemMetrics();
+        });
     }
     
     /**

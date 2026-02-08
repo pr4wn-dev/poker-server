@@ -27,8 +27,10 @@ class ServerStateCapture {
      * Start capturing server state
      */
     start() {
-        // Capture immediately
-        this.captureState();
+        // Initial capture - ASYNC, don't block initialization
+        setImmediate(() => {
+            this.captureState();
+        });
         
         // Then capture periodically
         this.captureIntervalId = setInterval(() => {

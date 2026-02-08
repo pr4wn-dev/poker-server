@@ -55,8 +55,15 @@ class ProcessMonitor extends EventEmitter {
             this.checkProcesses();
         }, 30000);
         
-        // Initial check
-        this.checkProcesses();
+        // Initial check - ASYNC, don't block initialization
+        // Use setImmediate to ensure it doesn't block the constructor
+        setImmediate(() => {
+            this.checkProcesses().catch(error => {
+                gameLogger.error('CERBERUS', '[PROCESS_MONITOR] Initial check failed', {
+                    error: error.message
+                });
+            });
+        });
     }
     
     /**
@@ -140,11 +147,18 @@ class ProcessMonitor extends EventEmitter {
      */
     async getNodeProcesses() {
         return new Promise((resolve, reject) => {
+            // Set a timeout to ensure we never hang forever
+            const timeout = setTimeout(() => {
+                gameLogger.warn('CERBERUS', '[PROCESS_MONITOR] getNodeProcesses timeout - returning empty array');
+                resolve([]); // Always resolve, never reject on timeout
+            }, 3000); // 3 second timeout (shorter than exec timeout)
+            
             if (process.platform === 'win32') {
                 // Windows: Use PowerShell to get processes
                 exec('powershell -Command "Get-Process node -ErrorAction SilentlyContinue | Select-Object Id, @{Name=\'Memory\';Expression={$_.WorkingSet64}}, @{Name=\'CPU\';Expression={$_.CPU}}, StartTime | ConvertTo-Json"', 
-                    { timeout: 5000 },
+                    { timeout: 2000 }, // Shorter timeout
                     (error, stdout, stderr) => {
+                        clearTimeout(timeout);
                         if (error) {
                             resolve([]);
                             return;
@@ -167,8 +181,9 @@ class ProcessMonitor extends EventEmitter {
             } else {
                 // Unix: Use ps command
                 exec('ps -eo pid,rss,pcpu,etime,comm | grep node | grep -v grep', 
-                    { timeout: 5000 },
+                    { timeout: 2000 }, // Shorter timeout
                     (error, stdout, stderr) => {
+                        clearTimeout(timeout);
                         if (error) {
                             resolve([]);
                             return;
