@@ -9,11 +9,16 @@ const path = require('path');
 const AIMonitorCore = require('./core/AIMonitorCore');
 
 async function storeWebSearchKnowledge() {
-    const projectRoot = path.join(__dirname, '..');
-    const core = new AIMonitorCore(projectRoot);
-    
-    // Wait for initialization
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    try {
+        const projectRoot = path.join(__dirname, '..');
+        console.log('Initializing AIMonitorCore...');
+        const core = new AIMonitorCore(projectRoot);
+        
+        // Wait for initialization
+        console.log('Waiting for initialization...');
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        
+        console.log('AIMonitorCore initialized');
     
     // Store web search findings as permanent knowledge
     const action = {
@@ -120,13 +125,19 @@ async function storeWebSearchKnowledge() {
     
     if (storedKnowledge.length === 0 && storedImprovements.length === 0) {
         console.error('❌ ERROR: Knowledge was not stored!');
+        console.error('   StateStore state:', JSON.stringify(core.stateStore.getState('learning'), null, 2));
         process.exit(1);
     }
     
     process.exit(0);
+    } catch (error) {
+        console.error('❌ Error storing web search knowledge:', error);
+        console.error('Stack:', error.stack);
+        process.exit(1);
+    }
 }
 
 storeWebSearchKnowledge().catch(err => {
-    console.error('Error storing web search knowledge:', err);
+    console.error('❌ Unhandled error:', err);
     process.exit(1);
 });
