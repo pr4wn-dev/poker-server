@@ -22,7 +22,7 @@ function Invoke-AIIntegration {
                 return $null
             }
         } else {
-            Write-Error "AI integration command failed: $($result -join "`n")" -ErrorAction SilentlyContinue
+            Write-Error "AI integration command failed: $($result -join [Environment]::NewLine)" -ErrorAction SilentlyContinue
             return $null
         }
     } catch {
