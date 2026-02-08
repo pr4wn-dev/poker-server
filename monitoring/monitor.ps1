@@ -3035,8 +3035,17 @@ while ($monitoringActive) {
             $statusFilePath = Join-Path $script:projectRoot "logs\monitor-status.json"
             if (Test-Path $statusFilePath) {
                 $statusData = Get-Content $statusFilePath -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
-                if ($statusData.investigation -and $statusData.investigation.active -is [bool] -and $statusData.investigation.active) {
-                    $statusFileInvestigationActive = $true
+                # CRITICAL FIX: Check investigation.active more robustly - it might be a string "True" or boolean true
+                if ($statusData.investigation) {
+                    $activeValue = $statusData.investigation.active
+                    # Convert to bool if it's a string, or use as-is if it's already a bool
+                    if ($activeValue -is [bool]) {
+                        $statusFileInvestigationActive = $activeValue
+                    } elseif ($activeValue -is [string]) {
+                        $statusFileInvestigationActive = ($activeValue -eq "True" -or $activeValue -eq "true" -or $activeValue -eq "1")
+                    } else {
+                        $statusFileInvestigationActive = [bool]$activeValue
+                    }
                     if ($statusData.investigation.startTime) {
                         try {
                             $statusFileInvestigationStartTime = [DateTime]::Parse($statusData.investigation.startTime)
