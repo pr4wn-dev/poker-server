@@ -43,7 +43,9 @@ class AIMonitorCore {
         
         // Initialize rules enforcer FIRST - AI must always know the rules
         try {
-            this.rulesEnforcer = new AIRulesEnforcer(this.stateStore);
+            // Rules enforcer needs learning engine for self-learning
+            // Will be initialized after learningEngine is created
+            this.rulesEnforcer = null;
             this.errorRecovery.recordSuccess('rulesEnforcer');
         } catch (error) {
             this.errorRecovery.recordError('rulesEnforcer', error);
