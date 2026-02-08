@@ -12,7 +12,18 @@
 
 const EventEmitter = require('events');
 const { exec } = require('child_process');
-const gameLogger = require('../../src/utils/GameLogger');
+// Lazy load gameLogger to avoid blocking during initialization
+let gameLogger = null;
+function getGameLogger() {
+    if (!gameLogger) {
+        try {
+            gameLogger = require('../../src/utils/GameLogger');
+        } catch (error) {
+            return { warn: () => {}, error: () => {}, info: () => {} };
+        }
+    }
+    return gameLogger;
+}
 
 class ProcessMonitor extends EventEmitter {
     constructor(stateStore, issueDetector) {
@@ -59,7 +70,7 @@ class ProcessMonitor extends EventEmitter {
         // Use setImmediate to ensure it doesn't block the constructor
         setImmediate(() => {
             this.checkProcesses().catch(error => {
-                gameLogger.error('CERBERUS', '[PROCESS_MONITOR] Initial check failed', {
+                getGameLogger().error('CERBERUS', '[PROCESS_MONITOR] Initial check failed', {
                     error: error.message
                 });
             });
@@ -136,7 +147,7 @@ class ProcessMonitor extends EventEmitter {
             this.save();
             
         } catch (error) {
-            gameLogger.error('CERBERUS', '[PROCESS_MONITOR] Check processes error', {
+            getGameLogger().error('CERBERUS', '[PROCESS_MONITOR] Check processes error', {
                 error: error.message
             });
         }
@@ -149,7 +160,7 @@ class ProcessMonitor extends EventEmitter {
         return new Promise((resolve, reject) => {
             // Set a timeout to ensure we never hang forever
             const timeout = setTimeout(() => {
-                gameLogger.warn('CERBERUS', '[PROCESS_MONITOR] getNodeProcesses timeout - returning empty array');
+                getGameLogger().warn('CERBERUS', '[PROCESS_MONITOR] getNodeProcesses timeout - returning empty array');
                 resolve([]); // Always resolve, never reject on timeout
             }, 3000); // 3 second timeout (shorter than exec timeout)
             
@@ -404,7 +415,7 @@ class ProcessMonitor extends EventEmitter {
             
             this.emit('intervalLeak', issue);
             
-            gameLogger.warn('CERBERUS', '[PROCESS_MONITOR] Interval leak detected', issue);
+            getGameLogger().warn('CERBERUS', '[PROCESS_MONITOR] Interval leak detected', issue);
         }
         
         return leaks;
@@ -412,8 +423,10 @@ class ProcessMonitor extends EventEmitter {
     
     /**
      * Get process report
+     * Returns cached data immediately - doesn't block on process enumeration
      */
     getProcessReport() {
+        // Return cached data - don't block on process enumeration
         const currentProcesses = Array.from(this.processSnapshots.values());
         const processCount = currentProcesses.length;
         
@@ -474,7 +487,7 @@ class ProcessMonitor extends EventEmitter {
             this.stateStore.updateState('process.monitor.history', this.processHistory.slice(-50));
             this.stateStore.updateState('process.monitor.snapshots', Object.fromEntries(this.processSnapshots));
         } catch (error) {
-            gameLogger.error('CERBERUS', '[PROCESS_MONITOR] Save error', {
+            getGameLogger().error('CERBERUS', '[PROCESS_MONITOR] Save error', {
                 error: error.message
             });
         }
