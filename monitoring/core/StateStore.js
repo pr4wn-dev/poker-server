@@ -772,6 +772,25 @@ class StateStore extends EventEmitter {
                 }
             }
         }
+        
+        // Ensure learning.knowledge and learning.improvements are arrays
+        if (!this.state.learning) {
+            this.state.learning = {
+                fixAttempts: new Map(),
+                successRates: new Map(),
+                patterns: new Map(),
+                knowledge: [],
+                improvements: []
+            };
+        }
+        
+        if (!Array.isArray(this.state.learning.knowledge)) {
+            this.state.learning.knowledge = [];
+        }
+        
+        if (!Array.isArray(this.state.learning.improvements)) {
+            this.state.learning.improvements = [];
+        }
     }
     
     /**
