@@ -3417,8 +3417,9 @@ try {
         # Even if we didn't break early, if server is running now, set the cooldown
         $script:lastServerRestart = Get-Date
     }
-        } catch {
-    Write-Error "Failed to restart server: $_"
+    } catch {
+        Write-Error "Failed to restart server: $_"
+    }
 }
 
 # Initial service maintenance check (quick check only - don't wait for slow operations)
