@@ -1659,19 +1659,21 @@ function Show-Statistics {
     # CRITICAL: Read status from status file to avoid sync issues
     $statusFromFile = "ACTIVE"
     $pausedFromFile = $false
-    if (Test-Path "logs\monitor-status.json") {
+    $statusFilePath = Join-Path $PWD "logs\monitor-status.json"
+    if (Test-Path $statusFilePath) {
         try {
-            $statusData = Get-Content "logs\monitor-status.json" -Raw | ConvertFrom-Json
-            if ($statusData.verification -and $statusData.verification.active) {
+            $statusData = Get-Content $statusFilePath -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+            if ($statusData.verification -and $statusData.verification.active -is [bool] -and $statusData.verification.active) {
                 $statusFromFile = "VERIFYING FIX (Unity Paused)"
-            } elseif ($statusData.investigation -and $statusData.investigation.active) {
+            } elseif ($statusData.investigation -and $statusData.investigation.active -is [bool] -and $statusData.investigation.active) {
                 $statusFromFile = "INVESTIGATING"
-            } elseif ($statusData.paused) {
+            } elseif ($statusData.paused -is [bool] -and $statusData.paused) {
                 $statusFromFile = "PAUSED (Fix Required)"
                 $pausedFromFile = $true
             }
         } catch {
             # Status file read failed - fall back to variables
+            Write-Error "Show-Statistics: Failed to read status from status file: $_" -ErrorAction SilentlyContinue
             $statusFromFile = if ($isVerifyingFix) { "VERIFYING FIX (Unity Paused)" } elseif ($script:isInvestigating) { "INVESTIGATING" } elseif ($isPaused) { "PAUSED (Fix Required)" } else { "ACTIVE" }
         }
     } else {
@@ -1861,11 +1863,12 @@ function Show-Statistics {
     $investigationActive = $false
     $investigationStartTimeValue = $null
     $investigationTimeRemaining = $null
-    if (Test-Path "logs\monitor-status.json") {
+    $statusFilePath = Join-Path $PWD "logs\monitor-status.json"
+    if (Test-Path $statusFilePath) {
         try {
-            $statusData = Get-Content "logs\monitor-status.json" -Raw | ConvertFrom-Json
+            $statusData = Get-Content $statusFilePath -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
             if ($statusData.investigation) {
-                $investigationActive = $statusData.investigation.active
+                $investigationActive = if ($statusData.investigation.active -is [bool]) { $statusData.investigation.active } else { $false }
                 if ($statusData.investigation.startTime) {
                     try {
                         $investigationStartTimeValue = [DateTime]::Parse($statusData.investigation.startTime)
@@ -1878,7 +1881,8 @@ function Show-Statistics {
                 }
             }
         } catch {
-            # Status file read failed - fall back to variables
+            # Status file read failed - fall back to variables with diagnostic
+            Write-Error "Show-Statistics: Failed to read status file: $_" -ErrorAction SilentlyContinue
             $investigationActive = $script:isInvestigating
             $investigationStartTimeValue = $script:investigationStartTime
         }
