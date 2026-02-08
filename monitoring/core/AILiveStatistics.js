@@ -543,9 +543,29 @@ class AILiveStatistics {
         if (!learning) return {};
         
         const result = {};
-        learning.forEach((attempts, issueId) => {
-            result[issueId] = attempts.length;
-        });
+        
+        // Handle Map
+        if (learning instanceof Map) {
+            learning.forEach((attempts, issueId) => {
+                result[issueId] = Array.isArray(attempts) ? attempts.length : 0;
+            });
+        }
+        // Handle array of entries
+        else if (Array.isArray(learning)) {
+            learning.forEach(entry => {
+                if (Array.isArray(entry) && entry.length >= 2) {
+                    const [issueId, attempts] = entry;
+                    result[issueId] = Array.isArray(attempts) ? attempts.length : 0;
+                }
+            });
+        }
+        // Handle object
+        else if (typeof learning === 'object') {
+            for (const [issueId, attempts] of Object.entries(learning)) {
+                result[issueId] = Array.isArray(attempts) ? attempts.length : 0;
+            }
+        }
+        
         return result;
     }
     
