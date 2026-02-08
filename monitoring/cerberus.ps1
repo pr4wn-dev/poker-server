@@ -3420,6 +3420,7 @@ try {
     } catch {
         Write-Error "Failed to restart server: $_"
     }
+}
 
 # Initial service maintenance check (quick check only - don't wait for slow operations)
 # Check if services are already running first, skip maintenance if they are
@@ -3458,8 +3459,6 @@ if (Test-Path $fixAppliedFile) {
 # Initialize monitor status file
 Update-MonitorStatus -statusUpdate @{
     monitorStatus = "starting"
-}
-}
 }
 
 # Initial display
