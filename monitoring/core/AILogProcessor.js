@@ -42,6 +42,9 @@ class AILogProcessor extends EventEmitter {
             lastProcessed: null
         };
         
+        // Prevent concurrent log checks
+        this._checkingLogs = false;
+        
         // Start processing
         this.start();
     }
@@ -94,6 +97,13 @@ class AILogProcessor extends EventEmitter {
      * Check for new logs
      */
     async checkForNewLogs() {
+        // Prevent concurrent checks
+        if (this._checkingLogs) {
+            return;
+        }
+        
+        this._checkingLogs = true;
+        
         try {
             if (!fs.existsSync(this.logFile)) {
                 return;
@@ -119,6 +129,8 @@ class AILogProcessor extends EventEmitter {
             }
         } catch (error) {
             console.error('Error checking for new logs:', error);
+        } finally {
+            this._checkingLogs = false;
         }
     }
     
