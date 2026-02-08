@@ -564,11 +564,13 @@ class AIFixTracker extends EventEmitter {
      */
     updateStateStore(attempt) {
         const attempts = this.stateStore.getState('fixes.attempts') || [];
-        attempts.push(attempt);
+        // Ensure attempts is an array
+        const attemptsArray = Array.isArray(attempts) ? attempts : [];
+        attemptsArray.push(attempt);
         
         // Keep only last 1000 attempts
-        if (attempts.length > 1000) {
-            attempts.splice(0, attempts.length - 1000);
+        if (attemptsArray.length > 1000) {
+            attemptsArray.splice(0, attemptsArray.length - 1000);
         }
         
         this.stateStore.updateState('fixes.attempts', attemptsArray);
