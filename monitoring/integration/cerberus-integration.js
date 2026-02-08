@@ -6,14 +6,14 @@
  */
 
 const path = require('path');
-const MonitorIntegration = require('./MonitorIntegration');
+const CerberusIntegration = require('./CerberusIntegration');
 const gameLogger = require('../../src/utils/GameLogger');
 
 // Get project root (parent of monitoring directory)
 const projectRoot = path.resolve(__dirname, '../..');
 
 // Initialize integration (CLI mode - don't start sync loop, allow process to exit)
-const integration = new MonitorIntegration(projectRoot, { startSyncLoop: false });
+const integration = new CerberusIntegration(projectRoot, { startSyncLoop: false });
 
 // Handle command line arguments
 const command = process.argv[2];

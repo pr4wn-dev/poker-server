@@ -1,7 +1,7 @@
 /**
- * Monitor Integration - Bridge PowerShell Monitor <-> AI Core
+ * Cerberus Integration - Bridge PowerShell Cerberus <-> AI Core
  * 
- * This bridges the existing PowerShell monitor.ps1 with the new AI-first core.
+ * This bridges the existing PowerShell cerberus.ps1 with the new AI-first core.
  * Allows gradual migration while preserving all existing functionality.
  */
 
@@ -9,7 +9,7 @@ const path = require('path');
 const AIMonitorCore = require('../core/AIMonitorCore');
 const gameLogger = require('../../src/utils/GameLogger');
 
-class MonitorIntegration {
+class CerberusIntegration {
     constructor(projectRoot, options = {}) {
         this.projectRoot = projectRoot;
         this.aiCore = new AIMonitorCore(projectRoot);
@@ -31,7 +31,7 @@ class MonitorIntegration {
     }
     
     /**
-     * Start sync loop - Keep AI core and monitor.ps1 in sync
+     * Start sync loop - Keep AI core and cerberus.ps1 in sync
      */
     startSyncLoop() {
         setInterval(() => {
@@ -40,7 +40,7 @@ class MonitorIntegration {
     }
     
     /**
-     * Sync with monitor.ps1
+     * Sync with cerberus.ps1
      * Reads monitor-status.json and updates AI core state
      */
     syncWithMonitor() {
@@ -161,7 +161,7 @@ class MonitorIntegration {
     
     /**
      * Get AI decision for investigation
-     * Replaces broken investigation logic in monitor.ps1
+     * Replaces broken investigation logic in cerberus.ps1
      */
     shouldStartInvestigation() {
         const decision = this.aiCore.decisionEngine.shouldStartInvestigation();
@@ -176,7 +176,7 @@ class MonitorIntegration {
     
     /**
      * Get AI decision for Unity pause
-     * Replaces broken pause logic in monitor.ps1
+     * Replaces broken pause logic in cerberus.ps1
      */
     shouldPauseUnity() {
         const decision = this.aiCore.decisionEngine.shouldPauseUnity();
@@ -190,7 +190,7 @@ class MonitorIntegration {
     
     /**
      * Get AI decision for Unity resume
-     * Replaces broken resume logic in monitor.ps1
+     * Replaces broken resume logic in cerberus.ps1
      */
     shouldResumeUnity() {
         const decision = this.aiCore.decisionEngine.shouldResumeUnity();
@@ -301,7 +301,7 @@ class MonitorIntegration {
                 };
             }
             
-            // No issue detected by AI - return null (fallback to pattern matching in monitor.ps1)
+            // No issue detected by AI - return null (fallback to pattern matching in cerberus.ps1)
             return null;
         } catch (error) {
             gameLogger.error('MONITORING', '[MONITOR_INTEGRATION] Detect issue error', {
@@ -408,7 +408,7 @@ class MonitorIntegration {
     
     /**
      * Get live statistics
-     * Replaces Show-Statistics in monitor.ps1
+     * Replaces Show-Statistics in cerberus.ps1
      */
     getLiveStatistics() {
         return this.aiCore.liveStatistics.getStatistics();
@@ -439,7 +439,7 @@ class MonitorIntegration {
     
     /**
      * Update monitor-status.json with AI core state
-     * Keeps monitor.ps1 in sync
+     * Keeps cerberus.ps1 in sync
      */
     updateMonitorStatus() {
         try {
@@ -498,4 +498,4 @@ class MonitorIntegration {
     }
 }
 
-module.exports = MonitorIntegration;
+module.exports = CerberusIntegration;

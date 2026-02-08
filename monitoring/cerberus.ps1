@@ -3,9 +3,9 @@
 # Displays real-time statistics in a formatted layout
 #
 # Usage: 
-#   .\monitoring\monitor.ps1                    # Normal mode (default)
-#   .\monitoring\monitor.ps1 -Mode simulation   # Simulation mode (fully automated)
-#   .\monitoring\monitor.ps1 -Mode normal       # Normal mode (user creates table)
+#   .\monitoring\cerberus.ps1                    # Normal mode (default)
+#   .\monitoring\cerberus.ps1 -Mode simulation   # Simulation mode (fully automated)
+#   .\monitoring\cerberus.ps1 -Mode normal       # Normal mode (user creates table)
 #
 # Modes:
 #   - simulation: Fully automated including table creation and simulation start
@@ -24,8 +24,8 @@ $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $script:projectRoot = Split-Path -Parent $scriptDir
 Set-Location $script:projectRoot
 
-# Source AI Integration helpers (NEW: AI-first monitoring system)
-$aiIntegrationPath = Join-Path $scriptDir "AIIntegration.ps1"
+# Source Cerberus Integration helpers (NEW: AI-first monitoring system)
+$aiIntegrationPath = Join-Path $scriptDir "CerberusIntegration.ps1"
 if (Test-Path $aiIntegrationPath) {
     . $aiIntegrationPath
     Write-Info "AI Integration loaded - AI-first monitoring system active"
@@ -48,11 +48,10 @@ $pendingIssuesFile = Join-Path $script:projectRoot "logs\pending-issues.json"
 $fixAppliedFile = Join-Path $script:projectRoot "logs\fix-applied.json"
 $monitorStatusFile = Join-Path $script:projectRoot "logs\monitor-status.json"  # Persistent status file for AI assistant
 $checkInterval = 1  # Check every 1 second
-# Legacy issue-detector.js path (fallback only, AI system preferred)
-$nodeScript = Join-Path $script:projectRoot "monitoring\issue-detector.js"
+# Legacy issue-detector.js removed - AI system now handles all issue detection
 $serverUrl = "http://localhost:3000"
 $statsUpdateInterval = 5  # Update stats display every 5 seconds (more responsive)
-$configFile = Join-Path $script:projectRoot "monitoring\monitor-config.json"
+$configFile = Join-Path $script:projectRoot "monitoring\cerberus-config.json"
 
 # Load configuration
 $config = @{
@@ -495,7 +494,7 @@ function Add-PendingIssue {
             }
         }
         
-        # Fallback to legacy issue-detector.js (if AI not available)
+        # Legacy issue-detector.js removed - AI system required
         # Automatic retry logic for issue detector
         $maxRetries = 3
         $retryCount = 0
@@ -1858,7 +1857,7 @@ function Show-Statistics {
         try {
             $aiStats = Get-AILiveStatistics
             if ($aiStats) {
-                Show-AIStatistics -LegacyStats $stats -LogFile $logFile -ServerUrl $serverUrl
+                Show-CerberusStatistics -LegacyStats $stats -LogFile $logFile -ServerUrl $serverUrl
                 return
             }
         } catch {
@@ -2020,7 +2019,7 @@ function Show-Statistics {
         } elseif ($MyInvocation.MyCommand.Path) {
             $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
     } else {
-            $scriptRoot = if (Test-Path "monitoring\monitor.ps1") { "monitoring" } elseif (Test-Path "logs\monitor-status.json") { "." } else { Get-Location }
+            $scriptRoot = if (Test-Path "monitoring\cerberus.ps1") { "monitoring" } elseif (Test-Path "logs\monitor-status.json") { "." } else { Get-Location }
         }
         $statusTextFilePath = Join-Path $scriptRoot "..\logs\monitor-status.json" | Resolve-Path -ErrorAction SilentlyContinue
         if (-not $statusTextFilePath) {
@@ -2228,7 +2227,7 @@ function Show-Statistics {
     $investigationActive = $false
     $investigationStartTimeValue = $null
     $investigationTimeRemaining = $null
-    # Use script root directory (where monitor.ps1 is located)
+    # Use script root directory (where cerberus.ps1 is located)
     # Try multiple methods to get script path
     $scriptRoot = $null
     if ($PSScriptRoot) {
@@ -2480,7 +2479,7 @@ function Show-Statistics {
         } elseif ($MyInvocation.MyCommand.Path) {
             $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
         } else {
-            $scriptRoot = if (Test-Path "monitoring\monitor.ps1") { "monitoring" } elseif (Test-Path "logs\monitor-status.json") { "." } else { Get-Location }
+            $scriptRoot = if (Test-Path "monitoring\cerberus.ps1") { "monitoring" } elseif (Test-Path "logs\monitor-status.json") { "." } else { Get-Location }
         }
         $verificationStatusFilePath = Join-Path $scriptRoot "..\logs\monitor-status.json" | Resolve-Path -ErrorAction SilentlyContinue
         if (-not $verificationStatusFilePath) {
@@ -3211,10 +3210,10 @@ function Stop-ExistingMonitorInstances {
         
         foreach ($proc in $allPowershellProcesses) {
             try {
-                # Check command line to see if it's running monitor.ps1
+                # Check command line to see if it's running cerberus.ps1
                 $cmdLine = (Get-CimInstance Win32_Process -Filter "ProcessId = $($proc.Id)" -ErrorAction SilentlyContinue).CommandLine
                 
-                if ($cmdLine -and $cmdLine -like "*monitor.ps1*") {
+                if ($cmdLine -and $cmdLine -like "*cerberus.ps1*") {
                     # Don't kill ourselves
                     if ($proc.Id -ne $PID) {
                         Write-Info "Found existing monitor process (PID: $($proc.Id)) - stopping it..."
@@ -4563,7 +4562,7 @@ while ($monitoringActive) {
                             Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ISSUE DETECTOR FAILED: Complete failure - issue NOT logged" -ForegroundColor "Red"
                             Write-ConsoleOutput -Message "  Issue: $($issue.type) ($($issue.severity))" -ForegroundColor "Yellow"
                             Write-ConsoleOutput -Message "  Diagnostics:" -ForegroundColor "Yellow"
-                            Write-ConsoleOutput -Message "    - Check if issue-detector.js is working: node monitoring/issue-detector.js --check 'test'" -ForegroundColor "Gray"
+                            Write-ConsoleOutput -Message "    - Check if Cerberus AI system is working: node monitoring/integration/cerberus-integration.js detect-issue 'test'" -ForegroundColor "Gray"
                             Write-ConsoleOutput -Message "    - Check if pending-issues.json is writable" -ForegroundColor "Gray"
                             Write-ConsoleOutput -Message "    - Check Node.js error output for details" -ForegroundColor "Gray"
                             
@@ -4586,7 +4585,7 @@ while ($monitoringActive) {
                             }
                         } elseif ($addResult -and -not $addResult.success) {
                             # Issue detector returned an error response
-                            $errorMsg = if ($addResult.error) { $addResult.error } else { "Issue detection failed - check issue-detector.js" }
+                            $errorMsg = if ($addResult.error) { $addResult.error } else { "Issue detection failed - check Cerberus AI system" }
                             $errorReason = if ($addResult.reason) { $addResult.reason } else { "detection_failed" }
                             Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ISSUE DETECTOR ERROR: Failed to log issue ($errorReason)" -ForegroundColor "Red"
                             Write-ConsoleOutput -Message "  Error: $errorMsg" -ForegroundColor "Yellow"
@@ -4635,12 +4634,12 @@ while ($monitoringActive) {
                                     }
                                 }
                             } else {
-                                $errorMsg = if ($addResult -and $addResult.error) { $addResult.error } else { "Issue detection failed - check issue-detector.js output" }
+                                $errorMsg = if ($addResult -and $addResult.error) { $addResult.error } else { "Issue detection failed - check Cerberus AI system" }
                                 $logFailMsg = "[$(Get-Date -Format 'HH:mm:ss')] FAILED TO LOG ISSUE: $errorMsg"
                                 Write-ConsoleOutput -Message $logFailMsg -ForegroundColor "Red"
                                 Write-ConsoleOutput -Message "  Issue detected but NOT logged to pending-issues.json" -ForegroundColor "Yellow"
                                 Write-ConsoleOutput -Message "  Diagnostics:" -ForegroundColor "Yellow"
-                                Write-ConsoleOutput -Message "    - Check if issue-detector.js is working: node monitoring/issue-detector.js --check 'test'" -ForegroundColor "Gray"
+                                Write-ConsoleOutput -Message "    - Check if Cerberus AI system is working: node monitoring/integration/cerberus-integration.js detect-issue 'test'" -ForegroundColor "Gray"
                                 Write-ConsoleOutput -Message "    - Check if pending-issues.json is writable" -ForegroundColor "Gray"
                                 Write-ConsoleOutput -Message "    - Check Node.js error output for details" -ForegroundColor "Gray"
                                 

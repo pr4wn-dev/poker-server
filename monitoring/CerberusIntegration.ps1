@@ -1,7 +1,7 @@
-# AI Integration Helper Functions
-# Bridge between PowerShell monitor and AI core
+# Cerberus Integration Helper Functions
+# Bridge between PowerShell Cerberus and AI core
 
-$script:aiIntegrationScript = Join-Path $PSScriptRoot "integration\monitor-integration.js"
+$script:aiIntegrationScript = Join-Path $PSScriptRoot "integration\cerberus-integration.js"
 
 # Helper function to call AI integration
 function Invoke-AIIntegration {
