@@ -3572,30 +3572,62 @@ while ($monitoringActive) {
                     if (-not $isPaused -and $config.unity.pauseDebuggerOnIssue) {
                         # CRITICAL FIX: Use /api/simulation/pause instead of /api/debugger/break for more reliable pausing
                         # This sets table.isPaused=true and broadcasts state, which Unity reads via table_state event
+                        # CRITICAL: Add timeout protection to prevent blocking the loop
                         try {
-                            # Get the table from server first
-                            $serverHealth = Invoke-WebRequest -Uri "$serverUrl/health" -TimeoutSec 2 -ErrorAction Stop | ConvertFrom-Json
-                            if ($serverHealth.activeSimulations -gt 0) {
-                                $tablesResponse = Invoke-WebRequest -Uri "$serverUrl/api/tables" -TimeoutSec 2 -ErrorAction Stop
-                                $tables = $tablesResponse.Content | ConvertFrom-Json
-                                $targetTable = $tables | Where-Object { $_.id -eq $tableId -or ($null -eq $tableId -and $_.isSimulation -eq $true) } | Select-Object -First 1
-                                
-                                if ($targetTable) {
-                                    # Call the server API to pause the simulation table
-                                    $pauseBody = @{
-                                        tableId = $targetTable.id
-                                        reason = "$($rootIssue.type) - $($rootIssue.severity) severity (Investigation complete)"
-                                    } | ConvertTo-Json
-                                    Invoke-WebRequest -Uri "$serverUrl/api/simulation/pause" -Method POST -Body $pauseBody -ContentType "application/json" -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop | Out-Null
-                                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Paused via table state update for table $($targetTable.id)" -ForegroundColor "Green"
-                                    $isPaused = $true
-                                    $pauseSuccess = $true
+                            # Get the table from server first (with timeout protection)
+                            $serverHealth = $null
+                            $tables = $null
+                            $targetTable = $null
+                            
+                            # Use job with timeout to prevent blocking
+                            $healthJob = Start-Job -ScriptBlock { param($url) try { $response = Invoke-WebRequest -Uri $url -TimeoutSec 2 -ErrorAction Stop; return @{ Success = $true; Content = $response.Content } } catch { return @{ Success = $false; Error = $_.Exception.Message } } } -ArgumentList "$serverUrl/health"
+                            $healthResult = $healthJob | Wait-Job -Timeout 3 | Receive-Job
+                            $healthJob | Remove-Job -ErrorAction SilentlyContinue
+                            
+                            if ($healthResult -and $healthResult.Success) {
+                                $serverHealth = $healthResult.Content | ConvertFrom-Json
+                                if ($serverHealth.activeSimulations -gt 0) {
+                                    # Get tables with timeout protection
+                                    $tablesJob = Start-Job -ScriptBlock { param($url) try { $response = Invoke-WebRequest -Uri $url -TimeoutSec 2 -ErrorAction Stop; return @{ Success = $true; Content = $response.Content } } catch { return @{ Success = $false; Error = $_.Exception.Message } } } -ArgumentList "$serverUrl/api/tables"
+                                    $tablesResult = $tablesJob | Wait-Job -Timeout 3 | Receive-Job
+                                    $tablesJob | Remove-Job -ErrorAction SilentlyContinue
+                                    
+                                    if ($tablesResult -and $tablesResult.Success) {
+                                        $tables = $tablesResult.Content | ConvertFrom-Json
+                                        $targetTable = $tables | Where-Object { $_.id -eq $tableId -or ($null -eq $tableId -and $_.isSimulation -eq $true) } | Select-Object -First 1
+                                        
+                                        if ($targetTable) {
+                                            # Call the server API to pause the simulation table (with timeout protection)
+                                            $pauseBody = @{
+                                                tableId = $targetTable.id
+                                                reason = "$($rootIssue.type) - $($rootIssue.severity) severity (Investigation complete)"
+                                            } | ConvertTo-Json
+                                            $pauseJob = Start-Job -ScriptBlock { param($url, $body) try { Invoke-WebRequest -Uri $url -Method POST -Body $body -ContentType "application/json" -UseBasicParsing -TimeoutSec 5 -ErrorAction Stop | Out-Null; return @{ Success = $true } } catch { return @{ Success = $false; Error = $_.Exception.Message } } } -ArgumentList "$serverUrl/api/simulation/pause", $pauseBody
+                                            $pauseResult = $pauseJob | Wait-Job -Timeout 6 | Receive-Job
+                                            $pauseJob | Remove-Job -ErrorAction SilentlyContinue
+                                            
+                                            if ($pauseResult -and $pauseResult.Success) {
+                                                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Paused via table state update for table $($targetTable.id)" -ForegroundColor "Green"
+                                                $isPaused = $true
+                                                $pauseSuccess = $true
+                                            } else {
+                                                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] WARNING: Failed to pause Unity via API: $($pauseResult.Error)" -ForegroundColor "Yellow"
+                                                $pauseSuccess = $false
+                                            }
+                                        } else {
+                                            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] WARNING: Could not find target simulation table to pause." -ForegroundColor "Yellow"
+                                            $pauseSuccess = $false
+                                        }
+                                    } else {
+                                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] WARNING: Failed to get tables from server: $($tablesResult.Error)" -ForegroundColor "Yellow"
+                                        $pauseSuccess = $false
+                                    }
                                 } else {
-                                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] WARNING: Could not find target simulation table to pause." -ForegroundColor "Yellow"
+                                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] WARNING: No active simulations found to pause." -ForegroundColor "Yellow"
                                     $pauseSuccess = $false
                                 }
                             } else {
-                                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] WARNING: No active simulations found to pause." -ForegroundColor "Yellow"
+                                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] WARNING: Failed to get server health: $($healthResult.Error)" -ForegroundColor "Yellow"
                                 $pauseSuccess = $false
                             }
                         } catch {
