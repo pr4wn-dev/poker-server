@@ -650,40 +650,70 @@ class AIMonitorCore {
      * Get component health summary
      */
     getComponentHealth() {
-        const health = {
-            timestamp: Date.now(),
-            components: {}
-        };
-        
-        // Get error recovery health
-        if (this.errorRecovery) {
-            health.components = this.errorRecovery.getAllHealth();
+        try {
+            const health = {
+                timestamp: Date.now(),
+                components: {}
+            };
+            
+            // Get error recovery health
+            if (this.errorRecovery) {
+                try {
+                    health.components = this.errorRecovery.getAllHealth();
+                } catch (error) {
+                    gameLogger.error('MONITORING', '[AI_MONITOR_CORE] Get error recovery health error', {
+                        error: error.message
+                    });
+                    health.components = {};
+                }
+            }
+            
+            // Add component status
+            health.status = {
+                stateStore: !!this.stateStore,
+                logProcessor: !!this.logProcessor,
+                issueDetector: !!this.issueDetector,
+                fixTracker: !!this.fixTracker,
+                decisionEngine: !!this.decisionEngine,
+                liveStatistics: !!this.liveStatistics,
+                communicationInterface: !!this.communicationInterface,
+                integrityChecker: !!this.integrityChecker,
+                serverStateCapture: !!this.serverStateCapture,
+                unityStateReporter: !!this.unityStateReporter,
+                stateVerificationContracts: !!this.stateVerificationContracts,
+                dependencyGraph: !!this.dependencyGraph,
+                enhancedAnomalyDetection: !!this.enhancedAnomalyDetection,
+                causalAnalysis: !!this.causalAnalysis,
+                autoFixEngine: !!this.autoFixEngine,
+                learningEngine: !!this.learningEngine,
+                errorRecovery: !!this.errorRecovery,
+                performanceMonitor: !!this.performanceMonitor,
+                universalErrorHandler: !!this.universalErrorHandler
+            };
+            
+            // Calculate overall health
+            const componentCount = Object.keys(health.status).length;
+            const activeCount = Object.values(health.status).filter(v => v === true).length;
+            health.overallHealth = {
+                active: activeCount,
+                total: componentCount,
+                percentage: componentCount > 0 ? Math.round((activeCount / componentCount) * 100) : 0
+            };
+            
+            return health;
+        } catch (error) {
+            gameLogger.error('MONITORING', '[AI_MONITOR_CORE] Get component health error', {
+                error: error.message,
+                stack: error.stack
+            });
+            return {
+                timestamp: Date.now(),
+                error: error.message,
+                components: {},
+                status: {},
+                overallHealth: { active: 0, total: 0, percentage: 0 }
+            };
         }
-        
-        // Add component status
-        health.status = {
-            stateStore: !!this.stateStore,
-            logProcessor: !!this.logProcessor,
-            issueDetector: !!this.issueDetector,
-            fixTracker: !!this.fixTracker,
-            decisionEngine: !!this.decisionEngine,
-            liveStatistics: !!this.liveStatistics,
-            communicationInterface: !!this.communicationInterface,
-            integrityChecker: !!this.integrityChecker,
-            serverStateCapture: !!this.serverStateCapture,
-            unityStateReporter: !!this.unityStateReporter,
-            stateVerificationContracts: !!this.stateVerificationContracts,
-            dependencyGraph: !!this.dependencyGraph,
-            enhancedAnomalyDetection: !!this.enhancedAnomalyDetection,
-            causalAnalysis: !!this.causalAnalysis,
-            autoFixEngine: !!this.autoFixEngine,
-            learningEngine: !!this.learningEngine,
-            errorRecovery: !!this.errorRecovery,
-            performanceMonitor: !!this.performanceMonitor,
-            universalErrorHandler: !!this.universalErrorHandler
-        };
-        
-        return health;
     }
     
     /**

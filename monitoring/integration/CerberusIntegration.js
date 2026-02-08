@@ -259,6 +259,14 @@ class CerberusIntegration {
      */
     detectIssue(logLine) {
         try {
+            if (!this.aiCore || !this.aiCore.logProcessor || !this.aiCore.issueDetector) {
+                return null; // Fallback to pattern matching
+            }
+            
+            if (!logLine || typeof logLine !== 'string') {
+                return null;
+            }
+            
             // Process log line through AI log processor
             // This parses the line and emits events if it's an error
             let detectedIssue = null;
@@ -267,12 +275,18 @@ class CerberusIntegration {
             
             // Set up one-time listener for error detection
             const errorHandler = (parsedLog) => {
-                // Try to detect issue from parsed log
-                const detected = this.aiCore.issueDetector.detectFromLog(parsedLog);
-                if (detected && detected.issue) {
-                    detectedIssue = detected.issue;
-                    detectionMethod = detected.method || 'pattern';
-                    confidence = detected.confidence || 0.8;
+                try {
+                    // Try to detect issue from parsed log
+                    const detected = this.aiCore.issueDetector.detectFromLog(parsedLog);
+                    if (detected && detected.issue) {
+                        detectedIssue = detected.issue;
+                        detectionMethod = detected.method || 'pattern';
+                        confidence = detected.confidence || 0.8;
+                    }
+                } catch (error) {
+                    gameLogger.error('MONITORING', '[MONITOR_INTEGRATION] Error in error handler', {
+                        error: error.message
+                    });
                 }
             };
             
@@ -289,8 +303,8 @@ class CerberusIntegration {
             if (detectedIssue) {
                 return {
                     issue: {
-                        type: detectedIssue.type,
-                        severity: detectedIssue.severity,
+                        type: detectedIssue.type || 'unknown',
+                        severity: detectedIssue.severity || 'medium',
                         source: detectedIssue.source || 'log',
                         message: detectedIssue.message || logLine,
                         confidence: confidence,
