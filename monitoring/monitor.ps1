@@ -1930,9 +1930,9 @@ function Show-Statistics {
     }
     
     $col3Lines += ""
-    $col3Lines += "═══════════════════════════"
+    $col3Lines += "==========================="
     $col3Lines += "  INVESTIGATION PHASE"
-    $col3Lines += "═══════════════════════════"
+    $col3Lines += "==========================="
     if ($investigationActive -and $investigationStartTimeValue) {
         $investigationElapsed = (Get-Date) - $investigationStartTimeValue
         # Use timeRemaining from status file if available, otherwise calculate
@@ -1951,10 +1951,10 @@ function Show-Statistics {
         $progressBarWidth = $colWidth - 8
         $filled = [Math]::Round(($elapsed / $investigationTimeout) * $progressBarWidth)
         $empty = $progressBarWidth - $filled
-        $progressBar = "[" + ("█" * $filled) + ("░" * $empty) + "]"
+        $progressBar = "[" + ("#" * $filled) + ("-" * $empty) + "]"
         
         $col3Lines += ""
-        $col3Lines += "Status: ● ACTIVE"
+        $col3Lines += "Status: ACTIVE"
         $col3Lines += "Elapsed: " + ("{0:N1}s" -f $elapsedSeconds) + " / " + ("{0:N0}s" -f $investigationTimeout)
         $col3Lines += "Remaining: " + ("{0:N1}s" -f $remaining)
         $col3Lines += ""
