@@ -24,6 +24,7 @@ const UniversalErrorHandler = require('./UniversalErrorHandler');
 const UnityStateReporter = require('./UnityStateReporter');
 const StateVerificationContracts = require('./StateVerificationContracts');
 const DependencyGraph = require('./DependencyGraph');
+const EnhancedAnomalyDetection = require('./EnhancedAnomalyDetection');
 const gameLogger = require('../../src/utils/GameLogger');
 
 class AIMonitorCore {
@@ -162,6 +163,18 @@ class AIMonitorCore {
             this.errorRecovery.recordSuccess('dependencyGraph');
         } catch (error) {
             this.errorRecovery.recordError('dependencyGraph', error);
+            throw error;
+        }
+        
+        // Enhanced anomaly detection (statistical analysis and pattern learning)
+        try {
+            this.enhancedAnomalyDetection = new EnhancedAnomalyDetection(
+                this.stateStore,
+                this.issueDetector
+            );
+            this.errorRecovery.recordSuccess('enhancedAnomalyDetection');
+        } catch (error) {
+            this.errorRecovery.recordError('enhancedAnomalyDetection', error);
             throw error;
         }
         
