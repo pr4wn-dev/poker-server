@@ -634,7 +634,7 @@ class StateStore extends EventEmitter {
             recommendations.push({
                 type: 'start_investigation',
                 priority: 'high',
-                reason: `${this.state.issues.active.length} active issues detected`
+                reason: `${activeIssuesCheck.length} active issues detected`
             });
         }
         
