@@ -10,7 +10,7 @@
  */
 
 class AICommunicationInterface {
-    constructor(stateStore, issueDetector, fixTracker, decisionEngine, logProcessor, liveStatistics, learningEngine) {
+    constructor(stateStore, issueDetector, fixTracker, decisionEngine, logProcessor, liveStatistics, learningEngine, rulesEnforcer) {
         this.stateStore = stateStore;
         this.issueDetector = issueDetector;
         this.fixTracker = fixTracker;
@@ -18,61 +18,145 @@ class AICommunicationInterface {
         this.logProcessor = logProcessor;
         this.liveStatistics = liveStatistics;
         this.learningEngine = learningEngine; // Add learning engine for confidence
+        this.rulesEnforcer = rulesEnforcer; // Add rules enforcer - AI must never forget rules
     }
     
     /**
      * Query the system - AI can ask anything
+     * ALWAYS includes rules reminder - AI must never forget
      */
     query(question) {
         const lower = question.toLowerCase();
         
+        // "What are the rules?" or "What rules must I follow?"
+        if (lower.includes('rule') || lower.includes('what must') || lower.includes('what should i')) {
+            return this.getRulesResponse();
+        }
+        
         // "What's the current state?"
         if (lower.includes('current state') || lower.includes('what is the state')) {
-            return this.getCurrentState();
+            const response = this.getCurrentState();
+            this.addRulesReminder(response);
+            return response;
         }
         
         // "What issues are active?"
         if (lower.includes('active issue') || lower.includes('what issue')) {
-            return this.getActiveIssues();
+            const response = this.getActiveIssues();
+            this.addRulesReminder(response);
+            return response;
         }
         
         // "What fixes have been tried?"
         if (lower.includes('fix attempt') || lower.includes('what fix')) {
-            return this.getFixAttempts(question);
+            const response = this.getFixAttempts(question);
+            this.addRulesReminder(response);
+            return response;
         }
         
         // "What's the investigation status?"
         if (lower.includes('investigation')) {
-            return this.getInvestigationStatus();
+            const response = this.getInvestigationStatus();
+            this.addRulesReminder(response);
+            return response;
         }
         
         // "What errors occurred?"
         if (lower.includes('error') && (lower.includes('occurred') || lower.includes('happened'))) {
-            return this.getErrors(question);
+            const response = this.getErrors(question);
+            this.addRulesReminder(response);
+            return response;
         }
         
         // "What's the system health?"
         if (lower.includes('system health') || lower.includes('health')) {
-            return this.getSystemHealth();
+            const response = this.getSystemHealth();
+            this.addRulesReminder(response);
+            return response;
         }
         
         // "What should I do?"
         if (lower.includes('what should') || lower.includes('recommendation')) {
-            return this.getRecommendations();
+            const response = this.getRecommendations();
+            this.addRulesReminder(response);
+            return response;
         }
         
         // "Why did X fail?"
         if (lower.includes('why') && lower.includes('fail')) {
-            return this.analyzeFailure(question);
+            const response = this.analyzeFailure(question);
+            this.addRulesReminder(response);
+            return response;
         }
         
         // "What patterns lead to Y?"
         if (lower.includes('pattern') && lower.includes('lead')) {
-            return this.getPatterns(question);
+            const response = this.getPatterns(question);
+            this.addRulesReminder(response);
+            return response;
         }
         
         // Default: search everything
-        return this.search(question);
+        const response = this.search(question);
+        this.addRulesReminder(response);
+        return response;
+    }
+    
+    /**
+     * Get rules response
+     */
+    getRulesResponse() {
+        if (!this.rulesEnforcer) {
+            return {
+                type: 'rules',
+                error: 'Rules enforcer not available',
+                reminder: 'Critical rules must be followed - see repo-specific rules'
+            };
+        }
+        
+        return {
+            type: 'rules',
+            rules: this.rulesEnforcer.getRules(),
+            criticalRules: this.rulesEnforcer.getCriticalRulesSummary(),
+            compliance: this.rulesEnforcer.complianceStats,
+            frequentlyViolated: this.rulesEnforcer.getFrequentlyViolatedRules(),
+            insights: this.rulesEnforcer.getRuleLearningInsights(),
+            reminder: 'These rules MUST be followed. Cerberus tracks compliance and learns from violations.',
+            timestamp: Date.now()
+        };
+    }
+    
+    /**
+     * Add rules reminder to any response
+     * ALWAYS reminds AI of critical rules
+     */
+    addRulesReminder(response) {
+        if (!this.rulesEnforcer) {
+            response.rulesReminder = {
+                warning: 'Rules enforcer not available - ensure you follow all critical rules',
+                criticalRules: [
+                    'Pull all repos first (LAW 1)',
+                    'All logs go to gameLogger, not console',
+                    'Never ask user to describe errors - check logs (LAW 9)',
+                    'Never delete features to fix problems (LAW 10)',
+                    'Document fixes immediately (LAW 3)',
+                    'Commit automatically after changes (LAW 4)'
+                ]
+            };
+            return;
+        }
+        
+        // Always include critical rules summary
+        response.rulesReminder = {
+            criticalRulesCount: this.rulesEnforcer.getCriticalRulesSummary().count,
+            complianceRate: Math.round(this.rulesEnforcer.complianceStats.complianceRate),
+            recentViolations: this.rulesEnforcer.violations.slice(-3).map(v => ({
+                rule: v.ruleName,
+                context: v.context
+            })),
+            reminder: 'Remember: All critical rules must be followed. Cerberus tracks compliance.',
+            frequentlyViolated: this.rulesEnforcer.getFrequentlyViolatedRules().frequentlyViolated.slice(0, 3)
+        };
     }
     
     /**
@@ -361,6 +445,7 @@ class AICommunicationInterface {
      * Get complete status report
      * AI gets everything it needs to know
      * ALWAYS includes learning confidence - cannot be masked
+     * ALWAYS includes rules - AI must never forget them
      */
     getStatusReport() {
         const report = {
@@ -386,6 +471,24 @@ class AICommunicationInterface {
                 overallConfidence: 0,
                 error: 'Learning engine not available',
                 timestamp: Date.now()
+            };
+        }
+        
+        // ALWAYS include rules - AI must never forget them
+        if (this.rulesEnforcer) {
+            report.rules = this.rulesEnforcer.getRules();
+            report.criticalRules = this.rulesEnforcer.getCriticalRulesSummary();
+            report.ruleCompliance = {
+                complianceRate: this.rulesEnforcer.complianceStats.complianceRate,
+                violations: this.rulesEnforcer.complianceStats.violations,
+                totalInteractions: this.rulesEnforcer.complianceStats.totalInteractions,
+                frequentlyViolated: this.rulesEnforcer.getFrequentlyViolatedRules(),
+                insights: this.rulesEnforcer.getRuleLearningInsights()
+            };
+        } else {
+            report.rules = {
+                error: 'Rules enforcer not available',
+                reminder: 'Critical rules must be followed - see repo-specific rules'
             };
         }
         

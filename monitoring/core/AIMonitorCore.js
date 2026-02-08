@@ -27,6 +27,7 @@ const DependencyGraph = require('./DependencyGraph');
 const EnhancedAnomalyDetection = require('./EnhancedAnomalyDetection');
 const CausalAnalysis = require('./CausalAnalysis');
 const AutoFixEngine = require('./AutoFixEngine');
+const AIRulesEnforcer = require('./AIRulesEnforcer');
 const gameLogger = require('../../src/utils/GameLogger');
 
 class AIMonitorCore {
@@ -104,7 +105,7 @@ class AIMonitorCore {
             this.decisionEngine,
             this.logProcessor
         );
-        // Communication interface needs learning engine for confidence - create after learning engine
+        // Communication interface needs learning engine for confidence and rules enforcer - create after learning engine
         this.communicationInterface = new AICommunicationInterface(
             this.stateStore,
             this.issueDetector,
@@ -112,7 +113,8 @@ class AIMonitorCore {
             this.decisionEngine,
             this.logProcessor,
             this.liveStatistics,
-            this.learningEngine // Pass learning engine for confidence tracking
+            this.learningEngine, // Pass learning engine for confidence tracking
+            this.rulesEnforcer // Pass rules enforcer - AI must never forget rules
         );
         this.integrityChecker = new IntegrityChecker(
             projectRoot,
