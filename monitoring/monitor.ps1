@@ -3652,7 +3652,22 @@ while ($monitoringActive) {
         # BUT: Don't start immediately after completion - wait 5 seconds cooldown
         # CRITICAL: If Unity is paused, DO NOT start new investigations - wait for user/AI to fix the current one
         $canStartNewInvestigation = $true
-        if ($isPaused) {
+        # Check both local variable AND status file to ensure we don't start investigations when Unity is paused
+        $unityIsPaused = $isPaused
+        try {
+            $statusFilePath = Join-Path $script:projectRoot "logs\monitor-status.json"
+            if (Test-Path $statusFilePath) {
+                $statusData = Get-Content $statusFilePath -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+                if ($statusData.paused -is [bool]) {
+                    $unityIsPaused = $statusData.paused
+                } elseif ($statusData.paused -is [string]) {
+                    $unityIsPaused = ($statusData.paused -eq "True" -or $statusData.paused -eq "true" -or $statusData.paused -eq "1")
+                }
+            }
+        } catch {
+            # Status file read failed - use local variable
+        }
+        if ($unityIsPaused) {
             # Unity is paused - don't start new investigations until current issue is fixed
             $canStartNewInvestigation = $false
             Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] Unity is paused - waiting for fix to be applied (checking for fix-applied.json)" -ForegroundColor "Gray"
