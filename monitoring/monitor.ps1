@@ -3146,15 +3146,21 @@ while ($monitoringActive) {
             }
             
             # Also check elapsed time if we have startTime
-            if (-not $shouldCompleteNow -and $statusFileInvestigationStartTime) {
+            # CRITICAL: Check elapsed time even if timeRemaining check passed, to ensure we complete
+            if ($statusFileInvestigationStartTime) {
                 $elapsedFromStatus = ((Get-Date) - $statusFileInvestigationStartTime).TotalSeconds
-                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] elapsed check: $([Math]::Round($elapsedFromStatus, 1))s >= $timeoutValue s = $($elapsedFromStatus -ge ($timeoutValue - 1))" -ForegroundColor "Gray"
-                if ($elapsedFromStatus -ge ($timeoutValue - 1)) {
-                    $shouldCompleteNow = $true
-                    $completionReason = "elapsed=$([Math]::Round($elapsedFromStatus, 1))s >= timeout=$timeoutValue s"
-                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] elapsed check: TRUE - should complete" -ForegroundColor "Yellow"
+                $elapsedCheckResult = $elapsedFromStatus -ge ($timeoutValue - 1)
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] elapsed check: $([Math]::Round($elapsedFromStatus, 1))s >= ($timeoutValue - 1) = $elapsedCheckResult" -ForegroundColor "Gray"
+                if ($elapsedCheckResult) {
+                    if (-not $shouldCompleteNow) {
+                        $shouldCompleteNow = $true
+                        $completionReason = "elapsed=$([Math]::Round($elapsedFromStatus, 1))s >= timeout=$timeoutValue s"
+                    }
+                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] elapsed check: TRUE - should complete (elapsed=$([Math]::Round($elapsedFromStatus, 1))s, timeout=$timeoutValue s)" -ForegroundColor "Yellow"
+                } else {
+                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] elapsed check: FALSE - not yet (elapsed=$([Math]::Round($elapsedFromStatus, 1))s, timeout=$timeoutValue s)" -ForegroundColor "Gray"
                 }
-            } elseif (-not $shouldCompleteNow) {
+            } else {
                 Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] elapsed check: SKIPPED (no startTime)" -ForegroundColor "Gray"
             }
             
