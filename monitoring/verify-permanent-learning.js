@@ -8,7 +8,7 @@
 const fs = require('fs');
 const path = require('path');
 
-function verifyPermanentLearning() {
+async function verifyPermanentLearning() {
     const stateFile = path.join(__dirname, '..', 'logs', 'ai-state-store.json');
     
     if (!fs.existsSync(stateFile)) {
@@ -16,16 +16,22 @@ function verifyPermanentLearning() {
         return false;
     }
     
-    const state = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
-    const learning = state.state?.learning || {};
+    // Use StateStore to load state (ensures proper deserialization)
+    const StateStore = require('./core/StateStore');
+    const stateStore = new StateStore(path.join(__dirname, '..'));
+    
+    // Wait for state to load
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    const learning = stateStore.getState('learning') || {};
     
     console.log('=== PERMANENT LEARNING VERIFICATION ===\n');
     
-    // Check knowledge array
+    // Check knowledge array (StateStore ensures it's an array)
     const knowledge = Array.isArray(learning.knowledge) ? learning.knowledge : [];
     console.log(`📚 Learning Knowledge Count: ${knowledge.length}`);
     
-    // Check improvements array
+    // Check improvements array (StateStore ensures it's an array)
     const improvements = Array.isArray(learning.improvements) ? learning.improvements : [];
     console.log(`📈 Learning Improvements Count: ${improvements.length}\n`);
     
@@ -104,4 +110,7 @@ function verifyPermanentLearning() {
     return allGood;
 }
 
-verifyPermanentLearning();
+verifyPermanentLearning().catch(err => {
+    console.error('Error:', err);
+    process.exit(1);
+});
