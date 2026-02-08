@@ -3451,23 +3451,39 @@ while ($monitoringActive) {
             $reader = New-Object System.IO.StreamReader($fileStream)
             
             while ($null -ne ($line = $reader.ReadLine())) {
-                $stats.TotalLinesProcessed++
-                $stats.LastLogActivity = Get-Date  # Update last activity timestamp
-                
-                # Skip our own monitoring logs and internal system logs
-                if ($line -match '\[MONITORING\]|\[ISSUE_DETECTOR\]|\[LOG_WATCHER\]|\[TRACE\]|\[STATUS_REPORT\]|\[ACTIVE_MONITORING\]|\[WORKFLOW\]') {
-                    continue
-                }
-                
-                # Skip FIX_ATTEMPT SUCCESS logs (these are good, not errors)
-                # Match both [FIX_ATTEMPT] and [FIX ATTEMPT] (with or without underscore)
-                if ($line -match '\[FIX[_\s]ATTEMPT\].*SUCCESS' -or $line -match 'FIX_ATTEMPT.*SUCCESS' -or $line -match 'FIX ATTEMPT.*SUCCESS') {
-                    continue
-                }
-                
-                # Skip TRACE logs (informational only)
-                # BUT: Don't skip [ROOT_TRACE] - these are important error indicators
-                if ($line -match '\[TRACE\]' -and $line -notmatch '\[ROOT_TRACE\]') {
+                try {
+                    $stats.TotalLinesProcessed++
+                    $stats.LastLogActivity = Get-Date  # Update last activity timestamp
+                    
+                    # CRITICAL: Validate line is not null/empty and is a string
+                    if ([string]::IsNullOrWhiteSpace($line)) {
+                        continue
+                    }
+                    
+                    # CRITICAL: Ensure line is a string (not an object)
+                    $line = $line.ToString()
+                    
+                    # Skip our own monitoring logs and internal system logs
+                    if ($line -match '\[MONITORING\]|\[ISSUE_DETECTOR\]|\[LOG_WATCHER\]|\[TRACE\]|\[STATUS_REPORT\]|\[ACTIVE_MONITORING\]|\[WORKFLOW\]') {
+                        continue
+                    }
+                    
+                    # Skip FIX_ATTEMPT SUCCESS logs (these are good, not errors)
+                    # Match both [FIX_ATTEMPT] and [FIX ATTEMPT] (with or without underscore)
+                    if ($line -match '\[FIX[_\s]ATTEMPT\].*SUCCESS' -or $line -match 'FIX_ATTEMPT.*SUCCESS' -or $line -match 'FIX ATTEMPT.*SUCCESS') {
+                        continue
+                    }
+                    
+                    # Skip TRACE logs (informational only)
+                    # BUT: Don't skip [ROOT_TRACE] - these are important error indicators
+                    if ($line -match '\[TRACE\]' -and $line -notmatch '\[ROOT_TRACE\]') {
+                        continue
+                    }
+                } catch {
+                    # CRITICAL: If line reading fails, log error and continue
+                    $errorMsg = "Error processing log line: $_"
+                    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+                    "$timestamp [ERROR] $errorMsg" | Out-File -FilePath (Join-Path $script:projectRoot "logs\monitor-diagnostics.log") -Append -Encoding UTF8 -ErrorAction SilentlyContinue
                     continue
                 }
                 
@@ -3840,7 +3856,7 @@ while ($monitoringActive) {
                                     }
                                 }
                             } else {
-                                $errorMsg = if ($addResult -and $addResult.error) { $addResult.error } else { "Unknown error - check Node.js script output" }
+                                $errorMsg = if ($addResult -and $addResult.error) { $addResult.error } else { "Issue detection failed - check issue-detector.js output" }
                                 $logFailMsg = "[$(Get-Date -Format 'HH:mm:ss')] FAILED TO LOG ISSUE: $errorMsg"
                                 Write-ConsoleOutput -Message $logFailMsg -ForegroundColor "Red"
                                 Write-ConsoleOutput -Message "  Issue detected but NOT logged to pending-issues.json" -ForegroundColor "Yellow"
