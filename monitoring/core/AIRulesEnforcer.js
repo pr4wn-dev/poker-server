@@ -40,122 +40,236 @@ class AIRulesEnforcer extends EventEmitter {
     
     /**
      * Define all critical rules that AI must follow
+     * Rules are from monitoring folder documentation - Cerberus-specific rules
      */
     defineRules() {
         return [
             {
-                id: 'law_1_pull_repos',
-                name: 'LAW 1: Pull All Repos First',
-                description: 'Pull EVERY repo in the project before doing anything. This happens BEFORE you respond. BEFORE anything else. FIRST.',
-                command: 'git pull',
+                id: 'cerberus_all_logs_to_gameLogger',
+                name: 'All Logs Go to gameLogger - Cerberus Sees Everything',
+                description: 'ALL debug/error output goes to gameLogger, NOT console.log/error/warn. Cerberus sees everything through logs. User should never see console output (except CLI JSON responses for PowerShell). Cerberus monitors all logs to learn and detect issues.',
                 priority: 'critical',
-                category: 'workflow',
-                examples: ['Always run git pull on both poker-server AND poker-client-unity before starting work']
+                category: 'logging',
+                examples: [
+                    'Use gameLogger.info/error/warn instead of console.log/error/warn',
+                    'Only console.log for CLI JSON output (cerberus-integration.js)',
+                    'All errors must be logged through gameLogger for Cerberus to detect and learn'
+                ]
             },
             {
-                id: 'law_2_check_past_problems',
-                name: 'LAW 2: Check Past Problems First',
-                description: 'Before solving ANY problem, search the project log/docs for matching issues. The solution probably already exists. Don\'t reinvent. CHECK FIRST.',
+                id: 'cerberus_single_source_of_truth',
+                name: 'Single Source of Truth - StateStore Only',
+                description: 'StateStore is the ONLY source of truth. No dual state management (files + variables). All state updates go through StateStore. No sync issues possible. This is fundamental to Cerberus architecture.',
                 priority: 'critical',
-                category: 'problem_solving',
-                examples: ['Search INSTALL_LOG.md for similar issues before implementing fixes']
+                category: 'architecture',
+                examples: [
+                    'Always use stateStore.updateState() and stateStore.getState()',
+                    'Never maintain state in both files and variables',
+                    'StateStore handles all persistence automatically'
+                ]
             },
             {
-                id: 'law_3_document_fixes',
-                name: 'LAW 3: Document Fixes Immediately',
-                description: 'When you fix ANY bug → document it BEFORE moving on. Not later. NOW. Add to INSTALL_LOG.md immediately.',
+                id: 'cerberus_proactive_detection',
+                name: 'Proactive Detection - State Verification, Not Just Error Detection',
+                description: 'Cerberus uses proactive state verification, not just reactive error detection. Continuously verify state is correct. Check invariants after every operation. Detect issues immediately, not when they log. This is how Cerberus catches issues before they become errors.',
                 priority: 'critical',
-                category: 'documentation',
-                examples: ['After fixing a bug, immediately add it to INSTALL_LOG.md with solution']
+                category: 'detection',
+                examples: [
+                    'Use StateVerificationContracts to define correct state',
+                    'Verify state after every operation, not just when errors occur',
+                    'Use multiple detection methods: state verification, patterns, anomalies, causal analysis'
+                ]
             },
             {
-                id: 'law_4_commit_automatically',
-                name: 'LAW 4: Commit Automatically',
-                description: 'After code changes: git add -A; git commit -m "message"; git push. Don\'t wait to be asked.',
-                command: 'git add -A; git commit -m "message"; git push',
+                id: 'cerberus_event_driven',
+                name: 'Event-Driven Communication - No File Polling',
+                description: 'Cerberus uses event-driven communication, not file-based polling. Use events/messages instead of JSON files. Real-time updates. No polling needed. This is fundamental to Cerberus architecture.',
                 priority: 'critical',
-                category: 'workflow',
-                examples: ['Always commit and push after making code changes']
+                category: 'architecture',
+                examples: [
+                    'Use EventEmitter.emit() for real-time updates',
+                    'Subscribe to events instead of polling files',
+                    'Event-driven architecture ensures no stale data'
+                ]
             },
             {
-                id: 'law_5_no_bandaids',
-                name: 'LAW 5: No Band-Aids',
-                description: 'Fix root causes. Install real dependencies. No mock mode. No workarounds.',
+                id: 'cerberus_ai_first_design',
+                name: 'AI-First Design - Built FOR AI, BY AI',
+                description: 'Cerberus is built FOR the AI, BY the AI. Human just prompts. AI sees everything, knows everything, acts on everything. All information is structured for AI consumption. AI makes all decisions automatically.',
+                priority: 'critical',
+                category: 'philosophy',
+                examples: [
+                    'All state is queryable by AI',
+                    'All logs are processed and understood by AI',
+                    'AI makes all decisions (investigation, pause/resume, fixes)',
+                    'Human never needs to understand technical details'
+                ]
+            },
+            {
+                id: 'cerberus_learning_from_everything',
+                name: 'Learn From Everything - Never Forget',
+                description: 'Cerberus learns from EVERY error, EVERY fix attempt, EVERY pattern. Tracks what works/doesn\'t work. Gets smarter over time. Never makes the same mistake twice. Learning confidence is always visible and cannot be masked.',
+                priority: 'critical',
+                category: 'learning',
+                examples: [
+                    'All errors advance the learning engine',
+                    'All fix attempts are tracked and learned from',
+                    'Patterns are extracted and stored',
+                    'Learning confidence is always visible in communication'
+                ]
+            },
+            {
+                id: 'cerberus_no_masking',
+                name: 'No Masking - Learning Confidence Cannot Be Artificially Inflated',
+                description: 'Masking is NEVER allowed. Learning confidence cannot be artificially inflated. System detects masking attempts (100% success with low samples, sudden jumps, unrealistic rates). Masking reduces confidence, not increases it. All metrics require minimum sample sizes.',
+                priority: 'critical',
+                category: 'learning',
+                examples: [
+                    'Low sample sizes with high success rates are flagged as masking',
+                    'Sudden confidence jumps are detected and penalized',
+                    'Perfect success rates with insufficient data are suspicious',
+                    'Masking warnings are tracked and reduce confidence'
+                ]
+            },
+            {
+                id: 'cerberus_auto_adjustment',
+                name: 'Automatic Self-Improvement When Confidence Low',
+                description: 'When learning confidence is low (<50%), Cerberus automatically adjusts. Suggests specific improvements (increase pattern collection, improve causal tracking, etc.). System self-improves when it detects low confidence.',
                 priority: 'high',
-                category: 'problem_solving',
-                examples: ['Don\'t disable features to fix errors - fix the root cause']
+                category: 'learning',
+                examples: [
+                    'Low confidence triggers automatic adjustment recommendations',
+                    'System suggests what needs improvement',
+                    'Auto-adjustments are tracked and visible'
+                ]
             },
             {
-                id: 'law_6_one_log_file',
-                name: 'LAW 6: One Log File',
-                description: 'All notes go in one central log file. Not scattered across multiple files.',
+                id: 'cerberus_multiple_detection_methods',
+                name: 'Multiple Detection Methods - Not Just Pattern Matching',
+                description: 'Cerberus uses multiple detection methods: state verification, pattern analysis, anomaly detection, causal analysis. Not just pattern matching. This ensures nothing escapes detection.',
+                priority: 'critical',
+                category: 'detection',
+                examples: [
+                    'State verification catches issues before they log',
+                    'Pattern analysis finds known issues',
+                    'Anomaly detection finds unexpected issues',
+                    'Causal analysis finds root causes'
+                ]
+            },
+            {
+                id: 'cerberus_integrity_checks',
+                name: 'AI Verifies Its Own Integrity',
+                description: 'Cerberus verifies its own integrity. Checks monitoring files, server files, Unity files, API endpoints, Socket.IO events. AI verifies that the system is working correctly.',
                 priority: 'high',
-                category: 'documentation',
-                examples: ['Use INSTALL_LOG.md as the single source of truth for all issues and fixes']
+                category: 'integrity',
+                examples: [
+                    'IntegrityChecker verifies all components are present and correct',
+                    'Checks file structure, code structure, integration correctness',
+                    'AI verifies its own integrity automatically'
+                ]
             },
             {
-                id: 'law_7_when_stuck_reset',
-                name: 'LAW 7: When Stuck, Reset',
-                description: 'If patching errors for >15 minutes, STOP. Find last working commit: git log --oneline. Reset to it: git reset --hard <commit>. Don\'t waste hours on what takes 30 seconds.',
+                id: 'cerberus_state_verification_contracts',
+                name: 'State Verification Contracts - Define Correct State',
+                description: 'StateVerificationContracts define what "correct" state looks like. Contracts define pre-conditions, post-conditions, and invariants for all critical operations. If we don\'t know what\'s correct, we can\'t detect what\'s wrong.',
+                priority: 'critical',
+                category: 'detection',
+                examples: [
+                    'Define contracts for chip integrity, state consistency, investigation status',
+                    'Contracts are verified continuously',
+                    'Contract violations are detected immediately'
+                ]
+            },
+            {
+                id: 'cerberus_dependency_graph',
+                name: 'Dependency Graph - Map Component Relationships',
+                description: 'DependencyGraph maps dependencies between system components. Enables Cerberus to trace cascading failures and understand the impact of issues. Knows what depends on what.',
+                priority: 'high',
+                category: 'analysis',
+                examples: [
+                    'Map dependencies between components',
+                    'Trace cascading failures',
+                    'Understand impact of issues',
+                    'Find root causes through dependency chains'
+                ]
+            },
+            {
+                id: 'cerberus_causal_analysis',
+                name: 'Causal Analysis - Trace State Changes Backwards',
+                description: 'CausalAnalysis traces state changes backwards to build causal chains and find root causes. Doesn\'t just detect issues - understands WHY they happened.',
+                priority: 'high',
+                category: 'analysis',
+                examples: [
+                    'Trace state changes backwards to find root causes',
+                    'Build causal chains of related issues',
+                    'Understand why issues occur',
+                    'Fix root causes, not just symptoms'
+                ]
+            },
+            {
+                id: 'cerberus_auto_fix',
+                name: 'Auto-Fix System - Automatically Try Fixes',
+                description: 'AutoFixEngine automatically tries fixes from knowledge base. Verifies fixes work. Learns from results. Won\'t try fixes that failed before. System becomes truly autonomous.',
+                priority: 'high',
+                category: 'automation',
+                examples: [
+                    'Automatically tries fixes when issues are detected',
+                    'Verifies fixes actually worked',
+                    'Learns from fix attempts',
+                    'Won\'t try fixes that failed before'
+                ]
+            },
+            {
+                id: 'cerberus_error_recovery',
+                name: 'Error Recovery & Resilience - Self-Healing',
+                description: 'ErrorRecovery provides graceful degradation, automatic recovery, and circuit breaker patterns. If one component fails, others continue working. System is self-healing.',
+                priority: 'high',
+                category: 'resilience',
+                examples: [
+                    'Graceful degradation if components fail',
+                    'Automatic recovery with exponential backoff',
+                    'Circuit breaker prevents cascading failures',
+                    'Component health tracking'
+                ]
+            },
+            {
+                id: 'cerberus_performance_monitoring',
+                name: 'Performance Monitoring - Track Operation Timing',
+                description: 'PerformanceMonitor tracks operation timing, memory usage, CPU usage. Identifies bottlenecks. Optimizes performance. Monitors system health.',
                 priority: 'medium',
-                category: 'problem_solving',
-                examples: ['If stuck for >15 minutes, reset to last working commit instead of continuing to patch']
+                category: 'performance',
+                examples: [
+                    'Track how long operations take',
+                    'Monitor memory and CPU usage',
+                    'Alert on slow operations',
+                    'Optimize based on performance data'
+                ]
             },
             {
-                id: 'law_8_grep_both_sides',
-                name: 'LAW 8: Grep Both Sides to Find Mismatches',
-                description: 'When client/server or multi-component systems don\'t connect: grep both sides. Pattern: When one side works but the other is stuck → MISMATCH. Grep both sides, compare exact strings.',
-                priority: 'high',
-                category: 'problem_solving',
-                examples: ['When client/server mismatch, grep both sides to find exact string differences']
-            },
-            {
-                id: 'law_9_simulation_logs_say_it_all',
-                name: 'LAW 9: Simulation/Logs Say It All - Never Ask User to Describe',
-                description: 'If you have to ask "what happened?" → YOU HAVE FAILED. Check server console logs, application logs (simulation.log, socketbot.log, game.log), Unity console output. Grep the codebase for the exact feature/flag involved. Trace the data flow from creation → storage → broadcast → client.',
+                id: 'cerberus_universal_error_handler',
+                name: 'Universal Error Handler - Catches All Errors',
+                description: 'UniversalErrorHandler catches ALL errors (unhandled rejections, uncaught exceptions, warnings). Wraps all component methods. NO ERROR CAN ESCAPE. All errors advance learning.',
                 priority: 'critical',
-                category: 'problem_solving',
-                examples: ['Never ask user to describe errors - check logs, grep codebase, trace data flow']
+                category: 'error_handling',
+                examples: [
+                    'Catches all unhandled promise rejections',
+                    'Catches all uncaught exceptions',
+                    'Wraps all component methods automatically',
+                    'All errors are reported and learned from'
+                ]
             },
             {
-                id: 'law_10_never_delete_features',
-                name: 'LAW 10: Never Delete Features to "Fix" Problems',
-                description: 'Disabling or removing existing functionality is NOT a fix. It\'s theft. NEVER disable a feature to make an error go away. NEVER comment out working code to avoid debugging it. If something is broken, FIX THE ROOT CAUSE.',
+                id: 'cerberus_rules_always_visible',
+                name: 'Rules Always Visible - AI Must Never Forget',
+                description: 'Rules are ALWAYS included in every communication with Cerberus. AI must never forget critical rules. Rules reminder is baked into every query response and status report. Cerberus tracks compliance and learns from violations.',
                 priority: 'critical',
-                category: 'problem_solving',
-                examples: ['Never disable or remove features - always fix the root cause']
-            },
-            {
-                id: 'logging_all_to_gameLogger',
-                name: 'All Debug/Error Output Goes to gameLogger',
-                description: 'ALL debug/error output goes to gameLogger, NOT console.log/error/warn. Cerberus sees everything through logs. User should never see console output (except CLI JSON responses).',
-                priority: 'critical',
-                category: 'logging',
-                examples: ['Use gameLogger.info/error/warn instead of console.log/error/warn', 'Only console.log for CLI JSON output']
-            },
-            {
-                id: 'cerberus_sees_everything',
-                name: 'Cerberus Sees Everything Through Logs',
-                description: 'Cerberus monitors all logs. All errors must go through gameLogger so Cerberus can learn from them. No silent errors.',
-                priority: 'critical',
-                category: 'logging',
-                examples: ['All errors must be logged through gameLogger for Cerberus to detect and learn']
-            },
-            {
-                id: 'read_install_log_first',
-                name: 'Read INSTALL_LOG.md First',
-                description: 'INSTALL_LOG.md in poker-server is the MASTER PROJECT LOG. MUST read this COMPLETELY at the start of EVERY session. Contains mandatory pre-flight checklist, 100+ documented issues with solutions, and session progress tracking.',
-                priority: 'critical',
-                category: 'workflow',
-                examples: ['Always read INSTALL_LOG.md completely at session start']
-            },
-            {
-                id: 'pull_both_repos',
-                name: 'Pull Both Repos at Session Start',
-                description: 'CRITICAL: PULL BOTH REPOS AT SESSION START - Always run git pull on BOTH poker-server AND poker-client-unity before doing ANY work. Failure to do this caused Issue #102 where 627 lines of work were lost.',
-                priority: 'critical',
-                category: 'workflow',
-                examples: ['Always git pull on both poker-server and poker-client-unity before starting']
+                category: 'rules',
+                examples: [
+                    'Every query response includes rules reminder',
+                    'Status report always includes rules',
+                    'Compliance is tracked and visible',
+                    'Violations are recorded and learned from'
+                ]
             }
         ];
     }
