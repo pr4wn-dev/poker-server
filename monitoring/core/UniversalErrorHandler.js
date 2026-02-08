@@ -66,7 +66,7 @@ class UniversalErrorHandler extends EventEmitter {
         
         // Increase max listeners to prevent memory leak warnings when multiple components listen
         // This is safe because we're monitoring the entire process, not individual components
-        process.setMaxListeners(20);
+        process.setMaxListeners(30);
         
         // Catch warnings
         process.on('warning', (warning) => {

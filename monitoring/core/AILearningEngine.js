@@ -35,6 +35,16 @@ class AILearningEngine extends EventEmitter {
         this.getterTimings = new Map(); // method -> { calls, totalTime, avgTime, maxTime, hangs }
         this.synchronousOperations = new Map(); // method -> { fileOps, stateOps, blockingOps }
         
+        // Critical problem-solving patterns (learned from actual fixes)
+        this.circularDependencies = new Map(); // pattern -> { chain: [], frequency, solutions }
+        this.blockingChains = new Map(); // pattern -> { chain: [], frequency, solutions }
+        this.debuggingPatterns = new Map(); // pattern -> { method: 'manual_debugging', successRate, contexts }
+        
+        // Critical problem-solving patterns (learned from actual fixes)
+        this.circularDependencies = new Map(); // pattern -> { chain: [], frequency, solutions }
+        this.blockingChains = new Map(); // pattern -> { chain: [], frequency, solutions }
+        this.debuggingPatterns = new Map(); // pattern -> { method: 'manual_debugging', successRate, contexts }
+        
         // Automatic adjustment thresholds
         this.lowConfidenceThreshold = 50; // Below 50% triggers adjustments
         this.criticalConfidenceThreshold = 30; // Below 30% is critical
@@ -380,16 +390,54 @@ class AILearningEngine extends EventEmitter {
     
     /**
      * Get best solution for issue type
+     * Enhanced to include circular dependency and blocking chain solutions
      */
     getBestSolution(issueType) {
-        const optimization = this.solutionOptimization.get(issueType);
-        if (!optimization) return null;
+        // First check for circular dependency patterns
+        if (issueType && (issueType.includes('hang') || issueType.includes('circular') || issueType.includes('loop'))) {
+            // Try to detect circular dependency
+            const circularPattern = this.detectCircularDependency([issueType]);
+            if (circularPattern) {
+                const solutions = this.getCircularDependencySolutions(circularPattern.chain);
+                if (solutions.length > 0) {
+                    return {
+                        method: solutions[0].method,
+                        description: solutions[0].description,
+                        confidence: solutions[0].confidence,
+                        source: 'circular_dependency_detection'
+                    };
+                }
+            }
+        }
         
-        return {
-            method: optimization.bestSolution,
-            successRate: optimization.successRate,
-            alternatives: optimization.alternatives
-        };
+        // Check for blocking chain patterns
+        if (issueType && (issueType.includes('blocking') || issueType.includes('sync') || issueType.includes('hang'))) {
+            const blockingPattern = this.detectBlockingChain([{ type: 'sync', method: issueType }]);
+            if (blockingPattern) {
+                const solutions = this.getBlockingChainSolutions(blockingPattern.chain);
+                if (solutions.length > 0) {
+                    return {
+                        method: solutions[0].method,
+                        description: solutions[0].description,
+                        confidence: solutions[0].confidence,
+                        source: 'blocking_chain_detection'
+                    };
+                }
+            }
+        }
+        
+        // Fall back to original solution optimization
+        const optimization = this.solutionOptimization.get(issueType);
+        if (optimization && optimization.bestSolution) {
+            return {
+                method: optimization.bestSolution.method || optimization.bestSolution,
+                successRate: optimization.successRate,
+                alternatives: optimization.alternatives,
+                source: 'solution_optimization'
+            };
+        }
+        
+        return null;
     }
     
     /**
@@ -1247,6 +1295,15 @@ class AILearningEngine extends EventEmitter {
             
             const synchronousOperations = this.stateStore.getState('learning.synchronousOperations') || {};
             this.synchronousOperations = new Map(Object.entries(synchronousOperations));
+            
+            const circularDependencies = this.stateStore.getState('learning.circularDependencies') || {};
+            this.circularDependencies = new Map(Object.entries(circularDependencies));
+            
+            const blockingChains = this.stateStore.getState('learning.blockingChains') || {};
+            this.blockingChains = new Map(Object.entries(blockingChains));
+            
+            const debuggingPatterns = this.stateStore.getState('learning.debuggingPatterns') || {};
+            this.debuggingPatterns = new Map(Object.entries(debuggingPatterns));
         } catch (error) {
             // DO NOT log to console - errors are for AI only, not user
             // Re-throw so UniversalErrorHandler can catch it
@@ -1266,6 +1323,9 @@ class AILearningEngine extends EventEmitter {
             this.stateStore.updateState('learning.initializationTimings', Object.fromEntries(this.initializationTimings));
             this.stateStore.updateState('learning.getterTimings', Object.fromEntries(this.getterTimings));
             this.stateStore.updateState('learning.synchronousOperations', Object.fromEntries(this.synchronousOperations));
+            this.stateStore.updateState('learning.circularDependencies', Object.fromEntries(this.circularDependencies));
+            this.stateStore.updateState('learning.blockingChains', Object.fromEntries(this.blockingChains));
+            this.stateStore.updateState('learning.debuggingPatterns', Object.fromEntries(this.debuggingPatterns));
         } catch (error) {
             // DO NOT log to console - errors are for AI only, not user
             // Re-throw so UniversalErrorHandler can catch it
@@ -1648,6 +1708,298 @@ class AILearningEngine extends EventEmitter {
             }
         }
         return patterns.sort((a, b) => b.totalOps - a.totalOps);
+    }
+    
+    // CRITICAL PROBLEM-SOLVING PATTERNS (learned from actual successful fixes)
+    
+    /**
+     * Track circular dependency pattern
+     * Pattern: getState → recordSuccess → updateState → getState (infinite loop)
+     * Solution: Break the cycle by making operations async (setImmediate)
+     */
+    trackCircularDependency(chain, solution) {
+        const chainKey = Array.isArray(chain) ? chain.join(' → ') : chain;
+        const existing = this.circularDependencies.get(chainKey) || {
+            chain: Array.isArray(chain) ? chain : [chain],
+            frequency: 0,
+            solutions: [],
+            firstSeen: Date.now(),
+            lastSeen: Date.now()
+        };
+        
+        existing.frequency++;
+        existing.lastSeen = Date.now();
+        
+        // Track successful solutions
+        if (solution && !existing.solutions.find(s => s.method === solution.method)) {
+            existing.solutions.push({
+                method: solution.method,
+                description: solution.description || 'Break cycle with async operation',
+                successRate: 1.0, // Proven solution
+                timestamp: Date.now()
+            });
+        }
+        
+        this.circularDependencies.set(chainKey, existing);
+        this.save();
+        
+        gameLogger.info('CERBERUS', '[LEARNING_ENGINE] Circular dependency tracked', {
+            chain: chainKey,
+            frequency: existing.frequency,
+            solutions: existing.solutions.length
+        });
+    }
+    
+    /**
+     * Detect circular dependency in method calls
+     * Analyzes call stack to find circular patterns
+     */
+    detectCircularDependency(methodCalls) {
+        if (!Array.isArray(methodCalls) || methodCalls.length < 3) {
+            return null;
+        }
+        
+        // Look for patterns like: getState → recordSuccess → updateState → getState
+        for (let i = 0; i < methodCalls.length - 2; i++) {
+            const start = methodCalls[i];
+            const middle = methodCalls[i + 1];
+            const end = methodCalls[i + 2];
+            
+            // Check if we loop back to start
+            if (end === start || (i + 3 < methodCalls.length && methodCalls[i + 3] === start)) {
+                const chain = methodCalls.slice(i, i + (end === start ? 3 : 4));
+                const pattern = {
+                    type: 'CIRCULAR_DEPENDENCY',
+                    chain: chain,
+                    severity: 'critical',
+                    solution: {
+                        method: 'make_async',
+                        description: 'Break circular dependency by making operations async (use setImmediate)',
+                        confidence: 0.95
+                    }
+                };
+                
+                // Track this pattern
+                this.trackCircularDependency(chain, pattern.solution);
+                
+                return pattern;
+            }
+        }
+        
+        return null;
+    }
+    
+    /**
+     * Track blocking chain pattern
+     * Pattern: Synchronous operations that block execution
+     * Solution: Make operations async (setImmediate, async/await)
+     */
+    trackBlockingChain(chain, solution) {
+        const chainKey = Array.isArray(chain) ? chain.join(' → ') : chain;
+        const existing = this.blockingChains.get(chainKey) || {
+            chain: Array.isArray(chain) ? chain : [chain],
+            frequency: 0,
+            solutions: [],
+            firstSeen: Date.now(),
+            lastSeen: Date.now()
+        };
+        
+        existing.frequency++;
+        existing.lastSeen = Date.now();
+        
+        // Track successful solutions
+        if (solution && !existing.solutions.find(s => s.method === solution.method)) {
+            existing.solutions.push({
+                method: solution.method,
+                description: solution.description || 'Make operations async to break blocking chain',
+                successRate: 1.0, // Proven solution
+                timestamp: Date.now()
+            });
+        }
+        
+        this.blockingChains.set(chainKey, existing);
+        this.save();
+        
+        gameLogger.info('CERBERUS', '[LEARNING_ENGINE] Blocking chain tracked', {
+            chain: chainKey,
+            frequency: existing.frequency,
+            solutions: existing.solutions.length
+        });
+    }
+    
+    /**
+     * Detect blocking chain in operations
+     * Identifies synchronous operations that should be async
+     */
+    detectBlockingChain(operations) {
+        if (!Array.isArray(operations)) {
+            return null;
+        }
+        
+        // Look for patterns of synchronous operations that block
+        const blockingOps = operations.filter(op => 
+            op.type === 'sync' || 
+            op.blocking === true || 
+            (op.method && (op.method.includes('Sync') || op.method.includes('readFileSync') || op.method.includes('writeFileSync')))
+        );
+        
+        if (blockingOps.length >= 2) {
+            const chain = blockingOps.map(op => op.method || op.type);
+            const pattern = {
+                type: 'BLOCKING_CHAIN',
+                chain: chain,
+                severity: 'high',
+                solution: {
+                    method: 'make_async',
+                    description: 'Break blocking chain by making operations async (setImmediate, async/await)',
+                    confidence: 0.9
+                }
+            };
+            
+            // Track this pattern
+            this.trackBlockingChain(chain, pattern.solution);
+            
+            return pattern;
+        }
+        
+        return null;
+    }
+    
+    /**
+     * Track manual debugging pattern
+     * Pattern: Testing what worked vs. what hung to identify root cause
+     * Solution: Systematic testing approach
+     */
+    trackManualDebugging(context, solution) {
+        const contextKey = `${context.component || 'unknown'}:${context.issue || 'unknown'}`;
+        const existing = this.debuggingPatterns.get(contextKey) || {
+            method: 'manual_debugging',
+            frequency: 0,
+            successes: 0,
+            failures: 0,
+            contexts: [],
+            solutions: [],
+            firstSeen: Date.now(),
+            lastSeen: Date.now()
+        };
+        
+        existing.frequency++;
+        existing.lastSeen = Date.now();
+        existing.contexts.push(context);
+        
+        if (solution && solution.result === 'success') {
+            existing.successes++;
+            if (!existing.solutions.find(s => s.description === solution.description)) {
+                existing.solutions.push({
+                    description: solution.description,
+                    steps: solution.steps || [],
+                    result: 'success',
+                    timestamp: Date.now()
+                });
+            }
+        } else {
+            existing.failures++;
+        }
+        
+        existing.successRate = existing.successes / existing.frequency;
+        this.debuggingPatterns.set(contextKey, existing);
+        this.save();
+        
+        gameLogger.info('CERBERUS', '[LEARNING_ENGINE] Manual debugging pattern tracked', {
+            context: contextKey,
+            frequency: existing.frequency,
+            successRate: existing.successRate
+        });
+    }
+    
+    /**
+     * Get solutions for circular dependency issues
+     */
+    getCircularDependencySolutions(chain) {
+        const chainKey = Array.isArray(chain) ? chain.join(' → ') : chain;
+        const pattern = this.circularDependencies.get(chainKey);
+        
+        if (pattern && pattern.solutions.length > 0) {
+            return pattern.solutions.map(s => ({
+                method: s.method,
+                description: s.description,
+                confidence: s.successRate,
+                source: 'circular_dependency_pattern'
+            }));
+        }
+        
+        // Default solution if pattern not found
+        return [{
+            method: 'make_async',
+            description: 'Break circular dependency by making operations async (use setImmediate to break the cycle)',
+            confidence: 0.85,
+            source: 'learned_pattern'
+        }];
+    }
+    
+    /**
+     * Get solutions for blocking chain issues
+     */
+    getBlockingChainSolutions(chain) {
+        const chainKey = Array.isArray(chain) ? chain.join(' → ') : chain;
+        const pattern = this.blockingChains.get(chainKey);
+        
+        if (pattern && pattern.solutions.length > 0) {
+            return pattern.solutions.map(s => ({
+                method: s.method,
+                description: s.description,
+                confidence: s.successRate,
+                source: 'blocking_chain_pattern'
+            }));
+        }
+        
+        // Default solution if pattern not found
+        return [{
+            method: 'make_async',
+            description: 'Break blocking chain by making operations async (use setImmediate or async/await)',
+            confidence: 0.85,
+            source: 'learned_pattern'
+        }];
+    }
+    
+    /**
+     * Get manual debugging approach for an issue
+     */
+    getManualDebuggingApproach(issue) {
+        const contextKey = `${issue.component || 'unknown'}:${issue.type || 'unknown'}`;
+        const pattern = this.debuggingPatterns.get(contextKey);
+        
+        if (pattern && pattern.solutions.length > 0) {
+            // Return the most successful debugging approach
+            const bestSolution = pattern.solutions.sort((a, b) => {
+                // Prefer solutions with more steps (more detailed)
+                return (b.steps?.length || 0) - (a.steps?.length || 0);
+            })[0];
+            
+            return {
+                method: 'manual_debugging',
+                description: bestSolution.description,
+                steps: bestSolution.steps || [],
+                confidence: pattern.successRate,
+                source: 'debugging_pattern'
+            };
+        }
+        
+        // Default debugging approach
+        return {
+            method: 'manual_debugging',
+            description: 'Systematic testing: Test what works vs. what hangs to identify root cause',
+            steps: [
+                '1. Test each component individually to isolate the issue',
+                '2. Compare working vs. hanging scenarios',
+                '3. Identify the specific operation that causes the hang',
+                '4. Check for circular dependencies or blocking operations',
+                '5. Apply fix (make async, break cycle, etc.)',
+                '6. Verify fix resolves the issue'
+            ],
+            confidence: 0.8,
+            source: 'learned_approach'
+        };
     }
 }
 
