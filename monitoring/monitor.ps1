@@ -2060,7 +2060,11 @@ function Show-Statistics {
         $investigationDisplayLines += "INVESTIGATION PHASE - ACTIVE"
         $investigationDisplayLines += ("=" * $consoleWidth)
         $investigationDisplayLines += ""
-        $investigationDisplayLines += "  Elapsed: " + ("{0:N1}s" -f $elapsedSeconds) + " / " + ("{0:N0}s" -f $investigationTimeout) + "  |  Remaining: " + ("{0:N1}s" -f $remaining) + "  |  Progress: " + ("{0:N1}%" -f $progressPercent)
+        $elapsedStr = "{0:N1}s" -f $elapsedSeconds
+        $timeoutStr = "{0:N0}s" -f $investigationTimeout
+        $remainingStr = "{0:N1}s" -f $remaining
+        $progressStr = "{0:N1}%" -f $progressPercent
+        $investigationDisplayLines += "  Elapsed: $elapsedStr / $timeoutStr  |  Remaining: $remainingStr  |  Progress: $progressStr"
         $investigationDisplayLines += ""
         $investigationDisplayLines += "  " + $progressBar
         $investigationDisplayLines += ""
