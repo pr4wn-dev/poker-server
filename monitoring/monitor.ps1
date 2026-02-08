@@ -24,6 +24,17 @@ $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $script:projectRoot = Split-Path -Parent $scriptDir
 Set-Location $script:projectRoot
 
+# Source AI Integration helpers (NEW: AI-first monitoring system)
+$aiIntegrationPath = Join-Path $scriptDir "AIIntegration.ps1"
+if (Test-Path $aiIntegrationPath) {
+    . $aiIntegrationPath
+    Write-Info "AI Integration loaded - AI-first monitoring system active"
+    $script:aiIntegrationEnabled = $true
+} else {
+    Write-Warning "AI Integration not found at $aiIntegrationPath - using legacy system"
+    $script:aiIntegrationEnabled = $false
+}
+
 # Colors for output (define FIRST before any use)
 function Write-Status { param($message, $color = "White") Write-Host "[$(Get-Date -Format 'HH:mm:ss')] $message" -ForegroundColor $color }
 function Write-Info { param($message) Write-Status $message "Cyan" }
