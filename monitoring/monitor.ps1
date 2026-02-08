@@ -3122,17 +3122,15 @@ while ($monitoringActive) {
             # If timeRemaining from status file is 0 or negative, OR elapsed time exceeds timeout, force check
             if (($statusFileTimeRemaining -ne $null -and $statusFileTimeRemaining -le 0) -or ($elapsedFromStatus -ge ($timeoutValue - 1))) {
                 # Investigation should have completed - force check
-                if (-not $shouldCheckInvestigation) {
-                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] Investigation in status file should have completed (timeRemaining: $statusFileTimeRemaining, elapsed: $([Math]::Round($elapsedFromStatus, 1))s, timeout: $timeoutValue s) - forcing check" -ForegroundColor "Yellow"
-                    $shouldCheckInvestigation = $true
-                    $investigationStartTimeValid = $true
-                    # Ensure script variables are synced
-                    if (-not $script:isInvestigating) {
-                        $script:isInvestigating = $true
-                    }
-                    if (-not $script:investigationStartTime -or $script:investigationStartTime -ne $statusFileInvestigationStartTime) {
-                        $script:investigationStartTime = $statusFileInvestigationStartTime
-                    }
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] Investigation MUST complete (timeRemaining: $statusFileTimeRemaining, elapsed: $([Math]::Round($elapsedFromStatus, 1))s, timeout: $timeoutValue s) - FORCING CHECK" -ForegroundColor "Yellow"
+                $shouldCheckInvestigation = $true
+                $investigationStartTimeValid = $true
+                # Ensure script variables are synced
+                if (-not $script:isInvestigating) {
+                    $script:isInvestigating = $true
+                }
+                if (-not $script:investigationStartTime -or $script:investigationStartTime -ne $statusFileInvestigationStartTime) {
+                    $script:investigationStartTime = $statusFileInvestigationStartTime
                 }
             }
         }
