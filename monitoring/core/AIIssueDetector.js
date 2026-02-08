@@ -87,7 +87,7 @@ class AIIssueDetector extends EventEmitter {
      */
     startStateVerification() {
         // Verify state every second
-        this.verificationIntervalId = setInterval(() => {
+        this.stateVerificationInterval = setInterval(() => {
             this.verifyState();
         }, 1000);
     }
@@ -96,9 +96,13 @@ class AIIssueDetector extends EventEmitter {
      * Stop state verification
      */
     stopStateVerification() {
-        if (this.verificationIntervalId) {
-            clearInterval(this.verificationIntervalId);
-            this.verificationIntervalId = null;
+        if (this.stateVerificationInterval) {
+            clearInterval(this.stateVerificationInterval);
+            this.stateVerificationInterval = null;
+        }
+        if (this.anomalyDetectionInterval) {
+            clearInterval(this.anomalyDetectionInterval);
+            this.anomalyDetectionInterval = null;
         }
     }
     
@@ -343,7 +347,7 @@ class AIIssueDetector extends EventEmitter {
      */
     startAnomalyDetection() {
         // Detect anomalies every 5 seconds
-        setInterval(() => {
+        this.anomalyDetectionInterval = setInterval(() => {
             this.detectAnomalies();
         }, 5000);
     }
