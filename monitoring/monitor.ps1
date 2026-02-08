@@ -3339,11 +3339,11 @@ while ($monitoringActive) {
         
         # CRITICAL FIX: If file size is smaller than last position, file was rotated/cleared
         # Reset lastLogPosition to current size to start reading from current position
-        if ($currentSize -lt $lastLogPosition) {
-            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] Log file was rotated/cleared (size=$currentSize < lastPos=$lastLogPosition) - resetting position" -ForegroundColor "Yellow"
+        if ($currentSize -lt $script:lastLogPosition) {
+            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] Log file was rotated/cleared (size=$currentSize < lastPos=$($script:lastLogPosition)) - resetting position" -ForegroundColor "Yellow"
             $script:lastLogPosition = $currentSize  # Use script scope to ensure it persists
-            $lastLogPosition = $currentSize
         }
+        $lastLogPosition = $script:lastLogPosition  # Sync local variable
         
         # DIAGNOSTIC: Log file reading status every 10 seconds
         if (-not $script:lastLogReadDiagnostic -or ((Get-Date) - $script:lastLogReadDiagnostic).TotalSeconds -ge 10) {
@@ -3353,7 +3353,8 @@ while ($monitoringActive) {
         }
         
         # If file has grown, read new lines
-        if ($currentSize -gt $lastLogPosition) {
+        if ($currentSize -gt $script:lastLogPosition) {
+            $lastLogPosition = $script:lastLogPosition  # Sync local variable
             # Use FileShare.ReadWrite to allow concurrent writes while reading
             $fileStream = [System.IO.File]::Open($logFile, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)
             $fileStream.Position = $lastLogPosition
