@@ -1415,6 +1415,9 @@ function Get-UnityActualStatus {
             if (-not $isResponding) {
                 $status.Details += "Process: Running but NOT responding (likely crashed/hung)"
                 $status.Status = "CRASHED"
+                # Cache status before returning
+                $script:unityStatusCache = @{ Status = $status; HealthData = $null }
+                $script:unityStatusCacheTime = Get-Date
                 return $status
             }
             
@@ -1422,6 +1425,9 @@ function Get-UnityActualStatus {
         } else {
             $status.Details += "Process: NOT running"
             $status.Status = "STOPPED"
+            # Cache status before returning
+            $script:unityStatusCache = @{ Status = $status; HealthData = $null }
+            $script:unityStatusCacheTime = Get-Date
             return $status
         }
         
@@ -1547,9 +1553,16 @@ function Get-UnityActualStatus {
             $status.Details += "Unity connected but no recent game activity"
         }
         
+        # Cache the status for non-blocking access
+        $script:unityStatusCache = @{
+            Status = $status
+            HealthData = $healthData
+        }
+        $script:unityStatusCacheTime = Get-Date
+        
         return $status
     } catch {
-        return @{
+        $errorStatus = @{
             ProcessRunning = $false
             ConnectedToServer = $false
             InGameScene = $false
@@ -1557,6 +1570,10 @@ function Get-UnityActualStatus {
             Status = "ERROR"
             Details = @("Error checking Unity status: $($_.Exception.Message)")
         }
+        # Cache error status too
+        $script:unityStatusCache = @{ Status = $errorStatus; HealthData = $null }
+        $script:unityStatusCacheTime = Get-Date
+        return $errorStatus
     }
 }
 
