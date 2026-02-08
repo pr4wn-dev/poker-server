@@ -3378,6 +3378,29 @@ while ($monitoringActive) {
                 $pendingInfo = Get-PendingIssuesInfo
                 Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] Got pending info: InFocusMode=$($pendingInfo.InFocusMode), hasRootIssue=$($null -ne $pendingInfo.RootIssue)" -ForegroundColor "Cyan"
                 
+                # CRITICAL FIX: If Get-PendingIssuesInfo returns false but file has focusedGroup, read file directly
+                # This handles cases where Get-PendingIssuesInfo fails due to timing/parsing issues
+                if (-not $pendingInfo -or -not $pendingInfo.InFocusMode -or -not $pendingInfo.RootIssue) {
+                    try {
+                        if (Test-Path $pendingIssuesFile) {
+                            $pendingContent = Get-Content $pendingIssuesFile -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+                            if ($pendingContent.focusedGroup -and $pendingContent.focusedGroup.rootIssue) {
+                                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] Get-PendingIssuesInfo returned false but file has focusedGroup - using file data directly" -ForegroundColor "Yellow"
+                                $pendingInfo = @{
+                                    InFocusMode = $true
+                                    RootIssue = $pendingContent.focusedGroup.rootIssue
+                                    RelatedIssuesCount = if ($pendingContent.focusedGroup.relatedIssues) { $pendingContent.focusedGroup.relatedIssues.Count } else { 0 }
+                                    RelatedIssues = if ($pendingContent.focusedGroup.relatedIssues) { $pendingContent.focusedGroup.relatedIssues } else { @() }
+                                    GroupId = $pendingContent.focusedGroup.id
+                                }
+                                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] Fixed pending info: InFocusMode=$($pendingInfo.InFocusMode), hasRootIssue=$($null -ne $pendingInfo.RootIssue)" -ForegroundColor "Cyan"
+                            }
+                        }
+                    } catch {
+                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [SELF-DIAGNOSTIC] Failed to read pending-issues.json directly: $_" -ForegroundColor "Yellow"
+                    }
+                }
+                
                 if ($pendingInfo -and $pendingInfo.InFocusMode -and $pendingInfo.RootIssue) {
                     $rootIssue = $pendingInfo.RootIssue
                     $relatedCount = $pendingInfo.RelatedIssuesCount
