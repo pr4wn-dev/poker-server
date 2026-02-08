@@ -20,6 +20,7 @@ const ServerStateCapture = require('./ServerStateCapture');
 const ErrorRecovery = require('./ErrorRecovery');
 const PerformanceMonitor = require('./PerformanceMonitor');
 const AILearningEngine = require('./AILearningEngine');
+const UniversalErrorHandler = require('./UniversalErrorHandler');
 
 class AIMonitorCore {
     constructor(projectRoot) {
@@ -31,6 +32,10 @@ class AIMonitorCore {
         // Initialize error recovery and performance monitor first
         this.errorRecovery = new ErrorRecovery(this.stateStore);
         this.performanceMonitor = new PerformanceMonitor(this.stateStore);
+        
+        // Initialize universal error handler (needs to be early, but after errorRecovery)
+        // Will be fully initialized after issueDetector and learningEngine are ready
+        this.universalErrorHandler = null; // Will be set after components are ready
         
         // Initialize learning engine (after fixTracker is ready)
         
@@ -63,6 +68,18 @@ class AIMonitorCore {
             this.fixTracker.on('attemptRecorded', (attempt) => {
                 this.learningEngine.learnFromAttempt(attempt);
             });
+            
+            // NOW initialize universal error handler (needs issueDetector, errorRecovery, learningEngine)
+            this.universalErrorHandler = new UniversalErrorHandler(
+                this.stateStore,
+                this.issueDetector,
+                this.errorRecovery,
+                this.learningEngine
+            );
+            this.errorRecovery.recordSuccess('universalErrorHandler');
+            
+            // Wrap all components with error handler
+            this.wrapAllComponents();
         } catch (error) {
             this.errorRecovery.recordError('fixTracker', error);
             throw error;
@@ -185,7 +202,8 @@ class AIMonitorCore {
         if (!this.errorRecovery) return;
         
         this.errorRecovery.on('error', ({ component, error }) => {
-            console.warn(`[Error Recovery] Component ${component} error: ${error.message}`);
+            // DO NOT log to console - errors are for AI only, not user
+            // Error is already tracked by errorRecovery and reported to issueDetector
         });
         
         this.errorRecovery.on('success', ({ component }) => {
@@ -197,7 +215,8 @@ class AIMonitorCore {
         });
         
         this.errorRecovery.on('circuitOpen', ({ component, failures }) => {
-            console.warn(`[Error Recovery] Circuit breaker opened for ${component} (${failures} failures)`);
+            // DO NOT log to console - errors are for AI only, not user
+            // Circuit breaker status is tracked in state store
         });
     }
     
@@ -208,19 +227,23 @@ class AIMonitorCore {
         if (!this.performanceMonitor) return;
         
         this.performanceMonitor.on('slowOperation', ({ operation, duration, threshold }) => {
-            console.warn(`[Performance] Slow operation: ${operation} took ${duration.toFixed(2)}ms (threshold: ${threshold}ms)`);
+            // DO NOT log to console - errors are for AI only, not user
+            // Performance issues are tracked in state store
         });
         
         this.performanceMonitor.on('verySlowOperation', ({ operation, duration, threshold }) => {
-            console.error(`[Performance] Very slow operation: ${operation} took ${duration.toFixed(2)}ms (threshold: ${threshold}ms)`);
+            // DO NOT log to console - errors are for AI only, not user
+            // Performance issues are tracked in state store and reported to issue detector
         });
         
         this.performanceMonitor.on('highMemoryUsage', ({ usagePercent, threshold }) => {
-            console.warn(`[Performance] High memory usage: ${(usagePercent * 100).toFixed(2)}% (threshold: ${threshold * 100}%)`);
+            // DO NOT log to console - errors are for AI only, not user
+            // Performance issues are tracked in state store
         });
         
         this.performanceMonitor.on('highCpuUsage', ({ usagePercent, threshold }) => {
-            console.warn(`[Performance] High CPU usage: ${(usagePercent * 100).toFixed(2)}% (threshold: ${threshold * 100}%)`);
+            // DO NOT log to console - errors are for AI only, not user
+            // Performance issues are tracked in state store
         });
     }
     

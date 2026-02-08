@@ -164,7 +164,9 @@ class IntegrityChecker extends EventEmitter {
             try {
                 this.runAllChecks();
             } catch (error) {
-                console.error('[IntegrityChecker] Startup check error:', error.message);
+                // DO NOT log to console - errors are for AI only, not user
+                // Re-throw so UniversalErrorHandler can catch it
+                throw error;
             }
         });
         
@@ -173,7 +175,9 @@ class IntegrityChecker extends EventEmitter {
             try {
                 this.runAllChecks();
             } catch (error) {
-                console.error('[IntegrityChecker] Periodic check error:', error.message);
+                // DO NOT log to console - errors are for AI only, not user
+                // Re-throw so UniversalErrorHandler can catch it
+                throw error;
             }
         }, this.checkInterval);
     }

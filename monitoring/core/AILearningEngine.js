@@ -464,7 +464,9 @@ class AILearningEngine extends EventEmitter {
             const crossIssueLearning = this.stateStore.getState('learning.crossIssueLearning') || {};
             this.crossIssueLearning = new Map(Object.entries(crossIssueLearning));
         } catch (error) {
-            console.warn('[AILearningEngine] Failed to load learning data:', error.message);
+            // DO NOT log to console - errors are for AI only, not user
+            // Re-throw so UniversalErrorHandler can catch it
+            throw error;
         }
     }
     
@@ -478,7 +480,9 @@ class AILearningEngine extends EventEmitter {
             this.stateStore.updateState('learning.solutionOptimization', Object.fromEntries(this.solutionOptimization));
             this.stateStore.updateState('learning.crossIssueLearning', Object.fromEntries(this.crossIssueLearning));
         } catch (error) {
-            console.warn('[AILearningEngine] Failed to save learning data:', error.message);
+            // DO NOT log to console - errors are for AI only, not user
+            // Re-throw so UniversalErrorHandler can catch it
+            throw error;
         }
     }
 }

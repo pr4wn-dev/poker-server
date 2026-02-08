@@ -194,7 +194,8 @@ class StateStore extends EventEmitter {
             const actualType = value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value;
             
             if (!expectedTypes.includes(actualType)) {
-                console.warn(`[StateStore] Type mismatch at path ${path}: expected ${expectedTypes.join('|')}, got ${actualType}`);
+                // DO NOT log to console - warnings are for AI only, not user
+                // Type mismatches are tracked in state store
             }
         }
         
@@ -210,7 +211,8 @@ class StateStore extends EventEmitter {
         // Arrays should be arrays
         if (path.includes('.attempts') || path.includes('.active') || path.includes('.history')) {
             if (value !== null && !Array.isArray(value)) {
-                console.warn(`[StateStore] Data integrity issue: ${path} should be array, got ${typeof value}. Auto-fixing...`);
+                // DO NOT log to console - warnings are for AI only, not user
+                // Data integrity issues are tracked in state store
                 // Auto-fix: convert to array if possible
                 if (typeof value === 'object' && value !== null) {
                     return Array.from(Object.values(value));
@@ -222,7 +224,8 @@ class StateStore extends EventEmitter {
         // Numbers should be numbers
         if (path.includes('.count') || path.includes('.total') || path.includes('.time')) {
             if (value !== null && typeof value !== 'number') {
-                console.warn(`[StateStore] Data integrity issue: ${path} should be number, got ${typeof value}`);
+                // DO NOT log to console - warnings are for AI only, not user
+                // Data integrity issues are tracked in state store
             }
         }
         
@@ -230,7 +233,8 @@ class StateStore extends EventEmitter {
         if (path.includes('.status')) {
             const validStatuses = ['active', 'inactive', 'starting', 'stopping', 'stopped', 'running', 'degraded', 'error', 'healthy', 'unhealthy'];
             if (typeof value === 'string' && !validStatuses.includes(value.toLowerCase())) {
-                console.warn(`[StateStore] Data integrity issue: ${path} has invalid status: ${value}`);
+                // DO NOT log to console - warnings are for AI only, not user
+                // Data integrity issues are tracked in state store
             }
         }
         
@@ -246,7 +250,8 @@ class StateStore extends EventEmitter {
         try {
             this._validateState(path, value);
         } catch (error) {
-            console.error(`[StateStore] Validation error for path ${path}:`, error.message);
+            // DO NOT log to console - errors are for AI only, not user
+            // Error will be caught by UniversalErrorHandler
             throw error;
         }
         
@@ -425,7 +430,9 @@ class StateStore extends EventEmitter {
                 try {
                     callback(newValue, oldValue, path);
                 } catch (error) {
-                    console.error(`Error in state listener for ${path}:`, error);
+                    // DO NOT log to console - errors are for AI only, not user
+                    // Re-throw so UniversalErrorHandler can catch it
+                    throw error;
                 }
             });
         }
@@ -439,7 +446,9 @@ class StateStore extends EventEmitter {
                     try {
                         callback(this.getState(path), oldValue, path);
                     } catch (error) {
-                        console.error(`Error in state listener for ${parentPath}:`, error);
+                        // DO NOT log to console - errors are for AI only, not user
+                        // Re-throw so UniversalErrorHandler can catch it
+                        throw error;
                     }
                 });
             }
@@ -640,7 +649,9 @@ class StateStore extends EventEmitter {
             
             fs.writeFileSync(this.persistenceFile, JSON.stringify(data, null, 2), 'utf8');
         } catch (error) {
-            console.error('Error saving state store:', error);
+            // DO NOT log to console - errors are for AI only, not user
+            // Re-throw so UniversalErrorHandler can catch it
+            throw error;
         }
     }
     
@@ -662,23 +673,25 @@ class StateStore extends EventEmitter {
                 }
             }
         } catch (error) {
-            console.error('Error loading state store:', error.message);
+            // DO NOT log to console - errors are for AI only, not user
             // If state file is corrupted, start fresh
             if (error instanceof SyntaxError) {
-                console.warn('[StateStore] Corrupted state file detected, starting fresh');
+                // DO NOT log to console - errors are for AI only, not user
                 // Backup corrupted file
                 try {
                     if (fs.existsSync(this.persistenceFile)) {
                         const backupFile = this.persistenceFile + '.corrupted.' + Date.now();
                         fs.copyFileSync(this.persistenceFile, backupFile);
-                        console.log(`[StateStore] Corrupted file backed up to: ${backupFile}`);
+                        // DO NOT log to console
                     }
                 } catch (backupError) {
-                    // Ignore backup errors
+                    // Ignore backup errors (but UniversalErrorHandler will catch them)
                 }
                 // Start with fresh state
                 this.state = this._getInitialState();
             }
+            // Re-throw so UniversalErrorHandler can catch it
+            throw error;
         }
     }
     

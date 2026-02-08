@@ -61,7 +61,9 @@ class AILogProcessor extends EventEmitter {
                 this.lastPosition = stats.size;
             }
         } catch (error) {
-            console.error('[AILogProcessor] Error initializing log position:', error);
+            // DO NOT log to console - errors are for AI only, not user
+            // Re-throw so UniversalErrorHandler can catch it
+            throw error;
         }
         
         // Watch for new logs
@@ -88,12 +90,15 @@ class AILogProcessor extends EventEmitter {
                 try {
                     this.processLine(line);
                 } catch (error) {
-                    // Don't let one bad line crash the processor
-                    console.error('[AILogProcessor] Error processing line:', error.message);
+                    // DO NOT log to console - errors are for AI only, not user
+                    // Re-throw so UniversalErrorHandler can catch it
+                    throw error;
                 }
             }
         } catch (error) {
-            console.error('Error processing existing logs:', error);
+            // DO NOT log to console - errors are for AI only, not user
+            // Re-throw so UniversalErrorHandler can catch it
+            throw error;
         }
     }
     
@@ -152,7 +157,9 @@ class AILogProcessor extends EventEmitter {
                 this.lastPosition = stats.size;
             }
         } catch (error) {
-            console.error('Error checking for new logs:', error);
+            // DO NOT log to console - errors are for AI only, not user
+            // Re-throw so UniversalErrorHandler can catch it
+            throw error;
         } finally {
             this._checkingLogs = false;
         }

@@ -193,7 +193,7 @@ class ServerStateCapture {
             this.consecutiveErrors++;
             const errorMessage = error.message || 'Unknown error';
             
-            console.error('[ServerStateCapture] Error capturing state:', errorMessage);
+            // DO NOT log to console - errors are for AI only, not user
             
             // Record error with error recovery if available
             if (this.errorRecovery) {
