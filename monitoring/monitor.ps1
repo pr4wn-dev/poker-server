@@ -3397,20 +3397,22 @@ while ($monitoringActive) {
             
             Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] Forced completion evaluation: elapsed=$([Math]::Round($elapsedFromStatusFile, 1))s, timeout=$timeoutValue s, timeRemaining=$statusFileTimeRemaining" -ForegroundColor "Gray"
             
-            # Force if elapsed time exceeds 2x timeout
-            if ($elapsedFromStatusFile -ge ($timeoutValue * 2)) {
+            # CRITICAL: Check elapsed time FIRST - this is the primary indicator
+            # If elapsed >= timeout, investigation should complete regardless of timeRemaining
+            # Force if elapsed time exceeds timeout (normal completion) - CHECK THIS FIRST
+            if ($elapsedFromStatusFile -ge $timeoutValue) {
+                $shouldForceCompletion = $true
+                $forceReason = "elapsed=$([Math]::Round($elapsedFromStatusFile, 1))s >= timeout=$timeoutValue s"
+            }
+            # Force if elapsed time exceeds 2x timeout (safety check for stuck investigations)
+            elseif ($elapsedFromStatusFile -ge ($timeoutValue * 2)) {
                 $shouldForceCompletion = $true
                 $forceReason = "elapsed=$([Math]::Round($elapsedFromStatusFile, 1))s >= 2x timeout=$($timeoutValue * 2)s"
             }
-            # Force if timeRemaining is 0 or negative (direct indicator)
+            # Force if timeRemaining is 0 or negative (direct indicator - but elapsed check takes priority)
             elseif ($statusFileTimeRemaining -ne $null -and $statusFileTimeRemaining -le 0) {
                 $shouldForceCompletion = $true
                 $forceReason = "timeRemaining=$statusFileTimeRemaining <= 0"
-            }
-            # Force if elapsed time exceeds timeout (normal completion)
-            elseif ($elapsedFromStatusFile -ge $timeoutValue) {
-                $shouldForceCompletion = $true
-                $forceReason = "elapsed=$([Math]::Round($elapsedFromStatusFile, 1))s >= timeout=$timeoutValue s"
             }
             
             if ($shouldForceCompletion) {
