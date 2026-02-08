@@ -1760,6 +1760,15 @@ function Show-Statistics {
     $col2Lines += "Issues: " + ("{0:N0}" -f $stats.IssuesDetected)
     $col2Lines += "Patterns: " + $stats.UniquePatterns.Count
     $col2Lines += "Log Size: " + ("{0:N2} MB" -f $stats.LogFileSize)
+    # Add diagnostic info
+    $logFileSizeMB = if (Test-Path $logFile) { [Math]::Round((Get-Item $logFile).Length / 1MB, 2) } else { 0 }
+    $logPositionDiff = if (Test-Path $logFile) { (Get-Item $logFile).Length - $lastLogPosition } else { 0 }
+    $col2Lines += ""
+    $col2Lines += "DIAGNOSTICS"
+    $col2Lines += ("-" * ($colWidth - 2))
+    $col2Lines += "File Size: ${logFileSizeMB}MB"
+    $col2Lines += "Position: $lastLogPosition"
+    $col2Lines += "Bytes to Read: $logPositionDiff"
     if ($stats.LastIssueTime) {
         $col2Lines += "Last Issue: " + $stats.LastIssueTime.ToString("HH:mm:ss")
     }
