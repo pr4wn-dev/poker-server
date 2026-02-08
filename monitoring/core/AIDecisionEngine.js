@@ -101,63 +101,67 @@ class AIDecisionEngine extends EventEmitter {
         
         try {
             const activeIssues = this.issueDetector.getActiveIssues();
-        const investigation = this.stateStore.getState('monitoring.investigation');
-        
-        // Already investigating
-        if (investigation.status === 'active' || investigation.status === 'starting') {
-            return {
-                should: false,
-                reason: 'Investigation already in progress',
-                confidence: 1.0
-            };
-        }
-        
-        // No active issues
-        if (activeIssues.length === 0) {
-            return {
-                should: false,
-                reason: 'No active issues',
-                confidence: 1.0
-            };
-        }
-        
-        // Check cooldown (don't start immediately after completion)
-        if (investigation.status === 'completed') {
-            const completedTime = investigation.history[investigation.history.length - 1]?.completedAt;
-            if (completedTime) {
-                const timeSinceCompletion = Date.now() - completedTime;
-                if (timeSinceCompletion < 5000) { // 5 second cooldown
-                    return {
-                        should: false,
-                        reason: 'Cooldown period after last investigation',
-                        confidence: 1.0
-                    };
+            const investigation = this.stateStore.getState('monitoring.investigation') || {};
+            
+            // Already investigating
+            if (investigation.status === 'active' || investigation.status === 'starting') {
+                return {
+                    should: false,
+                    reason: 'Investigation already in progress',
+                    confidence: 1.0
+                };
+            }
+            
+            // No active issues
+            if (activeIssues.length === 0) {
+                return {
+                    should: false,
+                    reason: 'No active issues',
+                    confidence: 1.0
+                };
+            }
+            
+            // Check cooldown (don't start immediately after completion)
+            if (investigation.status === 'completed') {
+                const completedTime = investigation.history[investigation.history.length - 1]?.completedAt;
+                if (completedTime) {
+                    const timeSinceCompletion = Date.now() - completedTime;
+                    if (timeSinceCompletion < 5000) { // 5 second cooldown
+                        return {
+                            should: false,
+                            reason: 'Cooldown period after last investigation',
+                            confidence: 1.0
+                        };
+                    }
                 }
             }
+            
+            // Should start investigation
+            const criticalIssues = activeIssues.filter(i => i.severity === 'critical');
+            const highIssues = activeIssues.filter(i => i.severity === 'high');
+            
+            let priority = 'medium';
+            let confidence = 0.7;
+            
+            if (criticalIssues.length > 0) {
+                priority = 'critical';
+                confidence = 0.95;
+            } else if (highIssues.length > 0) {
+                priority = 'high';
+                confidence = 0.85;
+            }
+            
+            return {
+                should: true,
+                reason: `${activeIssues.length} active issue(s) detected (${criticalIssues.length} critical, ${highIssues.length} high)`,
+                confidence,
+                priority,
+                issues: activeIssues
+            };
+        } catch (error) {
+            // Silently handle errors - issueDetector might not be ready yet
+            return { should: false, reason: 'Issue detector error' };
         }
-        
-        // Should start investigation
-        const criticalIssues = activeIssues.filter(i => i.severity === 'critical');
-        const highIssues = activeIssues.filter(i => i.severity === 'high');
-        
-        let priority = 'medium';
-        let confidence = 0.7;
-        
-        if (criticalIssues.length > 0) {
-            priority = 'critical';
-            confidence = 0.95;
-        } else if (highIssues.length > 0) {
-            priority = 'high';
-            confidence = 0.85;
-        }
-        
-        return {
-            should: true,
-            reason: `${activeIssues.length} active issue(s) detected (${criticalIssues.length} critical, ${highIssues.length} high)`,
-            confidence,
-            priority,
-            issues: activeIssues
-        };
     }
     
     /**
