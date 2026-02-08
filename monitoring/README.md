@@ -275,11 +275,14 @@ $status.verification.active       # Is verification running?
 **AI Model MUST**:
 1. **Read `logs/monitor-status.json` FIRST** to understand current state
 2. **Read `logs/pending-issues.json`** to see the issue details
-3. **Check `debuggerBreakStatus`** in status file:
-   - If `failed_unity_not_running`: Unity needs restart (Monitor will auto-handle)
-   - If `failed_no_tables`: Unity not in table room (Monitor will wait)
-   - If `failed_exception`: API call failed (check server status)
-   - If `success`: Debugger break worked, Unity should be paused
+3. **Check `paused`** in status file:
+   - If `true`: Unity is paused and waiting for fix
+   - If `false`: Unity is active (investigation may not have completed yet)
+   - Also check `debuggerBreakStatus` (legacy/fallback):
+     - If `failed_unity_not_running`: Unity needs restart (Monitor will auto-handle)
+     - If `failed_no_tables`: Unity not in table room (Monitor will wait)
+     - If `failed_exception`: API call failed (check server status)
+     - If `success`: Pause mechanism worked (Unity should be paused)
 4. **Check `unityStatus.actualStatus`**:
    - `ACTIVE`: Unity is connected and playing (ready)
    - `CONNECTED`: Unity connected but not in game (may need to join table)
@@ -370,8 +373,9 @@ if ($status.lastError) {
     Write-Host "Last Error: $($status.lastError) at $($status.lastErrorTime)"
 }
 
-# 3. Check debugger break status
-Write-Host "Debugger Break Status: $($status.debuggerBreakStatus)"
+# 3. Check Unity pause status
+Write-Host "Unity Paused: $($status.paused)"
+Write-Host "Debugger Break Status (legacy): $($status.debuggerBreakStatus)"
 
 # 4. Check Unity status
 Write-Host "Unity Status: $($status.unityStatus.actualStatus)"
@@ -381,8 +385,10 @@ Write-Host "Issue Detector Status: $($status.issueDetectorStatus)"
 ```
 
 **Diagnose automatically**:
-- If `debuggerBreakStatus = "failed_unity_not_running"`: Monitor will auto-restart Unity, but you can verify Unity path in config
-- If `debuggerBreakStatus = "failed_no_tables"`: Unity not in table room - Monitor will wait, but you can check if Unity should join table
+- If `paused = false` but investigation completed: Check if `/api/simulation/pause` call failed (check server logs)
+- If `paused = true`: Unity is correctly paused, waiting for `fix-applied.json`
+- If `debuggerBreakStatus = "failed_unity_not_running"` (legacy): Monitor will auto-restart Unity, but you can verify Unity path in config
+- If `debuggerBreakStatus = "failed_no_tables"` (legacy): Unity not in table room - Monitor will wait, but you can check if Unity should join table
 - If `issueDetectorStatus = "failed"`: Check `lastIssueDetectorError` - fix the root cause (file permissions, Node.js, etc.)
 - If `investigation.active = true` but stuck: 
   - Check `investigation.timeRemaining` - should complete automatically when <= 0
@@ -409,12 +415,15 @@ Write-Host "Issue Detector Status: $($status.issueDetectorStatus)"
 
 **Check status file**:
 1. Read `logs/monitor-status.json`
-2. Check `debuggerBreakStatus`:
-   - `verifying_unity`: Monitor is checking (wait)
-   - `failed_unity_not_running`: Monitor will auto-restart Unity
-   - `failed_no_tables`: Unity not in table room (Monitor will wait)
-   - `failed_exception`: API call failed (check server)
-   - `success`: Debugger break worked (Unity should be paused)
+2. Check `paused` status:
+   - `true`: Unity is paused and waiting for fix (correct state)
+   - `false`: Unity is active (investigation may not have completed or Unity didn't receive pause)
+   - Also check `debuggerBreakStatus` (legacy/fallback):
+     - `verifying_unity`: Monitor is checking (wait)
+     - `failed_unity_not_running`: Monitor will auto-restart Unity
+     - `failed_no_tables`: Unity not in table room (Monitor will wait)
+     - `failed_exception`: API call failed (check server)
+     - `success`: Pause mechanism worked (Unity should be paused)
 3. Check `unityStatus.actualStatus`:
    - `STOPPED`: Monitor will auto-restart Unity
    - `IDLE`: Monitor will wait for connection
@@ -518,13 +527,15 @@ The monitor will:
    - Issue logged to `pending-issues.json` with focused group
    - Statistics updated (issues detected, severity, source)
    
-2. **Investigation completes** → Monitor pauses Unity debugger
+2. **Investigation completes** → Monitor pauses Unity
    - Dashboard status changes to "PAUSED (Fix Required)" (Red)
    - Shows investigation summary:
      - Root issue type and severity
      - Number of related issues found
      - Group ID for tracking
-   - Unity debugger pauses via `Debug.Break()` (if debugger attached)
+   - Monitor calls `/api/simulation/pause` which sets `table.isPaused = true`
+   - Server broadcasts `table_state` event with `isPaused: true`
+   - Unity reads `isPaused` from `table_state` and sets `Time.timeScale = 0`
    - Monitor waits for you to review and fix
 
 #### Phase 2: Fix Application
