@@ -574,4 +574,4 @@ monitoring/
 
 ---
 
-**This is the most badass monitoring system ever built. AI sees everything, knows everything, acts on everything. Broken systems replaced with correct-by-design systems. Human just prompts. AI does everything.**
+**Cerberus is the most badass system ever built. The three-headed guardian sees everything, knows everything, acts on everything. Broken systems replaced with correct-by-design systems. Human just prompts. Cerberus does everything. Nothing escapes.**
