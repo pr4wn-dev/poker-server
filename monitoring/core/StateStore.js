@@ -879,6 +879,21 @@ class StateStore extends EventEmitter {
             if (Array.isArray(value) && key.includes('Map') || 
                 (key === 'tables' || key === 'players' || key === 'byTable' || key === 'byPlayer')) {
                 state[key] = new Map(value);
+            } else if (key === 'knowledge' || key === 'improvements') {
+                // CRITICAL: Explicitly handle learning arrays - convert objects with numeric keys to arrays
+                if (Array.isArray(value)) {
+                    state[key] = value;
+                } else if (typeof value === 'object' && value !== null) {
+                    // Convert object with numeric keys to array (e.g., {"0": {...}} -> [{...}])
+                    const keys = Object.keys(value).map(k => parseInt(k)).filter(k => !isNaN(k)).sort((a, b) => a - b);
+                    if (keys.length > 0) {
+                        state[key] = keys.map(k => value[k.toString()]).filter(item => item !== undefined);
+                    } else {
+                        state[key] = [];
+                    }
+                } else {
+                    state[key] = [];
+                }
             } else if (Array.isArray(value)) {
                 // Preserve arrays as arrays
                 state[key] = value;
@@ -932,31 +947,36 @@ class StateStore extends EventEmitter {
         }
         
         // CRITICAL: Ensure learning.knowledge and learning.improvements are arrays (repair corrupted state)
+        // This handles both deserialization from file AND repair of corrupted in-memory state
         if (state.learning) {
             // Fix learning.knowledge - must be array
-            if (state.learning.knowledge && !Array.isArray(state.learning.knowledge)) {
-                // Convert object with numeric keys to array
-                if (typeof state.learning.knowledge === 'object') {
+            if (!Array.isArray(state.learning.knowledge)) {
+                if (state.learning.knowledge && typeof state.learning.knowledge === 'object') {
+                    // Convert object with numeric keys to array (e.g., {"0": {...}} -> [{...}])
                     const keys = Object.keys(state.learning.knowledge).map(k => parseInt(k)).filter(k => !isNaN(k)).sort((a, b) => a - b);
-                    state.learning.knowledge = keys.map(k => state.learning.knowledge[k.toString()]).filter(item => item !== undefined);
+                    if (keys.length > 0) {
+                        state.learning.knowledge = keys.map(k => state.learning.knowledge[k.toString()]).filter(item => item !== undefined);
+                    } else {
+                        state.learning.knowledge = [];
+                    }
                 } else {
                     state.learning.knowledge = [];
                 }
-            } else if (!state.learning.knowledge) {
-                state.learning.knowledge = [];
             }
             
             // Fix learning.improvements - must be array
-            if (state.learning.improvements && !Array.isArray(state.learning.improvements)) {
-                // Convert object with numeric keys to array
-                if (typeof state.learning.improvements === 'object') {
+            if (!Array.isArray(state.learning.improvements)) {
+                if (state.learning.improvements && typeof state.learning.improvements === 'object') {
+                    // Convert object with numeric keys to array (e.g., {"0": {...}} -> [{...}])
                     const keys = Object.keys(state.learning.improvements).map(k => parseInt(k)).filter(k => !isNaN(k)).sort((a, b) => a - b);
-                    state.learning.improvements = keys.map(k => state.learning.improvements[k.toString()]).filter(item => item !== undefined);
+                    if (keys.length > 0) {
+                        state.learning.improvements = keys.map(k => state.learning.improvements[k.toString()]).filter(item => item !== undefined);
+                    } else {
+                        state.learning.improvements = [];
+                    }
                 } else {
                     state.learning.improvements = [];
                 }
-            } else if (!state.learning.improvements) {
-                state.learning.improvements = [];
             }
         }
         
