@@ -1263,11 +1263,391 @@ class AILearningEngine extends EventEmitter {
             this.stateStore.updateState('learning.causalChains', Object.fromEntries(this.causalChains));
             this.stateStore.updateState('learning.solutionOptimization', Object.fromEntries(this.solutionOptimization));
             this.stateStore.updateState('learning.crossIssueLearning', Object.fromEntries(this.crossIssueLearning));
+            this.stateStore.updateState('learning.initializationTimings', Object.fromEntries(this.initializationTimings));
+            this.stateStore.updateState('learning.getterTimings', Object.fromEntries(this.getterTimings));
+            this.stateStore.updateState('learning.synchronousOperations', Object.fromEntries(this.synchronousOperations));
         } catch (error) {
             // DO NOT log to console - errors are for AI only, not user
             // Re-throw so UniversalErrorHandler can catch it
             throw error;
         }
+    }
+    
+    // ============================================
+    // INITIALIZATION HANG PATTERN DETECTION
+    // ============================================
+    
+    /**
+     * Track initialization timing for a component
+     * Detects hangs during initialization
+     */
+    trackInitialization(componentName, startTime, endTime = null) {
+        const timing = this.initializationTimings.get(componentName) || {
+            component: componentName,
+            calls: 0,
+            totalTime: 0,
+            maxTime: 0,
+            hangs: 0,
+            lastStart: null,
+            lastEnd: null
+        };
+        
+        timing.calls++;
+        timing.lastStart = startTime;
+        
+        if (endTime) {
+            const duration = endTime - startTime;
+            timing.lastEnd = endTime;
+            timing.totalTime += duration;
+            timing.maxTime = Math.max(timing.maxTime, duration);
+            
+            // Detect hang: initialization taking > 5 seconds
+            if (duration > 5000) {
+                timing.hangs++;
+                this.detectInitializationHang(componentName, duration);
+            }
+        } else {
+            // No end time - likely hung
+            timing.hangs++;
+            this.detectInitializationHang(componentName, null);
+        }
+        
+        this.initializationTimings.set(componentName, timing);
+        this.save();
+    }
+    
+    /**
+     * Detect initialization hang pattern
+     */
+    detectInitializationHang(componentName, duration) {
+        const pattern = {
+            type: 'initialization_hang',
+            component: componentName,
+            duration: duration,
+            timestamp: Date.now(),
+            severity: duration && duration > 10000 ? 'critical' : 'high'
+        };
+        
+        // Learn this pattern
+        const patternKey = `init_hang:${componentName}`;
+        const existing = this.patterns.get(patternKey) || {
+            frequency: 0,
+            successes: 0,
+            failures: 0,
+            contexts: [],
+            solutions: []
+        };
+        
+        existing.frequency++;
+        existing.failures++; // Hangs are failures
+        existing.contexts.push({
+            duration,
+            timestamp: Date.now()
+        });
+        
+        this.patterns.set(patternKey, existing);
+        
+        // Report to issue detector
+        if (this.issueDetector) {
+            this.issueDetector.detectIssue({
+                type: 'INITIALIZATION_HANG',
+                severity: pattern.severity,
+                method: 'learningEngine',
+                details: pattern
+            });
+        }
+        
+        gameLogger.warn('CERBERUS', '[LEARNING_ENGINE] Initialization hang detected', pattern);
+    }
+    
+    // ============================================
+    // GETTER HANG PATTERN DETECTION
+    // ============================================
+    
+    /**
+     * Track getter/method call timing
+     * Detects "works in constructor but hangs in getter" pattern
+     */
+    trackGetterCall(methodName, startTime, endTime = null, context = {}) {
+        const timing = this.getterTimings.get(methodName) || {
+            method: methodName,
+            calls: 0,
+            totalTime: 0,
+            avgTime: 0,
+            maxTime: 0,
+            hangs: 0,
+            contexts: []
+        };
+        
+        timing.calls++;
+        
+        if (endTime) {
+            const duration = endTime - startTime;
+            timing.totalTime += duration;
+            timing.avgTime = timing.totalTime / timing.calls;
+            timing.maxTime = Math.max(timing.maxTime, duration);
+            
+            // Detect hang: getter taking > 1 second (getters should be instant)
+            if (duration > 1000) {
+                timing.hangs++;
+                this.detectGetterHang(methodName, duration, context);
+            }
+        } else {
+            // No end time - likely hung
+            timing.hangs++;
+            this.detectGetterHang(methodName, null, context);
+        }
+        
+        timing.contexts.push({
+            startTime,
+            endTime,
+            duration: endTime ? endTime - startTime : null,
+            context
+        });
+        
+        // Keep only last 50 contexts
+        if (timing.contexts.length > 50) {
+            timing.contexts = timing.contexts.slice(-50);
+        }
+        
+        this.getterTimings.set(methodName, timing);
+        this.save();
+    }
+    
+    /**
+     * Detect getter hang pattern
+     * Specifically detects "works in constructor but hangs in getter"
+     */
+    detectGetterHang(methodName, duration, context) {
+        // Check if constructor worked but getter hangs
+        const initTiming = this.initializationTimings.get(context.component || 'unknown');
+        const pattern = {
+            type: 'getter_hang',
+            method: methodName,
+            duration: duration,
+            timestamp: Date.now(),
+            constructorWorked: initTiming && initTiming.lastEnd !== null,
+            severity: duration && duration > 5000 ? 'critical' : 'high'
+        };
+        
+        // Learn this pattern
+        const patternKey = `getter_hang:${methodName}`;
+        const existing = this.patterns.get(patternKey) || {
+            frequency: 0,
+            successes: 0,
+            failures: 0,
+            contexts: [],
+            solutions: []
+        };
+        
+        existing.frequency++;
+        existing.failures++; // Hangs are failures
+        existing.contexts.push({
+            duration,
+            constructorWorked: pattern.constructorWorked,
+            timestamp: Date.now()
+        });
+        
+        this.patterns.set(patternKey, existing);
+        
+        // If constructor worked but getter hangs, this is the specific pattern we need to catch
+        if (pattern.constructorWorked) {
+            const specificPattern = {
+                type: 'constructor_works_getter_hangs',
+                component: context.component,
+                method: methodName,
+                timestamp: Date.now(),
+                severity: 'critical'
+            };
+            
+            // Learn this specific pattern
+            const specificKey = `constructor_works_getter_hangs:${context.component}:${methodName}`;
+            const specificExisting = this.patterns.get(specificKey) || {
+                frequency: 0,
+                successes: 0,
+                failures: 0,
+                contexts: [],
+                solutions: []
+            };
+            
+            specificExisting.frequency++;
+            specificExisting.failures++;
+            specificExisting.contexts.push(specificPattern);
+            
+            this.patterns.set(specificKey, specificExisting);
+            
+            // Report to issue detector
+            if (this.issueDetector) {
+                this.issueDetector.detectIssue({
+                    type: 'CONSTRUCTOR_WORKS_GETTER_HANGS',
+                    severity: 'critical',
+                    method: 'learningEngine',
+                    details: specificPattern
+                });
+            }
+            
+            gameLogger.error('CERBERUS', '[LEARNING_ENGINE] Constructor works but getter hangs', specificPattern);
+        }
+        
+        // Report general getter hang
+        if (this.issueDetector) {
+            this.issueDetector.detectIssue({
+                type: 'GETTER_HANG',
+                severity: pattern.severity,
+                method: 'learningEngine',
+                details: pattern
+            });
+        }
+        
+        gameLogger.warn('CERBERUS', '[LEARNING_ENGINE] Getter hang detected', pattern);
+    }
+    
+    // ============================================
+    // SYNCHRONOUS OPERATION DETECTION
+    // ============================================
+    
+    /**
+     * Track synchronous file/state operations in getters
+     * Detects blocking operations that should be async
+     */
+    trackSynchronousOperation(methodName, operationType, context = {}) {
+        const ops = this.synchronousOperations.get(methodName) || {
+            method: methodName,
+            fileOps: 0,
+            stateOps: 0,
+            blockingOps: 0,
+            operations: []
+        };
+        
+        if (operationType === 'file') {
+            ops.fileOps++;
+        } else if (operationType === 'state') {
+            ops.stateOps++;
+        } else if (operationType === 'blocking') {
+            ops.blockingOps++;
+        }
+        
+        ops.operations.push({
+            type: operationType,
+            timestamp: Date.now(),
+            context
+        });
+        
+        // Keep only last 100 operations
+        if (ops.operations.length > 100) {
+            ops.operations = ops.operations.slice(-100);
+        }
+        
+        this.synchronousOperations.set(methodName, ops);
+        
+        // Detect pattern: synchronous operations in getters
+        if (ops.fileOps > 0 || ops.stateOps > 0 || ops.blockingOps > 0) {
+            this.detectSynchronousOperationPattern(methodName, ops);
+        }
+        
+        this.save();
+    }
+    
+    /**
+     * Detect synchronous operation pattern
+     */
+    detectSynchronousOperationPattern(methodName, ops) {
+        const pattern = {
+            type: 'synchronous_operation_in_getter',
+            method: methodName,
+            fileOps: ops.fileOps,
+            stateOps: ops.stateOps,
+            blockingOps: ops.blockingOps,
+            timestamp: Date.now(),
+            severity: ops.blockingOps > 0 ? 'critical' : ops.fileOps > 0 ? 'high' : 'medium'
+        };
+        
+        // Learn this pattern
+        const patternKey = `sync_op_in_getter:${methodName}`;
+        const existing = this.patterns.get(patternKey) || {
+            frequency: 0,
+            successes: 0,
+            failures: 0,
+            contexts: [],
+            solutions: []
+        };
+        
+        existing.frequency++;
+        existing.failures++; // Synchronous ops in getters are failures
+        existing.contexts.push(pattern);
+        
+        this.patterns.set(patternKey, existing);
+        
+        // Report to issue detector
+        if (this.issueDetector) {
+            this.issueDetector.detectIssue({
+                type: 'SYNCHRONOUS_OPERATION_IN_GETTER',
+                severity: pattern.severity,
+                method: 'learningEngine',
+                details: pattern
+            });
+        }
+        
+        gameLogger.warn('CERBERUS', '[LEARNING_ENGINE] Synchronous operation in getter detected', pattern);
+    }
+    
+    /**
+     * Get initialization hang patterns
+     */
+    getInitializationHangPatterns() {
+        const hangs = [];
+        for (const [component, timing] of this.initializationTimings.entries()) {
+            if (timing.hangs > 0) {
+                hangs.push({
+                    component,
+                    hangs: timing.hangs,
+                    calls: timing.calls,
+                    maxTime: timing.maxTime,
+                    avgTime: timing.totalTime / timing.calls,
+                    hangRate: timing.hangs / timing.calls
+                });
+            }
+        }
+        return hangs.sort((a, b) => b.hangRate - a.hangRate);
+    }
+    
+    /**
+     * Get getter hang patterns
+     */
+    getGetterHangPatterns() {
+        const hangs = [];
+        for (const [method, timing] of this.getterTimings.entries()) {
+            if (timing.hangs > 0) {
+                hangs.push({
+                    method,
+                    hangs: timing.hangs,
+                    calls: timing.calls,
+                    maxTime: timing.maxTime,
+                    avgTime: timing.avgTime,
+                    hangRate: timing.hangs / timing.calls
+                });
+            }
+        }
+        return hangs.sort((a, b) => b.hangRate - a.hangRate);
+    }
+    
+    /**
+     * Get synchronous operation patterns
+     */
+    getSynchronousOperationPatterns() {
+        const patterns = [];
+        for (const [method, ops] of this.synchronousOperations.entries()) {
+            if (ops.fileOps > 0 || ops.stateOps > 0 || ops.blockingOps > 0) {
+                patterns.push({
+                    method,
+                    fileOps: ops.fileOps,
+                    stateOps: ops.stateOps,
+                    blockingOps: ops.blockingOps,
+                    totalOps: ops.fileOps + ops.stateOps + ops.blockingOps
+                });
+            }
+        }
+        return patterns.sort((a, b) => b.totalOps - a.totalOps);
     }
 }
 
