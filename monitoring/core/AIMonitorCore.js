@@ -946,8 +946,8 @@ class AIMonitorCore {
             message: 'All background processes stopped'
         });
         
-        // Emit destroyed event
-        this.emit('destroyed');
+        // Note: AIMonitorCore doesn't extend EventEmitter, so we can't emit
+        // If external cleanup is needed, it should be handled by the caller
     }
 }
 
