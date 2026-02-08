@@ -998,6 +998,12 @@ class AIMonitorCore {
         if (this.processMonitor && this.processMonitor.stopMonitoring) {
             this.processMonitor.stopMonitoring();
         }
+        
+        // Stop collaboration interface (remove listeners to prevent memory leaks)
+        if (this.collaborationInterface) {
+            this.collaborationInterface.removeAllListeners();
+        }
+        
         if (this.stateStore) {
             this.stateStore.destroy();
         }
