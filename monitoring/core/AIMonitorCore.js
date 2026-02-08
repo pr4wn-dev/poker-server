@@ -327,6 +327,52 @@ class AIMonitorCore {
             });
         });
         
+        // LEARNING SYSTEM TEACHES AI - When AutoFixEngine tries something and it works/fails
+        // This is the bidirectional learning - learning system teaches AI
+        if (this.autoFixEngine && this.collaborationInterface) {
+            // When learning system successfully fixes something, teach AI
+            this.autoFixEngine.on('fixSucceeded', (data) => {
+                const { issue, fix, result } = data;
+                this.collaborationInterface.learningSystemSucceeded({
+                    type: 'auto_fix',
+                    method: fix.method,
+                    issueType: issue.type,
+                    component: issue.component,
+                    details: {
+                        issueId: issue.id,
+                        confidence: fix.confidence,
+                        source: fix.source
+                    }
+                }, {
+                    success: true,
+                    description: result.reason || `Successfully fixed ${issue.type} using ${fix.method}`,
+                    confidence: fix.confidence || 0.9
+                });
+            });
+            
+            // When learning system tries something and it fails, teach AI what not to do
+            this.autoFixEngine.on('fixAttempted', (data) => {
+                const { issue, fix, result } = data;
+                if (!result.success) {
+                    this.collaborationInterface.learningSystemFailed({
+                        type: 'auto_fix',
+                        method: fix.method,
+                        issueType: issue.type,
+                        component: issue.component,
+                        details: {
+                            issueId: issue.id,
+                            confidence: fix.confidence,
+                            source: fix.source
+                        }
+                    }, {
+                        success: false,
+                        reason: result.reason || `Failed to fix ${issue.type} using ${fix.method}`,
+                        error: result.error
+                    });
+                }
+            });
+        }
+        
         // Decisions made
         this.decisionEngine.on('decisionsMade', (decisions) => {
             if (decisions.investigation.should) {
