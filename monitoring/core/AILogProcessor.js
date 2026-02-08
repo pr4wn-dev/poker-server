@@ -53,8 +53,16 @@ class AILogProcessor extends EventEmitter {
      * Start processing logs
      */
     start() {
-        // Process existing logs
-        this.processExistingLogs();
+        // Skip processing existing logs on startup to prevent stack overflow
+        // Just set position to end of file and start watching for new logs
+        try {
+            if (fs.existsSync(this.logFile)) {
+                const stats = fs.statSync(this.logFile);
+                this.lastPosition = stats.size;
+            }
+        } catch (error) {
+            console.error('[AILogProcessor] Error initializing log position:', error);
+        }
         
         // Watch for new logs
         this.watchLogFile();
@@ -72,11 +80,17 @@ class AILogProcessor extends EventEmitter {
             const stats = fs.statSync(this.logFile);
             this.lastPosition = stats.size;
             
-            // Read last 1000 lines to catch up
-            const lines = await this.readLastLines(1000);
+            // Read last 100 lines to catch up (reduced from 1000 to prevent stack overflow)
+            // If file is very large, reading 1000 lines can cause issues
+            const lines = await this.readLastLines(100);
             
             for (const line of lines) {
-                this.processLine(line);
+                try {
+                    this.processLine(line);
+                } catch (error) {
+                    // Don't let one bad line crash the processor
+                    console.error('[AILogProcessor] Error processing line:', error.message);
+                }
             }
         } catch (error) {
             console.error('Error processing existing logs:', error);
