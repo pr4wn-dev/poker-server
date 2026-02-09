@@ -1,9 +1,9 @@
 {
-  "timestamp": 1770611284318,
+  "timestamp": 1770612151552,
   "investigation": {
-    "active": true,
-    "status": "starting",
-    "startTime": 1770549821659,
+    "active": false,
+    "status": "idle",
+    "startTime": null,
     "timeout": 15,
     "progress": 0,
     "timeRemaining": 0,
@@ -15,14 +15,13 @@
   },
   "system": {
     "server": {
-      "status": "error",
+      "status": "unknown",
       "health": 0,
       "metrics": {
         "uptime": 0,
         "requests": 0,
-        "errors": 1,
-        "responseTime": 0,
-        "consecutiveErrors": 1
+        "errors": 0,
+        "responseTime": 0
       },
       "recentErrors": [],
       "trends": {
@@ -30,7 +29,7 @@
         "warningRate": null,
         "trend": "decreasing"
       },
-      "lastCheck": 1770555743174
+      "lastCheck": null
     },
     "database": {
       "status": "unknown",
@@ -59,10 +58,10 @@
         "lastActivity": null
       },
       "uiState": {
-        "labels": {},
-        "images": {},
-        "sounds": {},
-        "animations": {}
+        "labels": [],
+        "images": [],
+        "sounds": [],
+        "animations": []
       },
       "recentErrors": [],
       "trends": {
@@ -76,7 +75,7 @@
   "recommendations": {
     "investigation": {
       "should": false,
-      "reason": "Investigation already in progress",
+      "reason": "No active issues",
       "confidence": 1
     },
     "pause": {
@@ -99,6 +98,6 @@
   },
   "aiCore": {
     "active": true,
-    "lastSync": 1770611284303
+    "lastSync": 1770612151537
   }
 }

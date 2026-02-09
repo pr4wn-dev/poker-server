@@ -10,6 +10,7 @@
  */
 
 const EventEmitter = require('events');
+const PatternGeneralizer = require('./PatternGeneralizer');
 const gameLogger = require('../../src/utils/GameLogger');
 
 class AILearningEngine extends EventEmitter {
@@ -217,44 +218,47 @@ class AILearningEngine extends EventEmitter {
     }
     
     /**
-     * Extract patterns from fix attempt
+     * Extract patterns from fix attempt - GENERALIZED
      */
     extractPatterns(attempt) {
         const patterns = [];
         
-        // Issue type pattern
+        // Issue type pattern - keep as-is (already categorical)
         if (attempt.issueType) {
             patterns.push({
                 type: 'issueType',
                 value: attempt.issueType,
-                context: attempt.fixDetails
+                context: PatternGeneralizer.createMinimalContext(attempt.fixDetails || {}, attempt.issueType)
             });
         }
         
-        // Fix method pattern
+        // Fix method pattern - keep as-is (already categorical)
         if (attempt.fixMethod) {
             patterns.push({
                 type: 'fixMethod',
                 value: attempt.fixMethod,
-                context: attempt.fixDetails
+                context: PatternGeneralizer.createMinimalContext(attempt.fixDetails || {}, attempt.issueType)
             });
         }
         
-        // State pattern (if state was involved)
-        if (attempt.state) {
-            patterns.push({
-                type: 'state',
-                value: this.extractStatePattern(attempt.state),
-                context: attempt.fixDetails
-            });
+        // State pattern - only create if state is relevant to issue
+        if (attempt.state && attempt.issueType) {
+            const statePattern = PatternGeneralizer.generalizeStatePattern(attempt.state, attempt.issueType);
+            if (statePattern) {
+                patterns.push({
+                    type: 'state',
+                    value: statePattern,
+                    context: PatternGeneralizer.createMinimalContext(attempt.fixDetails || {}, attempt.issueType)
+                });
+            }
         }
         
-        // Log pattern (if logs were involved)
+        // Log pattern (if logs were involved) - generalized
         if (attempt.logs && attempt.logs.length > 0) {
             patterns.push({
                 type: 'log',
                 value: this.extractLogPattern(attempt.logs),
-                context: attempt.fixDetails
+                context: PatternGeneralizer.createMinimalContext(attempt.fixDetails || {}, attempt.issueType)
             });
         }
         
@@ -262,23 +266,12 @@ class AILearningEngine extends EventEmitter {
     }
     
     /**
-     * Extract state pattern
+     * Extract state pattern - DEPRECATED: Use PatternGeneralizer.generalizeStatePattern instead
+     * Kept for backward compatibility
      */
     extractStatePattern(state) {
-        // Extract key state features
-        const features = [];
-        
-        if (state.chips) {
-            features.push(`chips:${state.chips.total || 0}`);
-        }
-        if (state.phase) {
-            features.push(`phase:${state.phase}`);
-        }
-        if (state.players) {
-            features.push(`players:${Object.keys(state.players || {}).length}`);
-        }
-        
-        return features.join('|');
+        // Use generalizer for consistency
+        return PatternGeneralizer.generalizeStatePattern(state, null) || '';
     }
     
     /**
@@ -302,7 +295,7 @@ class AILearningEngine extends EventEmitter {
     }
     
     /**
-     * Update pattern knowledge
+     * Update pattern knowledge - STORES MINIMAL CONTEXT
      */
     updatePatternKnowledge(pattern, attempt) {
         const patternKey = `${pattern.type}:${pattern.value}`;
@@ -310,8 +303,8 @@ class AILearningEngine extends EventEmitter {
             frequency: 0,
             successes: 0,
             failures: 0,
-            contexts: [],
-            solutions: []
+            contexts: [], // Store minimal context only
+            solutions: [] // Store solution method only
         };
         
         existing.frequency++;
@@ -321,12 +314,26 @@ class AILearningEngine extends EventEmitter {
             existing.failures++;
         }
         
-        existing.contexts.push(pattern.context);
+        // Store minimal context (generalized, no exact values)
+        const minimalContext = pattern.context || {};
+        existing.contexts.push(minimalContext);
+        
+        // Keep only last 5 contexts (not 10, to reduce bloat)
+        if (existing.contexts.length > 5) {
+            existing.contexts = existing.contexts.slice(-5);
+        }
+        
+        // Store solution method only (no full details)
         existing.solutions.push({
             method: attempt.fixMethod,
             result: attempt.result,
             timestamp: attempt.timestamp
         });
+        
+        // Keep only last 5 solutions
+        if (existing.solutions.length > 5) {
+            existing.solutions = existing.solutions.slice(-5);
+        }
         
         // Keep only last 100 contexts and solutions
         if (existing.contexts.length > 100) {
@@ -631,6 +638,38 @@ class AILearningEngine extends EventEmitter {
                 successRate: optimization.successRate,
                 alternatives: optimization.alternatives,
                 source: 'solution_optimization'
+            };
+        }
+        
+        return null;
+    }
+    
+    /**
+     * Extract solution from pattern data (helper method)
+     */
+    _extractSolutionFromPattern(patternData, patternKey, source, confidence = 1.0) {
+        if (patternData && patternData.solutions && Array.isArray(patternData.solutions) && patternData.solutions.length > 0) {
+            const bestSolution = patternData.solutions[0];
+            return {
+                method: bestSolution.method || patternData.method || 'fix_from_pattern',
+                successRate: patternData.successRate || (patternData.successes / (patternData.successes + patternData.failures)) || 1.0,
+                frequency: patternData.frequency || 1,
+                contexts: (patternData.contexts || []).slice(0, 2), // Only return 2 contexts max
+                source: source,
+                pattern: patternKey,
+                confidence: confidence
+            };
+        }
+        
+        // If no solutions array, check if patternData itself has method
+        if (patternData && patternData.method) {
+            return {
+                method: patternData.method,
+                successRate: patternData.successRate || 1.0,
+                frequency: patternData.frequency || 1,
+                source: source,
+                pattern: patternKey,
+                confidence: confidence
             };
         }
         
@@ -1670,14 +1709,26 @@ class AILearningEngine extends EventEmitter {
     }
     
     /**
-     * Load learning data
+     * Load learning data - WITH CLEANUP
      */
     load() {
         try {
             const patterns = this.stateStore.getState('learning.patterns');
             if (patterns && Array.isArray(patterns)) {
-                for (const [key, value] of patterns) {
+                // Clean up and generalize existing patterns
+                const PatternCleanup = require('./PatternCleanup');
+                const cleanedPatterns = PatternCleanup.cleanupPatterns(patterns);
+                
+                // Load cleaned patterns
+                for (const [key, value] of cleanedPatterns) {
                     this.patterns.set(key, value);
+                }
+                
+                // Save cleaned patterns back to state store
+                if (cleanedPatterns.length !== patterns.length || 
+                    JSON.stringify(cleanedPatterns) !== JSON.stringify(patterns)) {
+                    // Patterns were cleaned, save them
+                    this.stateStore.updateState('learning.patterns', cleanedPatterns);
                 }
             }
             
