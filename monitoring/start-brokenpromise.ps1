@@ -54,18 +54,26 @@ if (-not $SkipBootstrap) {
                 $promptText += "`r`n"
                 $promptText += "═══════════════════════════════════════════════════════════════`r`n"
                 
+                # Display prompt in console
+                Write-Host ""
+                Write-Host "═══════════════════════════════════════════════════════════════" -ForegroundColor Yellow
+                Write-Host "⚠️  PROMPT FOR USER TO DELIVER TO AI" -ForegroundColor Yellow
+                Write-Host "═══════════════════════════════════════════════════════════════" -ForegroundColor Yellow
+                Write-Host ""
+                Write-Host $promptText -ForegroundColor White
+                Write-Host ""
+                
+                # Also write to file
                 try {
                     if (-not (Test-Path (Split-Path $promptFile -Parent))) {
                         New-Item -ItemType Directory -Path (Split-Path $promptFile -Parent) -Force | Out-Null
                     }
                     $promptText | Out-File -FilePath $promptFile -Encoding UTF8 -Append
-                    Write-Host "[START] Prompt written to: $promptFile" -ForegroundColor Yellow
+                    Write-Host "Prompt also saved to: $promptFile" -ForegroundColor Gray
                 } catch {
-                    Write-Host "[START] Failed to write prompt file: $($_.Exception.Message)" -ForegroundColor Yellow
+                    Write-Host "Failed to write prompt file: $($_.Exception.Message)" -ForegroundColor Yellow
                 }
                 
-                Write-Host ""
-                Write-Host "See logs\prompts-for-user.txt for prompt to give to AI" -ForegroundColor Yellow
                 Write-Host ""
                 exit 1
             }
