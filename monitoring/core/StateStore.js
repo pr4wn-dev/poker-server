@@ -708,7 +708,24 @@ class StateStore extends EventEmitter {
             // Force arrays into serialized state - explicit preservation
             serializedState.learning.knowledge = knowledgeArray;
             serializedState.learning.improvements = improvementsArray;
-            serializedState.learning.fixAttempts = fixAttempts;
+            
+            // CRITICAL: Ensure fixAttempts is a plain object (not Map, not array)
+            // Convert to plain object if needed
+            let fixAttemptsObj = {};
+            if (fixAttempts && typeof fixAttempts === 'object') {
+                if (fixAttempts instanceof Map) {
+                    fixAttemptsObj = Object.fromEntries(fixAttempts);
+                } else if (Array.isArray(fixAttempts)) {
+                    // If it's an array of entries, convert to object
+                    fixAttempts.forEach(([key, value]) => {
+                        fixAttemptsObj[key] = value;
+                    });
+                } else {
+                    fixAttemptsObj = fixAttempts;
+                }
+            }
+            serializedState.learning.fixAttempts = fixAttemptsObj;
+            
             serializedState.learning.aiCompliance = aiCompliance;
             serializedState.learning.patterns = patterns;
             serializedState.learning.misdiagnosisPatterns = misdiagnosisPatterns;
@@ -732,6 +749,10 @@ class StateStore extends EventEmitter {
             }
             if (!Array.isArray(data.state.learning.aiCompliance)) {
                 data.state.learning.aiCompliance = aiCompliance;
+            }
+            // Ensure fixAttempts is an object
+            if (!data.state.learning.fixAttempts || typeof data.state.learning.fixAttempts !== 'object' || Array.isArray(data.state.learning.fixAttempts)) {
+                data.state.learning.fixAttempts = fixAttemptsObj;
             }
             
             // Atomic write: Write to temp file first, then rename (prevents corruption)

@@ -35,32 +35,42 @@ class GameLogger {
      */
     rotateLog() {
         try {
-            if (fs.existsSync(this.logFile)) {
-                const stats = fs.statSync(this.logFile);
-                if (stats.size > this.maxLogSize) {
-                    // Rotate existing backups
-                    for (let i = this.backupCount - 1; i >= 1; i--) {
-                        const oldBackup = `${this.logFile}.${i}`;
-                        const newBackup = `${this.logFile}.${i + 1}`;
-                        if (fs.existsSync(oldBackup)) {
+            // Skip rotation if log file doesn't exist
+            if (!fs.existsSync(this.logFile)) {
+                return;
+            }
+            
+            const stats = fs.statSync(this.logFile);
+            if (stats.size > this.maxLogSize) {
+                // Rotate existing backups
+                for (let i = this.backupCount - 1; i >= 1; i--) {
+                    const oldBackup = `${this.logFile}.${i}`;
+                    const newBackup = `${this.logFile}.${i + 1}`;
+                    if (fs.existsSync(oldBackup)) {
+                        try {
                             if (fs.existsSync(newBackup)) {
                                 fs.unlinkSync(newBackup);
                             }
                             fs.renameSync(oldBackup, newBackup);
+                        } catch (err) {
+                            // Ignore rotation errors - don't block logging
                         }
                     }
-                    
-                    // Move current log to backup.1
+                }
+                
+                // Move current log to backup.1
+                try {
                     if (fs.existsSync(`${this.logFile}.1`)) {
                         fs.unlinkSync(`${this.logFile}.1`);
                     }
                     fs.renameSync(this.logFile, `${this.logFile}.1`);
+                } catch (err) {
+                    // Ignore rotation errors - don't block logging
                 }
             }
         } catch (error) {
-            // Can't use gameLogger here (would cause infinite loop), use minimal error handling
-            // Write directly to stderr as last resort
-            process.stderr.write(`[GameLogger] Error rotating log: ${error.message}\n`);
+            // Silently ignore rotation errors - don't block logging or hang commands
+            // Don't write to stderr as it causes command hangs
         }
     }
     
