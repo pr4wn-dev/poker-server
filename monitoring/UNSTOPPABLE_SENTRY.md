@@ -1,14 +1,14 @@
-# Cerberus: The Unstoppable Three-Headed Guardian
+# BrokenPromise: The Unstoppable Three-Headed Guardian
 
-**Status**: ✅ **OPERATIONAL + ENHANCED** - Cerberus is an unstoppable three-headed guardian that hunts down and eliminates ALL errors, even unseen ones. Enhanced with solution templates, code change tracking, pattern generalization, proactive prediction, and context-aware suggestions.
+**Status**: ✅ **OPERATIONAL + ENHANCED** - BrokenPromise is an unstoppable three-headed guardian that hunts down and eliminates ALL errors, even unseen ones. Enhanced with solution templates, code change tracking, pattern generalization, proactive prediction, and context-aware suggestions.
 
 ---
 
 ## 🎯 The Core Principle
 
-**Between the AI (you) and Cerberus's learning working together, it's basically unstoppable.**
+**Between the AI (you) and BrokenPromise's learning working together, it's basically unstoppable.**
 
-Cerberus is so smart it knows and learns everything to expect. If one thing is off, Cerberus will **hunt that motherfucker down with all three heads and beat it into submission**.
+BrokenPromise is so smart it knows and learns everything to expect. If one thing is off, BrokenPromise will **hunt that motherfucker down with all three heads and beat it into submission**.
 
 ---
 
@@ -216,13 +216,13 @@ Cerberus is so smart it knows and learns everything to expect. If one thing is o
 
 ---
 
-**Status**: 🛡️ **CERBERUS ACTIVE** - All errors are hunted down and eliminated. Nothing escapes the three-headed guardian.
+**Status**: 🛡️ **BrokenPromise ACTIVE** - All errors are hunted down and eliminated. Nothing escapes the three-headed guardian.
 
 ---
 
 ## 🛡️ Automated Rule Enforcement (NEW)
 
-**Cerberus now enforces rules automatically - impossible to violate them:**
+**BrokenPromise now enforces rules automatically - impossible to violate them:**
 
 1. **Runtime Override** - Console.* automatically routes to gameLogger
 2. **Pre-commit Hooks** - Blocks commits with violations

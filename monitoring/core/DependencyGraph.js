@@ -1,10 +1,10 @@
 /**
  * Dependency Graph - Map relationships between components
  * 
- * Cerberus uses dependency graphs to understand cascading failures and trace impact.
+ * BrokenPromise uses dependency graphs to understand cascading failures and trace impact.
  * When one component fails, we can trace which other components are affected.
  * 
- * This helps Cerberus understand:
+ * This helps BrokenPromise understand:
  * - What to check first when an issue is detected
  * - What other components might be affected by a failure
  * - Root causes of cascading failures

@@ -14,10 +14,10 @@ const violations = [];
 
 // Files that are allowed to use console.log (CLI tools)
 const allowedFiles = [
-    'cerberus-integration.js',
+    'BrokenPromise-integration.js',
     'check-console-usage.js',
     'test-simple.js',
-    'test-cerberus-a-z.js',
+    'test-BrokenPromise-a-z.js',
     'test-no-console-violations.js'
 ];
 
@@ -59,7 +59,7 @@ function checkFile(filePath) {
                     
                     // Check if it's CLI JSON output (allowed)
                     const isCLIJSON = line.includes('JSON.stringify') && 
-                                     (line.includes('cerberus-integration') || 
+                                     (line.includes('BrokenPromise-integration') || 
                                       line.includes('console.log(JSON.stringify'));
                     
                     if (!isCLIJSON) {

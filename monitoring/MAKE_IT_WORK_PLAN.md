@@ -1,4 +1,4 @@
-# 🚨 PLAN TO MAKE CERBERUS ACTUALLY WORK 🚨
+# 🚨 PLAN TO MAKE BrokenPromise ACTUALLY WORK 🚨
 
 **Date**: 2026-02-08  
 **Status**: CRITICAL - System built but AI doesn't use it
@@ -140,8 +140,8 @@
 ```javascript
 // Before ANY tool call:
 async function checkWorkflowCompliance(toolName, params) {
-    // Get state from Cerberus
-    const state = await getCerberusState();
+    // Get state from BrokenPromise
+    const state = await getBrokenPromiseState();
     
     // Check for unresolved web search requirement
     const webSearchRequired = state.ai?.learning?.webSearchRequired;

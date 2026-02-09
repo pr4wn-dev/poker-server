@@ -121,7 +121,7 @@ class AICommunicationInterface {
             compliance: this.rulesEnforcer.complianceStats,
             frequentlyViolated: this.rulesEnforcer.getFrequentlyViolatedRules(),
             insights: this.rulesEnforcer.getRuleLearningInsights(),
-            reminder: 'These rules MUST be followed. Cerberus tracks compliance and learns from violations.',
+            reminder: 'These rules MUST be followed. BrokenPromise tracks compliance and learns from violations.',
             timestamp: Date.now()
         };
     }
@@ -154,7 +154,7 @@ class AICommunicationInterface {
                 rule: v.ruleName,
                 context: v.context
             })),
-            reminder: 'Remember: All critical rules must be followed. Cerberus tracks compliance.',
+            reminder: 'Remember: All critical rules must be followed. BrokenPromise tracks compliance.',
             frequentlyViolated: this.rulesEnforcer.getFrequentlyViolatedRules().frequentlyViolated.slice(0, 3)
         };
     }

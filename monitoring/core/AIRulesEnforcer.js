@@ -1,8 +1,8 @@
 /**
  * AI Rules Enforcer - Ensures AI Always Knows the Rules
  * 
- * Cerberus tracks all critical rules and ALWAYS reminds AI of them.
- * Cerberus learns from rule violations and tracks compliance.
+ * BrokenPromise tracks all critical rules and ALWAYS reminds AI of them.
+ * BrokenPromise learns from rule violations and tracks compliance.
  * 
  * Rules cannot be forgotten - they're baked into every communication.
  */
@@ -59,26 +59,26 @@ class AIRulesEnforcer extends EventEmitter {
     
     /**
      * Define all critical rules that AI must follow
-     * Rules are from monitoring folder documentation - Cerberus-specific rules
+     * Rules are from monitoring folder documentation - BrokenPromise-specific rules
      */
     defineRules() {
         return [
             {
-                id: 'cerberus_all_logs_to_gameLogger',
-                name: 'All Logs Go to gameLogger - Cerberus Sees Everything',
-                description: 'ALL debug/error output goes to gameLogger, NOT console.log/error/warn. Cerberus sees everything through logs. User should never see console output (except CLI JSON responses for PowerShell). Cerberus monitors all logs to learn and detect issues.',
+                id: 'BrokenPromise_all_logs_to_gameLogger',
+                name: 'All Logs Go to gameLogger - BrokenPromise Sees Everything',
+                description: 'ALL debug/error output goes to gameLogger, NOT console.log/error/warn. BrokenPromise sees everything through logs. User should never see console output (except CLI JSON responses for PowerShell). BrokenPromise monitors all logs to learn and detect issues.',
                 priority: 'critical',
                 category: 'logging',
                 examples: [
                     'Use gameLogger.info/error/warn instead of console.log/error/warn',
-                    'Only console.log for CLI JSON output (cerberus-integration.js)',
-                    'All errors must be logged through gameLogger for Cerberus to detect and learn'
+                    'Only console.log for CLI JSON output (BrokenPromise-integration.js)',
+                    'All errors must be logged through gameLogger for BrokenPromise to detect and learn'
                 ]
             },
             {
-                id: 'cerberus_single_source_of_truth',
+                id: 'BrokenPromise_single_source_of_truth',
                 name: 'Single Source of Truth - StateStore Only',
-                description: 'StateStore is the ONLY source of truth. No dual state management (files + variables). All state updates go through StateStore. No sync issues possible. This is fundamental to Cerberus architecture.',
+                description: 'StateStore is the ONLY source of truth. No dual state management (files + variables). All state updates go through StateStore. No sync issues possible. This is fundamental to BrokenPromise architecture.',
                 priority: 'critical',
                 category: 'architecture',
                 examples: [
@@ -88,9 +88,9 @@ class AIRulesEnforcer extends EventEmitter {
                 ]
             },
             {
-                id: 'cerberus_proactive_detection',
+                id: 'BrokenPromise_proactive_detection',
                 name: 'Proactive Detection - State Verification, Not Just Error Detection',
-                description: 'Cerberus uses proactive state verification, not just reactive error detection. Continuously verify state is correct. Check invariants after every operation. Detect issues immediately, not when they log. This is how Cerberus catches issues before they become errors.',
+                description: 'BrokenPromise uses proactive state verification, not just reactive error detection. Continuously verify state is correct. Check invariants after every operation. Detect issues immediately, not when they log. This is how BrokenPromise catches issues before they become errors.',
                 priority: 'critical',
                 category: 'detection',
                 examples: [
@@ -100,9 +100,9 @@ class AIRulesEnforcer extends EventEmitter {
                 ]
             },
             {
-                id: 'cerberus_event_driven',
+                id: 'BrokenPromise_event_driven',
                 name: 'Event-Driven Communication - No File Polling',
-                description: 'Cerberus uses event-driven communication, not file-based polling. Use events/messages instead of JSON files. Real-time updates. No polling needed. This is fundamental to Cerberus architecture.',
+                description: 'BrokenPromise uses event-driven communication, not file-based polling. Use events/messages instead of JSON files. Real-time updates. No polling needed. This is fundamental to BrokenPromise architecture.',
                 priority: 'critical',
                 category: 'architecture',
                 examples: [
@@ -112,9 +112,9 @@ class AIRulesEnforcer extends EventEmitter {
                 ]
             },
             {
-                id: 'cerberus_ai_first_design',
+                id: 'BrokenPromise_ai_first_design',
                 name: 'AI-First Design - Built FOR AI, BY AI',
-                description: 'Cerberus is built FOR the AI, BY the AI. Human just prompts. AI sees everything, knows everything, acts on everything. All information is structured for AI consumption. AI makes all decisions automatically.',
+                description: 'BrokenPromise is built FOR the AI, BY the AI. Human just prompts. AI sees everything, knows everything, acts on everything. All information is structured for AI consumption. AI makes all decisions automatically.',
                 priority: 'critical',
                 category: 'philosophy',
                 examples: [
@@ -125,9 +125,9 @@ class AIRulesEnforcer extends EventEmitter {
                 ]
             },
             {
-                id: 'cerberus_learning_from_everything',
+                id: 'BrokenPromise_learning_from_everything',
                 name: 'Learn From Everything - Never Forget',
-                description: 'Cerberus learns from EVERY error, EVERY fix attempt, EVERY pattern. Tracks what works/doesn\'t work. Gets smarter over time. Never makes the same mistake twice. Learning confidence is always visible and cannot be masked.',
+                description: 'BrokenPromise learns from EVERY error, EVERY fix attempt, EVERY pattern. Tracks what works/doesn\'t work. Gets smarter over time. Never makes the same mistake twice. Learning confidence is always visible and cannot be masked.',
                 priority: 'critical',
                 category: 'learning',
                 examples: [
@@ -138,7 +138,7 @@ class AIRulesEnforcer extends EventEmitter {
                 ]
             },
             {
-                id: 'cerberus_no_masking',
+                id: 'BrokenPromise_no_masking',
                 name: 'No Masking - Learning Confidence Cannot Be Artificially Inflated',
                 description: 'Masking is NEVER allowed. Learning confidence cannot be artificially inflated. System detects masking attempts (100% success with low samples, sudden jumps, unrealistic rates). Masking reduces confidence, not increases it. All metrics require minimum sample sizes.',
                 priority: 'critical',
@@ -151,9 +151,9 @@ class AIRulesEnforcer extends EventEmitter {
                 ]
             },
             {
-                id: 'cerberus_never_give_up',
+                id: 'BrokenPromise_never_give_up',
                 name: 'Never Give Up - Solve Problems Completely',
-                description: 'Cerberus NEVER gives up on problems. If a test fails, a bug appears, or an issue is found, it MUST be solved completely. No workarounds, no "good enough", no moving on. Every problem is solved to completion. If something is hanging, find the root cause. If something is broken, fix it. Giving up is a violation that Cerberus learns from.',
+                description: 'BrokenPromise NEVER gives up on problems. If a test fails, a bug appears, or an issue is found, it MUST be solved completely. No workarounds, no "good enough", no moving on. Every problem is solved to completion. If something is hanging, find the root cause. If something is broken, fix it. Giving up is a violation that BrokenPromise learns from.',
                 priority: 'critical',
                 category: 'problem_solving',
                 examples: [
@@ -165,9 +165,9 @@ class AIRulesEnforcer extends EventEmitter {
                 ]
             },
             {
-                id: 'cerberus_auto_adjustment',
+                id: 'BrokenPromise_auto_adjustment',
                 name: 'Automatic Self-Improvement When Confidence Low',
-                description: 'When learning confidence is low (<50%), Cerberus automatically adjusts. Suggests specific improvements (increase pattern collection, improve causal tracking, etc.). System self-improves when it detects low confidence.',
+                description: 'When learning confidence is low (<50%), BrokenPromise automatically adjusts. Suggests specific improvements (increase pattern collection, improve causal tracking, etc.). System self-improves when it detects low confidence.',
                 priority: 'high',
                 category: 'learning',
                 examples: [
@@ -177,9 +177,9 @@ class AIRulesEnforcer extends EventEmitter {
                 ]
             },
             {
-                id: 'cerberus_multiple_detection_methods',
+                id: 'BrokenPromise_multiple_detection_methods',
                 name: 'Multiple Detection Methods - Not Just Pattern Matching',
-                description: 'Cerberus uses multiple detection methods: state verification, pattern analysis, anomaly detection, causal analysis. Not just pattern matching. This ensures nothing escapes detection.',
+                description: 'BrokenPromise uses multiple detection methods: state verification, pattern analysis, anomaly detection, causal analysis. Not just pattern matching. This ensures nothing escapes detection.',
                 priority: 'critical',
                 category: 'detection',
                 examples: [
@@ -190,9 +190,9 @@ class AIRulesEnforcer extends EventEmitter {
                 ]
             },
             {
-                id: 'cerberus_integrity_checks',
+                id: 'BrokenPromise_integrity_checks',
                 name: 'AI Verifies Its Own Integrity',
-                description: 'Cerberus verifies its own integrity. Checks monitoring files, server files, Unity files, API endpoints, Socket.IO events. AI verifies that the system is working correctly.',
+                description: 'BrokenPromise verifies its own integrity. Checks monitoring files, server files, Unity files, API endpoints, Socket.IO events. AI verifies that the system is working correctly.',
                 priority: 'high',
                 category: 'integrity',
                 examples: [
@@ -202,7 +202,7 @@ class AIRulesEnforcer extends EventEmitter {
                 ]
             },
             {
-                id: 'cerberus_state_verification_contracts',
+                id: 'BrokenPromise_state_verification_contracts',
                 name: 'State Verification Contracts - Define Correct State',
                 description: 'StateVerificationContracts define what "correct" state looks like. Contracts define pre-conditions, post-conditions, and invariants for all critical operations. If we don\'t know what\'s correct, we can\'t detect what\'s wrong.',
                 priority: 'critical',
@@ -214,9 +214,9 @@ class AIRulesEnforcer extends EventEmitter {
                 ]
             },
             {
-                id: 'cerberus_dependency_graph',
+                id: 'BrokenPromise_dependency_graph',
                 name: 'Dependency Graph - Map Component Relationships',
-                description: 'DependencyGraph maps dependencies between system components. Enables Cerberus to trace cascading failures and understand the impact of issues. Knows what depends on what.',
+                description: 'DependencyGraph maps dependencies between system components. Enables BrokenPromise to trace cascading failures and understand the impact of issues. Knows what depends on what.',
                 priority: 'high',
                 category: 'analysis',
                 examples: [
@@ -227,7 +227,7 @@ class AIRulesEnforcer extends EventEmitter {
                 ]
             },
             {
-                id: 'cerberus_causal_analysis',
+                id: 'BrokenPromise_causal_analysis',
                 name: 'Causal Analysis - Trace State Changes Backwards',
                 description: 'CausalAnalysis traces state changes backwards to build causal chains and find root causes. Doesn\'t just detect issues - understands WHY they happened.',
                 priority: 'high',
@@ -240,7 +240,7 @@ class AIRulesEnforcer extends EventEmitter {
                 ]
             },
             {
-                id: 'cerberus_auto_fix',
+                id: 'BrokenPromise_auto_fix',
                 name: 'Auto-Fix System - Automatically Try Fixes',
                 description: 'AutoFixEngine automatically tries fixes from knowledge base. Verifies fixes work. Learns from results. Won\'t try fixes that failed before. System becomes truly autonomous.',
                 priority: 'high',
@@ -253,7 +253,7 @@ class AIRulesEnforcer extends EventEmitter {
                 ]
             },
             {
-                id: 'cerberus_error_recovery',
+                id: 'BrokenPromise_error_recovery',
                 name: 'Error Recovery & Resilience - Self-Healing',
                 description: 'ErrorRecovery provides graceful degradation, automatic recovery, and circuit breaker patterns. If one component fails, others continue working. System is self-healing.',
                 priority: 'high',
@@ -266,7 +266,7 @@ class AIRulesEnforcer extends EventEmitter {
                 ]
             },
             {
-                id: 'cerberus_performance_monitoring',
+                id: 'BrokenPromise_performance_monitoring',
                 name: 'Performance Monitoring - Track Operation Timing',
                 description: 'PerformanceMonitor tracks operation timing, memory usage, CPU usage. Identifies bottlenecks. Optimizes performance. Monitors system health.',
                 priority: 'medium',
@@ -279,7 +279,7 @@ class AIRulesEnforcer extends EventEmitter {
                 ]
             },
             {
-                id: 'cerberus_universal_error_handler',
+                id: 'BrokenPromise_universal_error_handler',
                 name: 'Universal Error Handler - Catches All Errors',
                 description: 'UniversalErrorHandler catches ALL errors (unhandled rejections, uncaught exceptions, warnings). Wraps all component methods. NO ERROR CAN ESCAPE. All errors advance learning.',
                 priority: 'critical',
@@ -292,9 +292,9 @@ class AIRulesEnforcer extends EventEmitter {
                 ]
             },
             {
-                id: 'cerberus_rules_always_visible',
+                id: 'BrokenPromise_rules_always_visible',
                 name: 'Rules Always Visible - AI Must Never Forget',
-                description: 'Rules are ALWAYS included in every communication with Cerberus. AI must never forget critical rules. Rules reminder is baked into every query response and status report. Cerberus tracks compliance and learns from violations.',
+                description: 'Rules are ALWAYS included in every communication with BrokenPromise. AI must never forget critical rules. Rules reminder is baked into every query response and status report. BrokenPromise tracks compliance and learns from violations.',
                 priority: 'critical',
                 category: 'rules',
                 examples: [
@@ -339,7 +339,7 @@ class AIRulesEnforcer extends EventEmitter {
                 name: r.name,
                 description: r.description
             })),
-            reminder: 'These rules MUST be followed. Cerberus tracks compliance and learns from violations.'
+            reminder: 'These rules MUST be followed. BrokenPromise tracks compliance and learns from violations.'
         };
     }
     
@@ -349,7 +349,7 @@ class AIRulesEnforcer extends EventEmitter {
     recordViolation(ruleId, context, details) {
         const rule = this.rules.find(r => r.id === ruleId);
         if (!rule) {
-            gameLogger.warn('CERBERUS', '[RULES_ENFORCER] Unknown rule violation', {
+            gameLogger.warn('BrokenPromise', '[RULES_ENFORCER] Unknown rule violation', {
                 ruleId,
                 context
             });
@@ -403,7 +403,7 @@ class AIRulesEnforcer extends EventEmitter {
         this.emit('violation', violation);
         
         // Log violation
-        gameLogger.warn('CERBERUS', '[RULES_ENFORCER] Rule violation detected', {
+        gameLogger.warn('BrokenPromise', '[RULES_ENFORCER] Rule violation detected', {
             rule: rule.name,
             ruleId,
             context,
@@ -568,7 +568,7 @@ class AIRulesEnforcer extends EventEmitter {
             this.learningEngine.learnFromAttempt(violationAttempt);
         } catch (learnError) {
             // DO NOT log to console - errors are for AI only, not user
-            gameLogger.error('CERBERUS', '[RULES_ENFORCER] Error learning from violation', {
+            gameLogger.error('BrokenPromise', '[RULES_ENFORCER] Error learning from violation', {
                 error: learnError.message,
                 violationId: violation.id
             });
@@ -611,7 +611,7 @@ class AIRulesEnforcer extends EventEmitter {
             // Emit refinement event
             this.emit('ruleRefined', refinement);
             
-            gameLogger.info('CERBERUS', '[RULES_ENFORCER] Auto-refined rule based on violations', {
+            gameLogger.info('BrokenPromise', '[RULES_ENFORCER] Auto-refined rule based on violations', {
                 ruleId,
                 ruleName: rule.name,
                 frequency: patternData.frequency,
@@ -821,14 +821,14 @@ class AIRulesEnforcer extends EventEmitter {
                 
                 if (uniqueRules.length === 1) {
                     // Same rule violated multiple times - strong pattern
-                    gameLogger.info('CERBERUS', '[RULES_ENFORCER] Temporal violation pattern detected', {
+                    gameLogger.info('BrokenPromise', '[RULES_ENFORCER] Temporal violation pattern detected', {
                         ruleId: uniqueRules[0],
                         violations: violations.length,
                         window: new Date(parseInt(window) * 60 * 1000).toISOString()
                     });
                 } else if (uniqueRules.length > 1) {
                     // Multiple rules violated together - co-occurrence pattern
-                    gameLogger.info('CERBERUS', '[RULES_ENFORCER] Co-occurrence violation pattern detected', {
+                    gameLogger.info('BrokenPromise', '[RULES_ENFORCER] Co-occurrence violation pattern detected', {
                         rules: uniqueRules,
                         violations: violations.length,
                         window: new Date(parseInt(window) * 60 * 1000).toISOString()
@@ -851,7 +851,7 @@ class AIRulesEnforcer extends EventEmitter {
             if (patternData.frequency >= 10 && patternData.impact >= 20) {
                 if (rule.priority === 'medium') {
                     // Suggest upgrading to high
-                    gameLogger.info('CERBERUS', '[RULES_ENFORCER] Suggesting priority upgrade', {
+                    gameLogger.info('BrokenPromise', '[RULES_ENFORCER] Suggesting priority upgrade', {
                         ruleId,
                         ruleName: rule.name,
                         currentPriority: rule.priority,
@@ -860,7 +860,7 @@ class AIRulesEnforcer extends EventEmitter {
                     });
                 } else if (rule.priority === 'high') {
                     // Suggest upgrading to critical
-                    gameLogger.info('CERBERUS', '[RULES_ENFORCER] Suggesting priority upgrade', {
+                    gameLogger.info('BrokenPromise', '[RULES_ENFORCER] Suggesting priority upgrade', {
                         ruleId,
                         ruleName: rule.name,
                         currentPriority: rule.priority,
@@ -1025,14 +1025,14 @@ class AIRulesEnforcer extends EventEmitter {
         // Check for specific violation patterns
         const loggingViolations = this.violations.filter(v => 
             v.ruleId === 'logging_all_to_gameLogger' || 
-            v.ruleId === 'cerberus_sees_everything'
+            v.ruleId === 'BrokenPromise_sees_everything'
         );
         if (loggingViolations.length > 0) {
             recommendations.push({
                 type: 'logging',
                 message: 'Multiple logging rule violations detected. Ensure all errors go through gameLogger, not console.',
                 priority: 'high',
-                affectedRules: ['logging_all_to_gameLogger', 'cerberus_sees_everything']
+                affectedRules: ['logging_all_to_gameLogger', 'BrokenPromise_sees_everything']
             });
         }
         
@@ -1089,7 +1089,7 @@ class AIRulesEnforcer extends EventEmitter {
         const compliance = this.complianceStats.complianceRate;
         
         if (compliance < 80) {
-            gameLogger.warn('CERBERUS', '[RULES_ENFORCER] Low compliance rate', {
+            gameLogger.warn('BrokenPromise', '[RULES_ENFORCER] Low compliance rate', {
                 complianceRate: Math.round(compliance),
                 violations: this.complianceStats.violations,
                 totalInteractions: this.complianceStats.totalInteractions,
@@ -1128,7 +1128,7 @@ class AIRulesEnforcer extends EventEmitter {
             this.stateStore.updateState('rules.violations', this.violationHistory);
             this.stateStore.updateState('rules.complianceStats', this.complianceStats);
         } catch (error) {
-            gameLogger.error('CERBERUS', '[RULES_ENFORCER] Save error', {
+            gameLogger.error('BrokenPromise', '[RULES_ENFORCER] Save error', {
                 error: error.message
             });
         }
@@ -1148,12 +1148,12 @@ class AIRulesEnforcer extends EventEmitter {
         
         // Check "never give up" rule
         if (action.type === 'test_simplification' || action.type === 'test_change') {
-            const neverGiveUpRule = this.rules.find(r => r.id === 'cerberus_never_give_up');
+            const neverGiveUpRule = this.rules.find(r => r.id === 'BrokenPromise_never_give_up');
             if (neverGiveUpRule) {
                 // Check if test is being simplified instead of fixing the problem
                 if (this.isTestSimplification(action, context)) {
                     violations.push({
-                        ruleId: 'cerberus_never_give_up',
+                        ruleId: 'BrokenPromise_never_give_up',
                         ruleName: neverGiveUpRule.name,
                         severity: 'critical',
                         reason: 'Test is being simplified instead of fixing the root cause',
@@ -1167,7 +1167,7 @@ class AIRulesEnforcer extends EventEmitter {
         if (action.type === 'mark_fixed' || action.type === 'fix_complete') {
             if (!action.verification || !action.verification.verified) {
                 warnings.push({
-                    ruleId: 'cerberus_never_give_up',
+                    ruleId: 'BrokenPromise_never_give_up',
                     severity: 'high',
                     reason: 'Fix marked as complete without verification',
                     action: 'WARNING - Verify fix actually works before marking complete'
@@ -1177,10 +1177,10 @@ class AIRulesEnforcer extends EventEmitter {
         
         // Check if problem is being worked around instead of fixed
         if (action.type === 'workaround' || action.type === 'bypass') {
-            const neverGiveUpRule = this.rules.find(r => r.id === 'cerberus_never_give_up');
+            const neverGiveUpRule = this.rules.find(r => r.id === 'BrokenPromise_never_give_up');
             if (neverGiveUpRule) {
                 violations.push({
-                    ruleId: 'cerberus_never_give_up',
+                    ruleId: 'BrokenPromise_never_give_up',
                     ruleName: neverGiveUpRule.name,
                     severity: 'critical',
                     reason: 'Using workaround instead of fixing root cause',
@@ -1333,7 +1333,7 @@ class AIRulesEnforcer extends EventEmitter {
         
         // Record as violation of "never give up" rule
         if (mistake.type === 'gave_up' || mistake.type === 'masked_problem') {
-            this.recordViolation('cerberus_never_give_up', mistake.context, {
+            this.recordViolation('BrokenPromise_never_give_up', mistake.context, {
                 mistake: mistakeRecord,
                 severity: 'critical'
             });
@@ -1355,7 +1355,7 @@ class AIRulesEnforcer extends EventEmitter {
             this.learningEngine.learnFromAIMistake(mistakeRecord);
         }
         
-        gameLogger.warn('CERBERUS', '[RULES_ENFORCER] AI mistake tracked', {
+        gameLogger.warn('BrokenPromise', '[RULES_ENFORCER] AI mistake tracked', {
             type: mistake.type,
             context: mistake.context,
             action: 'Mistake recorded - system will learn from this'
@@ -1388,7 +1388,7 @@ class AIRulesEnforcer extends EventEmitter {
         }
         this.stateStore.updateState('ai.confidencePenalties', penalties);
         
-        gameLogger.warn('CERBERUS', '[RULES_ENFORCER] Confidence penalty applied', {
+        gameLogger.warn('BrokenPromise', '[RULES_ENFORCER] Confidence penalty applied', {
             reason,
             severity,
             action: 'Learning confidence reduced due to masking/low-quality fix'

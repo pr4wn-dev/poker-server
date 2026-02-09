@@ -178,13 +178,13 @@ The learning system exists and is functional, but:
 
 ### **Integration Layer** (`monitoring/integration/`)
 
-- **CerberusIntegration.js** - Node.js integration class
-- **cerberus-integration.js** - CLI interface for PowerShell
+- **BrokenPromiseIntegration.js** - Node.js integration class
+- **BrokenPromise-integration.js** - CLI interface for PowerShell
 
 ### **PowerShell Integration**
 
-- **CerberusIntegration.ps1** - PowerShell helper functions
-- **cerberus.ps1** - Main Cerberus script (AI system integrated)
+- **BrokenPromiseIntegration.ps1** - PowerShell helper functions
+- **BrokenPromise.ps1** - Main BrokenPromise script (AI system integrated)
 
 ---
 
@@ -194,7 +194,7 @@ The learning system exists and is functional, but:
 
 ```powershell
 cd C:\Projects\poker-server
-.\monitoring\cerberus.ps1
+.\monitoring\BrokenPromise.ps1
 ```
 
 ### **AI-Learning System Workflow**
@@ -215,7 +215,7 @@ const core = new AIMonitorCore(projectRoot);
 const suggestions = core.beforeAIAction({
     type: 'fix_attempt',
     issueType: 'syntax_error',
-    file: 'monitoring/cerberus.ps1'
+    file: 'monitoring/BrokenPromise.ps1'
 });
 
 // When stuck - get help
@@ -288,7 +288,7 @@ monitoring/
 │
 ├── BrokenPromiseIntegration.ps1        # ✅ PowerShell helpers
 ├── brokenpromise.ps1                    # ✅ Main BrokenPromise script (AI integrated)
-├── cerberus-config.json           # Configuration
+├── BrokenPromise-config.json           # Configuration
 ├── unity-log-handler.js           # Unity log handler (used by server)
 │
 └── Documentation/
@@ -371,7 +371,7 @@ monitoring/
 - ✅ Better Error Messages: **COMPLETE** (NEW)
 - ✅ Array Safety Fixes: **COMPLETE**
 - ✅ Exception Error Fixes: **COMPLETE**
-- ✅ cerberus.ps1 Integration: **COMPLETE**
+- ✅ BrokenPromise.ps1 Integration: **COMPLETE**
 - ✅ Rules Enforcement System: **COMPLETE** (NEW)
 - ✅ Automated Console Enforcement: **COMPLETE** (NEW)
 - ✅ Self-Learning Rules: **COMPLETE** (NEW)
@@ -400,7 +400,7 @@ See `PROGRESS_REPORT.md` for detailed status.
 
 ## 🔧 Configuration
 
-Edit `cerberus-config.json` to configure:
+Edit `BrokenPromise-config.json` to configure:
 
 ```json
 {

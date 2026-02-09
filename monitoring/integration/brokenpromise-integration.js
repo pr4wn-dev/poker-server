@@ -6,14 +6,14 @@
  */
 
 const path = require('path');
-const CerberusIntegration = require('./CerberusIntegration');
+const BrokenPromiseIntegration = require('./BrokenPromiseIntegration');
 const gameLogger = require('../../src/utils/GameLogger');
 
 // Get project root (parent of monitoring directory)
 const projectRoot = path.resolve(__dirname, '../..');
 
 // Initialize integration (CLI mode - don't start sync loop, allow process to exit)
-const integration = new CerberusIntegration(projectRoot, { startSyncLoop: false });
+const integration = new BrokenPromiseIntegration(projectRoot, { startSyncLoop: false });
 
 // Handle command line arguments
 const command = process.argv[2];
@@ -21,7 +21,7 @@ const args = process.argv.slice(3);
 
 // Set a global timeout to force exit if command takes too long (5 seconds max)
 const globalTimeout = setTimeout(() => {
-    // All errors go to gameLogger - Cerberus sees everything
+    // All errors go to gameLogger - BrokenPromise sees everything
     gameLogger.error('MONITORING', '[MONITOR_INTEGRATION_CLI] Command timeout', {
         command: command,
         timeout: '5000ms'
@@ -318,7 +318,7 @@ async function handleCommand() {
                 process.exit(1);
         }
     } catch (error) {
-        // All errors go to gameLogger - Cerberus sees everything
+        // All errors go to gameLogger - BrokenPromise sees everything
         gameLogger.error('MONITORING', '[MONITOR_INTEGRATION_CLI] Command error', {
             command: command,
             error: error.message,
@@ -349,7 +349,7 @@ handleCommand().then(() => {
         // Destroy integration even on error
         integration.destroy();
     }
-    // All errors go to gameLogger - Cerberus sees everything
+    // All errors go to gameLogger - BrokenPromise sees everything
     gameLogger.error('MONITORING', '[MONITOR_INTEGRATION_CLI] Fatal error', {
         error: error.message,
         stack: error.stack

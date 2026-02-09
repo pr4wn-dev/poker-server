@@ -158,7 +158,7 @@ class AICollaborationInterface extends EventEmitter {
         // Emit event so AI can listen
         this.emit('learningSystemTaughtAI', knowledgeUpdate);
         
-        gameLogger.info('CERBERUS', '[AI_COLLABORATION] Learning system taught AI', {
+        gameLogger.info('BrokenPromise', '[AI_COLLABORATION] Learning system taught AI', {
             method: action.method || action.fixMethod,
             issueType: action.issueType,
             success: result.success !== false
@@ -228,7 +228,7 @@ class AICollaborationInterface extends EventEmitter {
         this.emit('learningSystemTaughtAI', knowledgeUpdate);
         this.emit('failureAnalyzedTogether', jointAnalysis);
         
-        gameLogger.info('CERBERUS', '[AI_COLLABORATION] Learning system taught AI (failure) - analyzed together', {
+        gameLogger.info('BrokenPromise', '[AI_COLLABORATION] Learning system taught AI (failure) - analyzed together', {
             method: action.method || action.fixMethod,
             issueType: action.issueType,
             reason: result.reason,
@@ -653,7 +653,7 @@ class AICollaborationInterface extends EventEmitter {
         this.emit('aiFailure', failureRecord);
         this.emit('failureAnalyzedTogether', jointAnalysis);
         
-        gameLogger.warn('CERBERUS', '[AI_COLLABORATION] AI failure tracked and analyzed together - learning system learns what not to do', {
+        gameLogger.warn('BrokenPromise', '[AI_COLLABORATION] AI failure tracked and analyzed together - learning system learns what not to do', {
             method: action.method,
             issueType: action.issueType,
             reason: result.reason,
@@ -701,7 +701,7 @@ class AICollaborationInterface extends EventEmitter {
             // Emit event that learning system is telling AI to search
             this.emit('learningSystemRequiresWebSearch', webSearchRequirement);
             
-            gameLogger.warn('CERBERUS', '[LEARNING_SYSTEM] Web search required after failure', {
+            gameLogger.warn('BrokenPromise', '[LEARNING_SYSTEM] Web search required after failure', {
                 consecutiveFailures: this.failureTracking.consecutiveFailures,
                 searchTerms: searchTerms,
                 action: 'Learning system enforcing web search - AI must search online'
@@ -928,7 +928,7 @@ class AICollaborationInterface extends EventEmitter {
             // Emit event that learning system is telling AI to search
             this.emit('learningSystemRequiresWebSearch', webSearchRequirement);
             
-            gameLogger.warn('CERBERUS', '[LEARNING_SYSTEM] Web search required after failure', {
+            gameLogger.warn('BrokenPromise', '[LEARNING_SYSTEM] Web search required after failure', {
                 consecutiveFailures: this.failureTracking.consecutiveFailures,
                 searchTerms: searchTerms,
                 action: 'Learning system enforcing web search - AI must search online'
@@ -1324,7 +1324,7 @@ class AICollaborationInterface extends EventEmitter {
             // Otherwise validate the file as-is
             return await this.powerShellSyntaxValidator.validateScript(action.filePath);
         } catch (error) {
-            gameLogger.warn('CERBERUS', '[AI_COLLABORATION] Syntax check error', {
+            gameLogger.warn('BrokenPromise', '[AI_COLLABORATION] Syntax check error', {
                 filePath: action.filePath,
                 error: error.message
             });

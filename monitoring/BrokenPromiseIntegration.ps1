@@ -1,7 +1,7 @@
-# Cerberus Integration Helper Functions
-# Bridge between PowerShell Cerberus and AI core
+# BrokenPromise Integration Helper Functions
+# Bridge between PowerShell BrokenPromise and AI core
 
-$script:aiIntegrationScript = Join-Path $PSScriptRoot "integration\cerberus-integration.js"
+$script:aiIntegrationScript = Join-Path $PSScriptRoot "integration\BrokenPromise-integration.js"
 
 # Helper function to call AI integration
 function Invoke-AIIntegration {

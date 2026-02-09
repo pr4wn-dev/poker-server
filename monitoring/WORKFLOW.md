@@ -1,4 +1,4 @@
-# Cerberus - AI Workflow Documentation
+# BrokenPromise - AI Workflow Documentation
 
 **Date**: 2026-02-08  
 **Status**: ✅ **CURRENT** - Complete workflow for AI and Learning System collaboration
@@ -7,7 +7,7 @@
 
 ## 🎯 Overview
 
-This document describes how the AI (you) and the Learning System (Cerberus) work together as one unified entity. The workflow is designed to be proactive, intelligent, and continuously improving.
+This document describes how the AI (you) and the Learning System (BrokenPromise) work together as one unified entity. The workflow is designed to be proactive, intelligent, and continuously improving.
 
 ---
 

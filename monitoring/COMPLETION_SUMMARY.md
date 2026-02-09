@@ -1,4 +1,4 @@
-# Cerberus - Completion Summary
+# BrokenPromise - Completion Summary
 
 **Date**: 2026-02-08  
 **Status**: 🟢 **99.8% COMPLETE** - All server-side todos complete!
@@ -84,7 +84,7 @@
 ### **Unity C# Client Script** ✅ **COMPLETE**
 **Status**: ✅ Complete and integrated in `poker-client-unity` repo
 
-**Location**: `poker-client-unity/Assets/Scripts/Monitoring/CerberusStateReporter.cs`
+**Location**: `poker-client-unity/Assets/Scripts/Monitoring/BrokenPromiseStateReporter.cs`
 
 **What Was Done**:
 - ✅ Reports UI element states (labels, images, buttons, panels)
@@ -131,7 +131,7 @@
 
 ## 🚀 **Next Steps**
 
-1. **Unity C# Client Script** - Implement `CerberusStateReporter.cs` in `poker-client-unity` repo using the specification in `monitoring/UNITY_CLIENT_SPEC.md`
+1. **Unity C# Client Script** - Implement `BrokenPromiseStateReporter.cs` in `poker-client-unity` repo using the specification in `monitoring/UNITY_CLIENT_SPEC.md`
 
 2. **Testing** - Test all new Phase 5 and Phase 7 components in production
 

@@ -1,10 +1,10 @@
 /**
- * Simple Cerberus Test - Check if all modules load
+ * Simple BrokenPromise Test - Check if all modules load
  */
 
 // Wrap in async function to support await
 (async () => {
-console.log('Starting Cerberus A-Z Test...\n');
+console.log('Starting BrokenPromise A-Z Test...\n');
 
 const tests = [];
 
@@ -304,19 +304,19 @@ try {
     tests.push({ name: 'L: UniversalErrorHandler', status: 'FAIL', error: error.message });
 }
 
-// Test M: CerberusIntegration
+// Test M: BrokenPromiseIntegration
 try {
-    console.log('Testing M: CerberusIntegration...');
-    const CerberusIntegration = require('./integration/CerberusIntegration');
+    console.log('Testing M: BrokenPromiseIntegration...');
+    const BrokenPromiseIntegration = require('./integration/BrokenPromiseIntegration');
     const path = require('path');
     const projectRoot = path.join(__dirname, '..');
-    const integration = new CerberusIntegration(projectRoot);
-    console.log('✅ M: CerberusIntegration - PASS');
-    tests.push({ name: 'M: CerberusIntegration', status: 'PASS' });
+    const integration = new BrokenPromiseIntegration(projectRoot);
+    console.log('✅ M: BrokenPromiseIntegration - PASS');
+    tests.push({ name: 'M: BrokenPromiseIntegration', status: 'PASS' });
     if (integration.destroy) integration.destroy();
 } catch (error) {
-    console.log('❌ M: CerberusIntegration - FAIL:', error.message);
-    tests.push({ name: 'M: CerberusIntegration', status: 'FAIL', error: error.message });
+    console.log('❌ M: BrokenPromiseIntegration - FAIL:', error.message);
+    tests.push({ name: 'M: BrokenPromiseIntegration', status: 'FAIL', error: error.message });
 }
 
 // Summary

@@ -109,17 +109,17 @@ class IntegrityChecker extends EventEmitter {
                 methods: ['getStatus', 'query', 'getStatistics']
             },
             // Integration files
-            'monitoring/integration/CerberusIntegration.js': {
+            'monitoring/integration/BrokenPromiseIntegration.js': {
                 type: 'module',
-                exports: ['CerberusIntegration'],
+                exports: ['BrokenPromiseIntegration'],
                 methods: ['getInvestigationStatus', 'shouldStartInvestigation', 'startInvestigation']
             },
-            'monitoring/integration/cerberus-integration.js': {
+            'monitoring/integration/BrokenPromise-integration.js': {
                 type: 'script',
                 executable: true
             },
             // PowerShell files
-            'monitoring/CerberusIntegration.ps1': {
+            'monitoring/BrokenPromiseIntegration.ps1': {
                 type: 'powershell',
                 functions: [
                     'Get-AIInvestigationStatus',
@@ -350,18 +350,18 @@ class IntegrityChecker extends EventEmitter {
             files: {}
         };
         
-        // Check if cerberus.ps1 sources CerberusIntegration.ps1
-        const monitorPath = path.join(this.projectRoot, 'monitoring', 'cerberus.ps1');
+        // Check if BrokenPromise.ps1 sources BrokenPromiseIntegration.ps1
+        const monitorPath = path.join(this.projectRoot, 'monitoring', 'BrokenPromise.ps1');
         if (fs.existsSync(monitorPath)) {
             const content = fs.readFileSync(monitorPath, 'utf8');
-            const aiIntegrationSourced = /\.\s*\$aiIntegrationPath|\.\s*CerberusIntegration\.ps1/i.test(content);
+            const aiIntegrationSourced = /\.\s*\$aiIntegrationPath|\.\s*BrokenPromiseIntegration\.ps1/i.test(content);
             
             if (!aiIntegrationSourced) {
-                results.issues.push('cerberus.ps1 does not source CerberusIntegration.ps1');
+                results.issues.push('BrokenPromise.ps1 does not source BrokenPromiseIntegration.ps1');
                 results.passed = false;
             }
             
-            results.files['monitoring/cerberus.ps1'] = {
+            results.files['monitoring/BrokenPromise.ps1'] = {
                 aiIntegrationSourced,
                 issues: aiIntegrationSourced ? [] : ['AI Integration not sourced']
             };
@@ -518,8 +518,8 @@ class IntegrityChecker extends EventEmitter {
             integrations: {}
         };
         
-        // Check if cerberus.ps1 uses AI functions
-        const monitorPath = path.join(this.projectRoot, 'monitoring', 'cerberus.ps1');
+        // Check if BrokenPromise.ps1 uses AI functions
+        const monitorPath = path.join(this.projectRoot, 'monitoring', 'BrokenPromise.ps1');
         if (fs.existsSync(monitorPath)) {
             const content = fs.readFileSync(monitorPath, 'utf8');
             
@@ -543,7 +543,7 @@ class IntegrityChecker extends EventEmitter {
                 }
             }
             
-            results.integrations['cerberus.ps1'] = {
+            results.integrations['BrokenPromise.ps1'] = {
                 aiFunctionsUsed: usedFunctions.length,
                 aiFunctionsMissing: missingFunctions.length,
                 usedFunctions,
@@ -551,7 +551,7 @@ class IntegrityChecker extends EventEmitter {
             };
             
             if (missingFunctions.length > aiFunctions.length / 2) {
-                results.issues.push(`cerberus.ps1 not using AI functions (only ${usedFunctions.length}/${aiFunctions.length})`);
+                results.issues.push(`BrokenPromise.ps1 not using AI functions (only ${usedFunctions.length}/${aiFunctions.length})`);
                 results.passed = false;
             }
         }

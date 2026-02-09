@@ -1,5 +1,5 @@
 /**
- * Cerberus A-Z Comprehensive System Test
+ * BrokenPromise A-Z Comprehensive System Test
  * 
  * Tests all systems from A to Z:
  * - All core components
@@ -351,7 +351,7 @@ async function testAIRulesEnforcer() {
         }
         
         // Test recordViolation (self-learning)
-        const violation = enforcer.recordViolation('cerberus_all_logs_to_gameLogger', 'test_context', { test: true });
+        const violation = enforcer.recordViolation('BrokenPromise_all_logs_to_gameLogger', 'test_context', { test: true });
         if (violation && violation.id) {
             logTest('G: recordViolation works (self-learning)', 'PASS', { violationId: violation.id });
         } else {
@@ -627,13 +627,13 @@ async function testUniversalErrorHandler() {
     }
 }
 
-async function testCerberusIntegration() {
-    logTest('M: CerberusIntegration - Node.js Integration', 'TEST', {});
+async function testBrokenPromiseIntegration() {
+    logTest('M: BrokenPromiseIntegration - Node.js Integration', 'TEST', {});
     
     try {
-        const CerberusIntegration = require('./integration/CerberusIntegration');
+        const BrokenPromiseIntegration = require('./integration/BrokenPromiseIntegration');
         const projectRoot = path.join(__dirname, '..');
-        const integration = new CerberusIntegration(projectRoot);
+        const integration = new BrokenPromiseIntegration(projectRoot);
         
         // Test getActiveIssues
         const issues = await integration.getActiveIssues();
@@ -666,13 +666,13 @@ async function testCerberusIntegration() {
         
         return true;
     } catch (error) {
-        logTest('M: CerberusIntegration test', 'FAIL', { error: error.message });
+        logTest('M: BrokenPromiseIntegration test', 'FAIL', { error: error.message });
         return false;
     }
 }
 
 async function runAllTests() {
-    gameLogger.info('TEST', '🚀 Starting Cerberus A-Z Comprehensive System Test', {});
+    gameLogger.info('TEST', '🚀 Starting BrokenPromise A-Z Comprehensive System Test', {});
     
     const tests = [
         testAIMonitorCore,
@@ -687,7 +687,7 @@ async function runAllTests() {
         testErrorRecovery,
         testPerformanceMonitor,
         testUniversalErrorHandler,
-        testCerberusIntegration
+        testBrokenPromiseIntegration
     ];
     
     for (const test of tests) {

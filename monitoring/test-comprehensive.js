@@ -1,5 +1,5 @@
 /**
- * Comprehensive Cerberus System Test
+ * Comprehensive BrokenPromise System Test
  * 
  * Tests all components, integrations, and features end-to-end
  */
@@ -43,7 +43,7 @@ function test(name, fn) {
 }
 
 async function runTests() {
-    console.log('\n🔬 CERBERUS COMPREHENSIVE SYSTEM TEST\n');
+    console.log('\n🔬 BrokenPromise COMPREHENSIVE SYSTEM TEST\n');
     console.log('=' .repeat(60));
     
     let core = null;
@@ -192,10 +192,10 @@ async function runTests() {
     // Test 13: Integration files exist
     test('Integration files exist', () => {
         const integrationFiles = [
-            'monitoring/integration/CerberusIntegration.js',
-            'monitoring/integration/cerberus-integration.js',
-            'monitoring/CerberusIntegration.ps1',
-            'monitoring/cerberus.ps1'
+            'monitoring/integration/BrokenPromiseIntegration.js',
+            'monitoring/integration/BrokenPromise-integration.js',
+            'monitoring/BrokenPromiseIntegration.ps1',
+            'monitoring/BrokenPromise.ps1'
         ];
         
         for (const file of integrationFiles) {
@@ -239,7 +239,7 @@ async function runTests() {
     console.log('\n' + '='.repeat(60));
     
     if (results.failed === 0) {
-        console.log('\n🎉 ALL TESTS PASSED! Cerberus is ready! 🎉\n');
+        console.log('\n🎉 ALL TESTS PASSED! BrokenPromise is ready! 🎉\n');
         process.exit(0);
     } else {
         console.log('\n⚠️  Some tests failed. Review errors above.\n');

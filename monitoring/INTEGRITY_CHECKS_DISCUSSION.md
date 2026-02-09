@@ -1,6 +1,6 @@
-# Cerberus - File & Code Integrity Checks
+# BrokenPromise - File & Code Integrity Checks
 
-**Cerberus** - The three-headed guardian verifies its own integrity and hunts down ALL errors.
+**BrokenPromise** - The three-headed guardian verifies its own integrity and hunts down ALL errors.
 
 ## Current State
 
@@ -16,7 +16,7 @@
 
 ### ❌ What We DON'T Have (But Should)
 1. **File Integrity Checks** - Not built yet
-   - Does `cerberus.ps1` have required functions?
+   - Does `BrokenPromise.ps1` have required functions?
    - Are integration files present and correct?
 
 2. **Code Integrity Checks** - Not built yet
@@ -46,9 +46,9 @@
 
 **Examples**:
 - ✅ `monitoring/core/StateStore.js` exists and exports `StateStore` class
-- ✅ `monitoring/integration/CerberusIntegration.js` exists and exports `CerberusIntegration` class
-- ✅ `monitoring/CerberusIntegration.ps1` exists and has all required functions
-- ✅ `monitoring/cerberus.ps1` sources `CerberusIntegration.ps1`
+- ✅ `monitoring/integration/BrokenPromiseIntegration.js` exists and exports `BrokenPromiseIntegration` class
+- ✅ `monitoring/BrokenPromiseIntegration.ps1` exists and has all required functions
+- ✅ `monitoring/BrokenPromise.ps1` sources `BrokenPromiseIntegration.ps1`
 
 **What to Check**:
 ```javascript
@@ -60,7 +60,7 @@ const StateStore = require('./monitoring/core/StateStore.js')
 // StateStore should be a class with required methods
 
 // File has required functions (PowerShell)
-// Check if CerberusIntegration.ps1 has Get-AIInvestigationStatus, etc.
+// Check if BrokenPromiseIntegration.ps1 has Get-AIInvestigationStatus, etc.
 ```
 
 ---
@@ -73,7 +73,7 @@ const StateStore = require('./monitoring/core/StateStore.js')
 - ✅ `AIIssueDetector.js` has `detectIssue()`, `verifyState()`, `getActiveIssues()` methods
 - ✅ `AIFixTracker.js` has `recordAttempt()`, `getSuggestedFixes()` methods
 - ✅ `AIDecisionEngine.js` has `shouldStartInvestigation()`, `shouldPauseUnity()` methods
-- ✅ `CerberusIntegration.ps1` has all PowerShell helper functions
+- ✅ `BrokenPromiseIntegration.ps1` has all PowerShell helper functions
 
 **What to Check**:
 ```javascript
@@ -121,18 +121,18 @@ const match = logLine.match(/\[([^\]]+)\]\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+(.+)/)
 **Check**: Do files integrate properly with AI system?
 
 **Examples**:
-- ✅ `cerberus.ps1` sources `CerberusIntegration.ps1`
-- ✅ `cerberus.ps1` calls AI functions (not just old broken logic)
+- ✅ `BrokenPromise.ps1` sources `BrokenPromiseIntegration.ps1`
+- ✅ `BrokenPromise.ps1` calls AI functions (not just old broken logic)
 - ✅ Files update StateStore when state changes
 - ✅ Files emit events when things happen
 - ✅ Files call AI functions for decisions
 
 **What to Check**:
 ```javascript
-// Check if cerberus.ps1 sources CerberusIntegration.ps1
-// Search for: . $aiIntegrationPath or . CerberusIntegration.ps1
+// Check if BrokenPromise.ps1 sources BrokenPromiseIntegration.ps1
+// Search for: . $aiIntegrationPath or . BrokenPromiseIntegration.ps1
 
-// Check if cerberus.ps1 calls AI functions
+// Check if BrokenPromise.ps1 calls AI functions
 // Search for: Get-AIInvestigationStatus, Should-AIStartInvestigation, etc.
 
 // Check if files update StateStore

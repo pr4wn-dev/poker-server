@@ -1,7 +1,7 @@
 /**
  * UnityStateReporter - Handles Unity state reports and verification
  * 
- * Cerberus component that receives Unity UI/audio state from Unity client
+ * BrokenPromise component that receives Unity UI/audio state from Unity client
  * and compares it against server state to detect mismatches.
  */
 
@@ -63,7 +63,7 @@ class UnityStateReporter extends EventEmitter {
             this.emit('unityStateReported', unityState);
             
         } catch (error) {
-            gameLogger.error('CERBERUS', '[UNITY_STATE_REPORTER] HANDLE_REPORT_ERROR', {
+            gameLogger.error('BrokenPromise', '[UNITY_STATE_REPORTER] HANDLE_REPORT_ERROR', {
                 userId,
                 error: error.message,
                 stack: error.stack
@@ -245,7 +245,7 @@ class UnityStateReporter extends EventEmitter {
             });
             
         } catch (error) {
-            gameLogger.error('CERBERUS', '[UNITY_STATE_REPORTER] UPDATE_STATE_ERROR', {
+            gameLogger.error('BrokenPromise', '[UNITY_STATE_REPORTER] UPDATE_STATE_ERROR', {
                 error: error.message,
                 stack: error.stack
             });
@@ -274,7 +274,7 @@ class UnityStateReporter extends EventEmitter {
             this.verifyAudioState(userId, unityState, playerTable);
             
         } catch (error) {
-            gameLogger.error('CERBERUS', '[UNITY_STATE_REPORTER] VERIFY_ERROR', {
+            gameLogger.error('BrokenPromise', '[UNITY_STATE_REPORTER] VERIFY_ERROR', {
                 userId,
                 error: error.message,
                 stack: error.stack

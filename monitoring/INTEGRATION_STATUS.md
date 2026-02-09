@@ -1,8 +1,8 @@
-# Cerberus - Integration Status
+# BrokenPromise - Integration Status
 
 **Status**: ✅ **CORE COMPLETE** + ✅ **INTEGRATION LAYER COMPLETE** - Ready for use!
 
-**Cerberus** - The three-headed guardian is operational and ready to hunt down errors.
+**BrokenPromise** - The three-headed guardian is operational and ready to hunt down errors.
 
 ---
 
@@ -40,10 +40,10 @@ All 25 core components built and ready:
 ### **2. Integration Layer** ✅ **COMPLETE**
 Bridge between PowerShell monitor and AI core:
 
-1. ✅ **CerberusIntegration.js** - Node.js integration class
-2. ✅ **cerberus-integration.js** - CLI interface for PowerShell
-3. ✅ **CerberusIntegration.ps1** - PowerShell helper functions
-4. ✅ **cerberus.ps1** - AI integration sourced and ready
+1. ✅ **BrokenPromiseIntegration.js** - Node.js integration class
+2. ✅ **BrokenPromise-integration.js** - CLI interface for PowerShell
+3. ✅ **BrokenPromiseIntegration.ps1** - PowerShell helper functions
+4. ✅ **BrokenPromise.ps1** - AI integration sourced and ready
 
 ---
 
@@ -62,11 +62,11 @@ monitoring/
 │   └── AIMonitorCore.js            # Orchestrator
 │
 ├── integration/                    # ✅ COMPLETE - Integration layer
-│   ├── CerberusIntegration.js     # Node.js integration class
-│   └── cerberus-integration.js    # CLI interface
+│   ├── BrokenPromiseIntegration.js     # Node.js integration class
+│   └── BrokenPromise-integration.js    # CLI interface
 │
-├── CerberusIntegration.ps1        # ✅ COMPLETE - PowerShell helpers
-├── cerberus.ps1                    # ✅ INTEGRATED - AI system sourced
+├── BrokenPromiseIntegration.ps1        # ✅ COMPLETE - PowerShell helpers
+├── BrokenPromise.ps1                    # ✅ INTEGRATED - AI system sourced
 │
 ├── README.md                       # Documentation
 ├── EVOLUTION_PLAN.md              # Updated plan
@@ -101,7 +101,7 @@ node monitoring/ai-collaborate.js after-action '{"type":"fix_attempt"}' '{"succe
 
 ### **From PowerShell Monitor**
 
-The AI system is now integrated into `cerberus.ps1`. You can use it like this:
+The AI system is now integrated into `BrokenPromise.ps1`. You can use it like this:
 
 ```powershell
 # Get investigation status from AI
@@ -151,7 +151,7 @@ const core = new AIMonitorCore(projectRoot);
 const suggestions = core.beforeAIAction({
     type: 'fix_attempt',
     issueType: 'syntax_error',
-    file: 'monitoring/cerberus.ps1'
+    file: 'monitoring/BrokenPromise.ps1'
 });
 
 // When stuck - get help
@@ -167,12 +167,12 @@ core.afterAIAction(action, {
 });
 ```
 
-**For Standard Integration**, use `CerberusIntegration`:
+**For Standard Integration**, use `BrokenPromiseIntegration`:
 
 ```javascript
-const CerberusIntegration = require('./monitoring/integration/CerberusIntegration');
+const BrokenPromiseIntegration = require('./monitoring/integration/BrokenPromiseIntegration');
 
-const integration = new CerberusIntegration(projectRoot);
+const integration = new BrokenPromiseIntegration(projectRoot);
 
 // Get investigation status
 const status = integration.getInvestigationStatus();
@@ -206,28 +206,28 @@ const report = integration.getStatusReport();
 
 ```bash
 # Get investigation status
-node monitoring/integration/cerberus-integration.js get-investigation-status
+node monitoring/integration/BrokenPromise-integration.js get-investigation-status
 
 # Should start investigation?
-node monitoring/integration/cerberus-integration.js should-start-investigation
+node monitoring/integration/BrokenPromise-integration.js should-start-investigation
 
 # Get active issues
-node monitoring/integration/cerberus-integration.js get-active-issues
+node monitoring/integration/BrokenPromise-integration.js get-active-issues
 
 # Get suggested fixes
-node monitoring/integration/cerberus-integration.js get-suggested-fixes <issueId>
+node monitoring/integration/BrokenPromise-integration.js get-suggested-fixes <issueId>
 
 # Record fix attempt
-node monitoring/integration/cerberus-integration.js record-fix-attempt <issueId> <fixMethod> <result>
+node monitoring/integration/BrokenPromise-integration.js record-fix-attempt <issueId> <fixMethod> <result>
 
 # Get live statistics
-node monitoring/integration/cerberus-integration.js get-live-statistics
+node monitoring/integration/BrokenPromise-integration.js get-live-statistics
 
 # Query AI system
-node monitoring/integration/cerberus-integration.js query "What errors occurred in the last hour?"
+node monitoring/integration/BrokenPromise-integration.js query "What errors occurred in the last hour?"
 
 # Get complete status report
-node monitoring/integration/cerberus-integration.js get-status-report
+node monitoring/integration/BrokenPromise-integration.js get-status-report
 ```
 
 ---
@@ -298,7 +298,7 @@ node monitoring/integration/cerberus-integration.js get-status-report
 
 **Replaced With**:
 - ✅ `Get-AILiveStatistics` (comprehensive AI data)
-- ✅ `Show-CerberusStatistics.ps1` (human-readable display)
+- ✅ `Show-BrokenPromiseStatistics.ps1` (human-readable display)
 - ✅ Single source (AI state)
 
 **Result**: Comprehensive statistics display with AI data.
@@ -351,7 +351,7 @@ node monitoring/integration/cerberus-integration.js get-status-report
 2. ✅ **Integration Layer** - Bridge between PowerShell and AI core
 3. ✅ **PowerShell Helpers** - All helper functions available
 4. ✅ **CLI Interface** - Command-line access to AI system
-5. ✅ **cerberus.ps1 Integration** - AI system fully integrated, all broken systems replaced
+5. ✅ **BrokenPromise.ps1 Integration** - AI system fully integrated, all broken systems replaced
 6. ✅ **Server State Capture** - Real-time server health and table info
 7. ✅ **AI Statistics Display** - Comprehensive visibility
 8. ✅ **Array Safety** - All array operations protected
@@ -400,7 +400,7 @@ node monitoring/integration/cerberus-integration.js get-status-report
 | Integration Layer | ✅ Complete | Bridge PowerShell ↔ AI core |
 | PowerShell Helpers | ✅ Complete | All functions available |
 | CLI Interface | ✅ Complete | Command-line access |
-| cerberus.ps1 Integration | ✅ Complete | AI system fully integrated |
+| BrokenPromise.ps1 Integration | ✅ Complete | AI system fully integrated |
 | Investigation Replacement | ✅ Complete | Broken logic replaced |
 | Status Sync Replacement | ✅ Complete | Single source of truth |
 | Issue Detection Integration | ✅ Complete | AI + patterns combined |
@@ -428,4 +428,4 @@ node monitoring/integration/cerberus-integration.js get-status-report
 
 ---
 
-**Cerberus is built, integrated, tested, and production ready. All broken systems have been replaced. All errors have been fixed. The three-headed guardian is fully operational. The foundation is solid. Nothing escapes Cerberus.**
+**BrokenPromise is built, integrated, tested, and production ready. All broken systems have been replaced. All errors have been fixed. The three-headed guardian is fully operational. The foundation is solid. Nothing escapes BrokenPromise.**

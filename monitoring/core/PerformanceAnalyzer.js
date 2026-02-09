@@ -218,7 +218,7 @@ class PerformanceAnalyzer extends EventEmitter {
             try {
                 await this.analyzePerformance();
             } catch (error) {
-                gameLogger.error('CERBERUS', '[PERFORMANCE_ANALYZER] Periodic analysis error', {
+                gameLogger.error('BrokenPromise', '[PERFORMANCE_ANALYZER] Periodic analysis error', {
                     error: error.message
                 });
             }
@@ -227,7 +227,7 @@ class PerformanceAnalyzer extends EventEmitter {
         // Run initial analysis
         setImmediate(() => {
             this.analyzePerformance().catch(error => {
-                gameLogger.error('CERBERUS', '[PERFORMANCE_ANALYZER] Initial analysis error', {
+                gameLogger.error('BrokenPromise', '[PERFORMANCE_ANALYZER] Initial analysis error', {
                     error: error.message
                 });
             });

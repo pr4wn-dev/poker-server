@@ -28,13 +28,13 @@ async function storeCursorAPIFindings() {
                 'Cursor IDE does NOT expose a public API for external tools',
                 'Cursor "model auto x1" routing logic is not publicly documented',
                 'Cursor does not provide programmatic access to its model selection system',
-                'Cannot integrate Cerberus with Cursor\'s API to use Cursor account/free tier automatically',
+                'Cannot integrate BrokenPromise with Cursor\'s API to use Cursor account/free tier automatically',
                 'Cursor\'s model system is internal to the IDE, not accessible externally'
             ],
             solutions: [
                 'Use Anthropic/OpenAI APIs directly with API keys (loses Cursor free tier benefit)',
                 'Accept partial automation - some parts automatic, some require manual AI interaction',
-                'Redesign Cerberus to work independently without relying on Cursor API integration',
+                'Redesign BrokenPromise to work independently without relying on Cursor API integration',
                 'Consider alternative: direct API calls to Anthropic/OpenAI for full automation'
             ],
             searchTerms: [
@@ -53,12 +53,12 @@ async function storeCursorAPIFindings() {
         const architecturalFinding = {
             type: 'architectural_limitation',
             limitation: 'Cursor API Not Available',
-            description: 'Cursor IDE does not expose API for external tools. Cannot integrate Cerberus with Cursor\'s model system automatically.',
+            description: 'Cursor IDE does not expose API for external tools. Cannot integrate BrokenPromise with Cursor\'s model system automatically.',
             impact: 'Full automation through Cursor account/free tier is not possible',
             alternatives: [
                 'Direct Anthropic/OpenAI API integration (requires API keys)',
                 'Hybrid approach: automatic parts + manual AI interaction',
-                'Independent Cerberus design without Cursor dependency'
+                'Independent BrokenPromise design without Cursor dependency'
             ],
             timestamp: Date.now(),
             permanent: true,

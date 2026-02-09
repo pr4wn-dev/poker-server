@@ -73,7 +73,7 @@ class CodeChangeTracker extends EventEmitter {
         // Save
         this.save();
         
-        gameLogger.info('CERBERUS', '[CODE_CHANGE_TRACKER] Code change tracked', {
+        gameLogger.info('BrokenPromise', '[CODE_CHANGE_TRACKER] Code change tracked', {
             fixId,
             filesChanged: codeChange.filesChanged.length,
             patterns: codeChange.codePatterns.length
@@ -323,7 +323,7 @@ class CodeChangeTracker extends EventEmitter {
             }
         } catch (error) {
             // If load fails, start with empty maps
-            gameLogger.error('CERBERUS', '[CODE_CHANGE_TRACKER] Load error', { error: error.message });
+            gameLogger.error('BrokenPromise', '[CODE_CHANGE_TRACKER] Load error', { error: error.message });
         }
     }
 }

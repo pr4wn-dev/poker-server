@@ -1,7 +1,7 @@
 /**
- * Cerberus Integration - Bridge PowerShell Cerberus <-> AI Core
+ * BrokenPromise Integration - Bridge PowerShell BrokenPromise <-> AI Core
  * 
- * This bridges the existing PowerShell cerberus.ps1 with the new AI-first core.
+ * This bridges the existing PowerShell BrokenPromise.ps1 with the new AI-first core.
  * Allows gradual migration while preserving all existing functionality.
  */
 
@@ -9,7 +9,7 @@ const path = require('path');
 const AIMonitorCore = require('../core/AIMonitorCore');
 const gameLogger = require('../../src/utils/GameLogger');
 
-class CerberusIntegration {
+class BrokenPromiseIntegration {
     constructor(projectRoot, options = {}) {
         this.projectRoot = projectRoot;
         this.aiCore = new AIMonitorCore(projectRoot);
@@ -32,7 +32,7 @@ class CerberusIntegration {
     }
     
     /**
-     * Start sync loop - Keep AI core and cerberus.ps1 in sync
+     * Start sync loop - Keep AI core and BrokenPromise.ps1 in sync
      */
     startSyncLoop() {
         this.syncIntervalId = setInterval(() => {
@@ -53,7 +53,7 @@ class CerberusIntegration {
     }
     
     /**
-     * Sync with cerberus.ps1
+     * Sync with BrokenPromise.ps1
      * Reads monitor-status.json and updates AI core state
      */
     syncWithMonitor() {
@@ -174,7 +174,7 @@ class CerberusIntegration {
     
     /**
      * Get AI decision for investigation
-     * Replaces broken investigation logic in cerberus.ps1
+     * Replaces broken investigation logic in BrokenPromise.ps1
      */
     shouldStartInvestigation() {
         const decision = this.aiCore.decisionEngine.shouldStartInvestigation();
@@ -189,7 +189,7 @@ class CerberusIntegration {
     
     /**
      * Get AI decision for Unity pause
-     * Replaces broken pause logic in cerberus.ps1
+     * Replaces broken pause logic in BrokenPromise.ps1
      */
     shouldPauseUnity() {
         const decision = this.aiCore.decisionEngine.shouldPauseUnity();
@@ -203,7 +203,7 @@ class CerberusIntegration {
     
     /**
      * Get AI decision for Unity resume
-     * Replaces broken resume logic in cerberus.ps1
+     * Replaces broken resume logic in BrokenPromise.ps1
      */
     shouldResumeUnity() {
         const decision = this.aiCore.decisionEngine.shouldResumeUnity();
@@ -367,7 +367,7 @@ class CerberusIntegration {
                 };
             }
             
-            // No issue detected by AI - return null (fallback to pattern matching in cerberus.ps1)
+            // No issue detected by AI - return null (fallback to pattern matching in BrokenPromise.ps1)
             return null;
         } catch (error) {
             gameLogger.error('MONITORING', '[MONITOR_INTEGRATION] Detect issue error', {
@@ -503,7 +503,7 @@ class CerberusIntegration {
     
     /**
      * Get live statistics
-     * Replaces Show-Statistics in cerberus.ps1
+     * Replaces Show-Statistics in BrokenPromise.ps1
      */
     getLiveStatistics() {
         return this.aiCore.liveStatistics.getStatistics();
@@ -662,7 +662,7 @@ class CerberusIntegration {
     
     /**
      * Update monitor-status.json with AI core state
-     * Keeps cerberus.ps1 in sync
+     * Keeps BrokenPromise.ps1 in sync
      */
     updateMonitorStatus() {
         try {
@@ -728,4 +728,4 @@ class CerberusIntegration {
     }
 }
 
-module.exports = CerberusIntegration;
+module.exports = BrokenPromiseIntegration;

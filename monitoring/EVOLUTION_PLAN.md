@@ -1,12 +1,12 @@
-# Cerberus Evolution Plan
+# BrokenPromise Evolution Plan
 
 **Status**: ✅ **COMPLETE + ENHANCED** - All phases complete with learning system improvements (solution templates, code change tracking, pattern generalization, proactive prediction, context-aware suggestions), Phase 5 (Logging Integrity), and Phase 7 (Self-Improvement)
 
-**Goal**: Transform the system into Cerberus - an AI-first three-headed guardian where the AI sees everything, knows everything, and acts on everything automatically.
+**Goal**: Transform the system into BrokenPromise - an AI-first three-headed guardian where the AI sees everything, knows everything, and acts on everything automatically.
 
 **Philosophy**: Don't fix broken patterns. Build correct patterns from the start. Replace broken systems with better ones.
 
-**Cerberus** - The three-headed guard dog of Hades, now guarding your poker server. No error escapes. Nothing gets past.
+**BrokenPromise** - The three-headed guard dog of Hades, now guarding your poker server. No error escapes. Nothing gets past.
 
 ---
 
@@ -104,23 +104,23 @@
 
 #### Tasks Completed:
 1. **Create Integration Layer** ✅
-   - ✅ Created `monitoring/integration/CerberusIntegration.js`
-   - ✅ Created `monitoring/integration/cerberus-integration.js` (CLI)
-   - ✅ Created `CerberusIntegration.ps1` (PowerShell helpers)
+   - ✅ Created `monitoring/integration/BrokenPromiseIntegration.js`
+   - ✅ Created `monitoring/integration/BrokenPromise-integration.js` (CLI)
+   - ✅ Created `BrokenPromiseIntegration.ps1` (PowerShell helpers)
    - ✅ Bridge between PowerShell monitor and AI core
    - ✅ All existing functionality preserved
    - ✅ All new AI capabilities added
 
 2. **Replace Broken Investigation System** ✅
-   - ✅ Removed broken investigation logic from cerberus.ps1
+   - ✅ Removed broken investigation logic from BrokenPromise.ps1
    - ✅ Using AIDecisionEngine for investigation management
    - ✅ Using StateStore for investigation state
    - ✅ Investigation always works correctly
 
 3. **Replace Broken Status File Sync** ✅
-   - ✅ Removed dual state management from cerberus.ps1
+   - ✅ Removed dual state management from BrokenPromise.ps1
    - ✅ Using StateStore as single source of truth
-   - ✅ cerberus.ps1 reads from StateStore
+   - ✅ BrokenPromise.ps1 reads from StateStore
    - ✅ No more sync issues
 
 4. **Integrate Issue Detection** ✅
@@ -135,9 +135,9 @@
 
 6. **Integrate Live Statistics** ✅
    - ✅ Replaced basic Show-Statistics with AILiveStatistics
-   - ✅ Created Show-CerberusStatistics.ps1 for human-readable display
+   - ✅ Created Show-BrokenPromiseStatistics.ps1 for human-readable display
    - ✅ Comprehensive AI-consumable data available
-   - ✅ Integrated into cerberus.ps1
+   - ✅ Integrated into BrokenPromise.ps1
 
 7. **Add Server State Capture** ✅
    - ✅ Created ServerStateCapture.js
@@ -202,7 +202,7 @@
 
 #### Tasks Completed:
 1. **Unity State Reporting** ✅
-   - ✅ Create Unity C# script for state reporting (CerberusStateReporter.cs)
+   - ✅ Create Unity C# script for state reporting (BrokenPromiseStateReporter.cs)
    - ✅ Report UI element states (labels, images, visibility)
    - ✅ Report audio states (playing, volume, clips)
    - ✅ Report animation states
@@ -410,7 +410,7 @@ monitoring/
 ├── FUNDAMENTAL_REDESIGN.md     # Design philosophy
 ├── AI_FIRST_DESIGN.md          # AI-first design
 ├── BUILD_SUMMARY.md            # What we built
-├── cerberus.ps1                # Enhanced Cerberus (integration complete)
+├── BrokenPromise.ps1                # Enhanced BrokenPromise (integration complete)
 │
 ├── core/                       # NEW: AI-first core systems ✅ COMPLETE
 │   ├── StateStore.js           # Single source of truth ✅
@@ -423,8 +423,8 @@ monitoring/
 │   └── AIMonitorCore.js        # Orchestrator ✅
 │
 ├── integration/                # NEW: Integration layers ✅ COMPLETE
-│   ├── CerberusIntegration.js  # Bridge PowerShell <-> AI core
-│   └── cerberus-integration.js  # CLI interface
+│   ├── BrokenPromiseIntegration.js  # Bridge PowerShell <-> AI core
+│   └── BrokenPromise-integration.js  # CLI interface
 └── unity-log-handler.js       # Enhanced (adds state reporting)
 ```
 
@@ -533,7 +533,7 @@ monitoring/
 - Ready for integration
 
 ### 🔄 **IN PROGRESS**: Integration
-- ✅ Complete: Integrated with cerberus.ps1
+- ✅ Complete: Integrated with BrokenPromise.ps1
 - Replace broken investigation system
 - Replace broken status sync
 - Enhance existing capabilities
@@ -565,11 +565,11 @@ monitoring/
 
 ## 🚀 Next Steps
 
-1. ✅ **Integrated with cerberus.ps1** - AI core connected to PowerShell Cerberus
+1. ✅ **Integrated with BrokenPromise.ps1** - AI core connected to PowerShell BrokenPromise
 2. **Replace broken systems** - Use new systems instead of old broken ones
 3. **Test thoroughly** - Verify everything works
 4. **Enhance incrementally** - Add server/Unity integration, etc.
 
 ---
 
-**Cerberus is the most badass system ever built. The three-headed guardian sees everything, knows everything, acts on everything. Broken systems replaced with correct-by-design systems. Human just prompts. Cerberus does everything. Nothing escapes.**
+**BrokenPromise is the most badass system ever built. The three-headed guardian sees everything, knows everything, acts on everything. Broken systems replaced with correct-by-design systems. Human just prompts. BrokenPromise does everything. Nothing escapes.**

@@ -1,7 +1,7 @@
 /**
  * Enhanced Anomaly Detection - Statistical analysis and pattern learning
  * 
- * Cerberus learns normal patterns and flags deviations.
+ * BrokenPromise learns normal patterns and flags deviations.
  * Uses statistical analysis to detect anomalies that might not be obvious.
  * 
  * Features:

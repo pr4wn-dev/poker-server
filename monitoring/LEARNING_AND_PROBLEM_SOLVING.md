@@ -7,7 +7,7 @@
 
 ## 🎯 Overview
 
-The Cerberus learning system is now a complete, intelligent problem-solving partner. It doesn't just remember what worked - it provides actionable templates, tracks actual code changes, generalizes patterns, predicts issues, and gives context-aware suggestions.
+The BrokenPromise learning system is now a complete, intelligent problem-solving partner. It doesn't just remember what worked - it provides actionable templates, tracks actual code changes, generalizes patterns, predicts issues, and gives context-aware suggestions.
 
 ---
 

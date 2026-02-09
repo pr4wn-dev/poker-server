@@ -1,4 +1,4 @@
-# Cerberus - Build Summary
+# BrokenPromise - Build Summary
 
 **Status**: ✅ **PRODUCTION READY + ENHANCED** - All foundational components built, tested, error-free, and enhanced with improvements!
 
@@ -6,9 +6,9 @@
 
 ## 🎉 What We've Built
 
-### **Cerberus - The Three-Headed Guardian**
+### **BrokenPromise - The Three-Headed Guardian**
 
-A comprehensive AI-first system built FOR the AI, BY the AI. Cerberus sees everything, knows everything, and acts on everything automatically. The three-headed guardian hunts down and eliminates ALL errors.
+A comprehensive AI-first system built FOR the AI, BY the AI. BrokenPromise sees everything, knows everything, and acts on everything automatically. The three-headed guardian hunts down and eliminates ALL errors.
 
 ---
 
@@ -30,7 +30,7 @@ A comprehensive AI-first system built FOR the AI, BY the AI. Cerberus sees every
 
 ### **NEW: Rules Enforcement & Self-Learning** ✅
 - **AIRulesEnforcer.js** - Rules enforcement and self-learning
-- Tracks 18 critical Cerberus-specific rules
+- Tracks 18 critical BrokenPromise-specific rules
 - Records violations with context
 - Learns from violations automatically
 - Auto-refines rules based on patterns
@@ -323,24 +323,24 @@ A comprehensive AI-first system built FOR the AI, BY the AI. Cerberus sees every
 
 ## 🚀 Integration Layer
 
-### **CerberusIntegration.js** - Node.js Integration Class
+### **BrokenPromiseIntegration.js** - Node.js Integration Class
 - ✅ Bridges PowerShell monitor with AI core
 - ✅ Provides all AI functions
 - ✅ Syncs state automatically
 - ✅ Status: **WORKING** ✅
 
-### **cerberus-integration.js** - CLI Interface
+### **BrokenPromise-integration.js** - CLI Interface
 - ✅ Command-line access to AI system
 - ✅ All functions available
 - ✅ Non-blocking execution
 - ✅ Status: **WORKING** ✅ (Fixed: CLI hanging issues)
 
-### **CerberusIntegration.ps1** - PowerShell Helpers
+### **BrokenPromiseIntegration.ps1** - PowerShell Helpers
 - ✅ All helper functions for PowerShell
-- ✅ Easy to use from cerberus.ps1
+- ✅ Easy to use from BrokenPromise.ps1
 - ✅ Status: **WORKING** ✅
 
-### **Show-CerberusStatistics.ps1** - Cerberus Statistics Display
+### **Show-BrokenPromiseStatistics.ps1** - BrokenPromise Statistics Display
 - ✅ Fetches data from `Get-AILiveStatistics`
 - ✅ Formats into 3-column console display
 - ✅ Shows comprehensive AI data
@@ -375,7 +375,7 @@ A comprehensive AI-first system built FOR the AI, BY the AI. Cerberus sees every
 - ✅ `AILogProcessor.processExistingLogs` - Fixed (avoids processing entire log on startup)
 
 ### **CLI Hanging** (2 fixes)
-- ✅ `CerberusIntegration` sync loop - Fixed (optional for CLI usage)
+- ✅ `BrokenPromiseIntegration` sync loop - Fixed (optional for CLI usage)
 - ✅ Background intervals - Fixed (destroy methods added)
 
 ---

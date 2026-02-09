@@ -1,4 +1,4 @@
-# Cerberus - What's Left To Do
+# BrokenPromise - What's Left To Do
 
 **Last Updated**: 2026-02-08  
 **Status**: 🟢 **100% COMPLETE** - All todos finished! Everything is complete.
@@ -21,10 +21,10 @@
 - ✅ Enhanced AICollaborationInterface (with templates and code tracking)
 
 ### **Integration** - 100% Complete
-- ✅ PowerShell integration (CerberusIntegration.ps1)
-- ✅ Node.js integration (CerberusIntegration.js)
-- ✅ CLI interface (cerberus-integration.js)
-- ✅ cerberus.ps1 fully integrated
+- ✅ PowerShell integration (BrokenPromiseIntegration.ps1)
+- ✅ Node.js integration (BrokenPromiseIntegration.js)
+- ✅ CLI interface (BrokenPromise-integration.js)
+- ✅ BrokenPromise.ps1 fully integrated
 
 ### **Features** - 100% Complete
 - ✅ Server state capture
@@ -52,7 +52,7 @@
 ### **1. Unity C# Client Script** (4-6 hours)
 **Status**: ✅ **COMPLETE**
 
-**What Was Done**: `CerberusStateReporter.cs` exists in `poker-client-unity/Assets/Scripts/Monitoring/`
+**What Was Done**: `BrokenPromiseStateReporter.cs` exists in `poker-client-unity/Assets/Scripts/Monitoring/`
 - ✅ Reports UI element states (labels, images, buttons, panels)
 - ✅ Reports audio states (playing, volume, clips)
 - ✅ Reports animation states
@@ -122,7 +122,7 @@
 
 **What's Done**:
 - ✅ Removed old broken systems (issue-detector.js, fix-tracker.js)
-- ✅ All files renamed to Cerberus
+- ✅ All files renamed to BrokenPromise
 - ✅ All references updated
 - ✅ Final verification completed (all tests passing)
 - ✅ Verified new system catches everything (comprehensive testing)

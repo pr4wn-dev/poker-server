@@ -25,8 +25,8 @@ async function storeWebSearchKnowledge() {
         type: 'web_search_learning',
         method: 'web_search_integration',
         issueType: 'POWERSHELL_SYNTAX_ERROR',
-        component: 'cerberus.ps1',
-        file: 'monitoring/cerberus.ps1',
+        component: 'BrokenPromise.ps1',
+        file: 'monitoring/BrokenPromise.ps1',
         details: {
             problem: 'PowerShell try-catch syntax error - Tokenize reports OK but -File fails',
             webSearchFindings: {

@@ -1,7 +1,7 @@
 /**
  * Causal Analysis - Trace state changes backwards, build causal chains
  * 
- * Cerberus traces state changes backwards to find root causes.
+ * BrokenPromise traces state changes backwards to find root causes.
  * Builds causal chains to understand how issues propagate.
  * 
  * Features:
@@ -291,7 +291,7 @@ class CausalAnalysis extends EventEmitter {
         });
         
         // Log root cause
-        gameLogger.info('CERBERUS', '[CAUSAL_ANALYSIS] ROOT_CAUSE_FOUND', {
+        gameLogger.info('BrokenPromise', '[CAUSAL_ANALYSIS] ROOT_CAUSE_FOUND', {
             issueId: issue.id,
             issueType: issue.type,
             rootCause: rootCause.path,

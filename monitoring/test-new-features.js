@@ -45,11 +45,11 @@ async function runTests() {
     const core = new AIMonitorCore(projectRoot);
     await new Promise(resolve => setTimeout(resolve, 2000)); // Wait for initialization
     
-    // Test 1: PowerShell Syntax Validation - Real cerberus.ps1
-    test('PowerShellSyntaxValidator validates cerberus.ps1', async () => {
-        const ps1Path = path.join(projectRoot, 'monitoring', 'cerberus.ps1');
+    // Test 1: PowerShell Syntax Validation - Real BrokenPromise.ps1
+    test('PowerShellSyntaxValidator validates BrokenPromise.ps1', async () => {
+        const ps1Path = path.join(projectRoot, 'monitoring', 'BrokenPromise.ps1');
         if (!fs.existsSync(ps1Path)) {
-            return { success: false, error: 'cerberus.ps1 not found' };
+            return { success: false, error: 'BrokenPromise.ps1 not found' };
         }
         
         const result = await core.powerShellSyntaxValidator.validateScript(ps1Path);
@@ -97,11 +97,11 @@ async function runTests() {
         }
     });
     
-    // Test 5: Integration - CerberusIntegration loads
-    test('CerberusIntegration loads', () => {
+    // Test 5: Integration - BrokenPromiseIntegration loads
+    test('BrokenPromiseIntegration loads', () => {
         try {
-            const CerberusIntegration = require('./integration/CerberusIntegration');
-            const integration = new CerberusIntegration(projectRoot, { startSyncLoop: false });
+            const BrokenPromiseIntegration = require('./integration/BrokenPromiseIntegration');
+            const integration = new BrokenPromiseIntegration(projectRoot, { startSyncLoop: false });
             integration.destroy();
             return true;
         } catch (error) {

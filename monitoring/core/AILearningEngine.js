@@ -681,7 +681,7 @@ class AILearningEngine extends EventEmitter {
     
     /**
      * Get learning confidence - overall ability percentage
-     * This represents how well Cerberus is learning across all capabilities
+     * This represents how well BrokenPromise is learning across all capabilities
      * ALWAYS visible - cannot be masked
      */
     getLearningConfidence() {
@@ -1004,7 +1004,7 @@ class AILearningEngine extends EventEmitter {
                 this.maskingWarnings = this.maskingWarnings.slice(-20);
             }
             
-            gameLogger.warn('CERBERUS', '[LEARNING_ENGINE] Masking detected', {
+            gameLogger.warn('BrokenPromise', '[LEARNING_ENGINE] Masking detected', {
                 patterns: suspiciousPatterns,
                 confidence,
                 action: 'Masking detected - confidence may be artificially inflated'
@@ -1024,7 +1024,7 @@ class AILearningEngine extends EventEmitter {
             severity: 'warning'
         });
         
-        gameLogger.warn('CERBERUS', '[LEARNING_ENGINE] Masking flag', {
+        gameLogger.warn('BrokenPromise', '[LEARNING_ENGINE] Masking flag', {
             source,
             reason,
             action: 'Masking attempt detected - data quality reduced'
@@ -1083,7 +1083,7 @@ class AILearningEngine extends EventEmitter {
             adjustments
         });
         
-        gameLogger.info('CERBERUS', '[LEARNING_ENGINE] Auto-adjustment triggered', {
+        gameLogger.info('BrokenPromise', '[LEARNING_ENGINE] Auto-adjustment triggered', {
             confidence: Math.round(confidence),
             adjustments: adjustments.length,
             actions: adjustments.map(a => a.action)
@@ -1196,7 +1196,7 @@ class AILearningEngine extends EventEmitter {
         // Save
         this.save();
         
-        gameLogger.info('CERBERUS', '[LEARNING_ENGINE] Learned from syntax error', {
+        gameLogger.info('BrokenPromise', '[LEARNING_ENGINE] Learned from syntax error', {
             pattern,
             file: error.filePath,
             line: error.line
@@ -1277,7 +1277,7 @@ class AILearningEngine extends EventEmitter {
         // Emit event
         this.emit('aiMistakeLearned', mistake);
         
-        gameLogger.warn('CERBERUS', '[LEARNING_ENGINE] Learned from AI mistake', {
+        gameLogger.warn('BrokenPromise', '[LEARNING_ENGINE] Learned from AI mistake', {
             type: mistake.type,
             context: mistake.context,
             action: 'Pattern learned - will prevent similar mistakes'
@@ -1744,7 +1744,7 @@ class AILearningEngine extends EventEmitter {
             });
         }
         
-        gameLogger.warn('CERBERUS', '[LEARNING_ENGINE] Initialization hang detected', pattern);
+        gameLogger.warn('BrokenPromise', '[LEARNING_ENGINE] Initialization hang detected', pattern);
     }
     
     // ============================================
@@ -1873,7 +1873,7 @@ class AILearningEngine extends EventEmitter {
                 });
             }
             
-            gameLogger.error('CERBERUS', '[LEARNING_ENGINE] Constructor works but getter hangs', specificPattern);
+            gameLogger.error('BrokenPromise', '[LEARNING_ENGINE] Constructor works but getter hangs', specificPattern);
         }
         
         // Report general getter hang
@@ -1886,7 +1886,7 @@ class AILearningEngine extends EventEmitter {
             });
         }
         
-        gameLogger.warn('CERBERUS', '[LEARNING_ENGINE] Getter hang detected', pattern);
+        gameLogger.warn('BrokenPromise', '[LEARNING_ENGINE] Getter hang detected', pattern);
     }
     
     // ============================================
@@ -1975,7 +1975,7 @@ class AILearningEngine extends EventEmitter {
             });
         }
         
-        gameLogger.warn('CERBERUS', '[LEARNING_ENGINE] Synchronous operation in getter detected', pattern);
+        gameLogger.warn('BrokenPromise', '[LEARNING_ENGINE] Synchronous operation in getter detected', pattern);
     }
     
     /**
@@ -2070,7 +2070,7 @@ class AILearningEngine extends EventEmitter {
         this.circularDependencies.set(chainKey, existing);
         this.save();
         
-        gameLogger.info('CERBERUS', '[LEARNING_ENGINE] Circular dependency tracked', {
+        gameLogger.info('BrokenPromise', '[LEARNING_ENGINE] Circular dependency tracked', {
             chain: chainKey,
             frequency: existing.frequency,
             solutions: existing.solutions.length
@@ -2147,7 +2147,7 @@ class AILearningEngine extends EventEmitter {
         this.blockingChains.set(chainKey, existing);
         this.save();
         
-        gameLogger.info('CERBERUS', '[LEARNING_ENGINE] Blocking chain tracked', {
+        gameLogger.info('BrokenPromise', '[LEARNING_ENGINE] Blocking chain tracked', {
             chain: chainKey,
             frequency: existing.frequency,
             solutions: existing.solutions.length
@@ -2232,7 +2232,7 @@ class AILearningEngine extends EventEmitter {
         this.debuggingPatterns.set(contextKey, existing);
         this.save();
         
-        gameLogger.info('CERBERUS', '[LEARNING_ENGINE] Manual debugging pattern tracked', {
+        gameLogger.info('BrokenPromise', '[LEARNING_ENGINE] Manual debugging pattern tracked', {
             context: contextKey,
             frequency: existing.frequency,
             successRate: existing.successRate

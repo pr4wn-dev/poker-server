@@ -5,7 +5,7 @@
 **Status**: 🔴 **BLOCKER IDENTIFIED**
 
 ### The Problem
-- Attempted to integrate Cerberus with Cursor's API system to use Cursor account/free tier automatically
+- Attempted to integrate BrokenPromise with Cursor's API system to use Cursor account/free tier automatically
 - **Finding**: Cursor IDE does NOT expose a public API for external tools
 - Cannot programmatically access Cursor's "model auto x1" routing system
 - Full automation through Cursor integration is **not possible**
@@ -19,12 +19,12 @@
 ### Results
 - **No public API found** for external tool integration
 - Cursor's model system is internal to the IDE
-- Cannot use Cursor account/free tier automatically from Cerberus
+- Cannot use Cursor account/free tier automatically from BrokenPromise
 
 ### Alternative Solutions Documented
 1. **Direct API Integration**: Use Anthropic/OpenAI APIs directly (requires API keys, loses Cursor free tier)
 2. **Hybrid Approach**: Some parts automatic, some require manual AI interaction
-3. **Independent Design**: Redesign Cerberus to work without Cursor dependency
+3. **Independent Design**: Redesign BrokenPromise to work without Cursor dependency
 
 ### What Was Saved
 - All findings stored in `learning.knowledge` array in `logs/ai-state-store.json`
@@ -42,7 +42,7 @@
 1. Decide on alternative approach (direct API, hybrid, or independent)
 2. If direct API: Obtain Anthropic/OpenAI API keys
 3. If hybrid: Continue with current enforcement mechanisms
-4. If independent: Redesign Cerberus architecture
+4. If independent: Redesign BrokenPromise architecture
 
 ### Files Modified Today
 - `monitoring/store-cursor-api-findings.js` (new)

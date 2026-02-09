@@ -34,7 +34,7 @@ class LoggingAutoFix extends EventEmitter {
      */
     setEnabled(enabled) {
         this.autoFixEnabled = enabled;
-        gameLogger.info('CERBERUS', '[LOGGING_AUTO_FIX] Auto-fix', {
+        gameLogger.info('BrokenPromise', '[LOGGING_AUTO_FIX] Auto-fix', {
             enabled
         });
     }
@@ -93,7 +93,7 @@ class LoggingAutoFix extends EventEmitter {
             return fixAttempt.result;
             
         } catch (error) {
-            gameLogger.error('CERBERUS', '[LOGGING_AUTO_FIX] Fix attempt error', {
+            gameLogger.error('BrokenPromise', '[LOGGING_AUTO_FIX] Fix attempt error', {
                 error: error.message,
                 issue: issue.type
             });
@@ -190,7 +190,7 @@ class LoggingAutoFix extends EventEmitter {
                 }
                 
             } catch (error) {
-                gameLogger.error('CERBERUS', '[LOGGING_AUTO_FIX] Fix interference error', {
+                gameLogger.error('BrokenPromise', '[LOGGING_AUTO_FIX] Fix interference error', {
                     error: error.message,
                     file: violation.file
                 });

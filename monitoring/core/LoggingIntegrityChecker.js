@@ -123,7 +123,7 @@ class LoggingIntegrityChecker extends EventEmitter {
             this.emit('integrityChecked', results);
             
         } catch (error) {
-            gameLogger.error('CERBERUS', '[LOGGING_INTEGRITY_CHECKER] CHECK_ERROR', {
+            gameLogger.error('BrokenPromise', '[LOGGING_INTEGRITY_CHECKER] CHECK_ERROR', {
                 error: error.message,
                 stack: error.stack
             });
@@ -621,7 +621,7 @@ class LoggingIntegrityChecker extends EventEmitter {
             try {
                 await this.checkIntegrity();
             } catch (error) {
-                gameLogger.error('CERBERUS', '[LOGGING_INTEGRITY_CHECKER] Periodic check error', {
+                gameLogger.error('BrokenPromise', '[LOGGING_INTEGRITY_CHECKER] Periodic check error', {
                     error: error.message
                 });
             }
@@ -630,7 +630,7 @@ class LoggingIntegrityChecker extends EventEmitter {
         // Run initial check
         setImmediate(() => {
             this.checkIntegrity().catch(error => {
-                gameLogger.error('CERBERUS', '[LOGGING_INTEGRITY_CHECKER] Initial check error', {
+                gameLogger.error('BrokenPromise', '[LOGGING_INTEGRITY_CHECKER] Initial check error', {
                     error: error.message
                 });
             });

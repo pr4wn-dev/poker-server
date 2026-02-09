@@ -2,7 +2,7 @@
 
 **Status**: 📋 **SPECIFICATION READY** - Server-side complete, Unity client implementation needed
 
-**Purpose**: Create `CerberusStateReporter.cs` in `poker-client-unity` repo to report Unity UI/audio/animation state to Cerberus.
+**Purpose**: Create `BrokenPromiseStateReporter.cs` in `poker-client-unity` repo to report Unity UI/audio/animation state to BrokenPromise.
 
 ---
 
@@ -12,10 +12,10 @@ The server-side `UnityStateReporter.js` is complete and ready to receive state r
 
 ---
 
-## Required Unity Script: `CerberusStateReporter.cs`
+## Required Unity Script: `BrokenPromiseStateReporter.cs`
 
 ### Location
-`poker-client-unity/Assets/Scripts/Cerberus/CerberusStateReporter.cs`
+`poker-client-unity/Assets/Scripts/BrokenPromise/BrokenPromiseStateReporter.cs`
 
 ### Dependencies
 - Socket.IO client (already in project)
@@ -35,7 +35,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using SocketIOClient;
 
-public class CerberusStateReporter : MonoBehaviour
+public class BrokenPromiseStateReporter : MonoBehaviour
 {
     [Header("Configuration")]
     public float reportInterval = 5.0f; // Report every 5 seconds
@@ -64,7 +64,7 @@ public class CerberusStateReporter : MonoBehaviour
         
         if (socket == null)
         {
-            Debug.LogWarning("[Cerberus] Socket.IO not found - state reporting disabled");
+            Debug.LogWarning("[BrokenPromise] Socket.IO not found - state reporting disabled");
             enabled = false;
         }
     }
@@ -332,12 +332,12 @@ public class CerberusStateReporter : MonoBehaviour
 ## Integration Steps
 
 ### 1. Create Script File
-- Create `Assets/Scripts/Cerberus/CerberusStateReporter.cs`
+- Create `Assets/Scripts/BrokenPromise/BrokenPromiseStateReporter.cs`
 - Copy the implementation above
 
 ### 2. Add to Scene
-- Create empty GameObject named "CerberusStateReporter"
-- Add `CerberusStateReporter` component
+- Create empty GameObject named "BrokenPromiseStateReporter"
+- Add `BrokenPromiseStateReporter` component
 - Configure UI/Audio/Animation components in inspector
 
 ### 3. Configure Components
@@ -349,7 +349,7 @@ public class CerberusStateReporter : MonoBehaviour
 - Drag Animator components to `animators` list
 
 ### 4. Connect Socket.IO
-- Ensure Socket.IO client is initialized before `CerberusStateReporter.Start()`
+- Ensure Socket.IO client is initialized before `BrokenPromiseStateReporter.Start()`
 - Adjust `socket = FindObjectOfType<SocketManager>()?.socket;` to match your Socket.IO setup
 
 ### 5. Test
@@ -468,4 +468,4 @@ When Unity sends `report_unity_state`, the server will:
 
 ---
 
-**Next Step**: Implement `CerberusStateReporter.cs` in `poker-client-unity` repo using this specification.
+**Next Step**: Implement `BrokenPromiseStateReporter.cs` in `poker-client-unity` repo using this specification.

@@ -1,8 +1,8 @@
-# Next Steps - Cerberus
+# Next Steps - BrokenPromise
 
-**Current Status**: ✅ **PRODUCTION READY** - Cerberus is fully operational, error-free, and ready for production use!
+**Current Status**: ✅ **PRODUCTION READY** - BrokenPromise is fully operational, error-free, and ready for production use!
 
-**Cerberus** - The three-headed guardian stands ready to hunt down and eliminate ALL errors.
+**BrokenPromise** - The three-headed guardian stands ready to hunt down and eliminate ALL errors.
 
 ---
 
@@ -80,7 +80,7 @@
 ### **5. Unity C# Client Script** 🟡 **MEDIUM PRIORITY**
 **Why**: Server-side Unity state reporting is complete, need Unity client script
 **What**:
-- [ ] Create Unity C# script (CerberusStateReporter.cs) in poker-client-unity repo
+- [ ] Create Unity C# script (BrokenPromiseStateReporter.cs) in poker-client-unity repo
 - [ ] Report UI element states (labels, images, sounds)
 - [ ] Send to server via Socket.IO 'report_unity_state' event
 - [ ] Enable visual/audio state verification

@@ -1,7 +1,7 @@
 /**
  * Auto-Fix Engine - Automatically try fixes from knowledge base
  * 
- * Cerberus automatically tries fixes when issues are detected.
+ * BrokenPromise automatically tries fixes when issues are detected.
  * Uses the knowledge base to know what fixes work/don't work.
  * 
  * Features:
@@ -315,7 +315,7 @@ class AutoFixEngine extends EventEmitter {
         }
         
         try {
-            gameLogger.info('CERBERUS', '[AUTO_FIX] ATTEMPTING_FIX', {
+            gameLogger.info('BrokenPromise', '[AUTO_FIX] ATTEMPTING_FIX', {
                 issueId: issue.id,
                 issueType: issue.type,
                 fixMethod: fix.method,
@@ -352,7 +352,7 @@ class AutoFixEngine extends EventEmitter {
             };
             
         } catch (error) {
-            gameLogger.error('CERBERUS', '[AUTO_FIX] FIX_ERROR', {
+            gameLogger.error('BrokenPromise', '[AUTO_FIX] FIX_ERROR', {
                 issueId: issue.id,
                 fixMethod: fix.method,
                 error: error.message,

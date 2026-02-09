@@ -1,7 +1,7 @@
 /**
  * Process Monitor - Detects Resource Leaks and Zombie Processes
  * 
- * Cerberus monitors Node.js processes to detect:
+ * BrokenPromise monitors Node.js processes to detect:
  * - Zombie processes (should have exited but didn't)
  * - Interval leaks (intervals not being cleared)
  * - Memory leaks (processes consuming too much memory)
@@ -70,7 +70,7 @@ class ProcessMonitor extends EventEmitter {
         // Use setImmediate to ensure it doesn't block the constructor
         setImmediate(() => {
             this.checkProcesses().catch(error => {
-                getGameLogger().error('CERBERUS', '[PROCESS_MONITOR] Initial check failed', {
+                getGameLogger().error('BrokenPromise', '[PROCESS_MONITOR] Initial check failed', {
                     error: error.message
                 });
             });
@@ -147,7 +147,7 @@ class ProcessMonitor extends EventEmitter {
             this.save();
             
         } catch (error) {
-            getGameLogger().error('CERBERUS', '[PROCESS_MONITOR] Check processes error', {
+            getGameLogger().error('BrokenPromise', '[PROCESS_MONITOR] Check processes error', {
                 error: error.message
             });
         }
@@ -160,7 +160,7 @@ class ProcessMonitor extends EventEmitter {
         return new Promise((resolve, reject) => {
             // Set a timeout to ensure we never hang forever
             const timeout = setTimeout(() => {
-                getGameLogger().warn('CERBERUS', '[PROCESS_MONITOR] getNodeProcesses timeout - returning empty array');
+                getGameLogger().warn('BrokenPromise', '[PROCESS_MONITOR] getNodeProcesses timeout - returning empty array');
                 resolve([]); // Always resolve, never reject on timeout
             }, 3000); // 3 second timeout (shorter than exec timeout)
             
@@ -254,7 +254,7 @@ class ProcessMonitor extends EventEmitter {
                     // Check if it's a test/CLI process (should exit quickly)
                     const isTestProcess = snapshot.command && (
                         snapshot.command.includes('test-') ||
-                        snapshot.command.includes('cerberus-integration.js') ||
+                        snapshot.command.includes('BrokenPromise-integration.js') ||
                         snapshot.command.includes('test-simple.js')
                     );
                     
@@ -322,7 +322,7 @@ class ProcessMonitor extends EventEmitter {
             this.emit('processIssue', issue);
             
             // Log
-            gameLogger.warn('CERBERUS', '[PROCESS_MONITOR] Process issue detected', issue);
+            gameLogger.warn('BrokenPromise', '[PROCESS_MONITOR] Process issue detected', issue);
         }
     }
     
@@ -381,7 +381,7 @@ class ProcessMonitor extends EventEmitter {
             
             // If getState took too long, abort
             if (Date.now() - startTime > 100) {
-                getGameLogger().warn('CERBERUS', '[PROCESS_MONITOR] getState for intervals took too long, skipping check');
+                getGameLogger().warn('BrokenPromise', '[PROCESS_MONITOR] getState for intervals took too long, skipping check');
                 return [];
             }
             
@@ -427,14 +427,14 @@ class ProcessMonitor extends EventEmitter {
                     
                     this.emit('intervalLeak', issue);
                     
-                    getGameLogger().warn('CERBERUS', '[PROCESS_MONITOR] Interval leak detected', issue);
+                    getGameLogger().warn('BrokenPromise', '[PROCESS_MONITOR] Interval leak detected', issue);
                 });
             }
             
             return leaks;
         } catch (error) {
             // If anything fails, return empty array - don't block
-            getGameLogger().warn('CERBERUS', '[PROCESS_MONITOR] checkIntervalLeaks error', {
+            getGameLogger().warn('BrokenPromise', '[PROCESS_MONITOR] checkIntervalLeaks error', {
                 error: error.message
             });
             return [];
@@ -453,7 +453,7 @@ class ProcessMonitor extends EventEmitter {
             try {
                 currentProcesses = Array.from(this.processSnapshots.values());
             } catch (error) {
-                getGameLogger().warn('CERBERUS', '[PROCESS_MONITOR] Error getting process snapshots', {
+                getGameLogger().warn('BrokenPromise', '[PROCESS_MONITOR] Error getting process snapshots', {
                     error: error.message
                 });
             }
@@ -488,7 +488,7 @@ class ProcessMonitor extends EventEmitter {
                 }
             } catch (error) {
                 // If checkIntervalLeaks fails, don't block the report
-                getGameLogger().warn('CERBERUS', '[PROCESS_MONITOR] checkIntervalLeaks failed', {
+                getGameLogger().warn('BrokenPromise', '[PROCESS_MONITOR] checkIntervalLeaks failed', {
                     error: error.message
                 });
             }
@@ -516,7 +516,7 @@ class ProcessMonitor extends EventEmitter {
             };
         } catch (error) {
             // If anything fails, return minimal report - don't block
-            getGameLogger().warn('CERBERUS', '[PROCESS_MONITOR] getProcessReport error', {
+            getGameLogger().warn('BrokenPromise', '[PROCESS_MONITOR] getProcessReport error', {
                 error: error.message
             });
             return {
@@ -541,7 +541,7 @@ class ProcessMonitor extends EventEmitter {
             this.stateStore.updateState('process.monitor.history', this.processHistory.slice(-50));
             this.stateStore.updateState('process.monitor.snapshots', Object.fromEntries(this.processSnapshots));
         } catch (error) {
-            getGameLogger().error('CERBERUS', '[PROCESS_MONITOR] Save error', {
+            getGameLogger().error('BrokenPromise', '[PROCESS_MONITOR] Save error', {
                 error: error.message
             });
         }

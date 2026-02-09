@@ -27,11 +27,11 @@ async function teachLearningSystem() {
         // Create a fix attempt record
         const fixAttempt = {
             id: `powershell-syntax-fix-${Date.now()}`,
-            issueId: 'powershell-syntax-error-cerberus-ps1',
+            issueId: 'powershell-syntax-error-BrokenPromise-ps1',
             issueType: 'POWERSHELL_SYNTAX_ERROR',
             fixMethod: 'powerShellSyntaxValidator_structural_analysis',
             fixDetails: {
-                filePath: 'monitoring/cerberus.ps1',
+                filePath: 'monitoring/BrokenPromise.ps1',
                 problem: 'PowerShell script had syntax errors: extra closing braces, try/catch mismatches',
                 approach: [
                     '1. Used PowerShell parser to get actual errors (not just brace counting)',
@@ -91,7 +91,7 @@ async function teachLearningSystem() {
         learningData.syntaxErrorPatterns['BRACE_IMBALANCE_TRY_CATCH_MISMATCH'] = {
             count: 1,
             contexts: [{
-                filePath: 'monitoring/cerberus.ps1',
+                filePath: 'monitoring/BrokenPromise.ps1',
                 line: 3423,
                 message: 'Extra closing brace after try/catch block',
                 solution: 'Remove extra closing brace. Check try/catch pairing separately from brace counting. Use PowerShell parser for validation.',
@@ -108,7 +108,7 @@ async function teachLearningSystem() {
         learningData.syntaxErrorPatterns['BRACE_IMBALANCE_EXTRA_CLOSING'] = {
             count: 1,
             contexts: [{
-                filePath: 'monitoring/cerberus.ps1',
+                filePath: 'monitoring/BrokenPromise.ps1',
                 line: 5873,
                 message: 'Extra closing braces at end of script',
                 solution: 'Remove extra closing braces. Validate with PowerShell parser to confirm correct structure.',

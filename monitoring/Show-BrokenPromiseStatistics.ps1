@@ -2,7 +2,7 @@
 # Replaces Show-Statistics with AI-first system
 # Maintains visual format while using AI data
 
-function Show-CerberusStatistics {
+function Show-BrokenPromiseStatistics {
     param(
         [hashtable]$LegacyStats = @{},
         [string]$LogFile = "",
@@ -36,7 +36,7 @@ function Show-CerberusStatistics {
     }
     
     # Header
-    $headerText = "CERBERUS - THE THREE-HEADED GUARDIAN - LIVE STATISTICS"
+    $headerText = "BrokenPromise - THE THREE-HEADED GUARDIAN - LIVE STATISTICS"
     Write-Host ("=" * $consoleWidth) -ForegroundColor Cyan
     $headerPadding = [Math]::Max(0, [Math]::Floor(($consoleWidth - $headerText.Length) / 2))
     Write-Host (" " * $headerPadding + $headerText) -ForegroundColor White

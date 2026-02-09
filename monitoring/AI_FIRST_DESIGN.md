@@ -1,8 +1,8 @@
-# Cerberus - AI-First Design
+# BrokenPromise - AI-First Design
 
-**Philosophy**: Cerberus is built FOR the AI, BY the AI. The human's only job is to prompt the AI. Cerberus sees everything, knows everything, and acts on everything.
+**Philosophy**: BrokenPromise is built FOR the AI, BY the AI. The human's only job is to prompt the AI. BrokenPromise sees everything, knows everything, and acts on everything.
 
-**Cerberus** - The three-headed guardian that hunts down and eliminates ALL errors.
+**BrokenPromise** - The three-headed guardian that hunts down and eliminates ALL errors.
 
 ---
 

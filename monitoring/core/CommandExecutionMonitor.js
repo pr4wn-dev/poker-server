@@ -230,7 +230,7 @@ class CommandExecutionMonitor extends EventEmitter {
      * Report stuck command to learning system
      */
     reportStuckCommand(command, duration, error) {
-        gameLogger.warn('CERBERUS', '[COMMAND_MONITOR] Command stuck', {
+        gameLogger.warn('BrokenPromise', '[COMMAND_MONITOR] Command stuck', {
             command,
             duration,
             error: error.message
@@ -285,7 +285,7 @@ class CommandExecutionMonitor extends EventEmitter {
      * Report cancelled command
      */
     reportCancelledCommand(command, duration) {
-        gameLogger.warn('CERBERUS', '[COMMAND_MONITOR] Command cancelled by user', {
+        gameLogger.warn('BrokenPromise', '[COMMAND_MONITOR] Command cancelled by user', {
             command,
             duration
         });
@@ -339,7 +339,7 @@ class CommandExecutionMonitor extends EventEmitter {
      * Report slow command
      */
     reportSlowCommand(command, duration) {
-        gameLogger.info('CERBERUS', '[COMMAND_MONITOR] Command took longer than expected', {
+        gameLogger.info('BrokenPromise', '[COMMAND_MONITOR] Command took longer than expected', {
             command,
             duration,
             threshold: this.stuckThreshold

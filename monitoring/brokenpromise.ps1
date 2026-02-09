@@ -3,9 +3,9 @@
 # Displays real-time statistics in a formatted layout
 #
 # Usage: 
-#   .\monitoring\cerberus.ps1                    # Normal mode (default)
-#   .\monitoring\cerberus.ps1 -Mode simulation   # Simulation mode (fully automated)
-#   .\monitoring\cerberus.ps1 -Mode normal       # Normal mode (user creates table)
+#   .\monitoring\BrokenPromise.ps1                    # Normal mode (default)
+#   .\monitoring\BrokenPromise.ps1 -Mode simulation   # Simulation mode (fully automated)
+#   .\monitoring\BrokenPromise.ps1 -Mode normal       # Normal mode (user creates table)
 #
 # Modes:
 #   - simulation: Fully automated including table creation and simulation start
@@ -24,8 +24,8 @@ $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $script:projectRoot = Split-Path -Parent $scriptDir
 Set-Location $script:projectRoot
 
-# Source Cerberus Integration helpers (NEW: AI-first monitoring system)
-$aiIntegrationPath = Join-Path $scriptDir "CerberusIntegration.ps1"
+# Source BrokenPromise Integration helpers (NEW: AI-first monitoring system)
+$aiIntegrationPath = Join-Path $scriptDir "BrokenPromiseIntegration.ps1"
 if (Test-Path $aiIntegrationPath) {
     . $aiIntegrationPath
     Write-Info "AI Integration loaded - AI-first monitoring system active"
@@ -35,13 +35,13 @@ if (Test-Path $aiIntegrationPath) {
     $script:aiIntegrationEnabled = $false
 }
 
-# Source Show-CerberusStatistics function (AI-powered display)
-$showStatsPath = Join-Path $scriptDir "Show-CerberusStatistics.ps1"
+# Source Show-BrokenPromiseStatistics function (AI-powered display)
+$showStatsPath = Join-Path $scriptDir "Show-BrokenPromiseStatistics.ps1"
 if (Test-Path $showStatsPath) {
     . $showStatsPath
     Write-Info "AI Statistics Display loaded"
 } else {
-    Write-Warning "Show-CerberusStatistics.ps1 not found at $showStatsPath - display may not work correctly"
+    Write-Warning "Show-BrokenPromiseStatistics.ps1 not found at $showStatsPath - display may not work correctly"
 }
 
 # Colors for output (define FIRST before any use)
@@ -60,7 +60,7 @@ $checkInterval = 1  # Check every 1 second
 # Legacy issue-detector.js removed - AI system now handles all issue detection
 $serverUrl = "http://localhost:3000"
 $statsUpdateInterval = 5  # Update stats display every 5 seconds (more responsive)
-$configFile = Join-Path $script:projectRoot "monitoring\cerberus-config.json"
+$configFile = Join-Path $script:projectRoot "monitoring\BrokenPromise-config.json"
 
 # Load configuration
 $config = @{
@@ -1869,7 +1869,7 @@ function Show-Statistics {
         try {
             $aiStats = Get-AILiveStatistics
             if ($aiStats) {
-                Show-CerberusStatistics -LegacyStats $stats -LogFile $logFile -ServerUrl $serverUrl
+                Show-BrokenPromiseStatistics -LegacyStats $stats -LogFile $logFile -ServerUrl $serverUrl
                 return
             } else {
                 Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [ERROR] AI statistics unavailable - display may be incomplete" -ForegroundColor "Red"
@@ -2036,7 +2036,7 @@ function Show-Statistics {
         } elseif ($MyInvocation.MyCommand.Path) {
             $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
     } else {
-            $scriptRoot = if (Test-Path "monitoring\cerberus.ps1") { "monitoring" } elseif (Test-Path "logs\monitor-status.json") { "." } else { Get-Location }
+            $scriptRoot = if (Test-Path "monitoring\BrokenPromise.ps1") { "monitoring" } elseif (Test-Path "logs\monitor-status.json") { "." } else { Get-Location }
         }
         $statusTextFilePath = Join-Path $scriptRoot "..\logs\monitor-status.json" | Resolve-Path -ErrorAction SilentlyContinue
         if (-not $statusTextFilePath) {
@@ -2244,7 +2244,7 @@ function Show-Statistics {
     $investigationActive = $false
     $investigationStartTimeValue = $null
     $investigationTimeRemaining = $null
-    # Use script root directory (where cerberus.ps1 is located)
+    # Use script root directory (where BrokenPromise.ps1 is located)
     # Try multiple methods to get script path
     $scriptRoot = $null
     if ($PSScriptRoot) {
@@ -2253,7 +2253,7 @@ function Show-Statistics {
         $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
     } else {
         # Fallback: assume we're in the monitoring directory or project root
-        $scriptRoot = if (Test-Path "monitoring\cerberus.ps1") { "monitoring" } elseif (Test-Path "logs\monitor-status.json") { "." } else { Get-Location }
+        $scriptRoot = if (Test-Path "monitoring\BrokenPromise.ps1") { "monitoring" } elseif (Test-Path "logs\monitor-status.json") { "." } else { Get-Location }
     }
     $statusFilePath = Join-Path $scriptRoot "..\logs\monitor-status.json" | Resolve-Path -ErrorAction SilentlyContinue
     if (-not $statusFilePath) {
@@ -2496,7 +2496,7 @@ function Show-Statistics {
         } elseif ($MyInvocation.MyCommand.Path) {
             $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
         } else {
-            $scriptRoot = if (Test-Path "monitoring\cerberus.ps1") { "monitoring" } elseif (Test-Path "logs\monitor-status.json") { "." } else { Get-Location }
+            $scriptRoot = if (Test-Path "monitoring\BrokenPromise.ps1") { "monitoring" } elseif (Test-Path "logs\monitor-status.json") { "." } else { Get-Location }
         }
         $verificationStatusFilePath = Join-Path $scriptRoot "..\logs\monitor-status.json" | Resolve-Path -ErrorAction SilentlyContinue
         if (-not $verificationStatusFilePath) {
@@ -3295,10 +3295,10 @@ function Stop-ExistingMonitorInstances {
         
         foreach ($proc in $allPowershellProcesses) {
             try {
-                # Check command line to see if it's running cerberus.ps1
+                # Check command line to see if it's running BrokenPromise.ps1
                 $cmdLine = (Get-CimInstance Win32_Process -Filter "ProcessId = $($proc.Id)" -ErrorAction SilentlyContinue).CommandLine
                 
-                if ($cmdLine -and $cmdLine -like "*cerberus.ps1*") {
+                if ($cmdLine -and $cmdLine -like "*BrokenPromise.ps1*") {
                     # Don't kill ourselves
                     if ($proc.Id -ne $PID) {
                         Write-Info "Found existing monitor process (PID: $($proc.Id)) - stopping it..."
@@ -4686,7 +4686,7 @@ while ($monitoringActive) {
                             Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ISSUE DETECTOR FAILED: Complete failure - issue NOT logged" -ForegroundColor "Red"
                             Write-ConsoleOutput -Message "  Issue: $($issue.type) ($($issue.severity))" -ForegroundColor "Yellow"
                             Write-ConsoleOutput -Message "  Diagnostics:" -ForegroundColor "Yellow"
-                            Write-ConsoleOutput -Message "    - Check if Cerberus AI system is working: node monitoring/integration/cerberus-integration.js detect-issue 'test'" -ForegroundColor "Gray"
+                            Write-ConsoleOutput -Message "    - Check if BrokenPromise AI system is working: node monitoring/integration/BrokenPromise-integration.js detect-issue 'test'" -ForegroundColor "Gray"
                             Write-ConsoleOutput -Message "    - Check if pending-issues.json is writable" -ForegroundColor "Gray"
                             Write-ConsoleOutput -Message "    - Check Node.js error output for details" -ForegroundColor "Gray"
                             
@@ -4709,7 +4709,7 @@ while ($monitoringActive) {
                             }
                         } elseif ($addResult -and -not $addResult.success) {
                             # Issue detector returned an error response
-                            $errorMsg = if ($addResult.error) { $addResult.error } else { "Issue detection failed - check Cerberus AI system" }
+                            $errorMsg = if ($addResult.error) { $addResult.error } else { "Issue detection failed - check BrokenPromise AI system" }
                             $errorReason = if ($addResult.reason) { $addResult.reason } else { "detection_failed" }
                             Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ISSUE DETECTOR ERROR: Failed to log issue ($errorReason)" -ForegroundColor "Red"
                             Write-ConsoleOutput -Message "  Error: $errorMsg" -ForegroundColor "Yellow"
@@ -4758,12 +4758,12 @@ while ($monitoringActive) {
                                     }
                                 }
                             } else {
-                                $errorMsg = if ($addResult -and $addResult.error) { $addResult.error } else { "Issue detection failed - check Cerberus AI system" }
+                                $errorMsg = if ($addResult -and $addResult.error) { $addResult.error } else { "Issue detection failed - check BrokenPromise AI system" }
                                 $logFailMsg = "[$(Get-Date -Format 'HH:mm:ss')] FAILED TO LOG ISSUE: $errorMsg"
                                 Write-ConsoleOutput -Message $logFailMsg -ForegroundColor "Red"
                                 Write-ConsoleOutput -Message "  Issue detected but NOT logged to pending-issues.json" -ForegroundColor "Yellow"
                                 Write-ConsoleOutput -Message "  Diagnostics:" -ForegroundColor "Yellow"
-                                Write-ConsoleOutput -Message "    - Check if Cerberus AI system is working: node monitoring/integration/cerberus-integration.js detect-issue 'test'" -ForegroundColor "Gray"
+                                Write-ConsoleOutput -Message "    - Check if BrokenPromise AI system is working: node monitoring/integration/BrokenPromise-integration.js detect-issue 'test'" -ForegroundColor "Gray"
                                 Write-ConsoleOutput -Message "    - Check if pending-issues.json is writable" -ForegroundColor "Gray"
                                 Write-ConsoleOutput -Message "    - Check Node.js error output for details" -ForegroundColor "Gray"
                                 

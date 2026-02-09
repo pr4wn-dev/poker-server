@@ -1,10 +1,10 @@
-# Cerberus: Fundamental System Redesign
+# BrokenPromise: Fundamental System Redesign
 
-**Question**: Why fix broken things when we can build Cerberus - a system that's guaranteed to work?
+**Question**: Why fix broken things when we can build BrokenPromise - a system that's guaranteed to work?
 
-**Answer**: You're absolutely right. Let's identify what's fundamentally wrong and design Cerberus - correct by design.
+**Answer**: You're absolutely right. Let's identify what's fundamentally wrong and design BrokenPromise - correct by design.
 
-**Cerberus** - The three-headed guardian that hunts down and eliminates ALL errors.
+**BrokenPromise** - The three-headed guardian that hunts down and eliminates ALL errors.
 
 ---
 

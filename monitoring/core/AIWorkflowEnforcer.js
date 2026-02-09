@@ -77,7 +77,7 @@ class AIWorkflowEnforcer extends EventEmitter {
                         // Emit event
                         this.emit('actionBlocked', violation);
                         
-                        gameLogger.warn('CERBERUS', '[WORKFLOW_ENFORCER] Action blocked - syntax errors', {
+                        gameLogger.warn('BrokenPromise', '[WORKFLOW_ENFORCER] Action blocked - syntax errors', {
                             action: action.type,
                             filePath: action.filePath,
                             errorCount: syntaxResult.errors.length,
@@ -93,7 +93,7 @@ class AIWorkflowEnforcer extends EventEmitter {
                         };
                     }
                 } catch (error) {
-                    gameLogger.warn('CERBERUS', '[WORKFLOW_ENFORCER] Syntax check error', {
+                    gameLogger.warn('BrokenPromise', '[WORKFLOW_ENFORCER] Syntax check error', {
                         filePath: action.filePath,
                         error: error.message
                     });
@@ -127,7 +127,7 @@ class AIWorkflowEnforcer extends EventEmitter {
             // Emit event
             this.emit('actionBlocked', violation);
             
-            gameLogger.warn('CERBERUS', '[WORKFLOW_ENFORCER] Action blocked', {
+            gameLogger.warn('BrokenPromise', '[WORKFLOW_ENFORCER] Action blocked', {
                 action: action.type,
                 violations: ruleCheck.violations.map(v => v.ruleName),
                 reason: 'Rule violations detected - action blocked'
@@ -323,7 +323,7 @@ class AIWorkflowEnforcer extends EventEmitter {
         try {
             this.stateStore.updateState('workflow.actionHistory', this.actionHistory);
         } catch (error) {
-            gameLogger.error('CERBERUS', '[WORKFLOW_ENFORCER] Save error', {
+            gameLogger.error('BrokenPromise', '[WORKFLOW_ENFORCER] Save error', {
                 error: error.message
             });
         }

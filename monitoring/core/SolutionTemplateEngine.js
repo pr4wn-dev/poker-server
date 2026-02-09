@@ -205,7 +205,7 @@ processData() {
         // Save
         this.save();
         
-        gameLogger.info('CERBERUS', '[SOLUTION_TEMPLATE] Template added', {
+        gameLogger.info('BrokenPromise', '[SOLUTION_TEMPLATE] Template added', {
             id: template.id,
             pattern: template.pattern,
             name: template.name
@@ -549,7 +549,7 @@ processData() {
             }
         } catch (error) {
             // If load fails, start with empty maps (will be initialized with common templates)
-            gameLogger.error('CERBERUS', '[SOLUTION_TEMPLATE] Load error', { error: error.message });
+            gameLogger.error('BrokenPromise', '[SOLUTION_TEMPLATE] Load error', { error: error.message });
         }
     }
 }

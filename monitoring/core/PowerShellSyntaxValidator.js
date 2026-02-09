@@ -136,7 +136,7 @@ class PowerShellSyntaxValidator extends EventEmitter {
             return result;
             
         } catch (error) {
-            gameLogger.error('CERBERUS', '[POWERSHELL_VALIDATOR] VALIDATION_ERROR', {
+            gameLogger.error('BrokenPromise', '[POWERSHELL_VALIDATOR] VALIDATION_ERROR', {
                 filePath,
                 error: error.message,
                 stack: error.stack
@@ -621,7 +621,7 @@ class PowerShellSyntaxValidator extends EventEmitter {
                 }
             }
         } catch (error) {
-            gameLogger.warn('CERBERUS', '[POWERSHELL_VALIDATOR] LOAD_ERROR', {
+            gameLogger.warn('BrokenPromise', '[POWERSHELL_VALIDATOR] LOAD_ERROR', {
                 error: error.message
             });
         }
@@ -642,7 +642,7 @@ class PowerShellSyntaxValidator extends EventEmitter {
                 lastUpdated: Date.now()
             });
         } catch (error) {
-            gameLogger.warn('CERBERUS', '[POWERSHELL_VALIDATOR] SAVE_ERROR', {
+            gameLogger.warn('BrokenPromise', '[POWERSHELL_VALIDATOR] SAVE_ERROR', {
                 error: error.message
             });
         }

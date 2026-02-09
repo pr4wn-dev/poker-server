@@ -1,10 +1,10 @@
 /**
  * State Verification Contracts - Define what "correct" state looks like
  * 
- * Cerberus uses contracts to verify that critical operations maintain invariants.
+ * BrokenPromise uses contracts to verify that critical operations maintain invariants.
  * Contracts define pre-conditions, post-conditions, and invariants for all critical operations.
  * 
- * This is the foundation of Cerberus's detection - if we don't know what's correct,
+ * This is the foundation of BrokenPromise's detection - if we don't know what's correct,
  * we can't detect what's wrong.
  */
 
@@ -404,7 +404,7 @@ class StateVerificationContracts extends EventEmitter {
                     }
                 }
             } catch (error) {
-                gameLogger.error('CERBERUS', '[STATE_CONTRACTS] VERIFY_ERROR', {
+                gameLogger.error('BrokenPromise', '[STATE_CONTRACTS] VERIFY_ERROR', {
                     contractId,
                     error: error.message,
                     stack: error.stack

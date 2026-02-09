@@ -41,7 +41,7 @@ class CodeEnhancementSystem extends EventEmitter {
      */
     setEnabled(enabled) {
         this.autoEnhancementEnabled = enabled;
-        gameLogger.info('CERBERUS', '[CODE_ENHANCEMENT] Auto-enhancement', {
+        gameLogger.info('BrokenPromise', '[CODE_ENHANCEMENT] Auto-enhancement', {
             enabled
         });
     }
@@ -116,7 +116,7 @@ class CodeEnhancementSystem extends EventEmitter {
             return analysis;
             
         } catch (error) {
-            gameLogger.error('CERBERUS', '[CODE_ENHANCEMENT] Analysis error', {
+            gameLogger.error('BrokenPromise', '[CODE_ENHANCEMENT] Analysis error', {
                 error: error.message,
                 file: filePath
             });
@@ -207,7 +207,7 @@ class CodeEnhancementSystem extends EventEmitter {
             }
             
         } catch (error) {
-            gameLogger.error('CERBERUS', '[CODE_ENHANCEMENT] Enhancement error', {
+            gameLogger.error('BrokenPromise', '[CODE_ENHANCEMENT] Enhancement error', {
                 error: error.message,
                 file: filePath
             });
