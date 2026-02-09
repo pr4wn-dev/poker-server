@@ -1976,6 +1976,10 @@ class AILearningEngine extends EventEmitter {
             const failedMethods = this.stateStore.getState('learning.failedMethods') || {};
             this.stateStore.updateState('learning.failedMethods', failedMethods);
             
+            // CRITICAL: Ensure fixAttempts are saved (they're stored by storeFixAttempt but need to be preserved)
+            const fixAttempts = this.stateStore.getState('learning.fixAttempts') || {};
+            this.stateStore.updateState('learning.fixAttempts', fixAttempts);
+            
             // CRITICAL: Trigger immediate disk save to ensure learning data is persisted
             // Don't wait for auto-save interval - learning data is too valuable to lose
             this.stateStore.save();
