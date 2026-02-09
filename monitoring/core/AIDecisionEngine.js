@@ -354,6 +354,7 @@ class AIDecisionEngine extends EventEmitter {
         try {
             const server = this.stateStore.getState('system.server') || {};
             const unity = this.stateStore.getState('system.unity') || {};
+            const game = this.stateStore.getState('game') || {};
             const activeIssues = this.issueDetector.getActiveIssues();
             
             // Server is already online
@@ -371,13 +372,37 @@ class AIDecisionEngine extends EventEmitter {
             // Check if there are critical issues that might require server restart
             const criticalIssues = activeIssues.filter(i => i.severity === 'critical' && i.source === 'server');
             
-            // Should start if Unity needs it or if there are critical server issues
-            if (unityNeedsServer || criticalIssues.length > 0) {
+            // STARTUP SCENARIO: If server is offline and Unity is not running, start server first
+            // This handles the initial startup sequence: Server → Unity → Simulation
+            // In simulation mode or when Unity automation is enabled, server must be online first
+            const isStartupScenario = server.status !== 'online' && 
+                                      unity.status !== 'running' && 
+                                      unity.status !== 'starting' && 
+                                      unity.status !== 'connected';
+            
+            // Should start if:
+            // 1. Unity needs it (Unity is running/starting/connected)
+            // 2. Critical server issues require restart
+            // 3. Startup scenario: Server offline and Unity not running (start server first)
+            if (unityNeedsServer || criticalIssues.length > 0 || isStartupScenario) {
+                let reason = '';
+                let priority = 'high';
+                
+                if (criticalIssues.length > 0) {
+                    reason = `${criticalIssues.length} critical server issue(s)`;
+                    priority = 'critical';
+                } else if (unityNeedsServer) {
+                    reason = 'Unity needs server';
+                } else if (isStartupScenario) {
+                    reason = 'Startup scenario: Server must be online before Unity can start';
+                    priority = 'high';
+                }
+                
                 return {
                     should: true,
-                    reason: unityNeedsServer ? 'Unity needs server' : `${criticalIssues.length} critical server issue(s)`,
+                    reason: reason,
                     confidence: 0.9,
-                    priority: criticalIssues.length > 0 ? 'critical' : 'high'
+                    priority: priority
                 };
             }
             
