@@ -216,7 +216,7 @@ class AIMonitorCore {
         
         // Track tool calls (we'll need to hook into tool system or track manually)
         // For now, we'll track via state updates
-        this.setupToolCallTracking();
+        // Note: setupToolCallTracking will be implemented when we have tool system hooks
         
         // Initialize workflow violation detector
         this.workflowViolationDetector = new AIWorkflowViolationDetector(
