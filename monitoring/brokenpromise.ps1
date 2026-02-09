@@ -2095,23 +2095,41 @@ function Show-Statistics {
     }
     
     # Only clear screen on first display, then update in place
-    if ($script:firstDisplay -eq $null) {
-        Clear-Host
-        $script:firstDisplay = $true
-    } else {
+    # Only if we have an interactive console
+    if (Test-InteractiveConsole) {
+        if ($script:firstDisplay -eq $null) {
+            try {
+                Clear-Host
+                $script:firstDisplay = $true
+            } catch {
+                # Console handle may be invalid - just continue
+            }
+        } else {
+            try {
+                [Console]::CursorVisible = $false
+                Set-SafeCursorPosition -X 0 -Y 0 | Out-Null
+                Start-Sleep -Milliseconds 10
+            } catch {
+                # Console handle may be invalid (window resized/closed) - just continue
+                # This is handled by Set-SafeCursorPosition, but catch any other errors
+            }
+        }
+        
+        # Get console width for dynamic layout
         try {
-            [Console]::CursorVisible = $false
-            Set-SafeCursorPosition -X 0 -Y 0 | Out-Null
-            Start-Sleep -Milliseconds 10
+            $consoleWidth = [Console]::WindowWidth
+            if ($consoleWidth -lt 120) { $consoleWidth = 120 }
         } catch {
-            # Console handle may be invalid (window resized/closed) - just continue
-            # This is handled by Set-SafeCursorPosition, but catch any other errors
+            # Fallback if console width unavailable
+            $consoleWidth = 120
+        }
+    } else {
+        # Not interactive - use default width
+        $consoleWidth = 120
+        if ($script:firstDisplay -eq $null) {
+            $script:firstDisplay = $true
         }
     }
-    
-    # Get console width for dynamic layout
-    $consoleWidth = [Console]::WindowWidth
-    if ($consoleWidth -lt 120) { $consoleWidth = 120 }
     $colWidth = [Math]::Floor(($consoleWidth - 6) / 3)  # 3 columns with separators
     
     # Header
@@ -2737,28 +2755,54 @@ function Show-Statistics {
     Write-Host ("=" * $consoleWidth) -ForegroundColor Cyan
     
     # Calculate where console output should start (below stats)
-    $statsHeight = [Console]::CursorTop + 1
-    $script:consoleOutputStartLine = $statsHeight
-    
-    # Reset console line count when stats are redrawn (keeps console output fresh)
-    $script:consoleLineCount = 0
-    
-    # Clear the console output area to prevent old text from showing
-    $windowHeight = [Console]::WindowHeight
-    $consoleAreaStart = $script:consoleOutputStartLine
-    $consoleAreaEnd = [Math]::Min($windowHeight - 1, $consoleAreaStart + $script:maxConsoleLines)
-    
-    for ($line = $consoleAreaStart; $line -le $consoleAreaEnd; $line++) {
-        if (Set-SafeCursorPosition -X 0 -Y $line) {
-            Write-Host (" " * [Console]::WindowWidth) -NoNewline
+    # Only if we have an interactive console
+    if (Test-InteractiveConsole) {
+        try {
+            $statsHeight = [Console]::CursorTop + 1
+            $script:consoleOutputStartLine = $statsHeight
+        } catch {
+            # Console handle may be invalid - use default
+            $script:consoleOutputStartLine = 30
         }
+        
+        # Reset console line count when stats are redrawn (keeps console output fresh)
+        $script:consoleLineCount = 0
+        
+        # Clear the console output area to prevent old text from showing
+        try {
+            $windowHeight = [Console]::WindowHeight
+            $consoleAreaStart = $script:consoleOutputStartLine
+            $consoleAreaEnd = [Math]::Min($windowHeight - 1, $consoleAreaStart + $script:maxConsoleLines)
+            
+            for ($line = $consoleAreaStart; $line -le $consoleAreaEnd; $line++) {
+                if (Set-SafeCursorPosition -X 0 -Y $line) {
+                    try {
+                        Write-Host (" " * [Console]::WindowWidth) -NoNewline
+                    } catch {
+                        # Console handle may be invalid - skip this line
+                    }
+                }
+            }
+            
+            # Move cursor back to top (line 0) for next update - this keeps stats visible
+            Set-SafeCursorPosition -X 0 -Y 0 | Out-Null
+            
+            # Restore cursor visibility
+            try {
+                [Console]::CursorVisible = $true
+            } catch {
+                # Console handle may be invalid - just continue
+            }
+        } catch {
+            # Console handle may be invalid - just continue without clearing
+        }
+    } else {
+        # Not interactive - set default start line
+        if (-not $script:consoleOutputStartLine) {
+            $script:consoleOutputStartLine = 30
+        }
+        $script:consoleLineCount = 0
     }
-    
-    # Move cursor back to top (line 0) for next update - this keeps stats visible
-    Set-SafeCursorPosition -X 0 -Y 0 | Out-Null
-    
-    # Restore cursor visibility
-    [Console]::CursorVisible = $true
 }
 
 # Function to start server if not running
@@ -3269,6 +3313,11 @@ public class WindowSizeAPI {
 
 # Function to get actual character size in pixels
 function Get-CharacterSize {
+    # Only if we have an interactive console
+    if (-not (Test-InteractiveConsole)) {
+        return @{ Width = 8; Height = 16 }
+    }
+    
     try {
         $hwnd = [WindowSizeAPI]::GetConsoleWindow()
         if ($hwnd -ne [IntPtr]::Zero) {
@@ -3279,9 +3328,13 @@ function Get-CharacterSize {
                 [WindowSizeAPI]::GetWindowRect($hwnd, [ref]$windowRect)) {
                 $clientWidth = $clientRect.Right - $clientRect.Left
                 $clientHeight = $clientRect.Bottom - $clientRect.Top
-                $charWidth = [Math]::Round($clientWidth / [Console]::WindowWidth)
-                $charHeight = [Math]::Round($clientHeight / [Console]::WindowHeight)
-                return @{ Width = $charWidth; Height = $charHeight }
+                try {
+                    $charWidth = [Math]::Round($clientWidth / [Console]::WindowWidth)
+                    $charHeight = [Math]::Round($clientHeight / [Console]::WindowHeight)
+                    return @{ Width = $charWidth; Height = $charHeight }
+                } catch {
+                    # Console handle may be invalid - use fallback
+                }
             }
         }
     } catch {}
@@ -3291,6 +3344,11 @@ function Get-CharacterSize {
 
 # Function to set and enforce minimum window size
 function Set-MinimumWindowSize {
+    # Only if we have an interactive console
+    if (-not (Test-InteractiveConsole)) {
+        return
+    }
+    
     $minWidth = 80   # Minimum width in characters
     $minHeight = 45  # Minimum height in lines (stats ~30 lines + console ~15 lines)
     
@@ -3346,6 +3404,11 @@ function Set-MinimumWindowSize {
 # Function to enforce minimum window size (called periodically)
 function Enforce-MinimumWindowSize {
     if (-not $script:minWindowWidth -or -not $script:minWindowHeight) {
+        return
+    }
+    
+    # Only enforce if we have an interactive console
+    if (-not (Test-InteractiveConsole)) {
         return
     }
     
@@ -5899,9 +5962,11 @@ while ($monitoringActive) {
         }
         
         # Check for keyboard input (manual exit from focus mode)
-        if ([Console]::KeyAvailable) {
-            $key = [Console]::ReadKey($true)  # $true = don't display the key
-            if ($key.Key -eq 'X' -and $key.Modifiers -eq 'Control') {
+        # Only if we have an interactive console
+        if ((Test-InteractiveConsole) -and [Console]::KeyAvailable) {
+            try {
+                $key = [Console]::ReadKey($true)  # $true = don't display the key
+                if ($key.Key -eq 'X' -and $key.Modifiers -eq 'Control') {
                 # Ctrl+X to exit focus mode
                 $pendingInfo = Get-PendingIssuesInfo
                 if ($pendingInfo.InFocusMode) {
@@ -5924,9 +5989,12 @@ while ($monitoringActive) {
                 } else {
                     Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] Not in focus mode - nothing to exit" -ForegroundColor "Gray"
                 }
-            } elseif ($key.Key -eq 'Escape') {
-                # Escape key to show help
-                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] Monitor Controls: Ctrl+X = Exit Focus Mode" -ForegroundColor "Cyan"
+                } elseif ($key.Key -eq 'Escape') {
+                    # Escape key to show help
+                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] Monitor Controls: Ctrl+X = Exit Focus Mode" -ForegroundColor "Cyan"
+                }
+            } catch {
+                # Console handle may be invalid - just continue
             }
         }
         

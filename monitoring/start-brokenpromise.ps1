@@ -49,8 +49,18 @@ if (-not $SkipBootstrap) {
                 }
                 $promptText += "`r`n"
                 $promptText += "You must:`r`n"
-                $promptText += "1. Fix the syntax errors listed above`r`n"
-                $promptText += "2. Test that BrokenPromise can start successfully`r`n"
+                $promptText += "1. Call beforeAIAction() with context: type='fix_attempt', issueType='powershell_syntax_error', component='BrokenPromise', file='monitoring/brokenpromise.ps1'`r`n"
+                $promptText += "2. Check if webSearchRequired is true`r`n"
+                $promptText += "3. QUERY THE LEARNING SYSTEM to find solutions:`r`n"
+                $promptText += "   - Use queryLearning(`"What solutions worked for powershell_syntax_error?`") or`r`n"
+                $promptText += "   - Use getBestSolution(`"powershell_syntax_error`") to get the best known solution`r`n"
+                $promptText += "   - Check for matching patterns that solved similar issues`r`n"
+                $promptText += "   - The learning system is a tool to save you time - USE IT`r`n"
+                $promptText += "4. Fix the syntax errors listed above using the learning system's solution if available`r`n"
+                $promptText += "5. Test that BrokenPromise can start successfully`r`n"
+                $promptText += "6. Call afterAIAction() with the outcome`r`n"
+                $promptText += "`r`n"
+                $promptText += "System will verify: tool calls (beforeAIAction, afterAIAction, queryLearning/getBestSolution), state (findings stored), files (code changes)`r`n"
                 $promptText += "`r`n"
                 $promptText += "═══════════════════════════════════════════════════════════════`r`n"
                 
@@ -67,8 +77,18 @@ if (-not $SkipBootstrap) {
                 }
                 Write-Host ""
                 Write-Host "You must:" -ForegroundColor Cyan
-                Write-Host "1. Fix the syntax errors listed above" -ForegroundColor White
-                Write-Host "2. Test that BrokenPromise can start successfully" -ForegroundColor White
+                Write-Host "1. Call beforeAIAction() with context: type='fix_attempt', issueType='powershell_syntax_error', component='BrokenPromise', file='monitoring/brokenpromise.ps1'" -ForegroundColor White
+                Write-Host "2. Check if webSearchRequired is true" -ForegroundColor White
+                Write-Host "3. QUERY THE LEARNING SYSTEM to find solutions:" -ForegroundColor White
+                Write-Host "   - Use queryLearning(`"What solutions worked for powershell_syntax_error?`") or" -ForegroundColor Gray
+                Write-Host "   - Use getBestSolution(`"powershell_syntax_error`") to get the best known solution" -ForegroundColor Gray
+                Write-Host "   - Check for matching patterns that solved similar issues" -ForegroundColor Gray
+                Write-Host "   - The learning system is a tool to save you time - USE IT" -ForegroundColor Gray
+                Write-Host "4. Fix the syntax errors listed above using the learning system's solution if available" -ForegroundColor White
+                Write-Host "5. Test that BrokenPromise can start successfully" -ForegroundColor White
+                Write-Host "6. Call afterAIAction() with the outcome" -ForegroundColor White
+                Write-Host ""
+                Write-Host "System will verify: tool calls (beforeAIAction, afterAIAction, queryLearning/getBestSolution), state (findings stored), files (code changes)" -ForegroundColor Cyan
                 Write-Host ""
                 Write-Host "=================================================================" -ForegroundColor Yellow
                 Write-Host ""
