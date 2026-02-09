@@ -434,12 +434,22 @@ class AIDecisionEngine extends EventEmitter {
             const server = this.stateStore.getState('system.server') || {};
             const monitoring = this.stateStore.getState('monitoring') || {};
             
-            // Unity is already running
+            // Unity is already running or connected
             if (unity.status === 'running' || unity.status === 'connected') {
                 return {
                     should: false,
                     reason: 'Unity already running',
                     confidence: 1.0
+                };
+            }
+            
+            // Check if Unity was just started (grace period check)
+            // Unity needs 90 seconds to: start process, load project, enter play mode, initialize, connect, login
+            if (unity.status === 'starting' || (unity.lastStartTime && (Date.now() - unity.lastStartTime) < 90000)) {
+                return {
+                    should: false,
+                    reason: 'Unity was just started - waiting for connection (90s grace period)',
+                    confidence: 0.9
                 };
             }
             
