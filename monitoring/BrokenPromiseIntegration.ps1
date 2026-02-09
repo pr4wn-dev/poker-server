@@ -42,34 +42,46 @@ function Test-BrokenPromiseSystems {
     }
     
     # Test 3: AI Core Initialization
+    # Note: Can take 20-30s to load large state files (7.7MB+)
     Write-Host "  [3/9] Testing AI Core Initialization..." -NoNewline
     try {
+        # Give it extra time - initialization loads entire state file
         $result = Invoke-AIIntegration -Command "get-status-report"
-        if ($result -and $result.system) {
+        if ($result -and ($result.system -or $result.error)) {
+            if ($result.error) {
+                throw "AI Core error: $($result.error)"
+            }
             Write-Host " [OK]" -ForegroundColor Green
             $tests += @{ Test = "AI Core Initialization"; Status = "PASS" }
         } else {
-            throw "AI Core not responding"
+            throw "AI Core not responding (timeout or no response)"
         }
     } catch {
         Write-Host " [FAIL]" -ForegroundColor Red
-        $tests += @{ Test = "AI Core Initialization"; Status = "FAIL"; Error = $_.Exception.Message }
+        $errorMsg = if ($_.Exception.Message) { $_.Exception.Message } else { "Timeout or initialization failed" }
+        $tests += @{ Test = "AI Core Initialization"; Status = "FAIL"; Error = $errorMsg }
         $allPassed = $false
     }
     
     # Test 4: Learning Engine
+    # Note: Can take 20-30s to load large state files (7.7MB+)
     Write-Host "  [4/9] Testing Learning Engine..." -NoNewline
     try {
+        # Give it extra time - initialization loads entire state file
         $result = Invoke-AIIntegration -Command "query" -Arguments @("What is the learning system status?")
-        if ($result -and $result.answer) {
+        if ($result -and ($result.answer -or $result.error)) {
+            if ($result.error) {
+                throw "Learning Engine error: $($result.error)"
+            }
             Write-Host " [OK]" -ForegroundColor Green
             $tests += @{ Test = "Learning Engine"; Status = "PASS" }
         } else {
-            throw "Learning Engine not responding"
+            throw "Learning Engine not responding (timeout or no response)"
         }
     } catch {
         Write-Host " [FAIL]" -ForegroundColor Red
-        $tests += @{ Test = "Learning Engine"; Status = "FAIL"; Error = $_.Exception.Message }
+        $errorMsg = if ($_.Exception.Message) { $_.Exception.Message } else { "Timeout or initialization failed" }
+        $tests += @{ Test = "Learning Engine"; Status = "FAIL"; Error = $errorMsg }
         $allPassed = $false
     }
     

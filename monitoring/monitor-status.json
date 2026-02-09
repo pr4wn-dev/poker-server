@@ -1,11 +1,11 @@
 {
-  "timestamp": 1770621476031,
+  "timestamp": 1770679771119,
   "investigation": {
     "active": false,
-    "status": "idle",
-    "startTime": null,
+    "status": "completed",
+    "startTime": 1770679617453,
     "timeout": 15,
-    "progress": 0,
+    "progress": 100,
     "timeRemaining": 0,
     "issuesCount": 0
   },
@@ -20,8 +20,9 @@
       "metrics": {
         "uptime": 0,
         "requests": 0,
-        "errors": 0,
-        "responseTime": 0
+        "errors": 1,
+        "responseTime": 0,
+        "consecutiveErrors": 1
       },
       "recentErrors": [],
       "trends": {
@@ -29,7 +30,7 @@
         "warningRate": null,
         "trend": "decreasing"
       },
-      "lastCheck": null
+      "lastCheck": 1770679512142
     },
     "database": {
       "status": "unknown",
@@ -49,13 +50,15 @@
       "lastCheck": null
     },
     "unity": {
-      "status": "unknown",
+      "status": "paused",
       "health": 0,
       "metrics": {
         "uptime": 0,
         "fps": 0,
         "connected": false,
-        "lastActivity": null
+        "lastActivity": null,
+        "pausedReason": "1 critical issue(s) detected",
+        "pausedAt": 1770679248959
       },
       "uiState": {
         "labels": [],
@@ -80,13 +83,13 @@
     },
     "pause": {
       "should": false,
-      "reason": "No reason to pause",
+      "reason": "Unity already paused",
       "confidence": 1
     },
     "resume": {
       "should": false,
-      "reason": "Unity not paused",
-      "confidence": 1
+      "reason": "Waiting for verification or issues still active",
+      "confidence": 0.8
     },
     "fixes": [],
     "avoid": [],
@@ -98,6 +101,6 @@
   },
   "aiCore": {
     "active": true,
-    "lastSync": 1770621476017
+    "lastSync": 1770679771103
   }
 }
