@@ -274,6 +274,9 @@ class AICollaborationInterface extends EventEmitter {
         const timestamp = Date.now();
         this.stateStore.updateState('ai.lastBeforeActionCall', timestamp);
         
+        // AUTOMATIC PROMPT DELIVERY: Mark matching prompts as delivered when AI starts working
+        this.autoMarkPromptDelivered(action);
+        
         // Track tool call for compliance verification
         this.trackToolCall('beforeAIAction', {
             action: action.type || 'unknown',
@@ -1449,6 +1452,92 @@ class AICollaborationInterface extends EventEmitter {
         // Search learning system data
         // This would search patterns, solutions, etc.
         return [];
+    }
+    
+    /**
+     * Automatically mark prompts as delivered when AI starts working on matching issues
+     * This ensures compliance verification runs automatically
+     */
+    autoMarkPromptDelivered(action) {
+        try {
+            const prompts = this.stateStore.getState('ai.prompts') || [];
+            const deliveredPrompts = this.stateStore.getState('ai.deliveredPrompts') || [];
+            
+            // Get undelivered prompts from last 10 minutes
+            const now = Date.now();
+            const undeliveredPrompts = prompts.filter(p => 
+                !deliveredPrompts.includes(p.id) && 
+                (now - (p.timestamp || 0)) < 600000 // Last 10 minutes
+            );
+            
+            if (undeliveredPrompts.length === 0) {
+                return; // No pending prompts
+            }
+            
+            // Match prompts to current action
+            const actionIssueType = (action.issueType || '').toLowerCase();
+            const actionComponent = (action.component || '').toLowerCase();
+            const actionFile = (action.file || action.filePath || '').toLowerCase();
+            
+            for (const prompt of undeliveredPrompts) {
+                let matches = false;
+                
+                // Check if prompt issue matches action
+                if (prompt.issue) {
+                    const promptIssueType = (prompt.issue.issueType || prompt.issue.type || '').toLowerCase();
+                    const promptComponent = (prompt.issue.component || '').toLowerCase();
+                    const promptFile = (prompt.issue.file || '').toLowerCase();
+                    
+                    // Match if issue type matches (most important)
+                    if (actionIssueType && promptIssueType && 
+                        (actionIssueType.includes(promptIssueType) || promptIssueType.includes(actionIssueType))) {
+                        matches = true;
+                    }
+                    
+                    // Also match if component matches
+                    if (actionComponent && promptComponent && 
+                        (actionComponent.includes(promptComponent) || promptComponent.includes(actionComponent))) {
+                        matches = true;
+                    }
+                    
+                    // Also match if file matches
+                    if (actionFile && promptFile && actionFile.includes(promptFile)) {
+                        matches = true;
+                    }
+                }
+                
+                // If prompt text mentions the issue type/component, also match
+                if (!matches && prompt.prompt) {
+                    const promptText = prompt.prompt.toLowerCase();
+                    if (actionIssueType && promptText.includes(actionIssueType)) {
+                        matches = true;
+                    }
+                    if (actionComponent && promptText.includes(actionComponent)) {
+                        matches = true;
+                    }
+                }
+                
+                // Mark as delivered if matched
+                if (matches) {
+                    if (!deliveredPrompts.includes(prompt.id)) {
+                        deliveredPrompts.push(prompt.id);
+                        this.stateStore.updateState('ai.deliveredPrompts', deliveredPrompts);
+                        
+                        gameLogger.info('BrokenPromise', '[AI_COLLABORATION] Auto-marked prompt as delivered', {
+                            promptId: prompt.id,
+                            promptType: prompt.type,
+                            actionIssueType: action.issueType,
+                            actionComponent: action.component
+                        });
+                    }
+                }
+            }
+        } catch (error) {
+            // Don't let prompt marking errors break beforeAIAction
+            gameLogger.error('BrokenPromise', '[AI_COLLABORATION] Error auto-marking prompt', {
+                error: error.message
+            });
+        }
     }
 }
 
