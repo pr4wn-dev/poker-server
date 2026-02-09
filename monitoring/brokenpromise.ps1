@@ -153,6 +153,15 @@ if (Test-Path $aiIntegrationPath) {
     . $aiIntegrationPath
     Write-Info "AI Integration loaded - AI-first monitoring system active"
     $script:aiIntegrationEnabled = $true
+    
+    # Test all systems during startup
+    Write-Info "Running system verification..."
+    $systemTestPassed = Test-BrokenPromiseSystems
+    if (-not $systemTestPassed) {
+        Write-Warning "Some systems failed verification - BrokenPromise will continue but may have limited functionality"
+        Write-Warning "Check the verification output above for details"
+        Start-Sleep -Seconds 2
+    }
 } else {
     Write-Warning "AI Integration not found at $aiIntegrationPath - using legacy system"
     $script:aiIntegrationEnabled = $false
