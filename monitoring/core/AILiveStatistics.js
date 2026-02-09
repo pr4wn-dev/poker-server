@@ -70,7 +70,10 @@ class AILiveStatistics {
             recommendations: this.getRecommendations(),
             
             // Decision State (what AI decided)
-            decisions: this.getDecisionState()
+            decisions: this.getDecisionState(),
+            
+            // Workflow Violations (for AI to see its mistakes)
+            workflow: this.getWorkflowState()
         };
     }
     
@@ -585,6 +588,49 @@ class AILiveStatistics {
         });
         
         return result;
+    }
+    
+    /**
+     * Get workflow state (violations, compliance, etc.)
+     */
+    getWorkflowState() {
+        const violations = this.stateStore.getState('ai.workflowViolations') || [];
+        const recentViolations = Array.isArray(violations) 
+            ? violations.filter(v => (Date.now() - (v.timestamp || 0)) < 3600000) // Last hour
+            : [];
+        
+        const prompts = this.stateStore.getState('ai.prompts') || [];
+        const pendingPrompts = Array.isArray(prompts)
+            ? prompts.filter(p => !p.delivered && (Date.now() - (p.timestamp || 0)) < 3600000)
+            : [];
+        
+        const lastBeforeAction = this.stateStore.getState('ai.lastBeforeActionCall');
+        const lastAfterAction = this.stateStore.getState('ai.lastAfterActionCall');
+        
+        return {
+            violations: {
+                total: violations.length,
+                recent: recentViolations.length,
+                recentList: recentViolations.slice(-5).map(v => ({
+                    type: v.type,
+                    violation: v.violation,
+                    file: v.file,
+                    severity: v.severity,
+                    timestamp: v.timestamp
+                }))
+            },
+            prompts: {
+                total: prompts.length,
+                pending: pendingPrompts.length,
+                latest: prompts.length > 0 ? prompts[prompts.length - 1] : null
+            },
+            compliance: {
+                lastBeforeAction: lastBeforeAction,
+                lastAfterAction: lastAfterAction,
+                timeSinceBeforeAction: lastBeforeAction ? (Date.now() - lastBeforeAction) : null,
+                timeSinceAfterAction: lastAfterAction ? (Date.now() - lastAfterAction) : null
+            }
+        };
     }
     
     /**

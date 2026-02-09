@@ -146,6 +146,25 @@ function Show-BrokenPromiseStatistics {
         $col1Lines += "Or check terminal below"
     }
     
+    # Workflow Violations
+    $workflow = if ($aiStats.workflow) { $aiStats.workflow } else { @{violations=@{total=0;recent=0;recentList=@()}} }
+    if ($workflow.violations.recent -gt 0) {
+        $col1Lines += ""
+        $col1Lines += "🚨 WORKFLOW VIOLATIONS"
+        $col1Lines += ("-" * ($colWidth - 2))
+        $col1Lines += "Recent: " + $workflow.violations.recent
+        $col1Lines += "Total: " + $workflow.violations.total
+        if ($workflow.violations.recentList -and $workflow.violations.recentList.Count -gt 0) {
+            $col1Lines += ""
+            $col1Lines += "Latest:"
+            $latestViolation = $workflow.violations.recentList[0]
+            $violationText = if ($latestViolation.violation) { 
+                $latestViolation.violation.Substring(0, [Math]::Min(30, $latestViolation.violation.Length))
+            } else { "Unknown" }
+            $col1Lines += "  " + $violationText
+        }
+    }
+    
     # Column 2: Detection & Issues
     $col2Lines += "DETECTION STATS"
     $col2Lines += ("-" * ($colWidth - 2))
