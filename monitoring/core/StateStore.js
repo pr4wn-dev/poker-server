@@ -672,8 +672,16 @@ class StateStore extends EventEmitter {
      * Save state to disk
      * FIXED: Based on web search findings - explicit data selection, structured validation, single write
      * Search findings: State persistence requires explicit handling, verify JSON structure, write once
+     * ENHANCED: Added file locking and atomic write to prevent corruption
      */
     save() {
+        // Prevent concurrent saves
+        if (this._saving) {
+            return; // Already saving, skip this call
+        }
+        
+        this._saving = true;
+        
         try {
             // CRITICAL: Capture learning arrays from memory BEFORE any serialization
             // Search finding: Explicit data selection prevents loss during serialization
@@ -681,6 +689,11 @@ class StateStore extends EventEmitter {
                 ? JSON.parse(JSON.stringify(this.state.learning.knowledge)) : [];
             const improvementsArray = this.state.learning?.improvements && Array.isArray(this.state.learning.improvements)
                 ? JSON.parse(JSON.stringify(this.state.learning.improvements)) : [];
+            
+            // Also capture other critical learning data
+            const fixAttempts = this.state.learning?.fixAttempts || {};
+            const aiCompliance = this.state.learning?.aiCompliance || [];
+            const patterns = this.state.learning?.patterns || {};
             
             // Serialize entire state (learning arrays should be preserved by _serializeState)
             const serializedState = this._serializeState(this.state);
@@ -693,11 +706,14 @@ class StateStore extends EventEmitter {
             // Force arrays into serialized state - explicit preservation
             serializedState.learning.knowledge = knowledgeArray;
             serializedState.learning.improvements = improvementsArray;
+            serializedState.learning.fixAttempts = fixAttempts;
+            serializedState.learning.aiCompliance = aiCompliance;
+            serializedState.learning.patterns = patterns;
             
             // Create data object with arrays already in place
             const data = {
                 state: serializedState,
-                eventLog: this.eventLog.slice(-1000), // Save last 1000 events
+                eventLog: this.eventLog.slice(-1000), // Save last 1000 events (reduce size)
                 timestamp: Date.now(),
                 version: '2.0.0' // Schema version for migration tracking
             };
@@ -710,15 +726,36 @@ class StateStore extends EventEmitter {
             if (!Array.isArray(data.state.learning.improvements)) {
                 data.state.learning.improvements = improvementsArray;
             }
+            if (!Array.isArray(data.state.learning.aiCompliance)) {
+                data.state.learning.aiCompliance = aiCompliance;
+            }
             
-            // Write to file - single write operation
-            // Search finding: Write once, not continuously during auto-save
+            // Atomic write: Write to temp file first, then rename (prevents corruption)
+            const tempFile = this.persistenceFile + '.tmp';
             const jsonString = JSON.stringify(data, null, 2);
-            fs.writeFileSync(this.persistenceFile, jsonString, 'utf8');
+            
+            // Write to temp file
+            fs.writeFileSync(tempFile, jsonString, 'utf8');
+            
+            // Create backup before overwriting
+            if (fs.existsSync(this.persistenceFile)) {
+                const backupFile = this.persistenceFile + '.backup';
+                try {
+                    fs.copyFileSync(this.persistenceFile, backupFile);
+                } catch (backupError) {
+                    // Backup failed, but continue with save
+                }
+            }
+            
+            // Atomic rename (replaces old file atomically)
+            fs.renameSync(tempFile, this.persistenceFile);
+            
         } catch (error) {
             // DO NOT log to console - errors are for AI only, not user
             // Re-throw so UniversalErrorHandler can catch it
             throw error;
+        } finally {
+            this._saving = false;
         }
     }
     

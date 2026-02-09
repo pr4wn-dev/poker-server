@@ -113,6 +113,65 @@ recordSuccess(component) {
             tags: ['circular', 'dependency', 'async', 'setImmediate']
         });
         
+        // PowerShell bracket error misdiagnosis template
+        this.addTemplate({
+            id: 'powershell_bracket_error_misdiagnosis',
+            pattern: 'powershell_bracket_error_misdiagnosis',
+            name: 'PowerShell Bracket Error - Check Try/Catch First',
+            description: 'PowerShell bracket missing errors are often caused by missing try/catch blocks, not actual missing brackets',
+            template: 'check_try_catch_before_brackets',
+            codeExample: `
+# Problem: PowerShell reports "bracket missing" error
+# ❌ WRONG APPROACH: Searching for missing brackets (wastes time)
+# This takes forever and usually doesn't fix the issue
+
+# ✅ CORRECT APPROACH: Check try/catch structure first
+# Step 1: Search for all 'try {' blocks
+$tryBlocks = Select-String -Path "script.ps1" -Pattern "try\s*\{"
+$catchBlocks = Select-String -Path "script.ps1" -Pattern "catch\s*\{"
+$finallyBlocks = Select-String -Path "script.ps1" -Pattern "finally\s*\{"
+
+# Step 2: Verify each try has matching catch or finally
+foreach ($tryBlock in $tryBlocks) {
+    $lineNumber = $tryBlock.LineNumber
+    # Check if there's a catch or finally after this try
+    $hasCatchOrFinally = $catchBlocks | Where-Object { $_.LineNumber -gt $lineNumber } | Select-Object -First 1
+    if (-not $hasCatchOrFinally) {
+        Write-Host "Missing catch/finally for try at line $lineNumber"
+    }
+}
+
+# Step 3: Check for unclosed try blocks
+# Only then search for bracket mismatches if try/catch is correct
+
+# Common pattern: Missing catch block
+try {
+    # Some code
+    # ❌ Missing: catch { ... }
+}
+
+# ✅ Fixed: Add catch block
+try {
+    # Some code
+} catch {
+    # Handle error
+}
+            `.trim(),
+            whenToUse: 'When PowerShell reports "bracket missing" or "unexpected" syntax errors',
+            successRate: 0.95,
+            misdiagnosisPrevention: {
+                commonMisdiagnosis: 'Searching for missing brackets throughout the code',
+                actualRootCause: 'Missing try or catch block',
+                timeWasted: 'High - can take 30+ minutes searching for brackets',
+                correctApproach: 'Check try/catch structure first, then brackets'
+            },
+            contexts: [
+                { component: 'PowerShell', issueType: 'powershell_syntax_error', result: 'success' },
+                { component: 'BrokenPromise', issueType: 'syntax_error', result: 'success' }
+            ],
+            tags: ['powershell', 'syntax_error', 'try_catch', 'misdiagnosis', 'brackets']
+        });
+        
         // Guard before access template
         this.addTemplate({
             id: 'guard_before_access',

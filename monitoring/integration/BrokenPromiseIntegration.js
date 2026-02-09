@@ -286,6 +286,30 @@ class BrokenPromiseIntegration {
     /**
      * Mark prompt as delivered
      */
+    getComplianceVerification(promptId) {
+        if (!this.aiCore || !this.aiCore.complianceVerifier) {
+            return null;
+        }
+        
+        const prompt = this.aiCore.complianceVerifier.getPromptById(promptId);
+        if (!prompt) {
+            return null;
+        }
+        
+        // Verify compliance for this prompt
+        const verification = this.aiCore.complianceVerifier.verifyCompliance(prompt);
+        
+        return {
+            promptId: verification.promptId,
+            timestamp: verification.timestamp,
+            compliant: verification.compliant,
+            complianceResult: verification.complianceResult,
+            partsWorked: verification.partsWorked,
+            partsSkipped: verification.partsSkipped,
+            verification: verification.verification
+        };
+    }
+    
     markPromptDelivered(promptId) {
         const deliveredPrompts = this.aiCore.stateStore.getState('ai.deliveredPrompts') || [];
         if (!deliveredPrompts.includes(promptId)) {

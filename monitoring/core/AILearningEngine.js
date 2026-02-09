@@ -47,6 +47,9 @@ class AILearningEngine extends EventEmitter {
         // Pattern generalization rules
         this.generalizationRules = new Map(); // specificPattern -> generalPattern
         
+        // Misdiagnosis prevention tracking
+        this.misdiagnosisPatterns = new Map(); // pattern -> { symptom, commonMisdiagnosis, actualRootCause, correctApproach, frequency, timeWasted }
+        
         // Automatic adjustment thresholds
         this.lowConfidenceThreshold = 50; // Below 50% triggers adjustments
         this.criticalConfidenceThreshold = 30; // Below 30% is critical
@@ -55,38 +58,134 @@ class AILearningEngine extends EventEmitter {
         // Load learning data
         this.load();
         
+        // Initialize PowerShell misdiagnosis patterns (start with PowerShell, expand later)
+        this.initializePowerShellPatterns();
+        
         // Start periodic confidence check and auto-adjustment
         this.startConfidenceMonitoring();
     }
     
     /**
+     * Initialize PowerShell misdiagnosis patterns
+     * Start with PowerShell patterns, expand to other components later
+     */
+    initializePowerShellPatterns() {
+        // PowerShell bracket error misdiagnosis pattern
+        const bracketErrorPattern = {
+            pattern: 'powershell_bracket_error_misdiagnosis',
+            symptom: 'bracket missing|missing closing bracket|unexpected token',
+            commonMisdiagnosis: 'Searching for missing brackets throughout the code',
+            actualRootCause: 'Missing catch block in try statement',
+            correctApproach: 'Check try/catch structure first, then brackets',
+            frequency: 0, // Will be updated as system learns
+            timeWasted: 0, // Will be updated as system learns
+            successRate: 0,
+            successes: 0,
+            failures: 0,
+            component: 'PowerShell',
+            issueType: 'powershell_syntax_error'
+        };
+        
+        // Only add if not already exists (don't overwrite learned data)
+        if (!this.misdiagnosisPatterns.has('powershell_bracket_error_misdiagnosis')) {
+            this.misdiagnosisPatterns.set('powershell_bracket_error_misdiagnosis', bracketErrorPattern);
+        }
+        
+        // Save to state store
+        this.stateStore.updateState('learning.misdiagnosisPatterns', 
+            Object.fromEntries(this.misdiagnosisPatterns));
+    }
+    
+    /**
      * Learn from fix attempt
+     * MISDIAGNOSIS-FIRST: Track wrong approaches first (most valuable learning)
      */
     learnFromAttempt(attempt) {
-        // Extract patterns
+        // STEP 1: Track misdiagnosis patterns FIRST (highest priority)
+        // This prevents future wasted time - most valuable learning
+        this.trackMisdiagnosis(attempt);
+        
+        // STEP 2: Extract patterns (for general learning)
         const patterns = this.extractPatterns(attempt);
         
-        // Update pattern knowledge
+        // STEP 3: Update pattern knowledge
         for (const pattern of patterns) {
             this.updatePatternKnowledge(pattern, attempt);
         }
         
-        // Analyze causal chain
+        // STEP 4: If successful, learn what worked
         if (attempt.result === 'success') {
             this.analyzeCausalChain(attempt);
+            this.optimizeSolution(attempt);
+            this.learnCrossIssue(attempt);
+            this.generalizePattern(attempt);
+        } else {
+            // STEP 5: If failed, prioritize learning what NOT to do
+            // This is where misdiagnosis patterns are most valuable
+            this.learnFromFailure(attempt);
         }
         
-        // Optimize solutions
-        this.optimizeSolution(attempt);
-        
-        // Cross-issue learning
-        this.learnCrossIssue(attempt);
-        
-        // Generalize patterns
-        this.generalizePattern(attempt);
-        
-        // Save learning
+        // STEP 6: Save learning immediately (critical data)
         this.save();
+    }
+    
+    /**
+     * Learn from failure - focus on misdiagnosis prevention
+     */
+    learnFromFailure(attempt) {
+        // Extract what went wrong
+        const wrongApproach = attempt.fixMethod || attempt.fixDetails?.approach || 'unknown';
+        const timeWasted = attempt.fixDetails?.timeSpent || attempt.duration || 0;
+        
+        // Check if this matches a known misdiagnosis pattern
+        const pattern = this.detectSpecificPattern(attempt);
+        if (pattern && pattern.includes('misdiagnosis')) {
+            // This is a known misdiagnosis - update frequency and time wasted
+            const misdiagnosisKey = pattern;
+            const existing = this.misdiagnosisPatterns.get(misdiagnosisKey);
+            if (existing) {
+                existing.frequency++;
+                existing.timeWasted += timeWasted;
+                existing.failures++;
+                existing.successRate = existing.successes / existing.frequency;
+                this.misdiagnosisPatterns.set(misdiagnosisKey, existing);
+            }
+        }
+        
+        // Learn what NOT to try again
+        this.learnWhatNotToDo(attempt);
+    }
+    
+    /**
+     * Learn what NOT to do (prevent repeating failures)
+     */
+    learnWhatNotToDo(attempt) {
+        const issueType = attempt.issueType || 'unknown';
+        const wrongMethod = attempt.fixMethod || 'unknown';
+        
+        // Track failed methods for this issue type
+        const failedMethods = this.stateStore.getState('learning.failedMethods') || {};
+        if (!failedMethods[issueType]) {
+            failedMethods[issueType] = [];
+        }
+        
+        // Add to failed methods if not already there
+        const existingMethod = failedMethods[issueType].find(m => m.method === wrongMethod);
+        if (!existingMethod) {
+            failedMethods[issueType].push({
+                method: wrongMethod,
+                frequency: 1,
+                lastAttempt: attempt.timestamp,
+                timeWasted: attempt.fixDetails?.timeSpent || 0
+            });
+        } else {
+            // Update frequency
+            existingMethod.frequency++;
+            existingMethod.lastAttempt = attempt.timestamp;
+            existingMethod.timeWasted += (attempt.fixDetails?.timeSpent || 0);
+        }
+        
+        this.stateStore.updateState('learning.failedMethods', failedMethods);
     }
     
     /**
@@ -143,6 +242,30 @@ class AILearningEngine extends EventEmitter {
     detectSpecificPattern(attempt) {
         const issueType = attempt.issueType || '';
         const fixMethod = attempt.fixMethod || '';
+        const errorMessage = attempt.errorMessage || attempt.failureReason || '';
+        const component = attempt.component || '';
+        
+        // PowerShell bracket error misdiagnosis pattern
+        if ((issueType.includes('powershell') || issueType.includes('syntax_error')) && 
+            component.includes('PowerShell') || component.includes('ps1')) {
+            // Check if error message mentions brackets
+            if (errorMessage.toLowerCase().includes('bracket') || 
+                errorMessage.toLowerCase().includes('missing') ||
+                errorMessage.toLowerCase().includes('unexpected')) {
+                // Check if fix method was searching for brackets (misdiagnosis)
+                if (fixMethod.includes('search_brackets') || 
+                    fixMethod.includes('find_missing_bracket') ||
+                    attempt.fixDetails?.approach === 'search_for_brackets') {
+                    return 'powershell_bracket_error_misdiagnosis';
+                }
+                // Check if actual fix was try/catch related (correct diagnosis)
+                if (fixMethod.includes('try_catch') || 
+                    fixMethod.includes('check_try_catch') ||
+                    attempt.fixDetails?.approach === 'check_try_catch_structure') {
+                    return 'powershell_bracket_error_try_catch_fix';
+                }
+            }
+        }
         
         // Specific patterns
         if (issueType.includes('AIIssueDetector') && issueType.includes('timing')) {
@@ -165,6 +288,14 @@ class AILearningEngine extends EventEmitter {
      * Map specific pattern to general pattern
      */
     mapToGeneralPattern(specificPattern) {
+        // Misdiagnosis patterns
+        if (specificPattern.includes('misdiagnosis')) {
+            return 'symptom_vs_root_cause_misdiagnosis';
+        }
+        if (specificPattern.includes('powershell_bracket_error')) {
+            return 'error_message_misleading_pattern';
+        }
+        
         // Mapping rules
         if (specificPattern.includes('timing') || specificPattern.includes('initialization')) {
             return 'initialization_race_condition';
@@ -187,6 +318,17 @@ class AILearningEngine extends EventEmitter {
      */
     extractGeneralSolution(attempt) {
         const fixMethod = attempt.fixMethod || '';
+        const pattern = this.detectSpecificPattern(attempt);
+        
+        // PowerShell bracket error - check try/catch first
+        if (pattern === 'powershell_bracket_error_try_catch_fix') {
+            return 'For PowerShell bracket errors: Check try/catch structure first, then brackets';
+        }
+        
+        // Misdiagnosis prevention
+        if (pattern && pattern.includes('misdiagnosis')) {
+            return 'Avoid common misdiagnosis: Check actual root cause before treating symptom';
+        }
         
         if (fixMethod.includes('setImmediate')) {
             return 'Delay async operations with setImmediate and add guards';
@@ -1759,6 +1901,9 @@ class AILearningEngine extends EventEmitter {
             const debuggingPatterns = this.stateStore.getState('learning.debuggingPatterns') || {};
             this.debuggingPatterns = new Map(Object.entries(debuggingPatterns));
             
+            const misdiagnosisPatterns = this.stateStore.getState('learning.misdiagnosisPatterns') || {};
+            this.misdiagnosisPatterns = new Map(Object.entries(misdiagnosisPatterns));
+            
             const generalizedPatterns = this.stateStore.getState('learning.generalizedPatterns') || [];
             // Handle both array of entries and object format
             if (Array.isArray(generalizedPatterns)) {
@@ -1783,6 +1928,7 @@ class AILearningEngine extends EventEmitter {
     
     /**
      * Save learning data
+     * CRITICAL: Triggers immediate disk save to ensure persistence
      */
     save() {
         try {
@@ -1798,6 +1944,11 @@ class AILearningEngine extends EventEmitter {
             this.stateStore.updateState('learning.debuggingPatterns', Object.fromEntries(this.debuggingPatterns));
             this.stateStore.updateState('learning.generalizedPatterns', Array.from(this.generalizedPatterns.entries()));
             this.stateStore.updateState('learning.generalizationRules', Array.from(this.generalizationRules.entries()));
+            this.stateStore.updateState('learning.misdiagnosisPatterns', Object.fromEntries(this.misdiagnosisPatterns));
+            
+            // CRITICAL: Trigger immediate disk save to ensure learning data is persisted
+            // Don't wait for auto-save interval - learning data is too valuable to lose
+            this.stateStore.save();
         } catch (error) {
             // DO NOT log to console - errors are for AI only, not user
             // Re-throw so UniversalErrorHandler can catch it
@@ -2472,6 +2623,148 @@ class AILearningEngine extends EventEmitter {
             confidence: 0.8,
             source: 'learned_approach'
         };
+    }
+    
+    // ============================================
+    // MISDIAGNOSIS PREVENTION
+    // ============================================
+    
+    /**
+     * Track misdiagnosis patterns
+     * Learns from wrong approaches to prevent repeating them
+     */
+    trackMisdiagnosis(attempt) {
+        const pattern = this.detectSpecificPattern(attempt);
+        
+        // Check if this is a misdiagnosis pattern
+        if (pattern && pattern.includes('misdiagnosis')) {
+            const misdiagnosisKey = pattern;
+            const existing = this.misdiagnosisPatterns.get(misdiagnosisKey) || {
+                pattern: misdiagnosisKey,
+                symptom: attempt.errorMessage || attempt.issueType || '',
+                commonMisdiagnosis: attempt.fixMethod || attempt.fixDetails?.wrongApproach || '',
+                actualRootCause: attempt.fixDetails?.actualRootCause || '',
+                correctApproach: attempt.fixDetails?.correctApproach || '',
+                frequency: 0,
+                timeWasted: 0,
+                successRate: 0,
+                successes: 0,
+                failures: 0
+            };
+            
+            existing.frequency++;
+            
+            // Track time wasted (if provided)
+            if (attempt.fixDetails?.timeWasted) {
+                existing.timeWasted += attempt.fixDetails.timeWasted;
+            }
+            
+            // Track success/failure
+            if (attempt.result === 'success') {
+                existing.successes++;
+            } else {
+                existing.failures++;
+            }
+            
+            existing.successRate = existing.successes / existing.frequency;
+            
+            // Update actual root cause and correct approach if this was a successful fix
+            if (attempt.result === 'success' && attempt.fixDetails) {
+                if (attempt.fixDetails.actualRootCause) {
+                    existing.actualRootCause = attempt.fixDetails.actualRootCause;
+                }
+                if (attempt.fixDetails.correctApproach) {
+                    existing.correctApproach = attempt.fixDetails.correctApproach;
+                }
+            }
+            
+            this.misdiagnosisPatterns.set(misdiagnosisKey, existing);
+            
+            // Save to state store
+            this.stateStore.updateState('learning.misdiagnosisPatterns', 
+                Object.fromEntries(this.misdiagnosisPatterns));
+        }
+    }
+    
+    /**
+     * Get misdiagnosis prevention advice for an issue
+     * MISDIAGNOSIS-FIRST: Core prevention mechanism
+     */
+    getMisdiagnosisPrevention(issueType, errorMessage, component) {
+        const prevention = {
+            warnings: [],
+            correctApproach: null,
+            commonMisdiagnosis: null,
+            timeSavings: null,
+            failedMethods: []
+        };
+        
+        // Check for matching misdiagnosis patterns
+        for (const [patternKey, pattern] of this.misdiagnosisPatterns.entries()) {
+            // Check if symptom matches (flexible matching)
+            let symptomMatch = false;
+            if (pattern.symptom) {
+                const symptomPatterns = pattern.symptom.split('|');
+                const searchText = (errorMessage || issueType || '').toLowerCase();
+                symptomMatch = symptomPatterns.some(sp => searchText.includes(sp.trim().toLowerCase()));
+            }
+            
+            // Check if component matches
+            const componentMatch = !component || 
+                !pattern.component || 
+                pattern.component === component || 
+                pattern.component === 'any' ||
+                (component.toLowerCase().includes('powershell') && pattern.component === 'PowerShell');
+            
+            // Check if issue type matches
+            const issueTypeMatch = !issueType || 
+                !pattern.issueType ||
+                issueType.toLowerCase().includes(pattern.issueType.toLowerCase()) ||
+                pattern.issueType.toLowerCase().includes(issueType.toLowerCase());
+            
+            // Match if symptom OR issue type matches, and component matches
+            if ((symptomMatch || issueTypeMatch) && componentMatch) {
+                // Even if frequency is 0 (initialized pattern), still warn (it's a known pattern)
+                const shouldWarn = pattern.frequency >= 1 || (pattern.frequency === 0 && pattern.actualRootCause);
+                
+                if (shouldWarn) {
+                    prevention.warnings.push({
+                        type: 'MISDIAGNOSIS_WARNING',
+                        message: `Common misdiagnosis detected: ${pattern.commonMisdiagnosis}`,
+                        actualRootCause: pattern.actualRootCause,
+                        correctApproach: pattern.correctApproach,
+                        frequency: pattern.frequency || 0,
+                        timeWasted: pattern.timeWasted || 0,
+                        successRate: pattern.successRate || 0,
+                        pattern: patternKey
+                    });
+                    
+                    if (!prevention.correctApproach && pattern.correctApproach) {
+                        prevention.correctApproach = pattern.correctApproach;
+                    }
+                    if (!prevention.commonMisdiagnosis && pattern.commonMisdiagnosis) {
+                        prevention.commonMisdiagnosis = pattern.commonMisdiagnosis;
+                    }
+                    if (!prevention.timeSavings) {
+                        prevention.timeSavings = pattern.timeWasted || 0;
+                    }
+                }
+            }
+        }
+        
+        // Also check failed methods for this issue type
+        const failedMethods = this.stateStore.getState('learning.failedMethods') || {};
+        const issueFailedMethods = failedMethods[issueType] || [];
+        if (issueFailedMethods.length > 0) {
+            prevention.failedMethods = issueFailedMethods.map(m => ({
+                method: m.method,
+                frequency: m.frequency,
+                timeWasted: m.timeWasted,
+                lastAttempt: m.lastAttempt
+            }));
+        }
+        
+        return prevention;
     }
     
     // ============================================

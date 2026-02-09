@@ -308,3 +308,24 @@ function Mark-AIPromptDelivered {
     $result = Invoke-AIIntegration -Command "mark-prompt-delivered" -Arguments @($PromptId)
     return $result
 }
+
+# Get compliance verification for a prompt
+function Get-AIComplianceVerification {
+    param(
+        [string]$PromptId
+    )
+    
+    $result = Invoke-AIIntegration -Command "get-compliance-verification" -Arguments @($PromptId)
+    if ($result) {
+        return @{
+            PromptId = $result.promptId
+            Timestamp = if ($result.timestamp) { [DateTimeOffset]::FromUnixTimeMilliseconds($result.timestamp).LocalDateTime } else { $null }
+            Compliant = $result.compliant
+            ComplianceResult = $result.complianceResult
+            PartsWorked = $result.partsWorked
+            PartsSkipped = $result.partsSkipped
+            Verification = $result.verification
+        }
+    }
+    return $null
+}

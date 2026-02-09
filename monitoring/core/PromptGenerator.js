@@ -73,11 +73,19 @@ class PromptGenerator extends EventEmitter {
     
     /**
      * Generate error fix prompt
+     * MISDIAGNOSIS-FIRST: Check for misdiagnosis patterns before generating prompt
      */
     generateErrorFixPrompt(issue) {
         const context = this.gatherContext(issue);
         const webSearchRequired = this.stateStore.getState('ai.learning.webSearchRequired');
         const learningKnowledge = this.getLearningKnowledge(issue);
+        
+        // CRITICAL: Check for misdiagnosis patterns FIRST (prevent wasted time)
+        const misdiagnosisPrevention = this.learningEngine?.getMisdiagnosisPrevention?.(
+            issue.issueType || issue.errorType,
+            issue.errorMessage || issue.message,
+            issue.component
+        ) || { warnings: [], correctApproach: null, commonMisdiagnosis: null, timeSavings: null };
         
         let prompt = `${issue.errorType || 'Error'} detected in ${issue.component || 'system'}`;
         if (issue.file) {
@@ -85,10 +93,27 @@ class PromptGenerator extends EventEmitter {
         }
         prompt += '.\n\n';
         
+        // MISDIAGNOSIS WARNING (highest priority - prevent wasted time)
+        if (misdiagnosisPrevention.warnings.length > 0) {
+            const warning = misdiagnosisPrevention.warnings[0]; // Most relevant warning
+            prompt += '⚠️  CRITICAL: MISDIAGNOSIS PREVENTION\n';
+            prompt += `   DO NOT: ${warning.commonMisdiagnosis || warning.message}\n`;
+            prompt += `   This has been tried ${warning.frequency || 0} time(s) and failed\n`;
+            if (warning.timeWasted) {
+                const minutesWasted = Math.round(warning.timeWasted / 60000);
+                prompt += `   This approach wastes ${minutesWasted} minutes per attempt\n`;
+            }
+            prompt += `   ACTUAL ROOT CAUSE: ${warning.actualRootCause || 'Check learning system'}\n`;
+            prompt += `   CORRECT APPROACH: ${warning.correctApproach || misdiagnosisPrevention.correctApproach || 'See steps below'}\n`;
+            prompt += '\n';
+        }
+        
         prompt += 'You must:\n';
         
         // Step 1: Call beforeAIAction
         prompt += `1. Call beforeAIAction() with context: type='fix_attempt', issueType='${issue.issueType || 'error'}', component='${issue.component || 'unknown'}', file='${issue.file || ''}'\n`;
+        prompt += `   - The learning system will check for misdiagnosis patterns and warn you\n`;
+        prompt += `   - HEED THE WARNINGS - they prevent wasted time\n`;
         
         // Step 2: Check web search requirement
         if (webSearchRequired && !webSearchRequired.resolved) {
@@ -105,20 +130,37 @@ class PromptGenerator extends EventEmitter {
         prompt += `   - Use queryLearning("What solutions worked for ${issue.issueType || 'this issue type'}?") or\n`;
         prompt += `   - Use getBestSolution("${issue.issueType || 'error'}") to get the best known solution\n`;
         prompt += `   - Check for matching patterns that solved similar issues\n`;
+        prompt += `   - Check for misdiagnosis patterns (what NOT to do)\n`;
         prompt += `   - The learning system is a tool to save you time - USE IT\n`;
         
         if (learningKnowledge.hasSolutions) {
             prompt += `   - Found solution: ${learningKnowledge.bestSolution?.method || 'check learning system'}\n`;
         }
         
-        // Step 4: Fix the issue
-        prompt += `${webSearchRequired && !webSearchRequired.resolved ? '6' : '4'}. Fix the ${issue.errorType || 'error'} using the learning system's solution if available\n`;
+        // Step 4: Fix the issue (with misdiagnosis prevention)
+        const fixStepNum = webSearchRequired && !webSearchRequired.resolved ? '6' : '4';
+        prompt += `${fixStepNum}. Fix the ${issue.errorType || 'error'} using the learning system's solution\n`;
+        if (misdiagnosisPrevention.correctApproach) {
+            prompt += `   - Use this approach: ${misdiagnosisPrevention.correctApproach}\n`;
+        }
+        if (misdiagnosisPrevention.commonMisdiagnosis) {
+            prompt += `   - DO NOT: ${misdiagnosisPrevention.commonMisdiagnosis}\n`;
+        }
         
         // Step 5: Call afterAIAction
         prompt += `${webSearchRequired && !webSearchRequired.resolved ? '7' : '5'}. Call afterAIAction() with the outcome\n`;
+        prompt += `   - Include fixDetails.approach (what you actually did)\n`;
+        prompt += `   - Include fixDetails.timeSpent (how long it took)\n`;
+        prompt += `   - This helps the system learn and prevent future misdiagnosis\n`;
         
         // Verification info
         prompt += '\nSystem will verify: tool calls (web_search, beforeAIAction, afterAIAction, queryLearning/getBestSolution), state (findings stored, webSearchRequired resolved), files (code changes)';
+        
+        // Time savings estimate
+        if (misdiagnosisPrevention.timeSavings) {
+            const minutesSaved = Math.round(misdiagnosisPrevention.timeSavings / 60000);
+            prompt += `\n\n⏱️  TIME SAVINGS: Following the correct approach saves ~${minutesSaved} minutes vs the wrong approach`;
+        }
         
         return {
             id: uuidv4(),
@@ -128,7 +170,8 @@ class PromptGenerator extends EventEmitter {
             issue: issue,
             context: context,
             webSearchRequired: webSearchRequired && !webSearchRequired.resolved,
-            searchTerms: webSearchRequired?.searchTerms || []
+            searchTerms: webSearchRequired?.searchTerms || [],
+            misdiagnosisPrevention: misdiagnosisPrevention // Include in prompt metadata
         };
     }
     
@@ -247,11 +290,23 @@ class PromptGenerator extends EventEmitter {
     
     /**
      * Get learning system knowledge for this issue
+     * MISDIAGNOSIS-FIRST: Prioritize misdiagnosis patterns
      */
     getLearningKnowledge(issue) {
+        // CRITICAL: Check misdiagnosis patterns FIRST (most valuable)
+        const misdiagnosisPrevention = this.learningEngine?.getMisdiagnosisPrevention?.(
+            issue.issueType || issue.errorType,
+            issue.errorMessage || issue.message,
+            issue.component
+        ) || { warnings: [], correctApproach: null };
+        
         // Check if learning system has solutions
         const bestSolution = this.learningEngine?.getBestSolution?.(issue.issueType);
         const hasSolutions = !!bestSolution;
+        
+        // Check failed methods (what NOT to do)
+        const failedMethods = this.stateStore.getState('learning.failedMethods') || {};
+        const issueFailedMethods = failedMethods[issue.issueType] || [];
         
         // Check prompt effectiveness history
         const aiCompliance = this.stateStore.getState('learning.aiCompliance') || [];
@@ -263,6 +318,8 @@ class PromptGenerator extends EventEmitter {
         return {
             hasSolutions,
             bestSolution,
+            misdiagnosisPrevention, // Include misdiagnosis data
+            failedMethods: issueFailedMethods, // What NOT to do
             similarPrompts: similarPrompts.slice(-5), // Last 5 similar prompts
             averageCompliance: similarPrompts.length > 0 
                 ? similarPrompts.reduce((sum, p) => sum + (p.complianceResult === 'full' ? 1 : 0), 0) / similarPrompts.length

@@ -243,6 +243,13 @@ class AIMonitorCore {
             this.workflowViolationDetector.recordAfterActionCall();
         });
         
+        // Hook up tool call tracking to compliance verifier
+        this.collaborationInterface.on('toolCall', (toolCall) => {
+            if (this.complianceVerifier) {
+                this.complianceVerifier.trackToolCall(toolCall.tool, toolCall.params);
+            }
+        });
+        
         // Hook up violation detector to prompt generator
         this.workflowViolationDetector.on('violationDetected', (violation) => {
             const prompt = this.promptGenerator.generatePrompt({
@@ -342,25 +349,52 @@ class AIMonitorCore {
         // Hook up prompt generator to verify compliance after prompts are delivered
         this.promptGenerator.on('promptGenerated', ({ prompt }) => {
             // Schedule verification after a delay (give AI time to act)
-            setTimeout(() => {
-                const verification = this.complianceVerifier.verifyCompliance(prompt);
-                if (!verification.compliant) {
-                    // Generate non-compliance prompt
-                    const nonCompliancePrompt = this.promptGenerator.generatePrompt({
-                        type: 'non_compliance',
-                        claimedAction: 'follow the prompt',
-                        previousPromptId: prompt.id,
-                        verification: verification.verification,
-                        requiredSteps: this._extractRequiredSteps(prompt.prompt)
-                    });
-                    if (nonCompliancePrompt) {
-                        gameLogger.warn('BrokenPromise', '[PROMPT_SYSTEM] Generated non-compliance prompt', {
-                            promptId: nonCompliancePrompt.id,
-                            previousPromptId: prompt.id
-                        });
+            const verificationTimeout = setTimeout(() => {
+                this.verifyPromptCompliance(prompt);
+            }, 300000); // Check after 5 minutes
+            
+            // Store timeout so we can cancel if prompt is delivered early
+            prompt._verificationTimeout = verificationTimeout;
+        });
+        
+        // Verify compliance when prompt is marked as delivered
+        this.stateStore.on('stateChanged', (event) => {
+            if (event.path === 'ai.deliveredPrompts') {
+                // A prompt was marked as delivered - verify immediately
+                const deliveredPrompts = this.stateStore.getState('ai.deliveredPrompts') || [];
+                if (deliveredPrompts.length > 0) {
+                    const latestDeliveredId = deliveredPrompts[deliveredPrompts.length - 1];
+                    const prompts = this.stateStore.getState('ai.prompts') || [];
+                    const prompt = prompts.find(p => p.id === latestDeliveredId);
+                    if (prompt) {
+                        // Cancel scheduled verification and verify now
+                        if (prompt._verificationTimeout) {
+                            clearTimeout(prompt._verificationTimeout);
+                        }
+                        // Verify after a short delay to allow AI to complete actions
+                        setTimeout(() => {
+                            this.verifyPromptCompliance(prompt);
+                        }, 30000); // 30 seconds after delivery
                     }
                 }
-            }, 300000); // Check after 5 minutes
+            }
+        });
+        
+        // Verify compliance when tool calls are made (real-time verification)
+        this.collaborationInterface.on('toolCall', (toolCall) => {
+            // Check if there's a pending prompt that requires this tool
+            const prompts = this.stateStore.getState('ai.prompts') || [];
+            const pendingPrompts = prompts.filter(p => !p.delivered && (Date.now() - (p.timestamp || 0)) < 600000); // Last 10 minutes
+            
+            for (const prompt of pendingPrompts) {
+                // Check if this tool call satisfies part of the prompt
+                if (this._isToolCallRelevant(prompt, toolCall)) {
+                    // Schedule a quick verification check
+                    setTimeout(() => {
+                        this.verifyPromptCompliance(prompt, { quickCheck: true });
+                    }, 5000); // 5 seconds after relevant tool call
+                }
+            }
         });
         
         // Initialize PowerShell syntax validator (needs issueDetector and learningEngine)
@@ -1497,6 +1531,62 @@ class AIMonitorCore {
         
         // Note: AIMonitorCore doesn't extend EventEmitter, so we can't emit
         // If external cleanup is needed, it should be handled by the caller
+    }
+    
+    /**
+     * Verify prompt compliance (helper method)
+     */
+    verifyPromptCompliance(prompt, options = {}) {
+        if (!this.complianceVerifier || !prompt) {
+            return null;
+        }
+        
+        const verification = this.complianceVerifier.verifyCompliance(prompt, options);
+        
+        if (!verification.compliant && !options.quickCheck) {
+            // Generate non-compliance prompt
+            const nonCompliancePrompt = this.promptGenerator.generatePrompt({
+                type: 'non_compliance',
+                claimedAction: 'follow the prompt',
+                previousPromptId: prompt.id,
+                verification: verification.verification,
+                requiredSteps: this._extractRequiredSteps(prompt.prompt)
+            });
+            if (nonCompliancePrompt) {
+                gameLogger.warn('BrokenPromise', '[PROMPT_SYSTEM] Generated non-compliance prompt', {
+                    promptId: nonCompliancePrompt.id,
+                    previousPromptId: prompt.id,
+                    complianceResult: verification.complianceResult
+                });
+            }
+        }
+        
+        return verification;
+    }
+    
+    /**
+     * Check if a tool call is relevant to a prompt
+     */
+    _isToolCallRelevant(prompt, toolCall) {
+        if (!prompt || !toolCall) {
+            return false;
+        }
+        
+        const promptText = prompt.prompt || '';
+        const toolName = toolCall.tool;
+        
+        // Check if prompt requires this tool
+        if (toolName === 'web_search' && promptText.includes('Search the web')) {
+            return true;
+        }
+        if (toolName === 'beforeAIAction' && promptText.includes('beforeAIAction()')) {
+            return true;
+        }
+        if (toolName === 'afterAIAction' && promptText.includes('afterAIAction()')) {
+            return true;
+        }
+        
+        return false;
     }
     
     /**

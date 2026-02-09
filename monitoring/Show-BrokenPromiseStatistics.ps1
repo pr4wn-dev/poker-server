@@ -301,6 +301,36 @@ function Show-BrokenPromiseStatistics {
         Write-Host ("=" * $consoleWidth) -ForegroundColor Yellow
     }
     
+    # Misdiagnosis Prevention (full width, highest priority - prevents wasted time)
+    $misdiagnosis = if ($aiStats.misdiagnosis) { $aiStats.misdiagnosis } else { @{totalPatterns=0;highFrequencyPatterns=@()} }
+    if ($misdiagnosis.totalPatterns -gt 0 -and $misdiagnosis.highFrequencyPatterns -and $misdiagnosis.highFrequencyPatterns.Count -gt 0) {
+        Write-Host ""
+        Write-Host ("=" * $consoleWidth) -ForegroundColor Magenta
+        Write-Host "⚠️  MISDIAGNOSIS PREVENTION - PREVENTS WASTED TIME" -ForegroundColor Yellow
+        Write-Host ("=" * $consoleWidth) -ForegroundColor Magenta
+        
+        Write-Host "Total Patterns: $($misdiagnosis.totalPatterns)" -ForegroundColor White
+        Write-Host "Total Time Wasted (Prevented): $([Math]::Round($misdiagnosis.totalTimeWasted / 60000, 1)) minutes" -ForegroundColor White
+        Write-Host "Total Occurrences: $($misdiagnosis.totalFrequency)" -ForegroundColor White
+        
+        if ($misdiagnosis.highFrequencyPatterns -and $misdiagnosis.highFrequencyPatterns.Count -gt 0) {
+            Write-Host ""
+            Write-Host "High-Frequency Patterns (Most Valuable):" -ForegroundColor Yellow
+            $topPatterns = $misdiagnosis.highFrequencyPatterns | Select-Object -First 3
+            foreach ($pattern in $topPatterns) {
+                $minutesWasted = [Math]::Round($pattern.timeWasted / 60000, 1)
+                Write-Host ""
+                Write-Host "  Pattern: $($pattern.pattern)" -ForegroundColor Cyan
+                Write-Host "    ❌ DON'T: $($pattern.commonMisdiagnosis)" -ForegroundColor Red
+                Write-Host "    ✅ DO: $($pattern.correctApproach)" -ForegroundColor Green
+                Write-Host "    Root Cause: $($pattern.actualRootCause)" -ForegroundColor White
+                Write-Host "    Frequency: $($pattern.frequency) occurrence(s)" -ForegroundColor Gray
+                Write-Host "    Time Wasted: $minutesWasted minutes per occurrence" -ForegroundColor Gray
+            }
+        }
+        Write-Host ("=" * $consoleWidth) -ForegroundColor Magenta
+    }
+    
     # Learning Insights (full width, if learning system has data)
     $learning = if ($aiStats.learning) { $aiStats.learning } else { @{patternsLearned=0;recentImprovements=@()} }
     if ($learning.patternsLearned -gt 0 -or ($learning.recentImprovements -and $learning.recentImprovements.Count -gt 0)) {

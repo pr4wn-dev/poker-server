@@ -271,7 +271,16 @@ class AICollaborationInterface extends EventEmitter {
      */
     async beforeAIAction(action) {
         // Record that beforeAIAction was called
-        this.stateStore.updateState('ai.lastBeforeActionCall', Date.now());
+        const timestamp = Date.now();
+        this.stateStore.updateState('ai.lastBeforeActionCall', timestamp);
+        
+        // Track tool call for compliance verification
+        this.trackToolCall('beforeAIAction', {
+            action: action.type || 'unknown',
+            issueType: action.issueType,
+            component: action.component,
+            file: action.file || action.filePath
+        });
         const suggestions = {
             warnings: [],
             recommendations: [],
@@ -302,6 +311,29 @@ class AICollaborationInterface extends EventEmitter {
         
         // Get proactive suggestions from learning system
         if (this.learningEngine) {
+            // Check for misdiagnosis patterns FIRST (prevent wasted time)
+            const misdiagnosisPrevention = this.learningEngine.getMisdiagnosisPrevention(
+                action.issueType,
+                action.errorMessage || action.details?.errorMessage,
+                action.component
+            );
+            
+            if (misdiagnosisPrevention.warnings.length > 0) {
+                // Add misdiagnosis warnings (high priority - prevent wasted time)
+                suggestions.warnings.unshift(...misdiagnosisPrevention.warnings);
+                
+                // Add correct approach as recommendation
+                if (misdiagnosisPrevention.correctApproach) {
+                    suggestions.recommendations.unshift({
+                        type: 'MISDIAGNOSIS_PREVENTION',
+                        message: `Correct approach: ${misdiagnosisPrevention.correctApproach}`,
+                        priority: 'critical',
+                        timeSavings: misdiagnosisPrevention.timeSavings,
+                        why: `This prevents the common misdiagnosis: ${misdiagnosisPrevention.commonMisdiagnosis}`
+                    });
+                }
+            }
+            
             // Check for similar patterns
             const similarPatterns = this.findSimilarPatterns(action);
             if (similarPatterns.length > 0) {
@@ -441,8 +473,42 @@ class AICollaborationInterface extends EventEmitter {
      * This is called AFTER the AI does something - we learn from BOTH successes and failures
      */
     afterAIAction(action, result) {
-        // Track outcome
+        // Record that afterAIAction was called
+        const timestamp = Date.now();
+        this.stateStore.updateState('ai.lastAfterActionCall', timestamp);
+        
+        // Track tool call for compliance verification
+        this.trackToolCall('afterAIAction', {
+            action: action.type || 'unknown',
+            issueType: action.issueType,
+            component: action.component,
+            file: action.file || action.filePath,
+            success: result.success !== false
+        });
+        
+        // Calculate time spent (if action had a start time)
+        const timeSpent = action.startTime ? (timestamp - action.startTime) : (result.duration || 0);
+        
+        // Track outcome with time tracking
         this.trackActionOutcome(action, result);
+        
+        // Prepare fix attempt data with time tracking for learning system
+        const fixAttemptData = {
+            issueId: action.issueId,
+            issueType: action.issueType,
+            fixMethod: action.method || action.fixMethod,
+            fixDetails: {
+                ...action.details,
+                approach: action.details?.approach || action.method,
+                timeSpent: timeSpent,
+                actualRootCause: result.actualRootCause || action.details?.actualRootCause,
+                correctApproach: result.correctApproach || action.details?.correctApproach,
+                wrongApproach: result.wrongApproach || action.details?.wrongApproach
+            },
+            result: result.success !== false ? 'success' : 'failure',
+            timestamp: timestamp,
+            duration: timeSpent
+        };
         
         // Learn from the action - SUCCESS OR FAILURE
         if (this.learningEngine && result) {
@@ -453,10 +519,22 @@ class AICollaborationInterface extends EventEmitter {
                 this.learningEngine.learnFromAttempt({
                     issueId: action.issueId,
                     issueType: action.issueType,
-                    fixMethod: action.method,
-                    fixDetails: action.details,
+                    fixMethod: action.method || action.fixMethod,
+                    fixDetails: {
+                        ...action.details,
+                        approach: action.details?.approach || action.method,
+                        timeSpent: timeSpent,
+                        actualRootCause: result.actualRootCause || action.details?.actualRootCause,
+                        correctApproach: result.correctApproach || action.details?.correctApproach,
+                        wrongApproach: result.wrongApproach || action.details?.wrongApproach,
+                        errorMessage: result.errorMessage || action.details?.errorMessage,
+                        component: action.component
+                    },
                     result: wasSuccess ? 'success' : 'failure',
-                    timestamp: Date.now(),
+                    timestamp: timestamp,
+                    duration: timeSpent,
+                    errorMessage: result.errorMessage || action.details?.errorMessage,
+                    component: action.component,
                     // Include failure details so learning system knows WHY it failed
                     failureReason: wasSuccess ? null : (result.reason || result.error || 'Unknown failure reason'),
                     failureContext: wasSuccess ? null : (result.context || action.details)
@@ -1205,6 +1283,28 @@ class AICollaborationInterface extends EventEmitter {
             this.aiActions[actionIndex].result = result;
             this.aiActions[actionIndex].completedAt = Date.now();
         }
+    }
+    
+    trackToolCall(toolName, params = {}) {
+        const toolCall = {
+            tool: toolName,
+            params: params,
+            timestamp: Date.now()
+        };
+        
+        // Store in state for compliance verification
+        const recentToolCalls = this.stateStore.getState('ai.recentToolCalls') || [];
+        recentToolCalls.push(toolCall);
+        
+        // Keep only last 50 tool calls
+        if (recentToolCalls.length > 50) {
+            recentToolCalls.shift();
+        }
+        
+        this.stateStore.updateState('ai.recentToolCalls', recentToolCalls);
+        
+        // Also notify compliance verifier if available (via event)
+        this.emit('toolCall', toolCall);
     }
     
     findSimilarPatterns(action) {

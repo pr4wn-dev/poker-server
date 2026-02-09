@@ -66,6 +66,9 @@ class AILiveStatistics {
             // Learning State (for AI to understand)
             learning: this.getLearningState(),
             
+            // Misdiagnosis Prevention (for AI to prevent wasted time)
+            misdiagnosis: this.getMisdiagnosisState(),
+            
             // AI Recommendations (for AI to act on)
             recommendations: this.getRecommendations(),
             
@@ -607,6 +610,25 @@ class AILiveStatistics {
         const lastBeforeAction = this.stateStore.getState('ai.lastBeforeActionCall');
         const lastAfterAction = this.stateStore.getState('ai.lastAfterActionCall');
         
+        // Get compliance verification data
+        const aiCompliance = this.stateStore.getState('learning.aiCompliance') || [];
+        const recentVerifications = Array.isArray(aiCompliance)
+            ? aiCompliance.filter(v => (Date.now() - (v.timestamp || 0)) < 3600000) // Last hour
+            : [];
+        
+        // Calculate compliance statistics
+        const totalVerifications = recentVerifications.length;
+        const compliantCount = recentVerifications.filter(v => v.compliant === true).length;
+        const partialCount = recentVerifications.filter(v => v.complianceResult === 'partial').length;
+        const nonCompliantCount = recentVerifications.filter(v => v.compliant === false && v.complianceResult !== 'partial').length;
+        const complianceRate = totalVerifications > 0 ? (compliantCount / totalVerifications) * 100 : 0;
+        
+        // Get recent tool calls
+        const recentToolCalls = this.stateStore.getState('ai.recentToolCalls') || [];
+        const recentToolCallsFiltered = Array.isArray(recentToolCalls)
+            ? recentToolCalls.filter(tc => (Date.now() - (tc.timestamp || 0)) < 3600000)
+            : [];
+        
         return {
             violations: {
                 total: violations.length,
@@ -628,7 +650,29 @@ class AILiveStatistics {
                 lastBeforeAction: lastBeforeAction,
                 lastAfterAction: lastAfterAction,
                 timeSinceBeforeAction: lastBeforeAction ? (Date.now() - lastBeforeAction) : null,
-                timeSinceAfterAction: lastAfterAction ? (Date.now() - lastAfterAction) : null
+                timeSinceAfterAction: lastAfterAction ? (Date.now() - lastAfterAction) : null,
+                verifications: recentVerifications.slice(-10).map(v => ({
+                    promptId: v.promptId,
+                    timestamp: v.timestamp,
+                    promptType: v.promptType,
+                    complianceResult: v.complianceResult,
+                    compliant: v.compliant,
+                    partsWorked: v.partsWorked || [],
+                    partsSkipped: v.partsSkipped || [],
+                    verification: v.verification || {}
+                })),
+                statistics: {
+                    total: totalVerifications,
+                    compliant: compliantCount,
+                    partial: partialCount,
+                    nonCompliant: nonCompliantCount,
+                    complianceRate: complianceRate
+                },
+                recentToolCalls: recentToolCallsFiltered.slice(-20).map(tc => ({
+                    tool: tc.tool,
+                    timestamp: tc.timestamp,
+                    params: tc.params || {}
+                }))
             }
         };
     }
