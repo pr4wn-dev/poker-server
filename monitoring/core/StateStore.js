@@ -773,7 +773,27 @@ class StateStore extends EventEmitter {
             }
             
             // Atomic rename (replaces old file atomically)
-            fs.renameSync(tempFile, this.persistenceFile);
+            // Handle file locking gracefully (EPERM can occur if file is locked by another process)
+            try {
+                fs.renameSync(tempFile, this.persistenceFile);
+            } catch (renameError) {
+                // If rename fails due to permission/locking (EPERM), try to clean up temp file
+                if (renameError.code === 'EPERM' || renameError.code === 'EBUSY') {
+                    // File is locked - delete temp file and skip this save
+                    // Next auto-save will retry
+                    try {
+                        if (fs.existsSync(tempFile)) {
+                            fs.unlinkSync(tempFile);
+                        }
+                    } catch (cleanupError) {
+                        // Ignore cleanup errors
+                    }
+                    // Don't throw - allow process to continue, next save will retry
+                    return;
+                }
+                // For other errors, re-throw
+                throw renameError;
+            }
             
         } catch (error) {
             // DO NOT log to console - errors are for AI only, not user
