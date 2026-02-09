@@ -302,6 +302,52 @@ class AILiveStatistics {
     }
     
     /**
+     * Get misdiagnosis prevention state
+     */
+    getMisdiagnosisState() {
+        const misdiagnosisPatterns = this.stateStore.getState('learning.misdiagnosisPatterns') || {};
+        const patterns = Object.entries(misdiagnosisPatterns);
+        
+        // Calculate totals
+        let totalPatterns = patterns.length;
+        let totalTimeWasted = 0;
+        let totalFrequency = 0;
+        
+        patterns.forEach(([key, pattern]) => {
+            totalTimeWasted += pattern.timeWasted || 0;
+            totalFrequency += pattern.frequency || 0;
+        });
+        
+        // Get high-frequency patterns (most valuable)
+        const highFrequencyPatterns = patterns
+            .filter(([key, pattern]) => (pattern.frequency || 0) >= 2)
+            .sort((a, b) => (b[1].frequency || 0) - (a[1].frequency || 0))
+            .slice(0, 10)
+            .map(([key, pattern]) => ({
+                pattern: pattern.pattern || key,
+                symptom: pattern.symptom,
+                commonMisdiagnosis: pattern.commonMisdiagnosis,
+                actualRootCause: pattern.actualRootCause,
+                correctApproach: pattern.correctApproach,
+                frequency: pattern.frequency || 0,
+                timeWasted: pattern.timeWasted || 0,
+                successRate: pattern.successRate || 0
+            }));
+        
+        return {
+            totalPatterns,
+            totalTimeWasted,
+            totalFrequency,
+            highFrequencyPatterns,
+            patterns: patterns.map(([key, pattern]) => ({
+                pattern: pattern.pattern || key,
+                frequency: pattern.frequency || 0,
+                timeWasted: pattern.timeWasted || 0
+            }))
+        };
+    }
+    
+    /**
      * Get AI recommendations
      */
     getRecommendations() {
