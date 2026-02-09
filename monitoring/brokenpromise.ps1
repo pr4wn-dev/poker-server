@@ -1021,19 +1021,24 @@ function Write-ConsoleOutput {
             $windowHeight = [Console]::WindowHeight
             $startClearLine = $script:consoleOutputStartLine
             $endClearLine = [Math]::Min($windowHeight - 1, $script:consoleOutputStartLine + $script:maxConsoleLines)
+            
+            for ($line = $startClearLine; $line -le $endClearLine; $line++) {
+                if (Set-SafeCursorPosition -X 0 -Y $line) {
+                    try {
+                        $windowWidth = [Console]::WindowWidth
+                        Write-Host (" " * $windowWidth) -NoNewline
+                    } catch {
+                        # Console handle invalid - skip this line
+                    }
+                }
+            }
+            
+            # Reset console line count
+            $script:consoleLineCount = 0
         } catch {
             # Console handle invalid - skip clearing
             return
         }
-        
-        for ($line = $startClearLine; $line -le $endClearLine; $line++) {
-            if (Set-SafeCursorPosition -X 0 -Y $line) {
-                Write-Host (" " * [Console]::WindowWidth) -NoNewline
-            }
-        }
-        
-        # Reset console line count
-        $script:consoleLineCount = 0
     }
     
     # Calculate current console output line
@@ -1050,7 +1055,12 @@ function Write-ConsoleOutput {
                 
                 for ($line = $startClearLine; $line -le $endClearLine; $line++) {
                     if (Set-SafeCursorPosition -X 0 -Y $line) {
-                        Write-Host (" " * [Console]::WindowWidth) -NoNewline
+                        try {
+                            $windowWidth = [Console]::WindowWidth
+                            Write-Host (" " * $windowWidth) -NoNewline
+                        } catch {
+                            # Console handle invalid - skip this line
+                        }
                     }
                 }
                 
@@ -1067,7 +1077,8 @@ function Write-ConsoleOutput {
     $truncatedMessage = $Message
     if (Test-InteractiveConsole) {
         try {
-            $maxMessageLength = [Console]::WindowWidth - 2
+            $windowWidth = [Console]::WindowWidth
+            $maxMessageLength = $windowWidth - 2
             $truncatedMessage = if ($Message.Length -gt $maxMessageLength) {
                 $Message.Substring(0, $maxMessageLength - 3) + "..."
             } else {
@@ -2162,12 +2173,15 @@ function Show-Statistics {
         }
         
         # Get console width for dynamic layout
-        try {
-            $consoleWidth = [Console]::WindowWidth
-            if ($consoleWidth -lt 120) { $consoleWidth = 120 }
-        } catch {
-            # Fallback if console width unavailable
-            $consoleWidth = 120
+        $consoleWidth = 120  # Default fallback
+        if (Test-InteractiveConsole) {
+            try {
+                $consoleWidth = [Console]::WindowWidth
+                if ($consoleWidth -lt 120) { $consoleWidth = 120 }
+            } catch {
+                # Fallback if console width unavailable
+                $consoleWidth = 120
+            }
         }
     } else {
         # Not interactive - use default width
@@ -2823,7 +2837,8 @@ function Show-Statistics {
             for ($line = $consoleAreaStart; $line -le $consoleAreaEnd; $line++) {
                 if (Set-SafeCursorPosition -X 0 -Y $line) {
                     try {
-                        Write-Host (" " * [Console]::WindowWidth) -NoNewline
+                        $windowWidth = [Console]::WindowWidth
+                        Write-Host (" " * $windowWidth) -NoNewline
                     } catch {
                         # Console handle may be invalid - skip this line
                     }
@@ -3403,8 +3418,15 @@ function Set-MinimumWindowSize {
     $script:minWindowHeight = $minHeight
     
     try {
-        $currentWidth = [Console]::WindowWidth
-        $currentHeight = [Console]::WindowHeight
+        $currentWidth = $null
+        $currentHeight = $null
+        try {
+            $currentWidth = [Console]::WindowWidth
+            $currentHeight = [Console]::WindowHeight
+        } catch {
+            # Console handle invalid - can't resize
+            return
+        }
         
         if ($currentWidth -lt $minWidth -or $currentHeight -lt $minHeight) {
             # Try SetWindowSize first (PowerShell 5.1+)
@@ -3459,8 +3481,15 @@ function Enforce-MinimumWindowSize {
     }
     
     try {
-        $currentWidth = [Console]::WindowWidth
-        $currentHeight = [Console]::WindowHeight
+        $currentWidth = $null
+        $currentHeight = $null
+        try {
+            $currentWidth = [Console]::WindowWidth
+            $currentHeight = [Console]::WindowHeight
+        } catch {
+            # Console handle invalid - can't enforce size
+            return
+        }
         
         if ($currentWidth -lt $script:minWindowWidth -or $currentHeight -lt $script:minWindowHeight) {
             # Try SetWindowSize first (simpler, more reliable)
