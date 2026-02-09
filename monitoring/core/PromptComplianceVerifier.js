@@ -44,7 +44,7 @@ class PromptComplianceVerifier extends EventEmitter {
         };
         
         // Check based on prompt type
-        let result;
+        let result = verification;
         switch (prompt.type) {
             case 'error_fix':
                 result = this.verifyErrorFixPrompt(prompt, verification);
@@ -58,12 +58,11 @@ class PromptComplianceVerifier extends EventEmitter {
             case 'non_compliance':
                 result = this.verifyNonCompliancePrompt(prompt, verification);
                 break;
-            default:
-                result = verification;
         }
         
         // Merge result into verification
-        Object.assign(verification, result);
+        if (result && result !== verification) {
+            Object.assign(verification, result);
         }
         
         // Determine overall compliance

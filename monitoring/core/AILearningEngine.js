@@ -525,7 +525,72 @@ class AILearningEngine extends EventEmitter {
      * Enhanced to include circular dependency and blocking chain solutions
      */
     getBestSolution(issueType) {
-        // First check for circular dependency patterns
+        // FIRST: Check stored patterns from state.learning.patterns (most reliable)
+        const storedPatterns = this.stateStore.getState('learning.patterns') || [];
+        if (Array.isArray(storedPatterns) && storedPatterns.length > 0) {
+            // Patterns are stored as [key, value] pairs
+            for (const patternEntry of storedPatterns) {
+                if (Array.isArray(patternEntry) && patternEntry.length >= 2) {
+                    const [patternKey, patternData] = patternEntry;
+                    
+                    // Check if pattern matches issueType
+                    if (patternKey && typeof patternKey === 'string') {
+                        // Check exact match or contains match
+                        if (patternKey === issueType || 
+                            patternKey.includes(issueType) || 
+                            issueType.includes(patternKey.split(':')[1] || '')) {
+                            
+                            // Check if pattern has solutions
+                            if (patternData && patternData.solutions && Array.isArray(patternData.solutions) && patternData.solutions.length > 0) {
+                                const bestSolution = patternData.solutions[0];
+                                return {
+                                    method: bestSolution.method || patternData.method || 'fix_from_pattern',
+                                    successRate: patternData.successRate || 1.0,
+                                    frequency: patternData.frequency || 1,
+                                    contexts: patternData.contexts || [],
+                                    source: 'stored_pattern',
+                                    pattern: patternKey
+                                };
+                            }
+                            
+                            // If no solutions array, check if patternData itself has method
+                            if (patternData && patternData.method) {
+                                return {
+                                    method: patternData.method,
+                                    successRate: patternData.successRate || 1.0,
+                                    frequency: patternData.frequency || 1,
+                                    source: 'stored_pattern',
+                                    pattern: patternKey
+                                };
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // SECOND: Check in-memory patterns Map (if loaded)
+        for (const [patternKey, patternData] of this.patterns.entries()) {
+            if (patternKey && typeof patternKey === 'string') {
+                if (patternKey === issueType || 
+                    patternKey.includes(issueType) || 
+                    issueType.includes(patternKey.split(':')[1] || '')) {
+                    
+                    if (patternData && patternData.solutions && Array.isArray(patternData.solutions) && patternData.solutions.length > 0) {
+                        const bestSolution = patternData.solutions[0];
+                        return {
+                            method: bestSolution.method || patternData.method || 'fix_from_pattern',
+                            successRate: patternData.successRate || 1.0,
+                            frequency: patternData.frequency || 1,
+                            source: 'in_memory_pattern',
+                            pattern: patternKey
+                        };
+                    }
+                }
+            }
+        }
+        
+        // THIRD: Check for circular dependency patterns
         if (issueType && (issueType.includes('hang') || issueType.includes('circular') || issueType.includes('loop'))) {
             // Try to detect circular dependency
             const circularPattern = this.detectCircularDependency([issueType]);
@@ -542,7 +607,7 @@ class AILearningEngine extends EventEmitter {
             }
         }
         
-        // Check for blocking chain patterns
+        // FOURTH: Check for blocking chain patterns
         if (issueType && (issueType.includes('blocking') || issueType.includes('sync') || issueType.includes('hang'))) {
             const blockingPattern = this.detectBlockingChain([{ type: 'sync', method: issueType }]);
             if (blockingPattern) {
@@ -558,7 +623,7 @@ class AILearningEngine extends EventEmitter {
             }
         }
         
-        // Fall back to original solution optimization
+        // FIFTH: Fall back to original solution optimization
         const optimization = this.solutionOptimization.get(issueType);
         if (optimization && optimization.bestSolution) {
             return {
