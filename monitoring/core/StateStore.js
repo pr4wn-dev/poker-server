@@ -757,8 +757,56 @@ class StateStore extends EventEmitter {
                 } catch (backupError) {
                     // Ignore backup errors (but UniversalErrorHandler will catch them)
                 }
-                // Start with fresh state
-                this.state = this._getInitialState();
+                // Start with fresh state - use the same initialization as constructor
+                this.state = {
+                    // Game State - Complete visibility into game
+                    game: {
+                        tables: new Map(),
+                        players: new Map(),
+                        chips: {
+                            totalInSystem: 0,
+                            byTable: new Map(),
+                            byPlayer: new Map(),
+                            history: []
+                        },
+                        hands: {
+                            current: null,
+                            history: []
+                        },
+                        phase: null,
+                        lastUpdate: null
+                    },
+                    // System State - Server, Database, Unity
+                    system: {
+                        server: { status: 'unknown', health: null, metrics: { uptime: 0, requests: 0, errors: 0, responseTime: 0 }, logs: [], lastCheck: null },
+                        database: { status: 'unknown', health: null, metrics: { uptime: 0, queries: 0, errors: 0, responseTime: 0 }, logs: [], lastCheck: null },
+                        unity: { status: 'unknown', health: null, metrics: { uptime: 0, fps: 0, connected: false, lastActivity: null }, uiState: { labels: new Map(), images: new Map(), sounds: new Map(), animations: new Map() }, logs: [], lastCheck: null }
+                    },
+                    // Monitoring State
+                    monitoring: {
+                        investigation: { status: 'idle', startTime: null, timeout: 15, issues: [], history: [], progress: 0, timeRemaining: null },
+                        verification: { status: 'idle', startTime: null, period: 0, results: [], history: [] },
+                        detection: { activeDetectors: [], detectionRate: 0, falsePositives: 0, accuracy: 0, lastDetection: null }
+                    },
+                    // Issue State
+                    issues: { detected: [], active: [], resolved: [], patterns: new Map(), fixes: new Map() },
+                    // Fix State
+                    fixes: { attempts: [], successes: [], failures: [], knowledge: new Map() },
+                    // Learning State
+                    learning: {
+                        fixAttempts: new Map(),
+                        successRates: new Map(),
+                        patterns: new Map(),
+                        knowledge: [],
+                        improvements: [],
+                        aiCompliance: [],
+                        aiComplianceConfidence: { successRate: 0, totalPrompts: 0, successfulPrompts: 0, lastUpdated: null }
+                    },
+                    // AI State
+                    ai: { prompts: [], recentToolCalls: [], lastBeforeActionCall: null, lastAfterActionCall: null, recentCodeChanges: [], workflowViolations: [] },
+                    // Metadata
+                    metadata: { version: '2.0.0', started: Date.now(), lastUpdate: Date.now(), updateCount: 0 }
+                };
             }
             // Re-throw so UniversalErrorHandler can catch it
             throw error;
