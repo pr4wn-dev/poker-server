@@ -56,11 +56,21 @@ if (-not $SkipBootstrap) {
                 
                 # Display prompt in console
                 Write-Host ""
-                Write-Host "═══════════════════════════════════════════════════════════════" -ForegroundColor Yellow
-                Write-Host "⚠️  PROMPT FOR USER TO DELIVER TO AI" -ForegroundColor Yellow
-                Write-Host "═══════════════════════════════════════════════════════════════" -ForegroundColor Yellow
+                Write-Host "=================================================================" -ForegroundColor Yellow
+                Write-Host "  PROMPT FOR USER TO DELIVER TO AI" -ForegroundColor Yellow
+                Write-Host "=================================================================" -ForegroundColor Yellow
                 Write-Host ""
-                Write-Host $promptText -ForegroundColor White
+                Write-Host "BrokenPromise has PowerShell syntax errors and cannot start:" -ForegroundColor White
+                Write-Host ""
+                foreach ($err in $errors) {
+                    Write-Host "  Line $($err.Extent.StartLineNumber): $($err.Message)" -ForegroundColor Red
+                }
+                Write-Host ""
+                Write-Host "You must:" -ForegroundColor Cyan
+                Write-Host "1. Fix the syntax errors listed above" -ForegroundColor White
+                Write-Host "2. Test that BrokenPromise can start successfully" -ForegroundColor White
+                Write-Host ""
+                Write-Host "=================================================================" -ForegroundColor Yellow
                 Write-Host ""
                 
                 # Also write to file
