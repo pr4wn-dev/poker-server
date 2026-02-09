@@ -1,0 +1,104 @@
+{
+  "timestamp": 1770609149274,
+  "investigation": {
+    "active": true,
+    "status": "starting",
+    "startTime": 1770549821659,
+    "timeout": 15,
+    "progress": 0,
+    "timeRemaining": 0,
+    "issuesCount": 0
+  },
+  "issues": {
+    "active": 0,
+    "list": []
+  },
+  "system": {
+    "server": {
+      "status": "error",
+      "health": 0,
+      "metrics": {
+        "uptime": 0,
+        "requests": 0,
+        "errors": 1,
+        "responseTime": 0,
+        "consecutiveErrors": 1
+      },
+      "recentErrors": [],
+      "trends": {
+        "errorRate": null,
+        "warningRate": null,
+        "trend": "decreasing"
+      },
+      "lastCheck": 1770555743174
+    },
+    "database": {
+      "status": "unknown",
+      "health": 0,
+      "metrics": {
+        "uptime": 0,
+        "queries": 0,
+        "errors": 0,
+        "responseTime": 0
+      },
+      "recentErrors": [],
+      "trends": {
+        "errorRate": null,
+        "warningRate": null,
+        "trend": "decreasing"
+      },
+      "lastCheck": null
+    },
+    "unity": {
+      "status": "unknown",
+      "health": 0,
+      "metrics": {
+        "uptime": 0,
+        "fps": 0,
+        "connected": false,
+        "lastActivity": null
+      },
+      "uiState": {
+        "labels": {},
+        "images": {},
+        "sounds": {},
+        "animations": {}
+      },
+      "recentErrors": [],
+      "trends": {
+        "errorRate": null,
+        "warningRate": null,
+        "trend": "decreasing"
+      },
+      "lastCheck": null
+    }
+  },
+  "recommendations": {
+    "investigation": {
+      "should": false,
+      "reason": "Investigation already in progress",
+      "confidence": 1
+    },
+    "pause": {
+      "should": false,
+      "reason": "No reason to pause",
+      "confidence": 1
+    },
+    "resume": {
+      "should": false,
+      "reason": "Unity not paused",
+      "confidence": 1
+    },
+    "fixes": [],
+    "avoid": [],
+    "priority": {
+      "priority": "low",
+      "action": "monitor",
+      "reason": "No active issues"
+    }
+  },
+  "aiCore": {
+    "active": true,
+    "lastSync": 1770609149259
+  }
+}

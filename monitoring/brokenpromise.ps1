@@ -5007,6 +5007,7 @@ while ($monitoringActive) {
                     }
                 }
             }
+            }
             
             $reader.Close()
             $fileStream.Close()

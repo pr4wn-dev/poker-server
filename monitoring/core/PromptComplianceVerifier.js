@@ -44,19 +44,26 @@ class PromptComplianceVerifier extends EventEmitter {
         };
         
         // Check based on prompt type
+        let result;
         switch (prompt.type) {
             case 'error_fix':
-                verification = this.verifyErrorFixPrompt(prompt, verification);
+                result = this.verifyErrorFixPrompt(prompt, verification);
                 break;
             case 'workflow_violation':
-                verification = this.verifyWorkflowViolationPrompt(prompt, verification);
+                result = this.verifyWorkflowViolationPrompt(prompt, verification);
                 break;
             case 'web_search_required':
-                verification = this.verifyWebSearchPrompt(prompt, verification);
+                result = this.verifyWebSearchPrompt(prompt, verification);
                 break;
             case 'non_compliance':
-                verification = this.verifyNonCompliancePrompt(prompt, verification);
+                result = this.verifyNonCompliancePrompt(prompt, verification);
                 break;
+            default:
+                result = verification;
+        }
+        
+        // Merge result into verification
+        Object.assign(verification, result);
         }
         
         // Determine overall compliance
