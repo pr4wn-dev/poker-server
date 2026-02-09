@@ -77,6 +77,13 @@ if (-not $SkipBootstrap) {
     }
 }
 
+# Colors for output (define FIRST before any use)
+function Write-Status { param($message, $color = "White") Write-Host "[$(Get-Date -Format 'HH:mm:ss')] $message" -ForegroundColor $color }
+function Write-Info { param($message) Write-Status $message "Cyan" }
+function Write-Success { param($message) Write-Status $message "Green" }
+function Write-Warning { param($message) Write-Status $message "Yellow" }
+function Write-Error { param($message) Write-Status $message "Red" }
+
 # Source BrokenPromise Integration helpers (NEW: AI-first monitoring system)
 $aiIntegrationPath = Join-Path $scriptDir "BrokenPromiseIntegration.ps1"
 if (Test-Path $aiIntegrationPath) {
@@ -96,13 +103,6 @@ if (Test-Path $showStatsPath) {
 } else {
     Write-Warning "Show-BrokenPromiseStatistics.ps1 not found at $showStatsPath - display may not work correctly"
 }
-
-# Colors for output (define FIRST before any use)
-function Write-Status { param($message, $color = "White") Write-Host "[$(Get-Date -Format 'HH:mm:ss')] $message" -ForegroundColor $color }
-function Write-Info { param($message) Write-Status $message "Cyan" }
-function Write-Success { param($message) Write-Status $message "Green" }
-function Write-Warning { param($message) Write-Status $message "Yellow" }
-function Write-Error { param($message) Write-Status $message "Red" }
 
 # Configuration - use absolute paths to prevent directory issues
 $logFile = Join-Path $script:projectRoot "logs\game.log"
