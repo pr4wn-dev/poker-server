@@ -194,6 +194,175 @@ class AIMonitorCore {
         );
         this.errorRecovery.recordSuccess('collaborationInterface');
         
+        // Prompt-Based System Components
+        const PromptGenerator = require('./PromptGenerator');
+        const PromptComplianceVerifier = require('./PromptComplianceVerifier');
+        const AIWorkflowViolationDetector = require('./AIWorkflowViolationDetector');
+        
+        // Initialize prompt generator
+        this.promptGenerator = new PromptGenerator(
+            this.stateStore,
+            this.learningEngine,
+            this.collaborationInterface
+        );
+        this.errorRecovery.recordSuccess('promptGenerator');
+        
+        // Initialize compliance verifier
+        this.complianceVerifier = new PromptComplianceVerifier(
+            this.stateStore,
+            this.projectRoot
+        );
+        this.errorRecovery.recordSuccess('complianceVerifier');
+        
+        // Track tool calls (we'll need to hook into tool system or track manually)
+        // For now, we'll track via state updates
+        this.setupToolCallTracking();
+        
+        // Initialize workflow violation detector
+        this.workflowViolationDetector = new AIWorkflowViolationDetector(
+            this.stateStore,
+            this.collaborationInterface,
+            this.complianceVerifier
+        );
+        this.errorRecovery.recordSuccess('workflowViolationDetector');
+        
+        // Hook up code change tracker to workflow violation detector
+        if (this.codeChangeTracker) {
+            this.codeChangeTracker.on('codeChanged', (data) => {
+                if (this.workflowViolationDetector && data.file) {
+                    this.workflowViolationDetector.recordCodeChange(data.file, data.changeType || 'modified');
+                }
+            });
+        }
+        
+        // Hook up violation detector to record beforeAIAction/afterAIAction calls
+        this.collaborationInterface.on('beforeAIAction', () => {
+            this.workflowViolationDetector.recordBeforeActionCall();
+        });
+        this.collaborationInterface.on('afterAIAction', () => {
+            this.workflowViolationDetector.recordAfterActionCall();
+        });
+        
+        // Hook up violation detector to prompt generator
+        this.workflowViolationDetector.on('violationDetected', (violation) => {
+            const prompt = this.promptGenerator.generatePrompt({
+                type: 'workflow_violation',
+                violation: violation.violation,
+                file: violation.file,
+                timestamp: violation.timestamp
+            });
+            if (prompt) {
+                gameLogger.warn('BrokenPromise', '[PROMPT_SYSTEM] Generated prompt for workflow violation', {
+                    promptId: prompt.id,
+                    violation: violation.violation
+                });
+            }
+        });
+        
+        // Hook up error detection to prompt generator
+        if (this.errorRecovery) {
+            this.errorRecovery.on('error', ({ component, error }) => {
+                // Generate prompt for monitoring system errors
+                const prompt = this.promptGenerator.generatePrompt({
+                    type: 'error_fix',
+                    errorType: error.message || 'Error',
+                    component: component,
+                    issueType: 'monitoring_system_error',
+                    timestamp: Date.now()
+                });
+                if (prompt) {
+                    gameLogger.warn('BrokenPromise', '[PROMPT_SYSTEM] Generated prompt for monitoring system error', {
+                        promptId: prompt.id,
+                        component: component
+                    });
+                }
+            });
+        }
+        
+        // Hook up issue detection to prompt generator
+        if (this.issueDetector) {
+            this.issueDetector.on('issueDetected', (issue) => {
+                // Generate prompt for Unity game issues
+                const prompt = this.promptGenerator.generatePrompt({
+                    type: 'error_fix',
+                    errorType: issue.type || 'Issue',
+                    component: issue.component || 'Unity',
+                    issueType: issue.issueType || 'game_issue',
+                    file: issue.file,
+                    timestamp: Date.now()
+                });
+                if (prompt) {
+                    gameLogger.warn('BrokenPromise', '[PROMPT_SYSTEM] Generated prompt for Unity game issue', {
+                        promptId: prompt.id,
+                        issueType: issue.issueType
+                    });
+                }
+            });
+        }
+        
+        // Hook up failure tracking to prompt generator (after failures)
+        if (this.collaborationInterface) {
+            this.collaborationInterface.on('aiFailure', (failureRecord) => {
+                // After failure, check if web search is required
+                const webSearchRequired = this.stateStore.getState('ai.learning.webSearchRequired');
+                if (webSearchRequired && !webSearchRequired.resolved) {
+                    const prompt = this.promptGenerator.generatePrompt({
+                        type: 'web_search_required',
+                        consecutiveFailures: webSearchRequired.consecutiveFailures,
+                        searchTerms: webSearchRequired.searchTerms,
+                        issueType: failureRecord.action?.issueType,
+                        component: failureRecord.action?.component,
+                        timestamp: Date.now()
+                    });
+                    if (prompt) {
+                        gameLogger.warn('BrokenPromise', '[PROMPT_SYSTEM] Generated prompt for web search requirement', {
+                            promptId: prompt.id,
+                            consecutiveFailures: webSearchRequired.consecutiveFailures
+                        });
+                    }
+                } else {
+                    // Generate error fix prompt for the failure
+                    const prompt = this.promptGenerator.generatePrompt({
+                        type: 'error_fix',
+                        errorType: failureRecord.failure?.reason || 'Failure',
+                        component: failureRecord.action?.component || 'unknown',
+                        issueType: failureRecord.action?.issueType || 'fix_failure',
+                        timestamp: Date.now()
+                    });
+                    if (prompt) {
+                        gameLogger.warn('BrokenPromise', '[PROMPT_SYSTEM] Generated prompt for fix failure', {
+                            promptId: prompt.id,
+                            issueType: failureRecord.action?.issueType
+                        });
+                    }
+                }
+            });
+        }
+        
+        // Hook up prompt generator to verify compliance after prompts are delivered
+        this.promptGenerator.on('promptGenerated', ({ prompt }) => {
+            // Schedule verification after a delay (give AI time to act)
+            setTimeout(() => {
+                const verification = this.complianceVerifier.verifyCompliance(prompt);
+                if (!verification.compliant) {
+                    // Generate non-compliance prompt
+                    const nonCompliancePrompt = this.promptGenerator.generatePrompt({
+                        type: 'non_compliance',
+                        claimedAction: 'follow the prompt',
+                        previousPromptId: prompt.id,
+                        verification: verification.verification,
+                        requiredSteps: this._extractRequiredSteps(prompt.prompt)
+                    });
+                    if (nonCompliancePrompt) {
+                        gameLogger.warn('BrokenPromise', '[PROMPT_SYSTEM] Generated non-compliance prompt', {
+                            promptId: nonCompliancePrompt.id,
+                            previousPromptId: prompt.id
+                        });
+                    }
+                }
+            }, 300000); // Check after 5 minutes
+        });
+        
         // Initialize PowerShell syntax validator (needs issueDetector and learningEngine)
         const PowerShellSyntaxValidator = require('./PowerShellSyntaxValidator');
         this.powerShellSyntaxValidator = new PowerShellSyntaxValidator(
@@ -1321,8 +1490,42 @@ class AIMonitorCore {
             message: 'All background processes stopped'
         });
         
+        // Stop workflow violation detector
+        if (this.workflowViolationDetector) {
+            this.workflowViolationDetector.stopMonitoring();
+        }
+        
         // Note: AIMonitorCore doesn't extend EventEmitter, so we can't emit
         // If external cleanup is needed, it should be handled by the caller
+    }
+    
+    /**
+     * Extract required steps from prompt text
+     */
+    _extractRequiredSteps(promptText) {
+        const steps = [];
+        const lines = promptText.split('\n');
+        let inStepsSection = false;
+        
+        for (const line of lines) {
+            if (line.includes('You must:')) {
+                inStepsSection = true;
+                continue;
+            }
+            
+            if (inStepsSection) {
+                // Match numbered steps (1., 2., etc.)
+                const stepMatch = line.match(/^\d+\.\s*(.+)$/);
+                if (stepMatch) {
+                    steps.push(stepMatch[1].trim());
+                } else if (line.trim() === '' || line.includes('System will verify')) {
+                    // End of steps section
+                    break;
+                }
+            }
+        }
+        
+        return steps;
     }
 }
 

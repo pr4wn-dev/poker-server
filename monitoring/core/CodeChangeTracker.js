@@ -97,6 +97,17 @@ class CodeChangeTracker extends EventEmitter {
         // Store change
         this.codeChanges.set(fixId, codeChange);
         
+        // Emit event for each file changed
+        if (codeChange.filesChanged && codeChange.filesChanged.length > 0) {
+            codeChange.filesChanged.forEach(file => {
+                this.emit('codeChanged', {
+                    file: file,
+                    changeType: 'modified',
+                    timestamp: codeChange.timestamp
+                });
+            });
+        }
+        
         // Learn patterns
         this.learnFromCodeChange(codeChange);
         

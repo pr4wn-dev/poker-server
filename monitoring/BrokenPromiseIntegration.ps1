@@ -269,3 +269,28 @@ function Get-AIStatusReport {
     $result = Invoke-AIIntegration -Command "get-status-report"
     return $result
 }
+
+# Get latest prompt for user to deliver to AI
+function Get-AILatestPrompt {
+    $result = Invoke-AIIntegration -Command "get-latest-prompt"
+    if ($result) {
+        return @{
+            Id = $result.id
+            Type = $result.type
+            Prompt = $result.prompt
+            Timestamp = if ($result.timestamp) { [DateTimeOffset]::FromUnixTimeMilliseconds($result.timestamp).LocalDateTime } else { $null }
+            Delivered = $result.delivered
+        }
+    }
+    return $null
+}
+
+# Mark prompt as delivered
+function Mark-AIPromptDelivered {
+    param(
+        [string]$PromptId
+    )
+    
+    $result = Invoke-AIIntegration -Command "mark-prompt-delivered" -Arguments @($PromptId)
+    return $result
+}

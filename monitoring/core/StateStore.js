@@ -138,7 +138,24 @@ class StateStore extends EventEmitter {
                 successRates: new Map(), // fixMethod -> successRate
                 patterns: new Map(), // issuePattern -> fixMethod
                 knowledge: [], // Learned rules
-                improvements: [] // System improvements over time
+                improvements: [], // System improvements over time
+                aiCompliance: [], // Prompt compliance tracking
+                aiComplianceConfidence: {
+                    successRate: 0,
+                    totalPrompts: 0,
+                    successfulPrompts: 0,
+                    lastUpdated: null
+                }
+            },
+            
+            // AI State - AI action tracking
+            ai: {
+                prompts: [], // Generated prompts
+                recentToolCalls: [], // Recent tool calls for verification
+                lastBeforeActionCall: null, // Last time beforeAIAction was called
+                lastAfterActionCall: null, // Last time afterAIAction was called
+                recentCodeChanges: [], // Recent code changes
+                workflowViolations: [] // Workflow violations detected
             },
             
             // Metadata

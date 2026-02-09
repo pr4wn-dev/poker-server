@@ -280,6 +280,24 @@ async function handleCommand() {
                 console.log(JSON.stringify({ success: true, enabled }));
                 break;
                 
+            case 'get-latest-prompt':
+                const prompt = integration.getLatestPrompt();
+                console.log(JSON.stringify(prompt || { error: 'No prompt available' }));
+                break;
+                
+            case 'mark-prompt-delivered':
+                const promptId = args[0];
+                if (!promptId) {
+                    gameLogger.error('MONITORING', '[MONITOR_INTEGRATION_CLI] Missing promptId', {
+                        command: 'mark-prompt-delivered'
+                    });
+                    console.log(JSON.stringify({ error: 'promptId required' }));
+                    process.exit(1);
+                }
+                integration.markPromptDelivered(promptId);
+                console.log(JSON.stringify({ success: true, promptId }));
+                break;
+                
             default:
                 gameLogger.warn('MONITORING', '[MONITOR_INTEGRATION_CLI] Unknown command', {
                     command: command
@@ -312,7 +330,9 @@ async function handleCommand() {
                         'attempt-auto-fix <issueId>',
                         'get-auto-fix-statistics',
                         'get-auto-fix-suggestions <issueId>',
-                        'set-auto-fix-enabled <true|false>'
+                        'set-auto-fix-enabled <true|false>',
+                        'get-latest-prompt',
+                        'mark-prompt-delivered <promptId>'
                     ]
                 }));
                 process.exit(1);

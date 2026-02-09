@@ -135,6 +135,17 @@ function Show-BrokenPromiseStatistics {
         $col1Lines += "  MONITORING LOGS"
     }
     
+    # Check for pending prompt
+    $latestPrompt = Get-AILatestPrompt
+    if ($latestPrompt -and -not $latestPrompt.delivered) {
+        $col1Lines += ""
+        $col1Lines += "⚠️ PROMPT FOR USER"
+        $col1Lines += ("-" * ($colWidth - 2))
+        $col1Lines += "Type: " + $latestPrompt.Type
+        $col1Lines += "See: logs\prompts-for-user.txt"
+        $col1Lines += "Or check terminal below"
+    }
+    
     # Column 2: Detection & Issues
     $col2Lines += "DETECTION STATS"
     $col2Lines += ("-" * ($colWidth - 2))
@@ -239,6 +250,26 @@ function Show-BrokenPromiseStatistics {
             $recColor = if ($priority -eq "high") { "Red" } elseif ($priority -eq "medium") { "Yellow" } else { "Gray" }
             Write-Host "  [$($priority.ToUpper())] $action" -ForegroundColor $recColor
         }
+    }
+    
+    # Prompt for user section
+    $latestPrompt = Get-AILatestPrompt
+    if ($latestPrompt -and -not $latestPrompt.delivered) {
+        Write-Host ""
+        Write-Host ("=" * $consoleWidth) -ForegroundColor Yellow
+        Write-Host "⚠️  PROMPT FOR USER TO DELIVER TO AI" -ForegroundColor Yellow
+        Write-Host ("=" * $consoleWidth) -ForegroundColor Yellow
+        Write-Host ""
+        Write-Host "Type: $($latestPrompt.Type)" -ForegroundColor White
+        Write-Host "Generated: $($latestPrompt.Timestamp.ToString('yyyy-MM-dd HH:mm:ss'))" -ForegroundColor Gray
+        Write-Host ""
+        Write-Host "Copy and paste this prompt to the AI:" -ForegroundColor Cyan
+        Write-Host ""
+        Write-Host $latestPrompt.Prompt -ForegroundColor White
+        Write-Host ""
+        Write-Host ("=" * $consoleWidth) -ForegroundColor Yellow
+        Write-Host "Also available in: logs\prompts-for-user.txt" -ForegroundColor Gray
+        Write-Host ""
     }
     
     Write-Host ""

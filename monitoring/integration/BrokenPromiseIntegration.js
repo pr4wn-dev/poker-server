@@ -255,6 +255,46 @@ class BrokenPromiseIntegration {
     }
     
     /**
+     * Get latest prompt for user to deliver
+     */
+    getLatestPrompt() {
+        if (!this.aiCore.promptGenerator) {
+            return null;
+        }
+        
+        const prompts = this.aiCore.stateStore.getState('ai.prompts') || [];
+        if (prompts.length === 0) {
+            return null;
+        }
+        
+        // Get most recent prompt
+        const latestPrompt = prompts[prompts.length - 1];
+        
+        // Check if it's been delivered (we'll track this)
+        const deliveredPrompts = this.aiCore.stateStore.getState('ai.deliveredPrompts') || [];
+        const isDelivered = deliveredPrompts.includes(latestPrompt.id);
+        
+        return {
+            id: latestPrompt.id,
+            type: latestPrompt.type,
+            prompt: latestPrompt.prompt,
+            timestamp: latestPrompt.timestamp,
+            delivered: isDelivered
+        };
+    }
+    
+    /**
+     * Mark prompt as delivered
+     */
+    markPromptDelivered(promptId) {
+        const deliveredPrompts = this.aiCore.stateStore.getState('ai.deliveredPrompts') || [];
+        if (!deliveredPrompts.includes(promptId)) {
+            deliveredPrompts.push(promptId);
+            this.aiCore.stateStore.updateState('ai.deliveredPrompts', deliveredPrompts);
+        }
+    }
+    
+    /**
      * Get investigation status from AI core
      * Replaces reading from monitor-status.json
      */

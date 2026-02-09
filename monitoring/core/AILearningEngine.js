@@ -709,6 +709,9 @@ class AILearningEngine extends EventEmitter {
             this.autoAdjust(confidence, metrics);
         }
         
+        // Calculate AI Compliance capability
+        const aiCompliance = this.calculateAICompliance();
+        
         return {
             overallConfidence: Math.round(confidence),
             breakdown: {
@@ -717,7 +720,8 @@ class AILearningEngine extends EventEmitter {
                 solutionOptimization: Math.round(metrics.solutionOptimization),
                 crossIssueLearning: Math.round(metrics.crossIssueLearning),
                 predictionAccuracy: Math.round(metrics.predictionAccuracy),
-                dataQuality: Math.round(metrics.dataQuality)
+                dataQuality: Math.round(metrics.dataQuality),
+                aiCompliance: Math.round(aiCompliance)
             },
             maskingDetected: this.maskingDetected,
             maskingWarnings: this.maskingWarnings.slice(-5), // Last 5 warnings
@@ -799,17 +803,41 @@ class AILearningEngine extends EventEmitter {
     }
     
     /**
+     * Calculate AI Compliance capability
+     */
+    calculateAICompliance() {
+        const aiCompliance = this.stateStore.getState('learning.aiCompliance') || [];
+        const complianceConfidence = this.stateStore.getState('learning.aiComplianceConfidence');
+        
+        if (aiCompliance.length === 0) {
+            return 0; // No data yet
+        }
+        
+        // Use stored confidence if available
+        if (complianceConfidence && complianceConfidence.successRate !== undefined) {
+            return complianceConfidence.successRate * 100;
+        }
+        
+        // Calculate from compliance records
+        const successful = aiCompliance.filter(c => c.complianceResult === 'full').length;
+        const successRate = successful / aiCompliance.length;
+        
+        return Math.max(0, Math.min(100, successRate * 100));
+    }
+    
+    /**
      * Calculate overall confidence from metrics
      */
     calculateOverallConfidence(metrics) {
         // Weighted average - all capabilities are important
         const weights = {
-            patternRecognition: 0.20,
-            causalAnalysis: 0.20,
-            solutionOptimization: 0.25,
-            crossIssueLearning: 0.15,
-            predictionAccuracy: 0.10,
-            dataQuality: 0.10
+            patternRecognition: 0.18,
+            causalAnalysis: 0.18,
+            solutionOptimization: 0.22,
+            crossIssueLearning: 0.13,
+            predictionAccuracy: 0.09,
+            dataQuality: 0.09,
+            aiCompliance: 0.11 // AI Compliance is important
         };
         
         const weightedSum = 
@@ -818,7 +846,8 @@ class AILearningEngine extends EventEmitter {
             metrics.solutionOptimization * weights.solutionOptimization +
             metrics.crossIssueLearning * weights.crossIssueLearning +
             metrics.predictionAccuracy * weights.predictionAccuracy +
-            metrics.dataQuality * weights.dataQuality;
+            metrics.dataQuality * weights.dataQuality +
+            metrics.aiCompliance * weights.aiCompliance;
         
         return Math.max(0, Math.min(100, weightedSum));
     }

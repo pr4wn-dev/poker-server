@@ -270,6 +270,8 @@ class AICollaborationInterface extends EventEmitter {
      * This is called BEFORE the AI does something
      */
     async beforeAIAction(action) {
+        // Record that beforeAIAction was called
+        this.stateStore.updateState('ai.lastBeforeActionCall', Date.now());
         const suggestions = {
             warnings: [],
             recommendations: [],
@@ -428,7 +430,7 @@ class AICollaborationInterface extends EventEmitter {
         // Cache suggestions
         this.suggestionCache.set(action.id || Date.now(), suggestions);
         
-        // Emit event
+        // Emit event (for workflow violation detector)
         this.emit('beforeAIAction', { action, suggestions });
         
         return suggestions;
