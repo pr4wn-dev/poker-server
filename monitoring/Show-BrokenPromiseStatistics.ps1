@@ -306,7 +306,7 @@ function Show-BrokenPromiseStatistics {
     if ($misdiagnosis.totalPatterns -gt 0 -and $misdiagnosis.highFrequencyPatterns -and $misdiagnosis.highFrequencyPatterns.Count -gt 0) {
         Write-Host ""
         Write-Host ("=" * $consoleWidth) -ForegroundColor Magenta
-        Write-Host "⚠️  MISDIAGNOSIS PREVENTION - PREVENTS WASTED TIME" -ForegroundColor Yellow
+        Write-Host "[!] MISDIAGNOSIS PREVENTION - PREVENTS WASTED TIME" -ForegroundColor Yellow
         Write-Host ("=" * $consoleWidth) -ForegroundColor Magenta
         
         Write-Host "Total Patterns: $($misdiagnosis.totalPatterns)" -ForegroundColor White
@@ -361,7 +361,7 @@ function Show-BrokenPromiseStatistics {
     if ($latestPrompt -and -not $latestPrompt.delivered) {
         Write-Host ""
         Write-Host ("=" * $consoleWidth) -ForegroundColor Yellow
-        Write-Host "⚠️  PROMPT FOR USER TO DELIVER TO AI" -ForegroundColor Yellow
+        Write-Host "[!] PROMPT FOR USER TO DELIVER TO AI" -ForegroundColor Yellow
         Write-Host ("=" * $consoleWidth) -ForegroundColor Yellow
         Write-Host ""
         Write-Host "Type: $($latestPrompt.Type)" -ForegroundColor White
@@ -394,11 +394,11 @@ function Show-BrokenPromiseStatistics {
     Write-Host "This section shows all checks performed to verify AI compliance:" -ForegroundColor White
     Write-Host ""
     Write-Host "VERIFICATION CHECKS PERFORMED:" -ForegroundColor Cyan
-    Write-Host "  ✓ Tool Calls - Did AI call required tools (web_search, beforeAIAction, afterAIAction)?" -ForegroundColor Gray
-    Write-Host "  ✓ State Changes - Are findings stored? Is webSearchRequired resolved?" -ForegroundColor Gray
-    Write-Host "  ✓ File Changes - Did AI actually modify code files as claimed?" -ForegroundColor Gray
-    Write-Host "  ✓ Workflow Compliance - Did AI call beforeAIAction() before coding?" -ForegroundColor Gray
-    Write-Host "  ✓ Learning System Usage - Did AI query the learning system when instructed?" -ForegroundColor Gray
+    Write-Host "  [OK] Tool Calls - Did AI call required tools (web_search, beforeAIAction, afterAIAction)?" -ForegroundColor Gray
+    Write-Host "  [OK] State Changes - Are findings stored? Is webSearchRequired resolved?" -ForegroundColor Gray
+    Write-Host "  [OK] File Changes - Did AI actually modify code files as claimed?" -ForegroundColor Gray
+    Write-Host "  [OK] Workflow Compliance - Did AI call beforeAIAction() before coding?" -ForegroundColor Gray
+    Write-Host "  [OK] Learning System Usage - Did AI query the learning system when instructed?" -ForegroundColor Gray
     Write-Host ""
     
     if ($recentVerifications -and $recentVerifications.Count -gt 0) {
@@ -419,13 +419,13 @@ function Show-BrokenPromiseStatistics {
             
             Write-Host "  [$resultText] $timeAgo" -ForegroundColor $resultColor
             if ($verification.partsWorked -and $verification.partsWorked.Count -gt 0) {
-                Write-Host "    ✓ Worked: $($verification.partsWorked -join ', ')" -ForegroundColor Green
+                Write-Host "    [OK] Worked: $($verification.partsWorked -join ', ')" -ForegroundColor Green
             }
             if ($verification.partsSkipped -and $verification.partsSkipped.Count -gt 0) {
-                Write-Host "    ✗ Skipped: $($verification.partsSkipped -join ', ')" -ForegroundColor Red
+                Write-Host "    [X] Skipped: $($verification.partsSkipped -join ', ')" -ForegroundColor Red
             }
             if ($verification.verification -and $verification.verification.missingToolCalls -and $verification.verification.missingToolCalls.Count -gt 0) {
-                Write-Host "    ⚠ Missing Tools: $($verification.verification.missingToolCalls -join ', ')" -ForegroundColor Yellow
+                Write-Host "    [!] Missing Tools: $($verification.verification.missingToolCalls -join ', ')" -ForegroundColor Yellow
             }
             Write-Host ""
         }

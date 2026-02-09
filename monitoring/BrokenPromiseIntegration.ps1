@@ -15,111 +15,111 @@ function Test-BrokenPromiseSystems {
     $tests = @()
     
     # Test 1: AI Integration Script Exists
-    Write-Host "  [1/8] Testing AI Integration Script..." -NoNewline
+    Write-Host "  [1/9] Testing AI Integration Script..." -NoNewline
     if (Test-Path $script:aiIntegrationScript) {
-        Write-Host " ✓" -ForegroundColor Green
+        Write-Host " [OK]" -ForegroundColor Green
         $tests += @{ Test = "AI Integration Script"; Status = "PASS" }
     } else {
-        Write-Host " ✗" -ForegroundColor Red
+        Write-Host " [FAIL]" -ForegroundColor Red
         $tests += @{ Test = "AI Integration Script"; Status = "FAIL"; Error = "Not found at $script:aiIntegrationScript" }
         $allPassed = $false
     }
     
     # Test 2: Node.js Available
-    Write-Host "  [2/8] Testing Node.js..." -NoNewline
+    Write-Host "  [2/9] Testing Node.js..." -NoNewline
     try {
         $nodeVersion = node --version 2>&1
         if ($LASTEXITCODE -eq 0) {
-            Write-Host " ✓ ($nodeVersion)" -ForegroundColor Green
+            Write-Host " [OK] ($nodeVersion)" -ForegroundColor Green
             $tests += @{ Test = "Node.js"; Status = "PASS"; Version = $nodeVersion }
         } else {
             throw "Node.js not available"
         }
     } catch {
-        Write-Host " ✗" -ForegroundColor Red
+        Write-Host " [FAIL]" -ForegroundColor Red
         $tests += @{ Test = "Node.js"; Status = "FAIL"; Error = "Node.js not found" }
         $allPassed = $false
     }
     
     # Test 3: AI Core Initialization
-    Write-Host "  [3/8] Testing AI Core Initialization..." -NoNewline
+    Write-Host "  [3/9] Testing AI Core Initialization..." -NoNewline
     try {
         $result = Invoke-AIIntegration -Command "get-status-report"
         if ($result -and $result.system) {
-            Write-Host " ✓" -ForegroundColor Green
+            Write-Host " [OK]" -ForegroundColor Green
             $tests += @{ Test = "AI Core Initialization"; Status = "PASS" }
         } else {
             throw "AI Core not responding"
         }
     } catch {
-        Write-Host " ✗" -ForegroundColor Red
+        Write-Host " [FAIL]" -ForegroundColor Red
         $tests += @{ Test = "AI Core Initialization"; Status = "FAIL"; Error = $_.Exception.Message }
         $allPassed = $false
     }
     
     # Test 4: Learning Engine
-    Write-Host "  [4/8] Testing Learning Engine..." -NoNewline
+    Write-Host "  [4/9] Testing Learning Engine..." -NoNewline
     try {
         $result = Invoke-AIIntegration -Command "query" -Arguments @("What is the learning system status?")
         if ($result -and $result.answer) {
-            Write-Host " ✓" -ForegroundColor Green
+            Write-Host " [OK]" -ForegroundColor Green
             $tests += @{ Test = "Learning Engine"; Status = "PASS" }
         } else {
             throw "Learning Engine not responding"
         }
     } catch {
-        Write-Host " ✗" -ForegroundColor Red
+        Write-Host " [FAIL]" -ForegroundColor Red
         $tests += @{ Test = "Learning Engine"; Status = "FAIL"; Error = $_.Exception.Message }
         $allPassed = $false
     }
     
     # Test 5: Misdiagnosis Prevention System
-    Write-Host "  [5/8] Testing Misdiagnosis Prevention..." -NoNewline
+    Write-Host "  [5/9] Testing Misdiagnosis Prevention..." -NoNewline
     try {
         # Test misdiagnosis prevention by querying for PowerShell syntax error
         $result = Invoke-AIIntegration -Command "query" -Arguments @("What misdiagnosis patterns are known for PowerShell syntax errors?")
         if ($result) {
-            Write-Host " ✓" -ForegroundColor Green
+            Write-Host " [OK]" -ForegroundColor Green
             $tests += @{ Test = "Misdiagnosis Prevention"; Status = "PASS" }
         } else {
             throw "Misdiagnosis system not responding"
         }
     } catch {
-        Write-Host " ✗" -ForegroundColor Red
+        Write-Host " [FAIL]" -ForegroundColor Red
         $tests += @{ Test = "Misdiagnosis Prevention"; Status = "FAIL"; Error = $_.Exception.Message }
         $allPassed = $false
     }
     
     # Test 6: Prompt Generation System
-    Write-Host "  [6/8] Testing Prompt Generation..." -NoNewline
+    Write-Host "  [6/9] Testing Prompt Generation..." -NoNewline
     try {
         $result = Invoke-AIIntegration -Command "get-latest-prompt"
         if ($result -ne $null) {
-            Write-Host " ✓" -ForegroundColor Green
+            Write-Host " [OK]" -ForegroundColor Green
             $tests += @{ Test = "Prompt Generation"; Status = "PASS" }
         } else {
             # No prompt is OK (just means no issues yet)
-            Write-Host " ✓ (no prompts yet)" -ForegroundColor Green
+            Write-Host " [OK] (no prompts yet)" -ForegroundColor Green
             $tests += @{ Test = "Prompt Generation"; Status = "PASS" }
         }
     } catch {
-        Write-Host " ✗" -ForegroundColor Red
+        Write-Host " [FAIL]" -ForegroundColor Red
         $tests += @{ Test = "Prompt Generation"; Status = "FAIL"; Error = $_.Exception.Message }
         $allPassed = $false
     }
     
     # Test 7: Statistics System
-    Write-Host "  [7/8] Testing Statistics System..." -NoNewline
+    Write-Host "  [7/9] Testing Statistics System..." -NoNewline
     try {
         $result = Invoke-AIIntegration -Command "get-status-report"
         if ($result -and $result.statistics) {
-            Write-Host " ✓" -ForegroundColor Green
+            Write-Host " [OK]" -ForegroundColor Green
             $tests += @{ Test = "Statistics System"; Status = "PASS" }
         } else {
             throw "Statistics not available"
         }
     } catch {
-        Write-Host " ✗" -ForegroundColor Red
+        Write-Host " [FAIL]" -ForegroundColor Red
         $tests += @{ Test = "Statistics System"; Status = "FAIL"; Error = $_.Exception.Message }
         $allPassed = $false
     }
@@ -129,13 +129,13 @@ function Test-BrokenPromiseSystems {
     try {
         $result = Invoke-AIIntegration -Command "detect-issue" -Arguments @("test log line")
         if ($result -ne $null) {
-            Write-Host " ✓" -ForegroundColor Green
+            Write-Host " [OK]" -ForegroundColor Green
             $tests += @{ Test = "Issue Detection"; Status = "PASS" }
         } else {
             throw "Issue detection not responding"
         }
     } catch {
-        Write-Host " ✗" -ForegroundColor Red
+        Write-Host " [FAIL]" -ForegroundColor Red
         $tests += @{ Test = "Issue Detection"; Status = "FAIL"; Error = $_.Exception.Message }
         $allPassed = $false
     }
@@ -148,10 +148,10 @@ function Test-BrokenPromiseSystems {
             $dbResult = & node $dbTestScript 2>&1 | ConvertFrom-Json
             if ($dbResult.success) {
                 $tableInfo = if ($dbResult.details.tableCount) { " ($($dbResult.details.tableCount) tables)" } else { "" }
-                Write-Host " ✓$tableInfo" -ForegroundColor Green
+                Write-Host " [OK]$tableInfo" -ForegroundColor Green
                 $tests += @{ Test = "Database Connection"; Status = "PASS"; Details = $dbResult.details }
             } else {
-                Write-Host " ✗" -ForegroundColor Red
+                Write-Host " [FAIL]" -ForegroundColor Red
                 Write-Host "      Error: $($dbResult.message)" -ForegroundColor Yellow
                 if ($dbResult.details.suggestion) {
                     Write-Host "      Suggestion: $($dbResult.details.suggestion)" -ForegroundColor Yellow
@@ -160,11 +160,11 @@ function Test-BrokenPromiseSystems {
                 $allPassed = $false
             }
         } else {
-            Write-Host " ⚠ (test script not found)" -ForegroundColor Yellow
+            Write-Host " [SKIP] (test script not found)" -ForegroundColor Yellow
             $tests += @{ Test = "Database Connection"; Status = "SKIP"; Reason = "Test script not found" }
         }
     } catch {
-        Write-Host " ✗" -ForegroundColor Red
+        Write-Host " [FAIL]" -ForegroundColor Red
         $tests += @{ Test = "Database Connection"; Status = "FAIL"; Error = $_.Exception.Message }
         $allPassed = $false
     }
@@ -173,9 +173,9 @@ function Test-BrokenPromiseSystems {
     Write-Host ""
     Write-Host "═══════════════════════════════════════════════════════════════" -ForegroundColor Cyan
     if ($allPassed) {
-        Write-Host "  ✅ ALL SYSTEMS VERIFIED - MISDIAGNOSIS-FIRST ARCHITECTURE READY" -ForegroundColor Green
+        Write-Host "  [OK] ALL SYSTEMS VERIFIED - MISDIAGNOSIS-FIRST ARCHITECTURE READY" -ForegroundColor Green
     } else {
-        Write-Host "  ⚠️  SOME SYSTEMS FAILED - REVIEW ABOVE" -ForegroundColor Yellow
+        Write-Host "  [!] SOME SYSTEMS FAILED - REVIEW ABOVE" -ForegroundColor Yellow
         Write-Host ""
         Write-Host "  Failed Tests:" -ForegroundColor Yellow
         foreach ($test in $tests) {
