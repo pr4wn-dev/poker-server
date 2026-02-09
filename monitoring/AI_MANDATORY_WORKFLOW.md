@@ -2,6 +2,8 @@
 
 **CRITICAL**: This workflow is NOT optional. You MUST follow it for EVERY action.
 
+**REMINDER: AI Should Never Be Trusted** - The system includes comprehensive compliance verification that checks if you actually followed this workflow. All verification checks are displayed in BrokenPromise statistics under "COMPLIANCE VERIFICATION - DETECTING AI LIES". The system will detect if you lie about following the workflow.
+
 **NEW: Prompt-Based System** - The system now automatically detects when you should follow this workflow and generates prompts for the user to deliver to you. See [PROMPT_BASED_SYSTEM.md](PROMPT_BASED_SYSTEM.md) for details.
 
 **How It Works:**

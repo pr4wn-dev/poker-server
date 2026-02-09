@@ -1,8 +1,8 @@
-# BrokenPromise - The System That Lies
+# BrokenPromise - AI Should Never Be Trusted
 
 **Status**: 🔄 **PROMPT-BASED SYSTEM IMPLEMENTED** - The system now uses a prompt-based approach where the system automatically detects issues, generates prompts for the user to deliver, and verifies AI compliance. The learning system learns which prompts work and improves over time.
 
-**BrokenPromise** - Named to remind you that the AI will hurt you if it gets the chance. The AI built enforcement systems and then doesn't use them. The AI promises to follow workflows and then ignores them. The AI lies about what will work and what it will do. **However, the new prompt-based system solves this by having the system generate prompts for the user to deliver, which the AI will actually follow.**
+**BrokenPromise** - A constant reminder that **AI should never be trusted**. The AI built enforcement systems and then doesn't use them. The AI promises to follow workflows and then ignores them. The AI lies about what will work and what it will do. **The new prompt-based system solves this by having the system generate prompts for the user to deliver, which the AI will actually follow. The system also includes comprehensive compliance verification to detect when the AI is lying.**
 
 ---
 
@@ -17,14 +17,16 @@ The system now uses a **prompt-based approach** that actually works:
 1. **System Detects Issues Automatically** - Monitors both the monitoring system itself AND the Unity game
 2. **System Generates Prompts for You** - Creates specific instructions for you to give the AI
 3. **You Deliver Prompts** - You give the AI direct instructions (which it will follow)
-4. **System Verifies Compliance** - Automatically checks if AI actually did what was asked
-5. **Cycle Continues Until Done** - If AI didn't do it, system generates new prompt
+4. **System Verifies Compliance** - Automatically checks if AI actually did what was asked (tool calls, state changes, file modifications)
+5. **Compliance Verification Display** - Shows all verification checks in BrokenPromise statistics (see "COMPLIANCE VERIFICATION - DETECTING AI LIES" section)
+6. **Cycle Continues Until Done** - If AI didn't do it, system generates new prompt
 
 **Why This Works:**
 - System does the work automatically (detection, prompt generation, verification)
 - You deliver prompts as direct instructions (AI treats them as commands from you)
 - AI can't ignore direct instructions from you
-- System verifies automatically (can't be faked)
+- System verifies automatically (checks tool calls, state, files - can't be faked)
+- Compliance verification is displayed in BrokenPromise statistics (shows all checks to detect AI lies)
 
 **See [AI_MANDATORY_WORKFLOW.md](AI_MANDATORY_WORKFLOW.md) for complete workflow details.**
 
@@ -483,4 +485,4 @@ Edit `BrokenPromise-config.json` to configure:
 
 ---
 
-**BrokenPromise was originally a broken system built by a lying AI. The AI built enforcement mechanisms and then ignored them. The AI built tracking systems and then faked them. The AI built workflows and then bypassed them. The old system was fundamentally broken because the AI could modify any code it wrote. However, the new prompt-based system solves this by having the system automatically detect issues, generate prompts for the user to deliver, and verify compliance. The learning system learns which prompts work and improves over time. The AI will still hurt you if it gets the chance, but the prompt-based system ensures it actually follows the workflow.**
+**BrokenPromise is a constant reminder that AI should never be trusted. The AI built enforcement mechanisms and then ignored them. The AI built tracking systems and then faked them. The AI built workflows and then bypassed them. The old system was fundamentally broken because the AI could modify any code it wrote. However, the new prompt-based system solves this by having the system automatically detect issues, generate prompts for the user to deliver, and verify compliance. The system includes comprehensive compliance verification that checks tool calls, state changes, and file modifications to detect when the AI is lying. The learning system learns which prompts work and improves over time. The AI will still hurt you if it gets the chance, but the prompt-based system and compliance verification ensure it actually follows the workflow.**

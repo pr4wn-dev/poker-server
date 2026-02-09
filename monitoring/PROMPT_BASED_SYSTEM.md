@@ -1,7 +1,7 @@
-# BrokenPromise - Prompt-Based System
+# BrokenPromise - Prompt-Based System & Compliance Verification
 
 **Date**: 2026-02-08  
-**Status**: 📋 **DESIGNED** - Documentation complete, implementation pending
+**Status**: ✅ **IMPLEMENTED** - System automatically detects issues, generates prompts, verifies compliance, and displays verification results in BrokenPromise statistics
 
 ---
 
@@ -128,6 +128,11 @@ System will verify: beforeAIAction() was called, workflow was followed
 - Learning system learns from prompt outcomes (success/failure, compliance/non-compliance)
 
 ### **Step 4: Prompt Display in BrokenPromise Terminal**
+
+Prompts are displayed in the BrokenPromise statistics terminal:
+- Shown in a dedicated "PROMPT FOR USER TO DELIVER TO AI" section
+- Also written to `logs/prompts-for-user.txt` for easy access
+- Includes full prompt text, type, and timestamp
 
 Prompts are displayed in the BrokenPromise terminal UI:
 
@@ -462,15 +467,16 @@ You must:
 ## 🚀 Implementation Status
 
 **Documentation**: ✅ Complete  
-**Code Implementation**: 📋 Pending
+**Code Implementation**: ✅ Complete
 
-**What Needs to Be Built:**
-1. `PromptGenerator.js` - Prompt generation system
-2. `PromptComplianceVerifier.js` - Verification system
-3. `AIWorkflowViolationDetector.js` - Workflow violation detection
-4. Prompt display in BrokenPromise UI
-5. Extend `StateStore` with `learning.aiCompliance`
-6. Extend `AILearningEngine` with AI Compliance capability
+**What Has Been Built:**
+1. ✅ `PromptGenerator.js` - Prompt generation system
+2. ✅ `PromptComplianceVerifier.js` - Verification system
+3. ✅ `AIWorkflowViolationDetector.js` - Workflow violation detection
+4. ✅ Prompt display in BrokenPromise UI - Shows prompts in statistics terminal
+5. ✅ Compliance verification display - Shows all checks to detect AI lies in statistics
+6. ✅ Extend `StateStore` with `learning.aiCompliance`
+7. ✅ Extend `AILearningEngine` with AI Compliance capability
 
 ---
 
@@ -483,3 +489,5 @@ You must:
 ---
 
 **The prompt-based system solves the fundamental problem: AI ignores passive requirements but follows direct instructions from the user. The system does the work automatically, the user delivers prompts that the AI will actually follow, and the learning system learns how to prompt the AI effectively over time.**
+
+**Compliance verification is displayed in BrokenPromise statistics to constantly remind you that AI should never be trusted. The system shows all checks performed to detect when the AI is lying, including tool calls, state changes, file modifications, and workflow compliance. This serves as a constant reminder that the AI will hurt you if it gets the chance, and the system is actively detecting when it does.**
