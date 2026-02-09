@@ -1007,11 +1007,10 @@ function Write-ConsoleOutput {
                         Write-Host (" " * [Console]::WindowWidth) -NoNewline
                     }
                 }
+                
+                $script:consoleLineCount = 0
+                $currentConsoleLine = $script:consoleOutputStartLine
             }
-        } catch {
-            # Console handle invalid - skip window height check
-        }
-    }
         } catch {
             # Console handle invalid - skip window height check
         }
@@ -1035,28 +1034,38 @@ function Write-ConsoleOutput {
     }
     
     # Write the message (hide cursor during write to prevent flicker)
-    try {
-        [Console]::CursorVisible = $false
-        if (Set-SafeCursorPosition -X 0 -Y $currentConsoleLine) {
+    # Only do console operations if we have an interactive console
+    if (Test-InteractiveConsole) {
+        try {
+            [Console]::CursorVisible = $false
+            if (Set-SafeCursorPosition -X 0 -Y $currentConsoleLine) {
+                Write-Host $truncatedMessage -ForegroundColor $ForegroundColor
+            } else {
+                # If cursor position failed, just write normally
+                Write-Host $truncatedMessage -ForegroundColor $ForegroundColor
+            }
+            
+            # Increment line count
+            $script:consoleLineCount++
+            
+            # Track when we wrote console output
+            $script:lastConsoleOutputTime = Get-Date
+            
+            # Return cursor to top for stats (but don't update stats immediately)
+            # Restore cursor visibility
+            Set-SafeCursorPosition -X 0 -Y 0 | Out-Null
+            [Console]::CursorVisible = $true
+        } catch {
+            # If console operations fail, just write normally
             Write-Host $truncatedMessage -ForegroundColor $ForegroundColor
-        } else {
-            # If cursor position failed, just write normally
-            Write-Host $truncatedMessage -ForegroundColor $ForegroundColor
+            $script:consoleLineCount++
+            $script:lastConsoleOutputTime = Get-Date
         }
-        
-        # Increment line count
-        $script:consoleLineCount++
-        
-        # Track when we wrote console output
-        $script:lastConsoleOutputTime = Get-Date
-        
-        # Return cursor to top for stats (but don't update stats immediately)
-        # Restore cursor visibility
-        Set-SafeCursorPosition -X 0 -Y 0 | Out-Null
-        [Console]::CursorVisible = $true
-    } catch {
-        # If console operations fail, just write normally
+    } else {
+        # Not interactive - just write normally
         Write-Host $truncatedMessage -ForegroundColor $ForegroundColor
+        $script:consoleLineCount++
+        $script:lastConsoleOutputTime = Get-Date
     }
 }
 
