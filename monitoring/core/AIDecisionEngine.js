@@ -452,19 +452,23 @@ class AIDecisionEngine extends EventEmitter {
                 };
             }
             
-            // Server must be online for Unity to connect
-            if (server.status !== 'online') {
+            // Server must be running for Unity to connect
+            // Server can be 'running' (database online) or 'degraded' (database offline but server running)
+            // Unity can connect to server even if database is offline
+            if (server.status !== 'running' && server.status !== 'degraded') {
                 return {
                     should: false,
-                    reason: 'Server is not online',
+                    reason: `Server is not running (status: ${server.status || 'unknown'})`,
                     confidence: 0.9
                 };
             }
             
-            // Should start Unity if server is ready
+            // Should start Unity if server is running (even if database is offline)
             return {
                 should: true,
-                reason: 'Server is online, Unity should start',
+                reason: server.status === 'degraded' 
+                    ? 'Server is running (database offline, but Unity can still connect)'
+                    : 'Server is running, Unity should start',
                 confidence: 0.85,
                 priority: 'medium'
             };
