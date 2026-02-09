@@ -744,9 +744,72 @@ class StateStore extends EventEmitter {
             }
         } catch (error) {
             // DO NOT log to console - errors are for AI only, not user
-            // If state file is corrupted, start fresh
+            // If state file is corrupted, recover learning data first
             if (error instanceof SyntaxError) {
                 // DO NOT log to console - errors are for AI only, not user
+                // CRITICAL: Extract learning data before starting fresh
+                let recoveredLearningData = null;
+                try {
+                    const StateStoreRecovery = require('./StateStoreRecovery');
+                    
+                    // First try: Extract from corrupted file
+                    recoveredLearningData = StateStoreRecovery.extractLearningData(this.persistenceFile);
+                    
+                    // Second try: If that failed, try backup file
+                    if (!recoveredLearningData.success || recoveredLearningData.patterns.length === 0) {
+                        const backupFile = this.persistenceFile + '.backup';
+                        if (fs.existsSync(backupFile)) {
+                            try {
+                                const backupData = JSON.parse(fs.readFileSync(backupFile, 'utf8'));
+                                if (backupData.state && backupData.state.learning) {
+                                    // Extract from backup
+                                    recoveredLearningData = {
+                                        success: true,
+                                        patterns: backupData.state.learning.patterns || [],
+                                        knowledge: backupData.state.learning.knowledge || [],
+                                        improvements: backupData.state.learning.improvements || [],
+                                        aiCompliance: backupData.state.learning.aiCompliance || [],
+                                        workflowViolations: backupData.state.ai?.workflowViolations || [],
+                                        prompts: backupData.state.ai?.prompts || [],
+                                        errors: []
+                                    };
+                                }
+                            } catch (backupError) {
+                                // Backup also corrupted, use what we got from main file
+                            }
+                        }
+                    }
+                    
+                    // Third try: Check for existing recovered file
+                    if (!recoveredLearningData.success || recoveredLearningData.patterns.length === 0) {
+                        const recoveredFiles = fs.readdirSync(path.dirname(this.persistenceFile))
+                            .filter(f => f.startsWith('ai-state-store.recovered') && f.endsWith('.json'))
+                            .map(f => path.join(path.dirname(this.persistenceFile), f))
+                            .sort()
+                            .reverse(); // Most recent first
+                        
+                        for (const recoveredFile of recoveredFiles) {
+                            try {
+                                const existing = StateStoreRecovery.loadRecoveredData(recoveredFile);
+                                if (existing && existing.patterns && existing.patterns.length > 0) {
+                                    recoveredLearningData = existing;
+                                    break;
+                                }
+                            } catch (e) {
+                                // Skip this file
+                            }
+                        }
+                    }
+                    
+                    // Save recovered data to separate file
+                    if (recoveredLearningData && recoveredLearningData.success) {
+                        const recoveredFile = this.persistenceFile + '.recovered.' + Date.now() + '.json';
+                        StateStoreRecovery.saveRecoveredData(recoveredLearningData, recoveredFile);
+                    }
+                } catch (recoveryError) {
+                    // Recovery failed, but continue with fresh state
+                }
+                
                 // Backup corrupted file
                 try {
                     if (fs.existsSync(this.persistenceFile)) {
@@ -757,6 +820,7 @@ class StateStore extends EventEmitter {
                 } catch (backupError) {
                     // Ignore backup errors (but UniversalErrorHandler will catch them)
                 }
+                
                 // Start with fresh state - use the same initialization as constructor
                 this.state = {
                     // Game State - Complete visibility into game
@@ -807,6 +871,52 @@ class StateStore extends EventEmitter {
                     // Metadata
                     metadata: { version: '2.0.0', started: Date.now(), lastUpdate: Date.now(), updateCount: 0 }
                 };
+                
+                // CRITICAL: Restore recovered learning data if available
+                if (recoveredLearningData && recoveredLearningData.success) {
+                    try {
+                        // Restore patterns (convert array entries to Map)
+                        if (recoveredLearningData.patterns && recoveredLearningData.patterns.length > 0) {
+                            const patternsMap = new Map();
+                            for (const patternEntry of recoveredLearningData.patterns) {
+                                if (Array.isArray(patternEntry) && patternEntry.length === 2) {
+                                    patternsMap.set(patternEntry[0], patternEntry[1]);
+                                }
+                            }
+                            this.state.learning.patterns = patternsMap;
+                        }
+                        
+                        // Restore knowledge
+                        if (recoveredLearningData.knowledge && Array.isArray(recoveredLearningData.knowledge)) {
+                            this.state.learning.knowledge = recoveredLearningData.knowledge;
+                        }
+                        
+                        // Restore improvements
+                        if (recoveredLearningData.improvements && Array.isArray(recoveredLearningData.improvements)) {
+                            this.state.learning.improvements = recoveredLearningData.improvements;
+                        }
+                        
+                        // Restore compliance
+                        if (recoveredLearningData.aiCompliance && Array.isArray(recoveredLearningData.aiCompliance)) {
+                            this.state.learning.aiCompliance = recoveredLearningData.aiCompliance;
+                        }
+                        
+                        // Restore workflow violations
+                        if (recoveredLearningData.workflowViolations && Array.isArray(recoveredLearningData.workflowViolations)) {
+                            this.state.ai.workflowViolations = recoveredLearningData.workflowViolations;
+                        }
+                        
+                        // Restore prompts
+                        if (recoveredLearningData.prompts && Array.isArray(recoveredLearningData.prompts)) {
+                            this.state.ai.prompts = recoveredLearningData.prompts;
+                        }
+                        
+                        // Save immediately to preserve recovered data
+                        this.save();
+                    } catch (restoreError) {
+                        // If restore fails, continue with empty learning data
+                    }
+                }
             }
             // Re-throw so UniversalErrorHandler can catch it
             throw error;
