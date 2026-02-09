@@ -26,30 +26,54 @@ $script:projectRoot = Split-Path -Parent $scriptDir
 Set-Location $script:projectRoot
 
 # Bootstrap check - Run BEFORE anything else (after setting directories)
+# Check syntax directly in this process so we can actually stop execution
 if (-not $SkipBootstrap) {
-    $bootstrapScript = Join-Path $scriptDir "bootstrap-check.ps1"
-    if (Test-Path $bootstrapScript) {
-        Write-Host "[BROKENPROMISE] Running bootstrap check..." -ForegroundColor Cyan
-        
-        # Run bootstrap check and capture exit code
-        & $bootstrapScript
-        $bootstrapExitCode = $LASTEXITCODE
-        
-        # CRITICAL: Check exit code - if non-zero, exit immediately
-        if ($bootstrapExitCode -ne 0) {
-            Write-Host ""
-            Write-Host "[BROKENPROMISE] Bootstrap check FAILED (exit code: $bootstrapExitCode)" -ForegroundColor Red
-            Write-Host "[BROKENPROMISE] BrokenPromise cannot start due to detected errors" -ForegroundColor Red
-            Write-Host "[BROKENPROMISE] Check logs\prompts-for-user.txt for prompt to give to AI" -ForegroundColor Yellow
-            Write-Host "[BROKENPROMISE] Or run with -SkipBootstrap to bypass (not recommended)" -ForegroundColor Yellow
-            Write-Host ""
-            exit $bootstrapExitCode
+    Write-Host "[BROKENPROMISE] Running syntax check..." -ForegroundColor Cyan
+    
+    $brokenPromisePath = Join-Path $scriptDir "brokenpromise.ps1"
+    if (Test-Path $brokenPromisePath) {
+        try {
+            $errors = $null
+            $tokens = $null
+            $content = Get-Content $brokenPromisePath -Raw
+            
+            # Parse the script - this will catch syntax errors
+            $null = [System.Management.Automation.Language.Parser]::ParseInput($content, [ref]$tokens, [ref]$errors)
+            
+            if ($errors -and $errors.Count -gt 0) {
+                Write-Host ""
+                Write-Host "[BROKENPROMISE] SYNTAX ERRORS DETECTED - Cannot start" -ForegroundColor Red
+                foreach ($err in $errors) {
+                    Write-Host "  Line $($err.Extent.StartLineNumber): $($err.Message)" -ForegroundColor Red
+                }
+                Write-Host ""
+                Write-Host "[BROKENPROMISE] BrokenPromise has syntax errors and cannot start" -ForegroundColor Red
+                Write-Host "[BROKENPROMISE] Check logs\prompts-for-user.txt for prompt to give to AI" -ForegroundColor Yellow
+                Write-Host "[BROKENPROMISE] Or run with -SkipBootstrap to bypass (not recommended)" -ForegroundColor Yellow
+                Write-Host ""
+                
+                # Write prompt to file
+                $promptFile = Join-Path $script:projectRoot "logs\prompts-for-user.txt"
+                $promptText = "BrokenPromise has PowerShell syntax errors:`r`n"
+                foreach ($err in $errors) {
+                    $promptText += "Line $($err.Extent.StartLineNumber): $($err.Message)`r`n"
+                }
+                $promptText += "`r`nFix these syntax errors before BrokenPromise can start.`r`n"
+                try {
+                    $promptText | Out-File -FilePath $promptFile -Encoding UTF8 -Append
+                } catch {
+                    # Ignore file write errors
+                }
+                
+                # ACTUALLY EXIT - this runs in the same process so it will work
+                exit 1
+            }
+            
+            Write-Host "[BROKENPROMISE] Syntax check passed" -ForegroundColor Green
+        } catch {
+            Write-Host "[BROKENPROMISE] Syntax check failed: $($_.Exception.Message)" -ForegroundColor Red
+            exit 1
         }
-        
-        Write-Host "[BROKENPROMISE] Bootstrap check passed - Starting BrokenPromise..." -ForegroundColor Green
-        Write-Host ""
-    } else {
-        Write-Warning "[BROKENPROMISE] Bootstrap check script not found - skipping pre-flight checks"
     }
 }
 
