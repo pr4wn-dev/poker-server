@@ -51,11 +51,31 @@ Write-Host "[BOOTSTRAP] Checking PowerShell syntax..." -ForegroundColor Cyan
 $brokenPromisePath = Join-Path $scriptDir "brokenpromise.ps1"
 if (Test-Path $brokenPromisePath) {
     try {
-        $null = [System.Management.Automation.PSParser]::Tokenize((Get-Content $brokenPromisePath -Raw), [ref]$null)
-        Write-Host "  ✓ PowerShell syntax valid" -ForegroundColor Green
+        # Method 1: Tokenize and check for errors
+        $errors = $null
+        $tokens = $null
+        $ast = $null
+        $content = Get-Content $brokenPromisePath -Raw
+        
+        # Parse the script - this will catch syntax errors
+        $null = [System.Management.Automation.Language.Parser]::ParseInput($content, [ref]$tokens, [ref]$errors)
+        
+        if ($errors -and $errors.Count -gt 0) {
+            $errorMessages = $errors | ForEach-Object { 
+                "$($_.Message) (Line $($_.Extent.StartLineNumber), Column $($_.Extent.StartColumnNumber))"
+            }
+            $errorDetails = $errorMessages -join "`n"
+            Add-Issue -Type "powershell_syntax_error" -Message "PowerShell syntax error(s) in brokenpromise.ps1" -Details $errorDetails -Critical $true
+            Write-Host "  ✗ PowerShell syntax error(s) found:" -ForegroundColor Red
+            foreach ($err in $errors) {
+                Write-Host "    - Line $($err.Extent.StartLineNumber): $($err.Message)" -ForegroundColor Red
+            }
+        } else {
+            Write-Host "  ✓ PowerShell syntax valid" -ForegroundColor Green
+        }
     } catch {
-        Add-Issue -Type "powershell_syntax_error" -Message "PowerShell syntax error in brokenpromise.ps1" -Details $_.Exception.Message -Critical $true
-        Write-Host "  ✗ PowerShell syntax error: $($_.Exception.Message)" -ForegroundColor Red
+        Add-Issue -Type "powershell_syntax_error" -Message "PowerShell syntax check failed" -Details $_.Exception.Message -Critical $true
+        Write-Host "  ✗ PowerShell syntax check error: $($_.Exception.Message)" -ForegroundColor Red
     }
 } else {
     Add-Issue -Type "file_missing" -Message "brokenpromise.ps1 not found" -Details $brokenPromisePath -Critical $true
@@ -169,50 +189,47 @@ if (($criticalIssues.Count -gt 0 -or $issues.Count -gt 0) -and -not $SkipPromptG
     Write-Host ""
     Write-Host "[BOOTSTRAP] Issues detected - generating prompt..." -ForegroundColor Yellow
     
-    $promptText = @"
-═══════════════════════════════════════════════════════════════
-  PROMPT FOR USER TO DELIVER TO AI
-  Generated: $(Get-Date -Format "yyyy-MM-dd HH:mm:ss")
-  Type: bootstrap_startup_error
-═══════════════════════════════════════════════════════════════
-
-BrokenPromise failed to start due to the following issue(s):
-
-"@
+    $promptText = "═══════════════════════════════════════════════════════════════`r`n"
+    $promptText += "  PROMPT FOR USER TO DELIVER TO AI`r`n"
+    $promptText += "  Generated: $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')`r`n"
+    $promptText += "  Type: bootstrap_startup_error`r`n"
+    $promptText += "═══════════════════════════════════════════════════════════════`r`n"
+    $promptText += "`r`n"
+    $promptText += "BrokenPromise failed to start due to the following issue(s):`r`n"
+    $promptText += "`r`n"
     
     if ($criticalIssues.Count -gt 0) {
-        $promptText += "`nCRITICAL ISSUES:`n"
+        $promptText += "CRITICAL ISSUES:`r`n"
         foreach ($issue in $criticalIssues) {
-            $promptText += "`n- $($issue.Type): $($issue.Message)`n"
+            $promptText += "`r`n- $($issue.Type): $($issue.Message)`r`n"
             if ($issue.Details) {
-                $promptText += "  Details: $($issue.Details)`n"
+                $promptText += "  Details: $($issue.Details)`r`n"
             }
         }
+        $promptText += "`r`n"
     }
     
     if ($issues.Count -gt 0) {
-        $promptText += "`nWARNINGS:`n"
+        $promptText += "WARNINGS:`r`n"
         foreach ($issue in $issues) {
-            $promptText += "`n- $($issue.Type): $($issue.Message)`n"
+            $promptText += "`r`n- $($issue.Type): $($issue.Message)`r`n"
             if ($issue.Details) {
-                $promptText += "  Details: $($issue.Details)`n"
+                $promptText += "  Details: $($issue.Details)`r`n"
             }
         }
+        $promptText += "`r`n"
     }
     
-    $promptText += @"
-
-You must:
-1. Fix the issue(s) listed above
-2. Test that BrokenPromise can start successfully
-3. Verify all required files are present and valid
-4. Ensure Node.js is available and working
-5. Check that all PowerShell syntax is correct
-
-System will verify: BrokenPromise starts successfully, no errors in bootstrap check
-
-═══════════════════════════════════════════════════════════════
-"@
+    $promptText += "You must:`r`n"
+    $promptText += "1. Fix the issue(s) listed above`r`n"
+    $promptText += "2. Test that BrokenPromise can start successfully`r`n"
+    $promptText += "3. Verify all required files are present and valid`r`n"
+    $promptText += "4. Ensure Node.js is available and working`r`n"
+    $promptText += "5. Check that all PowerShell syntax is correct`r`n"
+    $promptText += "`r`n"
+    $promptText += "System will verify: BrokenPromise starts successfully, no errors in bootstrap check`r`n"
+    $promptText += "`r`n"
+    $promptText += "═══════════════════════════════════════════════════════════════`r`n"
     
     try {
         $promptText | Out-File -FilePath $promptFile -Encoding UTF8 -Append

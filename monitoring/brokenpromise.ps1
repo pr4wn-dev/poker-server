@@ -19,9 +19,15 @@ param(
 
 $ErrorActionPreference = "Continue"
 
-# Bootstrap check - Run BEFORE anything else
+# Ensure we're in the correct directory (poker-server root)
+# Script is in monitoring/ folder, so go up one level
+$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$script:projectRoot = Split-Path -Parent $scriptDir
+Set-Location $script:projectRoot
+
+# Bootstrap check - Run BEFORE anything else (after setting directories)
 if (-not $SkipBootstrap) {
-    $bootstrapScript = Join-Path $PSScriptRoot "bootstrap-check.ps1"
+    $bootstrapScript = Join-Path $scriptDir "bootstrap-check.ps1"
     if (Test-Path $bootstrapScript) {
         Write-Host "[BROKENPROMISE] Running bootstrap check..." -ForegroundColor Cyan
         & $bootstrapScript
@@ -38,12 +44,6 @@ if (-not $SkipBootstrap) {
         Write-Warning "[BROKENPROMISE] Bootstrap check script not found - skipping pre-flight checks"
     }
 }
-
-# Ensure we're in the correct directory (poker-server root)
-# Script is in monitoring/ folder, so go up one level
-$scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$script:projectRoot = Split-Path -Parent $scriptDir
-Set-Location $script:projectRoot
 
 # Source BrokenPromise Integration helpers (NEW: AI-first monitoring system)
 $aiIntegrationPath = Join-Path $scriptDir "BrokenPromiseIntegration.ps1"
