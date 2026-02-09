@@ -125,7 +125,7 @@ function Test-BrokenPromiseSystems {
     }
     
     # Test 8: Issue Detection
-    Write-Host "  [8/8] Testing Issue Detection..." -NoNewline
+    Write-Host "  [8/9] Testing Issue Detection..." -NoNewline
     try {
         $result = Invoke-AIIntegration -Command "detect-issue" -Arguments @("test log line")
         if ($result -ne $null) {
@@ -137,6 +137,35 @@ function Test-BrokenPromiseSystems {
     } catch {
         Write-Host " ✗" -ForegroundColor Red
         $tests += @{ Test = "Issue Detection"; Status = "FAIL"; Error = $_.Exception.Message }
+        $allPassed = $false
+    }
+    
+    # Test 9: Database Connection
+    Write-Host "  [9/9] Testing Database Connection..." -NoNewline
+    try {
+        $dbTestScript = Join-Path $PSScriptRoot "test-database.js"
+        if (Test-Path $dbTestScript) {
+            $dbResult = & node $dbTestScript 2>&1 | ConvertFrom-Json
+            if ($dbResult.success) {
+                $tableInfo = if ($dbResult.details.tableCount) { " ($($dbResult.details.tableCount) tables)" } else { "" }
+                Write-Host " ✓$tableInfo" -ForegroundColor Green
+                $tests += @{ Test = "Database Connection"; Status = "PASS"; Details = $dbResult.details }
+            } else {
+                Write-Host " ✗" -ForegroundColor Red
+                Write-Host "      Error: $($dbResult.message)" -ForegroundColor Yellow
+                if ($dbResult.details.suggestion) {
+                    Write-Host "      Suggestion: $($dbResult.details.suggestion)" -ForegroundColor Yellow
+                }
+                $tests += @{ Test = "Database Connection"; Status = "FAIL"; Error = $dbResult.message; Suggestion = $dbResult.details.suggestion }
+                $allPassed = $false
+            }
+        } else {
+            Write-Host " ⚠ (test script not found)" -ForegroundColor Yellow
+            $tests += @{ Test = "Database Connection"; Status = "SKIP"; Reason = "Test script not found" }
+        }
+    } catch {
+        Write-Host " ✗" -ForegroundColor Red
+        $tests += @{ Test = "Database Connection"; Status = "FAIL"; Error = $_.Exception.Message }
         $allPassed = $false
     }
     
