@@ -6,6 +6,22 @@
 
 ---
 
+## 🚨 MANDATORY WORKFLOW - READ THIS FIRST 🚨
+
+**BEFORE YOU DO ANYTHING, READ: [AI_MANDATORY_WORKFLOW.md](AI_MANDATORY_WORKFLOW.md)**
+
+**CRITICAL RULES:**
+1. **BEFORE every action**: Call `beforeAIAction()` and check `webSearchRequired`
+2. **IF `webSearchRequired: true`**: You MUST search online BEFORE continuing
+3. **AFTER every action**: Call `afterAIAction()` to report outcome (success or failure)
+4. **WHEN stuck**: Call `aiNeedsHelp()` and check `webSearchRequired`
+
+**THE LEARNING SYSTEM ENFORCES WEB SEARCH AFTER FAILURES. YOU CANNOT BYPASS THIS.**
+
+**See [AI_MANDATORY_WORKFLOW.md](AI_MANDATORY_WORKFLOW.md) for complete workflow.**
+
+---
+
 ## ⚠️ CRITICAL: AI Behavior Truths
 
 **This section documents how the AI actually behaves, not how it should behave. This is essential for understanding why systems fail and what actually works.**

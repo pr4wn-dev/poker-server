@@ -1,0 +1,191 @@
+# 🚨 MANDATORY AI WORKFLOW - YOU MUST FOLLOW THIS 🚨
+
+**CRITICAL**: This workflow is NOT optional. You MUST follow it for EVERY action.
+
+---
+
+## ⚠️ BEFORE EVERY ACTION - MANDATORY CHECKLIST
+
+### **STEP 1: Check for Web Search Requirement (MANDATORY)**
+
+**BEFORE** you attempt ANY fix, code change, or problem-solving action:
+
+```javascript
+// 1. Get suggestions from learning system
+const suggestions = core.beforeAIAction({
+    type: 'fix_attempt', // or 'code_change', 'debugging', etc.
+    method: 'your_method',
+    issueType: 'your_issue_type',
+    component: 'your_component',
+    file: 'path/to/file',
+    details: { /* your details */ }
+});
+
+// 2. CHECK FOR WEB SEARCH REQUIREMENT (MANDATORY)
+if (suggestions.webSearchRequired) {
+    // LEARNING SYSTEM IS TELLING YOU TO SEARCH ONLINE
+    // YOU MUST DO THIS BEFORE CONTINUING
+    
+    const searchTerms = suggestions.webSearchTerms;
+    const urgency = suggestions.webSearchUrgency; // 'high' or 'critical'
+    const message = suggestions.warnings.find(w => w.type === 'WEB_SEARCH_REQUIRED')?.message;
+    
+    // SEARCH ONLINE (MANDATORY)
+    const searchResults = await web_search(searchTerms.join(' '));
+    
+    // STORE FINDINGS IN LEARNING SYSTEM (MANDATORY)
+    await storeWebSearchKnowledge(searchResults, searchTerms, {
+        issueType: 'your_issue_type',
+        component: 'your_component',
+        urgency: urgency
+    });
+    
+    // MARK AS RESOLVED
+    core.stateStore.updateState('ai.learning.webSearchRequired', {
+        ...suggestions.webSearchRequired,
+        resolved: true,
+        resolvedAt: Date.now(),
+        searchResults: searchResults
+    });
+    
+    // DO NOT CONTINUE WITH FIX UNTIL YOU'VE SEARCHED AND STORED FINDINGS
+    return; // Stop here until search is complete
+}
+```
+
+**IF YOU SKIP THIS STEP, YOU ARE VIOLATING THE WORKFLOW.**
+
+---
+
+### **STEP 2: Review Warnings and Recommendations**
+
+After checking web search (or if none required), review all warnings and recommendations:
+
+```javascript
+// Check warnings
+if (suggestions.warnings.length > 0) {
+    // HEED THESE WARNINGS - they're from the learning system
+    for (const warning of suggestions.warnings) {
+        if (warning.priority === 'critical') {
+            // CRITICAL WARNING - DO NOT IGNORE
+            // Consider alternative approach
+        }
+    }
+}
+
+// Check recommendations
+if (suggestions.recommendations.length > 0) {
+    // USE THESE - they're learned solutions that worked before
+    const bestRecommendation = suggestions.recommendations[0];
+    // Use the recommended approach
+}
+```
+
+---
+
+### **STEP 3: Take Action**
+
+Only after completing Steps 1 and 2, proceed with your action.
+
+---
+
+### **STEP 4: Report Outcome (MANDATORY)**
+
+**AFTER** every action (success OR failure):
+
+```javascript
+// Report outcome to learning system
+core.afterAIAction(action, {
+    success: true, // or false
+    description: 'What happened',
+    codeChanges: [/* actual changes made */],
+    // If failure:
+    reason: 'Why it failed',
+    error: errorObject,
+    whatWentWrong: 'What went wrong',
+    whatShouldHaveHappened: 'What should have happened'
+});
+
+// If it failed, learning system will automatically:
+// 1. Track the failure
+// 2. Increment consecutive failure count
+// 3. Require web search for next attempt
+```
+
+---
+
+## 🔄 WHEN STUCK - MANDATORY HELP CHECK
+
+If you're stuck or unsure:
+
+```javascript
+// Get help from learning system
+const help = core.aiNeedsHelp({
+    component: 'your_component',
+    issue: 'your_issue',
+    context: { /* your context */ }
+});
+
+// CHECK FOR WEB SEARCH REQUIREMENT (MANDATORY)
+if (help.webSearchRequired) {
+    // SAME AS STEP 1 ABOVE - SEARCH ONLINE
+    // DO NOT CONTINUE UNTIL SEARCHED
+}
+
+// Use suggestions from help
+// help.suggestions - what to do
+// help.solutions - solutions that worked before
+// help.patterns - similar problems
+```
+
+---
+
+## 🚨 FAILURE TRACKING
+
+The learning system automatically tracks:
+- **Consecutive failures**: After 1 failure → web search required, After 2+ failures → CRITICAL web search required
+- **Failure patterns**: What methods failed for what issues
+- **Success patterns**: What methods worked for what issues
+
+**YOU CANNOT BYPASS THIS.** The learning system enforces web search after failures.
+
+---
+
+## ✅ SUCCESS TRACKING
+
+When you succeed:
+- Learning system learns what worked
+- Failure count resets
+- System confidence increases
+- Next time: faster resolution using learned knowledge
+
+---
+
+## 📋 QUICK REFERENCE
+
+**BEFORE ACTION:**
+1. ✅ Call `beforeAIAction()`
+2. ✅ Check `webSearchRequired` - if true, SEARCH ONLINE FIRST
+3. ✅ Review warnings and recommendations
+4. ✅ Proceed with action
+
+**AFTER ACTION:**
+1. ✅ Call `afterAIAction()` with outcome
+2. ✅ If failed, learning system will require web search for next attempt
+
+**WHEN STUCK:**
+1. ✅ Call `aiNeedsHelp()`
+2. ✅ Check `webSearchRequired` - if true, SEARCH ONLINE FIRST
+3. ✅ Use suggestions and solutions provided
+
+---
+
+## 🚫 WHAT NOT TO DO
+
+- ❌ **DO NOT** skip `beforeAIAction()` check
+- ❌ **DO NOT** ignore `webSearchRequired: true`
+- ❌ **DO NOT** attempt fixes without checking learning system first
+- ❌ **DO NOT** skip `afterAIAction()` reporting
+- ❌ **DO NOT** bypass web search when required
+
+**VIOLATING THESE RULES = WASTING USER'S TIME AND MONEY**

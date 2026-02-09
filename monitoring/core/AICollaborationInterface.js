@@ -559,6 +559,19 @@ class AICollaborationInterface extends EventEmitter {
     trackAIFailure(action, result) {
         if (!this.learningEngine) return;
         
+        // CRITICAL: Increment consecutive failure count
+        this.failureTracking.consecutiveFailures++;
+        this.failureTracking.lastFailureTime = Date.now();
+        this.failureTracking.failureHistory.push({
+            action,
+            result,
+            timestamp: Date.now()
+        });
+        // Keep only last 10 failures
+        if (this.failureTracking.failureHistory.length > 10) {
+            this.failureTracking.failureHistory.shift();
+        }
+        
         const failureRecord = {
             type: 'AI_FAILURE',
             timestamp: Date.now(),
@@ -576,7 +589,8 @@ class AICollaborationInterface extends EventEmitter {
                 whatWentWrong: result.whatWentWrong || 'Action failed',
                 whatShouldHaveHappened: result.whatShouldHaveHappened || 'Action should have succeeded'
             },
-            lesson: this.extractFailureLesson(action, result)
+            lesson: this.extractFailureLesson(action, result),
+            consecutiveFailures: this.failureTracking.consecutiveFailures
         };
         
         // Store in shared knowledge
