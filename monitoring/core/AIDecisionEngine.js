@@ -514,11 +514,11 @@ class AIDecisionEngine extends EventEmitter {
                 };
             }
             
-            // Server must be online
-            if (server.status !== 'online') {
+            // Server must be running (can be 'running' or 'degraded' - database offline is OK)
+            if (server.status !== 'running' && server.status !== 'degraded') {
                 return {
                     should: false,
-                    reason: 'Server not online',
+                    reason: `Server not running (status: ${server.status || 'unknown'})`,
                     confidence: 0.9
                 };
             }
