@@ -694,6 +694,8 @@ class StateStore extends EventEmitter {
             const fixAttempts = this.state.learning?.fixAttempts || {};
             const aiCompliance = this.state.learning?.aiCompliance || [];
             const patterns = this.state.learning?.patterns || {};
+            const misdiagnosisPatterns = this.state.learning?.misdiagnosisPatterns || {};
+            const failedMethods = this.state.learning?.failedMethods || {};
             
             // Serialize entire state (learning arrays should be preserved by _serializeState)
             const serializedState = this._serializeState(this.state);
@@ -709,6 +711,8 @@ class StateStore extends EventEmitter {
             serializedState.learning.fixAttempts = fixAttempts;
             serializedState.learning.aiCompliance = aiCompliance;
             serializedState.learning.patterns = patterns;
+            serializedState.learning.misdiagnosisPatterns = misdiagnosisPatterns;
+            serializedState.learning.failedMethods = failedMethods;
             
             // Create data object with arrays already in place
             const data = {

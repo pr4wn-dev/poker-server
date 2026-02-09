@@ -101,6 +101,9 @@ class AILearningEngine extends EventEmitter {
      * MISDIAGNOSIS-FIRST: Track wrong approaches first (most valuable learning)
      */
     learnFromAttempt(attempt) {
+        // STEP 0: Store the attempt itself for tracking
+        this.storeFixAttempt(attempt);
+        
         // STEP 1: Track misdiagnosis patterns FIRST (highest priority)
         // This prevents future wasted time - most valuable learning
         this.trackMisdiagnosis(attempt);
@@ -127,6 +130,29 @@ class AILearningEngine extends EventEmitter {
         
         // STEP 6: Save learning immediately (critical data)
         this.save();
+    }
+    
+    /**
+     * Store fix attempt for tracking and analysis
+     */
+    storeFixAttempt(attempt) {
+        const fixAttempts = this.stateStore.getState('learning.fixAttempts') || {};
+        const attemptId = attempt.issueId || `attempt-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        
+        fixAttempts[attemptId] = {
+            issueId: attempt.issueId,
+            issueType: attempt.issueType,
+            fixMethod: attempt.fixMethod,
+            fixDetails: attempt.fixDetails,
+            result: attempt.result,
+            timestamp: attempt.timestamp || Date.now(),
+            duration: attempt.duration || 0,
+            errorMessage: attempt.errorMessage,
+            failureReason: attempt.failureReason,
+            component: attempt.component
+        };
+        
+        this.stateStore.updateState('learning.fixAttempts', fixAttempts);
     }
     
     /**
@@ -1945,6 +1971,10 @@ class AILearningEngine extends EventEmitter {
             this.stateStore.updateState('learning.generalizedPatterns', Array.from(this.generalizedPatterns.entries()));
             this.stateStore.updateState('learning.generalizationRules', Array.from(this.generalizationRules.entries()));
             this.stateStore.updateState('learning.misdiagnosisPatterns', Object.fromEntries(this.misdiagnosisPatterns));
+            
+            // Store failed methods (what NOT to do)
+            const failedMethods = this.stateStore.getState('learning.failedMethods') || {};
+            this.stateStore.updateState('learning.failedMethods', failedMethods);
             
             // CRITICAL: Trigger immediate disk save to ensure learning data is persisted
             // Don't wait for auto-save interval - learning data is too valuable to lose

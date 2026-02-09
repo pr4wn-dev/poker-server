@@ -394,10 +394,10 @@ function Show-BrokenPromiseStatistics {
     Write-Host "This section shows all checks performed to verify AI compliance:" -ForegroundColor White
     Write-Host ""
     Write-Host "VERIFICATION CHECKS PERFORMED:" -ForegroundColor Cyan
-    Write-Host "  [OK] Tool Calls - Did AI call required tools (web_search, beforeAIAction, afterAIAction)?" -ForegroundColor Gray
+    Write-Host '  [OK] Tool Calls - Did AI call required tools (web_search, beforeAIAction, afterAIAction)?' -ForegroundColor Gray
     Write-Host "  [OK] State Changes - Are findings stored? Is webSearchRequired resolved?" -ForegroundColor Gray
     Write-Host "  [OK] File Changes - Did AI actually modify code files as claimed?" -ForegroundColor Gray
-    Write-Host "  [OK] Workflow Compliance - Did AI call beforeAIAction() before coding?" -ForegroundColor Gray
+    Write-Host '  [OK] Workflow Compliance - Did AI call beforeAIAction before coding?' -ForegroundColor Gray
     Write-Host "  [OK] Learning System Usage - Did AI query the learning system when instructed?" -ForegroundColor Gray
     Write-Host ""
     

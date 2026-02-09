@@ -178,9 +178,29 @@ function Test-BrokenPromiseSystems {
         Write-Host "  [!] SOME SYSTEMS FAILED - REVIEW ABOVE" -ForegroundColor Yellow
         Write-Host ""
         Write-Host "  Failed Tests:" -ForegroundColor Yellow
+        
+        # Track failures in learning system
+        $failureList = @()
         foreach ($test in $tests) {
             if ($test.Status -eq "FAIL") {
                 Write-Host "    - $($test.Test): $($test.Error)" -ForegroundColor Red
+                $failureList += "$($test.Test):$($test.Error)"
+            }
+        }
+        
+        # Record failures to learning system
+        if ($failureList.Count -gt 0) {
+            try {
+                $trackScript = Join-Path $PSScriptRoot "track-startup-failures.js"
+                if (Test-Path $trackScript) {
+                    $trackResult = & node $trackScript $failureList 2>&1 | ConvertFrom-Json
+                    if ($trackResult.success) {
+                        Write-Host ""
+                        Write-Host "  [OK] Failures recorded to learning system ($($trackResult.tracked) failures)" -ForegroundColor Green
+                    }
+                }
+            } catch {
+                # Silently fail - don't block startup
             }
         }
     }
