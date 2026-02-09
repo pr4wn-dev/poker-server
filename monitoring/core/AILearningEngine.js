@@ -2725,12 +2725,48 @@ class AILearningEngine extends EventEmitter {
      * MISDIAGNOSIS-FIRST: Core prevention mechanism
      */
     getMisdiagnosisPrevention(issueType, errorMessage, component) {
+        // OPTIMIZATION: Try lightweight query first (avoids loading 7.7MB file)
+        // Fallback to full system if lightweight doesn't have data
+        try {
+            const lightweightQuery = require('../query-learning-lightweight');
+            const lightweightResult = lightweightQuery.queryLearning(issueType, errorMessage, component);
+            
+            // If lightweight query has results, use them (fast path)
+            if (lightweightResult.warnings && lightweightResult.warnings.length > 0) {
+                return {
+                    warnings: lightweightResult.warnings,
+                    correctApproach: lightweightResult.correctApproach,
+                    commonMisdiagnosis: lightweightResult.commonMisdiagnosis,
+                    timeSavings: lightweightResult.timeSavings,
+                    failedMethods: lightweightResult.failedMethods || [],
+                    source: 'lightweight' // Track that we used lightweight query
+                };
+            }
+            
+            // If lightweight has failed methods, include them even if no warnings
+            if (lightweightResult.failedMethods && lightweightResult.failedMethods.length > 0) {
+                return {
+                    warnings: [],
+                    correctApproach: lightweightResult.correctApproach,
+                    commonMisdiagnosis: lightweightResult.commonMisdiagnosis,
+                    timeSavings: lightweightResult.timeSavings,
+                    failedMethods: lightweightResult.failedMethods,
+                    source: 'lightweight'
+                };
+            }
+        } catch (error) {
+            // If lightweight query fails, fall through to full system
+            // Don't log - this is expected fallback behavior
+        }
+        
+        // FALLBACK: Use full system (slow but complete)
         const prevention = {
             warnings: [],
             correctApproach: null,
             commonMisdiagnosis: null,
             timeSavings: null,
-            failedMethods: []
+            failedMethods: [],
+            source: 'full' // Track that we used full system
         };
         
         // Check for matching misdiagnosis patterns
