@@ -215,6 +215,39 @@ function Show-BrokenPromiseStatistics {
         Write-Host "$line1 | $line2 | $line3"
     }
     
+    # Workflow Violations section (full width, if violations exist)
+    $workflow = if ($aiStats.workflow) { $aiStats.workflow } else { @{violations=@{total=0;recent=0;recentList=@()}} }
+    if ($workflow.violations.recent -gt 0) {
+        Write-Host ""
+        Write-Host ("=" * $consoleWidth) -ForegroundColor Red
+        Write-Host "WORKFLOW VIOLATIONS DETECTED" -ForegroundColor Red
+        Write-Host ("=" * $consoleWidth) -ForegroundColor Red
+        
+        $recentViolations = if ($workflow.violations.recentList) { $workflow.violations.recentList } else { @() }
+        foreach ($violation in $recentViolations) {
+            $severityColor = switch ($violation.severity) {
+                "critical" { "Red" }
+                "high" { "Yellow" }
+                default { "White" }
+            }
+            $timeAgo = if ($violation.timestamp) {
+                $timeSince = (Get-Date).ToUniversalTime() - ([DateTimeOffset]::FromUnixTimeMilliseconds($violation.timestamp).LocalDateTime)
+                "$([math]::Round($timeSince.TotalMinutes))m ago"
+            } else { "Unknown" }
+            
+            Write-Host ""
+            Write-Host "  [$($violation.severity.ToUpper())] $($violation.violation)" -ForegroundColor $severityColor
+            if ($violation.file) {
+                Write-Host "    File: $($violation.file)" -ForegroundColor Gray
+            }
+            Write-Host "    Time: $timeAgo" -ForegroundColor Gray
+        }
+        
+        Write-Host ""
+        Write-Host "Total Violations: $($workflow.violations.total)" -ForegroundColor Yellow
+        Write-Host ("=" * $consoleWidth) -ForegroundColor Red
+    }
+    
     # Investigation section (full width, always visible)
     Write-Host ""
     Write-Host ("=" * $consoleWidth) -ForegroundColor Cyan
