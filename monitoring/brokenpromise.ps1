@@ -78,16 +78,62 @@ if (-not $SkipBootstrap) {
 }
 
 # Function to check if we're in an interactive console
+# Uses safe checks that don't throw errors in non-interactive contexts
 function Test-InteractiveConsole {
+    # First check: Environment flag (safest, never throws)
     try {
-        # Check if we have a valid console handle
+        if (-not [Environment]::UserInteractive) {
+            return $false
+        }
+    } catch {
+        # If we can't even check this, definitely not interactive
+        return $false
+    }
+    
+    # Second check: Host UI availability (safe, doesn't access console)
+    try {
+        if (-not $Host.UI -or -not $Host.UI.RawUI) {
+            return $false
+        }
+    } catch {
+        # Host UI not available - not interactive
+        return $false
+    }
+    
+    # Third check: Output redirection (may throw in non-interactive contexts)
+    # Wrap in try-catch to prevent errors
+    try {
+        # If stdout or stderr are redirected, we're not interactive
+        # These properties may throw in non-interactive contexts, so catch any errors
+        $isOutputRedirected = $false
+        $isErrorRedirected = $false
+        try {
+            $isOutputRedirected = [Console]::IsOutputRedirected
+        } catch {
+            # If we can't check, assume redirected (non-interactive)
+            return $false
+        }
+        try {
+            $isErrorRedirected = [Console]::IsErrorRedirected
+        } catch {
+            # If we can't check, assume redirected (non-interactive)
+            return $false
+        }
+        if ($isOutputRedirected -or $isErrorRedirected) {
+            return $false
+        }
+    } catch {
+        # If any redirection check fails, assume non-interactive
+        return $false
+    }
+    
+    # Fourth check: Only NOW try to access console properties
+    # This only happens if all previous checks passed (likely interactive)
+    try {
+        # Try to access console properties - if this fails, we're not interactive
         $null = [Console]::WindowWidth
         $null = [Console]::WindowHeight
-        # Check if output is redirected (non-interactive)
-        if ([Environment]::UserInteractive -and $Host.UI.RawUI) {
-            return $true
-        }
-        return $false
+        return $true
     } catch {
         # Console handle invalid - not interactive
         return $false
