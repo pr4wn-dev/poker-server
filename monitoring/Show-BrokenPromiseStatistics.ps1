@@ -107,98 +107,109 @@ function Show-BrokenPromiseStatistics {
     $col2Lines = @()
     $col3Lines = @()
     
-    # Column 1: System Status & Monitoring
+    # Column 1: System Status & Active Issues
     $col1Lines += "SYSTEM STATUS"
     $col1Lines += ("-" * ($colWidth - 2))
     $col1Lines += "Server: " + $serverStatus
+    $col1Lines += "Unity: " + $unityStatus
     $col1Lines += "Simulations: " + $aiStats.game.activeSimulations
-    $col1Lines += "Database: " + $(if($aiStats.system.database.status -eq "online"){"CONNECTED"}else{"UNKNOWN"})
     $col1Lines += ""
     
-    $col1Lines += "MONITOR STATE"
-    $col1Lines += ("-" * ($colWidth - 2))
-    $col1Lines += "Unity Status: " + $(if($aiStats.monitoring.unity.paused){"PAUSED"}else{"ACTIVE"})
-    $col1Lines += "Waiting: " + $(if($aiStats.monitoring.unity.paused){"FIX REQUIRED"}else{"NONE"})
-    $col1Lines += ""
-    
-    $col1Lines += "Current Action:"
-    if ($aiStats.monitoring.investigation.active) {
-        $col1Lines += "  INVESTIGATING"
-        if ($aiStats.monitoring.investigation.startTime) {
-            $startTime = [DateTime]::Parse($aiStats.monitoring.investigation.startTime)
-            $elapsed = (Get-Date) - $startTime
-            $col1Lines += "  Elapsed: " + ("{0:N0}s" -f $elapsed.TotalSeconds)
-        }
-    } elseif ($aiStats.monitoring.unity.paused) {
-        $col1Lines += "  WAITING FOR FIX"
-    } else {
-        $col1Lines += "  MONITORING LOGS"
-    }
-    
-    # Check for pending prompt
-    $latestPrompt = Get-AILatestPrompt
-    if ($latestPrompt -and -not $latestPrompt.delivered) {
-        $col1Lines += ""
-        $col1Lines += "⚠️ PROMPT FOR USER"
-        $col1Lines += ("-" * ($colWidth - 2))
-        $col1Lines += "Type: " + $latestPrompt.Type
-        $col1Lines += "See: logs\prompts-for-user.txt"
-        $col1Lines += "Or check terminal below"
-    }
-    
-    # Workflow Violations
-    $workflow = if ($aiStats.workflow) { $aiStats.workflow } else { @{violations=@{total=0;recent=0;recentList=@()}} }
-    if ($workflow.violations.recent -gt 0) {
-        $col1Lines += ""
-        $col1Lines += "🚨 WORKFLOW VIOLATIONS"
-        $col1Lines += ("-" * ($colWidth - 2))
-        $col1Lines += "Recent: " + $workflow.violations.recent
-        $col1Lines += "Total: " + $workflow.violations.total
-        if ($workflow.violations.recentList -and $workflow.violations.recentList.Count -gt 0) {
-            $col1Lines += ""
-            $col1Lines += "Latest:"
-            $latestViolation = $workflow.violations.recentList[0]
-            $violationText = if ($latestViolation.violation) { 
-                $latestViolation.violation.Substring(0, [Math]::Min(30, $latestViolation.violation.Length))
-            } else { "Unknown" }
-            $col1Lines += "  " + $violationText
-        }
-    }
-    
-    # Column 2: Detection & Issues
-    $col2Lines += "DETECTION STATS"
-    $col2Lines += ("-" * ($colWidth - 2))
-    $linesProcessed = if ($aiStats.monitoring -and $aiStats.monitoring.logs) { $aiStats.monitoring.logs.processed } else { 0 }
-    $totalIssues = if ($aiStats.issues) { $aiStats.issues.total } else { 0 }
+    # Active Issues (what needs attention NOW)
     $activeIssues = if ($aiStats.issues -and $aiStats.issues.active) { $aiStats.issues.active.count } else { 0 }
-    $col2Lines += "Lines: " + ("{0:N0}" -f $linesProcessed)
-    $col2Lines += "Issues: " + ("{0:N0}" -f $totalIssues)
-    $col2Lines += "Active: " + ("{0:N0}" -f $activeIssues)
+    $col1Lines += "ACTIVE ISSUES"
+    $col1Lines += ("-" * ($colWidth - 2))
+    $col1Lines += "Count: " + ("{0:N0}" -f $activeIssues)
+    if ($activeIssues -gt 0) {
+        $bySeverity = if ($aiStats.issues.active.bySeverity) { $aiStats.issues.active.bySeverity } else { @{critical=0;high=0;medium=0;low=0} }
+        if ($bySeverity.critical -gt 0) { $col1Lines += "Critical: " + ("{0:N0}" -f $bySeverity.critical) }
+        if ($bySeverity.high -gt 0) { $col1Lines += "High: " + ("{0:N0}" -f $bySeverity.high) }
+        if ($bySeverity.medium -gt 0) { $col1Lines += "Medium: " + ("{0:N0}" -f $bySeverity.medium) }
+    } else {
+        $col1Lines += "Status: All Clear"
+    }
+    $col1Lines += ""
+    
+    # Prompt System Status
+    $latestPrompt = Get-AILatestPrompt
+    $workflow = if ($aiStats.workflow) { $aiStats.workflow } else { @{prompts=@{total=0;pending=0};violations=@{total=0;recent=0}} }
+    $col1Lines += "PROMPT SYSTEM"
+    $col1Lines += ("-" * ($colWidth - 2))
+    $col1Lines += "Pending: " + $workflow.prompts.pending
+    $col1Lines += "Total: " + $workflow.prompts.total
+    if ($latestPrompt -and -not $latestPrompt.delivered) {
+        $col1Lines += "Type: " + $latestPrompt.Type
+    }
+    
+    # Column 2: Learning System (NEW - what we actually use)
+    $learning = if ($aiStats.learning) { $aiStats.learning } else { @{patternsLearned=0;knowledgeRules=0;improvements=0} }
+    $col2Lines += "LEARNING SYSTEM"
+    $col2Lines += ("-" * ($colWidth - 2))
+    $col2Lines += "Patterns: " + ("{0:N0}" -f $learning.patternsLearned)
+    $col2Lines += "Knowledge: " + ("{0:N0}" -f $learning.knowledgeRules)
+    $col2Lines += "Improvements: " + ("{0:N0}" -f $learning.improvements)
     $col2Lines += ""
     
-    $col2Lines += "ISSUES BY SEVERITY"
+    # Pattern Matching (from learning engine)
+    $patternMatches = if ($learning.patternsLearned -gt 0) { "Active" } else { "None Yet" }
+    $col2Lines += "PATTERN MATCHING"
     $col2Lines += ("-" * ($colWidth - 2))
-    $bySeverity = if ($aiStats.issues -and $aiStats.issues.bySeverity) { $aiStats.issues.bySeverity } else { @{critical=0;high=0;medium=0;low=0} }
-    $col2Lines += "Critical: " + ("{0:N0}" -f $bySeverity.critical)
-    $col2Lines += "High:     " + ("{0:N0}" -f $bySeverity.high)
-    $col2Lines += "Medium:   " + ("{0:N0}" -f $bySeverity.medium)
-    $col2Lines += "Low:      " + ("{0:N0}" -f $bySeverity.low)
+    $col2Lines += "Status: " + $patternMatches
+    if ($learning.recentImprovements -and $learning.recentImprovements.Count -gt 0) {
+        $col2Lines += "Recent: " + $learning.recentImprovements.Count
+    }
+    $col2Lines += ""
     
-    # Column 3: Fixes & Learning
+    # Fix Attempts by Issue Type
+    $fixAttemptsByIssue = if ($learning.fixAttempts -and $learning.fixAttempts.byIssue) { $learning.fixAttempts.byIssue } else { @{} }
+    if ($fixAttemptsByIssue.Count -gt 0) {
+        $col2Lines += "FIX ATTEMPTS"
+        $col2Lines += ("-" * ($colWidth - 2))
+        $issueTypes = $fixAttemptsByIssue.Keys | Select-Object -First 3
+        foreach ($type in $issueTypes) {
+            $count = $fixAttemptsByIssue[$type]
+            $typeShort = if ($type.Length -gt 15) { $type.Substring(0, 12) + "..." } else { $type }
+            $col2Lines += "$typeShort : $count"
+        }
+    }
+    
+    # Column 3: Fixes & Compliance
+    $fixAttempts = if ($aiStats.fixes -and $aiStats.fixes.attempts) { $aiStats.fixes.attempts } else { @{total=0;successes=0;failures=0;successRate=0} }
     $col3Lines += "FIX STATISTICS"
     $col3Lines += ("-" * ($colWidth - 2))
-    $fixAttempts = if ($aiStats.fixes -and $aiStats.fixes.attempts) { $aiStats.fixes.attempts } else { @{total=0;successful=0;failed=0;successRate=0} }
-    $col3Lines += "Total Attempts: " + ("{0:N0}" -f $fixAttempts.total)
-    $col3Lines += "Successful: " + ("{0:N0}" -f $fixAttempts.successful)
-    $col3Lines += "Failed: " + ("{0:N0}" -f $fixAttempts.failed)
-    $col3Lines += "Success Rate: " + ("{0:N1}%" -f ($fixAttempts.successRate * 100))
+    $col3Lines += "Total: " + ("{0:N0}" -f $fixAttempts.total)
+    $col3Lines += "Success: " + ("{0:N0}" -f $fixAttempts.successes)
+    $col3Lines += "Failed: " + ("{0:N0}" -f $fixAttempts.failures)
+    $successRate = if ($fixAttempts.total -gt 0) { ($fixAttempts.successes / $fixAttempts.total) * 100 } else { 0 }
+    $col3Lines += "Rate: " + ("{0:N1}%" -f $successRate)
     $col3Lines += ""
     
-    $col3Lines += "AI LEARNING"
+    # Working Fixes
+    $workingFixes = if ($aiStats.fixes -and $aiStats.fixes.workingFixes) { $aiStats.fixes.workingFixes } else { @() }
+    $col3Lines += "WORKING FIXES"
     $col3Lines += ("-" * ($colWidth - 2))
-    $learning = if ($aiStats.learning) { $aiStats.learning } else { @{patterns=@{count=0};workingFixes=@{count=0}} }
-    $col3Lines += "Patterns: " + ("{0:N0}" -f $learning.patterns.count)
-    $col3Lines += "Working Fixes: " + ("{0:N0}" -f $learning.workingFixes.count)
+    $col3Lines += "Count: " + ("{0:N0}" -f $workingFixes.Count)
+    if ($workingFixes.Count -gt 0) {
+        $avgSuccessRate = ($workingFixes | ForEach-Object { $_.successRate } | Measure-Object -Average).Average
+        if ($avgSuccessRate) {
+            $col3Lines += "Avg Rate: " + ("{0:N1}%" -f ($avgSuccessRate * 100))
+        }
+    }
+    $col3Lines += ""
+    
+    # Workflow Compliance
+    $workflow = if ($aiStats.workflow) { $aiStats.workflow } else { @{violations=@{total=0;recent=0};compliance=@{}} }
+    $col3Lines += "WORKFLOW COMPLIANCE"
+    $col3Lines += ("-" * ($colWidth - 2))
+    $col3Lines += "Violations: " + $workflow.violations.recent
+    $col3Lines += "Total: " + $workflow.violations.total
+    if ($workflow.compliance.lastBeforeAction) {
+        $timeSince = (Get-Date).ToUniversalTime() - ([DateTimeOffset]::FromUnixTimeMilliseconds($workflow.compliance.lastBeforeAction).LocalDateTime)
+        $timeSinceStr = if ($timeSince.TotalMinutes -lt 1) { "$([Math]::Round($timeSince.TotalSeconds))s" } else { "$([Math]::Round($timeSince.TotalMinutes))m" }
+        $col3Lines += "Last Action: " + $timeSinceStr + " ago"
+    } else {
+        $col3Lines += "Last Action: Never"
+    }
     
     # Display columns
     $maxLines = [Math]::Max($col1Lines.Count, [Math]::Max($col2Lines.Count, $col3Lines.Count))
@@ -248,60 +259,52 @@ function Show-BrokenPromiseStatistics {
         Write-Host ("=" * $consoleWidth) -ForegroundColor Red
     }
     
-    # Investigation section (full width, always visible)
-    Write-Host ""
-    Write-Host ("=" * $consoleWidth) -ForegroundColor Cyan
-    Write-Host "INVESTIGATION STATUS" -ForegroundColor White
-    Write-Host ("=" * $consoleWidth) -ForegroundColor Cyan
-    
-    $investigation = if ($aiStats.monitoring -and $aiStats.monitoring.investigation) { $aiStats.monitoring.investigation } else { @{active=$false} }
-    
-    if ($investigation.active) {
-        try {
-            $startTime = if ($investigation.startTime) { [DateTime]::Parse($investigation.startTime) } else { Get-Date }
-            $elapsed = (Get-Date) - $startTime
-            $remaining = if ($investigation.timeRemaining) { $investigation.timeRemaining } else { 0 }
-            $progress = if ($investigation.progress) { $investigation.progress } else { 0 }
-            $issuesCount = if ($investigation.issuesCount) { $investigation.issuesCount } else { 0 }
-            
-            Write-Host "Status: ACTIVE" -ForegroundColor Yellow
-            Write-Host "Started: $($startTime.ToString('HH:mm:ss'))"
-            Write-Host "Elapsed: $([Math]::Round($elapsed.TotalSeconds, 1))s"
-            Write-Host "Remaining: $([Math]::Round($remaining, 1))s"
-            Write-Host "Progress: $([Math]::Round($progress, 1))%"
-            Write-Host "Issues Found: $issuesCount"
-            
-            if ($investigation.issues -and $investigation.issues.Count -gt 0) {
-                Write-Host ""
-                Write-Host "Current Issues:" -ForegroundColor White
-                foreach ($issue in $investigation.issues) {
-                    $severity = if ($issue.severity) { $issue.severity } else { "unknown" }
-                    $type = if ($issue.type) { $issue.type } else { "unknown" }
-                    $color = if ($severity -eq "critical") { "Red" } elseif ($severity -eq "high") { "Yellow" } else { "Gray" }
-                    Write-Host "  - $type ($severity)" -ForegroundColor $color
-                }
-            }
-        } catch {
-            Write-Host "Status: ACTIVE (Error displaying details)" -ForegroundColor Yellow
+    # Active Issues Details (full width, if any active issues)
+    $activeIssues = if ($aiStats.issues -and $aiStats.issues.active) { $aiStats.issues.active } else { @{count=0;issues=@()} }
+    if ($activeIssues.count -gt 0 -and $activeIssues.issues) {
+        Write-Host ""
+        Write-Host ("=" * $consoleWidth) -ForegroundColor Yellow
+        Write-Host "ACTIVE ISSUES REQUIRING ATTENTION" -ForegroundColor White
+        Write-Host ("=" * $consoleWidth) -ForegroundColor Yellow
+        
+        $displayedIssues = $activeIssues.issues | Select-Object -First 5
+        foreach ($issue in $displayedIssues) {
+            $severity = if ($issue.severity) { $issue.severity } else { "unknown" }
+            $type = if ($issue.type) { $issue.type } else { "unknown" }
+            $color = if ($severity -eq "critical") { "Red" } elseif ($severity -eq "high") { "Yellow" } else { "Gray" }
+            $count = if ($issue.count) { " (x$($issue.count))" } else { "" }
+            Write-Host "  [$($severity.ToUpper())] $type$count" -ForegroundColor $color
         }
-    } else {
-        Write-Host "Status: NOT ACTIVE" -ForegroundColor Gray
-        Write-Host "Waiting for issues to trigger investigation"
+        
+        if ($activeIssues.count -gt 5) {
+            Write-Host "  ... and $($activeIssues.count - 5) more" -ForegroundColor Gray
+        }
+        Write-Host ("=" * $consoleWidth) -ForegroundColor Yellow
     }
     
-    # Recommendations section
-    if ($aiStats.recommendations -and $aiStats.recommendations.priority -and $aiStats.recommendations.priority.Count -gt 0) {
+    # Learning Insights (full width, if learning system has data)
+    $learning = if ($aiStats.learning) { $aiStats.learning } else { @{patternsLearned=0;recentImprovements=@()} }
+    if ($learning.patternsLearned -gt 0 -or ($learning.recentImprovements -and $learning.recentImprovements.Count -gt 0)) {
         Write-Host ""
         Write-Host ("=" * $consoleWidth) -ForegroundColor Cyan
-        Write-Host "AI RECOMMENDATIONS" -ForegroundColor White
+        Write-Host "LEARNING SYSTEM INSIGHTS" -ForegroundColor White
         Write-Host ("=" * $consoleWidth) -ForegroundColor Cyan
         
-        foreach ($rec in $aiStats.recommendations.priority) {
-            $priority = if ($rec.priority) { $rec.priority } else { "low" }
-            $action = if ($rec.action) { $rec.action } else { "No action specified" }
-            $recColor = if ($priority -eq "high") { "Red" } elseif ($priority -eq "medium") { "Yellow" } else { "Gray" }
-            Write-Host "  [$($priority.ToUpper())] $action" -ForegroundColor $recColor
+        Write-Host "Patterns Learned: $($learning.patternsLearned)" -ForegroundColor White
+        Write-Host "Knowledge Base: $($learning.knowledgeRules) rules" -ForegroundColor White
+        Write-Host "Improvements Tracked: $($learning.improvements)" -ForegroundColor White
+        
+        if ($learning.recentImprovements -and $learning.recentImprovements.Count -gt 0) {
+            Write-Host ""
+            Write-Host "Recent Improvements:" -ForegroundColor Yellow
+            $recent = $learning.recentImprovements | Select-Object -Last 3
+            foreach ($improvement in $recent) {
+                $desc = if ($improvement.description) { $improvement.description } elseif ($improvement.issueType) { $improvement.issueType } else { "Improvement" }
+                $descShort = if ($desc.Length -gt 50) { $desc.Substring(0, 47) + "..." } else { $desc }
+                Write-Host "  - $descShort" -ForegroundColor Gray
+            }
         }
+        Write-Host ("=" * $consoleWidth) -ForegroundColor Cyan
     }
     
     # Prompt for user section
