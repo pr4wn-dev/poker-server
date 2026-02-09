@@ -562,14 +562,26 @@ class BrokenPromiseIntegration {
      * AI can answer any question
      */
     query(question) {
-        return this.aiCore.communication.query(question);
+        if (!this.aiCore || !this.aiCore.communicationInterface) {
+            return {
+                error: 'AI core or communication interface not available',
+                question
+            };
+        }
+        return this.aiCore.communicationInterface.query(question);
     }
     
     /**
      * Get complete status report
      */
     getStatusReport() {
-        return this.aiCore.communication.getStatusReport();
+        if (!this.aiCore || !this.aiCore.communicationInterface) {
+            return {
+                error: 'AI core or communication interface not available',
+                timestamp: Date.now()
+            };
+        }
+        return this.aiCore.communicationInterface.getStatusReport();
     }
     
     /**
