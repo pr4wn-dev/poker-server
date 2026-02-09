@@ -9,6 +9,8 @@
 
 This document describes how the AI (you) and the Learning System (BrokenPromise) work together as one unified entity. The workflow is designed to be proactive, intelligent, and continuously improving.
 
+**NEW: Prompt-Based System** - The system now uses a prompt-based approach where the system automatically detects issues, generates prompts for the user to deliver, and verifies compliance. See [PROMPT_BASED_SYSTEM.md](PROMPT_BASED_SYSTEM.md) for details.
+
 ---
 
 ## 🔄 Core Workflow

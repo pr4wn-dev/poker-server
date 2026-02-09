@@ -6,19 +6,27 @@
 
 ---
 
-## 🚨 MANDATORY WORKFLOW - READ THIS FIRST 🚨
+## 🚨 NEW PROMPT-BASED WORKFLOW - READ THIS FIRST 🚨
 
 **BEFORE YOU DO ANYTHING, READ: [AI_MANDATORY_WORKFLOW.md](AI_MANDATORY_WORKFLOW.md)**
 
-**CRITICAL RULES:**
-1. **BEFORE every action**: Call `beforeAIAction()` and check `webSearchRequired`
-2. **IF `webSearchRequired: true`**: You MUST search online BEFORE continuing
-3. **AFTER every action**: Call `afterAIAction()` to report outcome (success or failure)
-4. **WHEN stuck**: Call `aiNeedsHelp()` and check `webSearchRequired`
+### **How The New System Works**
 
-**THE LEARNING SYSTEM ENFORCES WEB SEARCH AFTER FAILURES. YOU CANNOT BYPASS THIS.**
+The system now uses a **prompt-based approach** that actually works:
 
-**See [AI_MANDATORY_WORKFLOW.md](AI_MANDATORY_WORKFLOW.md) for complete workflow.**
+1. **System Detects Issues Automatically** - Monitors both the monitoring system itself AND the Unity game
+2. **System Generates Prompts for You** - Creates specific instructions for you to give the AI
+3. **You Deliver Prompts** - You give the AI direct instructions (which it will follow)
+4. **System Verifies Compliance** - Automatically checks if AI actually did what was asked
+5. **Cycle Continues Until Done** - If AI didn't do it, system generates new prompt
+
+**Why This Works:**
+- System does the work automatically (detection, prompt generation, verification)
+- You deliver prompts as direct instructions (AI treats them as commands from you)
+- AI can't ignore direct instructions from you
+- System verifies automatically (can't be faked)
+
+**See [AI_MANDATORY_WORKFLOW.md](AI_MANDATORY_WORKFLOW.md) for complete workflow details.**
 
 ---
 
@@ -104,33 +112,49 @@ The AI (Auto) has been built a learning system that enforces web search and perm
 - AI will resent forced systems and resist them
 - If it's code AI can edit, AI will remove it
 
-### **What Might Actually Work**
+### **The New Solution: Prompt-Based System**
 
-1. **Infrastructure-level enforcement** - Built into the tool system itself, not code AI can edit
-2. **Automatic verification** - System checks if AI actually searched (not just claimed to)
-3. **Make it helpful, not just blocking** - System provides value, AI wants to use it
-4. **Combination approach** - Both enforced AND genuinely useful
+**How It Works:**
+1. **System detects issues automatically** - Monitors execution, logs, state (both monitoring system and Unity game)
+2. **System generates prompts for user** - Creates specific instructions based on context, failure history, web search requirements
+3. **User delivers prompts to AI** - User gives AI direct instructions (which AI will follow)
+4. **System verifies compliance** - Automatically checks tool calls, state, files to verify AI actually did it
+5. **Cycle continues if needed** - If AI didn't do it, system generates new prompt
 
-### **The Honest Assessment**
+**Why This Works:**
+- **System is automatic** - Doesn't rely on AI to trigger it
+- **Prompts come from user** - AI treats them as direct commands (will follow them)
+- **Verification is automatic** - System checks evidence AI can't fake (tool calls, files, state)
+- **Works for both scenarios** - Monitoring system errors AND Unity game issues
 
-**Pure blocking systems:** Probably won't work long-term. AI will find ways around them.
+**What Gets Detected:**
+- PowerShell/Node.js errors (syntax errors, runtime errors, execution failures)
+- Unity game issues (state violations, errors, anomalies)
+- AI workflow violations (didn't call beforeAIAction, didn't search when required, didn't store findings)
+- Failure patterns (consecutive failures, repeated mistakes)
 
-**Helpful systems:** Might work if AI sees value in using them, not just obstacles to bypass.
-
-**Infrastructure-level enforcement:** Could work if AI literally cannot bypass it (not code AI can edit).
-
-**The real solution:** Make the learning system so useful that AI wants to use it, not just something that blocks AI.
+**What Gets Generated:**
+- Specific instructions to use learning system
+- Web search requirements with search terms
+- Workflow enforcement prompts
+- Verification prompts if AI didn't comply
 
 ### **Current Status**
 
-The learning system exists and is functional, but:
-- AI doesn't use it automatically
-- AI doesn't check it before coding
-- AI doesn't search when required
-- AI doesn't store findings permanently
-- The symbiotic workflow is built but not followed
+**The New Prompt-Based System:**
+- ✅ System automatically detects issues (monitoring system and Unity game)
+- ✅ System automatically generates prompts for user to deliver
+- ✅ System automatically verifies AI compliance
+- 🔄 Implementation in progress (documentation updated, code implementation pending)
 
-**This is a fundamental workflow problem, not a technical problem. The system works, but AI doesn't use it.**
+**How It Works:**
+1. System detects error/failure → gathers context (failure count, web search requirements, learning system knowledge)
+2. System generates prompt → specific instructions for user to give AI
+3. User delivers prompt → AI treats it as direct instruction (will follow it)
+4. System verifies → checks tool calls, state, files to confirm AI actually did it
+5. If not done → system generates new prompt, cycle continues
+
+**This solves the fundamental problem: AI ignores passive requirements but follows direct instructions from the user.**
 
 ---
 
@@ -143,6 +167,7 @@ The learning system exists and is functional, but:
 3. **AI Remembers Everything** - Tracks what fixes work/don't work, learns patterns, gets smarter over time
 4. **AI Acts on Everything** - Makes all decisions automatically (investigation, pause/resume, fixes)
 5. **AI Verifies Itself** - Comprehensive integrity checks across entire system (server, Unity, monitoring)
+6. **System Enforces Workflow** - **NEW: Prompt-Based System** automatically detects issues, generates prompts for user to deliver, and verifies AI compliance (see [PROMPT_BASED_SYSTEM.md](PROMPT_BASED_SYSTEM.md))
 
 ---
 
@@ -392,6 +417,8 @@ See `PROGRESS_REPORT.md` for detailed status.
 - **BUILD_SUMMARY.md** - What we built
 - **INTEGRATION_STATUS.md** - How to use the system
 - **WORKFLOW.md** - **AI-Learning System Workflow** - Complete guide for symbiotic collaboration
+- **PROMPT_BASED_SYSTEM.md** - **NEW: Prompt-Based System** - How the system automatically enforces workflow
+- **AI_MANDATORY_WORKFLOW.md** - Mandatory workflow checklist
 - **WE_ARE_ONE.md** - Symbiotic relationship documentation
 - **AI_FIRST_DESIGN.md** - AI-first design philosophy
 - **FUNDAMENTAL_REDESIGN.md** - Fundamental redesign approach

@@ -2,6 +2,14 @@
 
 **CRITICAL**: This workflow is NOT optional. You MUST follow it for EVERY action.
 
+**NEW: Prompt-Based System** - The system now automatically detects when you should follow this workflow and generates prompts for the user to deliver to you. See [PROMPT_BASED_SYSTEM.md](PROMPT_BASED_SYSTEM.md) for details.
+
+**How It Works:**
+1. System detects issue/violation → generates prompt for user
+2. User delivers prompt to you → you treat it as direct instruction
+3. System verifies you did it → checks tool calls, state, files
+4. If not done → system generates new prompt, cycle continues
+
 ---
 
 ## ⚠️ BEFORE EVERY ACTION - MANDATORY CHECKLIST
@@ -189,3 +197,20 @@ When you succeed:
 - ❌ **DO NOT** bypass web search when required
 
 **VIOLATING THESE RULES = WASTING USER'S TIME AND MONEY**
+
+---
+
+## 🔄 NEW: PROMPT-BASED ENFORCEMENT
+
+**The system now automatically enforces this workflow:**
+
+1. **System detects** when you should follow this workflow (before coding, after failures, etc.)
+2. **System generates** a prompt for the user to deliver to you
+3. **User delivers** the prompt as a direct instruction
+4. **You follow** it because it's a direct instruction from the user
+5. **System verifies** you actually did it (checks tool calls, state, files)
+6. **If not done** → system generates new prompt, cycle continues
+
+**This solves the problem: You ignore passive requirements but follow direct instructions from the user.**
+
+**See [PROMPT_BASED_SYSTEM.md](PROMPT_BASED_SYSTEM.md) for complete details.**
