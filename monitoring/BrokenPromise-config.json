@@ -1,0 +1,30 @@
+{
+  "mode": "simulation",
+  "automation": {
+    "autoRestartServer": true,
+    "autoRestartDatabase": true,
+    "autoRestartUnity": true,
+    "autoConnectUnity": true,
+    "autoLogin": true
+  },
+  "unity": {
+    "executablePath": "",
+    "projectPath": "",
+    "autoConnectOnStartup": true,
+    "serverUrl": "http://localhost:3000"
+  },
+  "login": {
+    "username": "monitor_user",
+    "password": ""
+  },
+  "simulation": {
+    "enabled": true,
+    "tableName": "Auto Simulation",
+    "maxPlayers": 9,
+    "startingChips": 10000,
+    "smallBlind": 50,
+    "bigBlind": 100,
+    "autoStartSimulation": true,
+    "itemAnteEnabled": false
+  }
+}
