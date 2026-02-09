@@ -47,7 +47,7 @@ function Add-Issue {
 }
 
 # Check 1: PowerShell syntax check on brokenpromise.ps1
-Write-Host "[BOOTSTRAP] Checking PowerShell syntax..." -ForegroundColor Cyan
+Write-Host '[BOOTSTRAP] Checking PowerShell syntax...' -ForegroundColor Cyan
 $brokenPromisePath = Join-Path $scriptDir "brokenpromise.ps1"
 if (Test-Path $brokenPromisePath) {
     try {
@@ -83,7 +83,7 @@ if (Test-Path $brokenPromisePath) {
 }
 
 # Check 2: Node.js availability
-Write-Host "[BOOTSTRAP] Checking Node.js..." -ForegroundColor Cyan
+Write-Host '[BOOTSTRAP] Checking Node.js...' -ForegroundColor Cyan
 try {
     $nodeVersion = node --version 2>&1
     if ($LASTEXITCODE -eq 0) {
@@ -98,7 +98,7 @@ try {
 }
 
 # Check 3: Required Node.js files exist
-Write-Host "[BOOTSTRAP] Checking Node.js integration files..." -ForegroundColor Cyan
+Write-Host '[BOOTSTRAP] Checking Node.js integration files...' -ForegroundColor Cyan
 $integrationFiles = @(
     "integration\BrokenPromiseIntegration.js",
     "integration\brokenpromise-integration.js",
@@ -118,7 +118,7 @@ foreach ($file in $integrationFiles) {
 }
 
 # Check 4: Test Node.js integration can load
-Write-Host "[BOOTSTRAP] Testing Node.js integration..." -ForegroundColor Cyan
+Write-Host '[BOOTSTRAP] Testing Node.js integration...' -ForegroundColor Cyan
 $integrationTestScript = Join-Path $scriptDir "integration\brokenpromise-integration.js"
 if (Test-Path $integrationTestScript) {
     try {
@@ -137,7 +137,7 @@ if (Test-Path $integrationTestScript) {
 }
 
 # Check 5: Required PowerShell files exist
-Write-Host "[BOOTSTRAP] Checking PowerShell integration files..." -ForegroundColor Cyan
+Write-Host '[BOOTSTRAP] Checking PowerShell integration files...' -ForegroundColor Cyan
 $psFiles = @(
     "BrokenPromiseIntegration.ps1",
     "Show-BrokenPromiseStatistics.ps1"
@@ -154,7 +154,7 @@ foreach ($file in $psFiles) {
 }
 
 # Check 6: Test PowerShell integration can load
-Write-Host "[BOOTSTRAP] Testing PowerShell integration..." -ForegroundColor Cyan
+Write-Host '[BOOTSTRAP] Testing PowerShell integration...' -ForegroundColor Cyan
 $psIntegrationPath = Join-Path $scriptDir "BrokenPromiseIntegration.ps1"
 if (Test-Path $psIntegrationPath) {
     try {
@@ -168,7 +168,7 @@ if (Test-Path $psIntegrationPath) {
 }
 
 # Check 7: Check logs directory is writable
-Write-Host "[BOOTSTRAP] Checking logs directory..." -ForegroundColor Cyan
+Write-Host '[BOOTSTRAP] Checking logs directory...' -ForegroundColor Cyan
 if (Test-Path $logsDir) {
     try {
         $testFile = Join-Path $logsDir "bootstrap-test.txt"
@@ -187,7 +187,7 @@ if (Test-Path $logsDir) {
 # If critical issues found, exit immediately (don't wait for prompt generation)
 if ($criticalIssues.Count -gt 0) {
     Write-Host ""
-    Write-Host "[BOOTSTRAP] CRITICAL ISSUES DETECTED - BrokenPromise cannot start" -ForegroundColor Red
+    Write-Host '[BOOTSTRAP] CRITICAL ISSUES DETECTED - BrokenPromise cannot start' -ForegroundColor Red
     foreach ($issue in $criticalIssues) {
         Write-Host "  ✗ $($issue.Type): $($issue.Message)" -ForegroundColor Red
         if ($issue.Details) {
@@ -202,7 +202,7 @@ if ($criticalIssues.Count -gt 0) {
 # Generate prompt if issues found (only warnings at this point)
 if ($issues.Count -gt 0 -and -not $SkipPromptGeneration) {
     Write-Host ""
-    Write-Host "[BOOTSTRAP] Issues detected - generating prompt..." -ForegroundColor Yellow
+    Write-Host '[BOOTSTRAP] Issues detected - generating prompt...' -ForegroundColor Yellow
     
     $promptText = "═══════════════════════════════════════════════════════════════`r`n"
     $promptText += "  PROMPT FOR USER TO DELIVER TO AI`r`n"
@@ -252,10 +252,10 @@ if ($issues.Count -gt 0 -and -not $SkipPromptGeneration) {
     # Return non-zero exit code to indicate failure
     # Use exit code 1 to indicate failure
     Write-Host ""
-    Write-Host "[BOOTSTRAP] FAILED - BrokenPromise cannot start" -ForegroundColor Red
+    Write-Host '[BOOTSTRAP] FAILED - BrokenPromise cannot start' -ForegroundColor Red
     exit 1
 } else {
     Write-Host ""
-    Write-Host "[BOOTSTRAP] All checks passed - BrokenPromise can start" -ForegroundColor Green
+    Write-Host '[BOOTSTRAP] All checks passed - BrokenPromise can start' -ForegroundColor Green
     exit 0
 }
