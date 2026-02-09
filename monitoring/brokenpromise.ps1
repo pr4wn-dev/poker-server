@@ -13,10 +13,31 @@
 
 param(
     [ValidateSet("simulation", "normal")]
-    [string]$Mode = "simulation"
+    [string]$Mode = "simulation",
+    [switch]$SkipBootstrap = $false
 )
 
 $ErrorActionPreference = "Continue"
+
+# Bootstrap check - Run BEFORE anything else
+if (-not $SkipBootstrap) {
+    $bootstrapScript = Join-Path $PSScriptRoot "bootstrap-check.ps1"
+    if (Test-Path $bootstrapScript) {
+        Write-Host "[BROKENPROMISE] Running bootstrap check..." -ForegroundColor Cyan
+        & $bootstrapScript
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host ""
+            Write-Host "[BROKENPROMISE] Bootstrap check failed - BrokenPromise cannot start" -ForegroundColor Red
+            Write-Host "[BROKENPROMISE] Check logs\prompts-for-user.txt for prompt to give to AI" -ForegroundColor Yellow
+            Write-Host "[BROKENPROMISE] Or run with -SkipBootstrap to bypass (not recommended)" -ForegroundColor Yellow
+            exit $LASTEXITCODE
+        }
+        Write-Host "[BROKENPROMISE] Bootstrap check passed - Starting BrokenPromise..." -ForegroundColor Green
+        Write-Host ""
+    } else {
+        Write-Warning "[BROKENPROMISE] Bootstrap check script not found - skipping pre-flight checks"
+    }
+}
 
 # Ensure we're in the correct directory (poker-server root)
 # Script is in monitoring/ folder, so go up one level
