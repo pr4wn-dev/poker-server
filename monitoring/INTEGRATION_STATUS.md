@@ -2,7 +2,7 @@
 
 **Status**: ✅ **CORE COMPLETE** + ✅ **INTEGRATION LAYER COMPLETE** - Ready for use!
 
-**BrokenPromise** - The three-headed guardian is operational and ready to hunt down errors.
+**BrokenPromise** - A constant reminder that AI should never be trusted. The system is operational and ready to hunt down errors, with comprehensive compliance verification to detect when the AI is lying.
 
 ---
 
@@ -428,4 +428,4 @@ node monitoring/integration/BrokenPromise-integration.js get-status-report
 
 ---
 
-**BrokenPromise is built, integrated, tested, and production ready. All broken systems have been replaced. All errors have been fixed. The three-headed guardian is fully operational. The foundation is solid. Nothing escapes BrokenPromise.**
+**BrokenPromise is built, integrated, tested, and production ready. All broken systems have been replaced. All errors have been fixed. The system is fully operational with comprehensive compliance verification to detect when the AI is lying. The foundation is solid. Nothing escapes BrokenPromise.**

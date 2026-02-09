@@ -341,4 +341,4 @@
 - ✅ All errors are reported to issue detector
 - ✅ Error rates tracked and spikes detected
 
-**Result**: BrokenPromise catches, reports, learns from, and tracks ALL errors. Nothing goes unnoticed. The three-headed guardian hunts down and eliminates ALL errors.
+**Result**: BrokenPromise catches, reports, learns from, and tracks ALL errors. Nothing goes unnoticed. The system hunts down and eliminates ALL errors, and includes comprehensive compliance verification to detect when the AI is lying.

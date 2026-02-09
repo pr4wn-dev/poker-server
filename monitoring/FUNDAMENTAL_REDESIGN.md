@@ -4,7 +4,7 @@
 
 **Answer**: You're absolutely right. Let's identify what's fundamentally wrong and design BrokenPromise - correct by design.
 
-**BrokenPromise** - The three-headed guardian that hunts down and eliminates ALL errors.
+**BrokenPromise** - A constant reminder that AI should never be trusted. The system hunts down and eliminates ALL errors, and includes comprehensive compliance verification to detect when the AI is lying.
 
 ---
 

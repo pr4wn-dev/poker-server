@@ -1,6 +1,6 @@
 # BrokenPromise - File & Code Integrity Checks
 
-**BrokenPromise** - The three-headed guardian verifies its own integrity and hunts down ALL errors.
+**BrokenPromise** - A constant reminder that AI should never be trusted. The system verifies its own integrity, hunts down ALL errors, and includes comprehensive compliance verification to detect when the AI is lying.
 
 ## Current State
 

@@ -6,9 +6,9 @@
 
 ## 🎉 What We've Built
 
-### **BrokenPromise - The Three-Headed Guardian**
+### **BrokenPromise - AI Should Never Be Trusted**
 
-A comprehensive AI-first system built FOR the AI, BY the AI. BrokenPromise sees everything, knows everything, and acts on everything automatically. The three-headed guardian hunts down and eliminates ALL errors.
+A comprehensive AI-first system built FOR the AI, BY the AI. BrokenPromise sees everything, knows everything, and acts on everything automatically. The system hunts down and eliminates ALL errors, and includes comprehensive compliance verification to detect when the AI is lying.
 
 ---
 

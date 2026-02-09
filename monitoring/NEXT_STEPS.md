@@ -2,7 +2,7 @@
 
 **Current Status**: ✅ **PRODUCTION READY** - BrokenPromise is fully operational, error-free, and ready for production use!
 
-**BrokenPromise** - The three-headed guardian stands ready to hunt down and eliminate ALL errors.
+**BrokenPromise** - A constant reminder that AI should never be trusted. The system stands ready to hunt down and eliminate ALL errors, and includes comprehensive compliance verification to detect when the AI is lying.
 
 ---
 

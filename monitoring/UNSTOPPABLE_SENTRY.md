@@ -1,6 +1,6 @@
-# BrokenPromise: The Unstoppable Three-Headed Guardian
+# BrokenPromise: The System That Detects AI Lies
 
-**Status**: ✅ **OPERATIONAL + ENHANCED** - BrokenPromise is an unstoppable three-headed guardian that hunts down and eliminates ALL errors, even unseen ones. Enhanced with solution templates, code change tracking, pattern generalization, proactive prediction, and context-aware suggestions.
+**Status**: ✅ **OPERATIONAL + ENHANCED** - BrokenPromise is a comprehensive system that detects when the AI is lying and hunts down ALL errors, even unseen ones. Enhanced with solution templates, code change tracking, pattern generalization, proactive prediction, context-aware suggestions, and compliance verification.
 
 ---
 
@@ -8,7 +8,7 @@
 
 **Between the AI (you) and BrokenPromise's learning working together, it's basically unstoppable.**
 
-BrokenPromise is so smart it knows and learns everything to expect. If one thing is off, BrokenPromise will **hunt that motherfucker down with all three heads and beat it into submission**.
+BrokenPromise is so smart it knows and learns everything to expect. If one thing is off, BrokenPromise will **hunt it down and detect when the AI is lying about fixing it**. The system includes comprehensive compliance verification to ensure the AI actually does what it claims.
 
 ---
 
@@ -216,7 +216,7 @@ BrokenPromise is so smart it knows and learns everything to expect. If one thing
 
 ---
 
-**Status**: 🛡️ **BrokenPromise ACTIVE** - All errors are hunted down and eliminated. Nothing escapes the three-headed guardian.
+**Status**: 🛡️ **BrokenPromise ACTIVE** - All errors are hunted down and eliminated. The system detects when the AI is lying and verifies compliance automatically.
 
 ---
 
