@@ -3263,18 +3263,31 @@ function Maintain-Services {
     }
     
     # AI-FIRST: Use AI decisions for all service management
+    # STARTUP SEQUENCE: Database → Server → Unity → Simulation
     if ($script:aiIntegrationEnabled) {
         try {
-            # Server management (AI decision)
+            # STEP 1: Database management (must be online first)
+            # Database is required for server to be fully operational and for Unity login
+            if ($config.automation.autoRestartDatabase) {
+                Restart-DatabaseIfNeeded | Out-Null
+                # Give database time to start (if it was just started)
+                Start-Sleep -Seconds 2
+            }
+            
+            # STEP 2: Server management (AI decision)
+            # Server needs database to be online to be fully operational
             if ($config.automation.autoRestartServer) {
                 $serverDecision = Should-AIStartServer
                 if ($serverDecision -and $serverDecision.Should) {
                     Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] AI DECISION: Starting server - $($serverDecision.Reason)" -ForegroundColor "Cyan"
                     Start-ServerIfNeeded | Out-Null
+                    # Give server time to start and connect to database
+                    Start-Sleep -Seconds 3
                 }
             }
             
-            # Unity management (AI decision)
+            # STEP 3: Unity management (AI decision)
+            # Unity needs server to be fully running with database online
             if ($config.automation.autoRestartUnity) {
                 $unityDecision = Should-AIStartUnity
                 if ($unityDecision -and $unityDecision.Should) {
@@ -3283,7 +3296,8 @@ function Maintain-Services {
                 }
             }
             
-            # Simulation management (AI decision)
+            # STEP 4: Simulation management (AI decision)
+            # Simulation needs Unity to be connected
             if ($config.simulation.enabled -and $config.simulation.autoStartSimulation) {
                 $simDecision = Should-AIStartSimulation
                 if ($simDecision -and $simDecision.Should) {
@@ -3312,11 +3326,6 @@ function Maintain-Services {
                     }
                 }
             }
-            
-            # Database management (still use legacy for now - AI decision can be added later)
-            if ($config.automation.autoRestartDatabase) {
-                Restart-DatabaseIfNeeded | Out-Null
-            }
         } catch {
             Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [ERROR] AI service management failed: $_" -ForegroundColor "Red"
             # Fallback to legacy if AI fails
@@ -3332,11 +3341,14 @@ function Maintain-Services {
         }
     } else {
         # FALLBACK: Legacy service management (if AI integration disabled)
-        if ($config.automation.autoRestartServer) {
-            Start-ServerIfNeeded | Out-Null
-        }
+        # STARTUP SEQUENCE: Database → Server → Unity
         if ($config.automation.autoRestartDatabase) {
             Restart-DatabaseIfNeeded | Out-Null
+            Start-Sleep -Seconds 2
+        }
+        if ($config.automation.autoRestartServer) {
+            Start-ServerIfNeeded | Out-Null
+            Start-Sleep -Seconds 3
         }
         if ($config.automation.autoRestartUnity) {
             Restart-UnityIfNeeded | Out-Null

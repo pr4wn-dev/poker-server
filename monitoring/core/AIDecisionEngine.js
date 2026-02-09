@@ -452,10 +452,17 @@ class AIDecisionEngine extends EventEmitter {
                 };
             }
             
-            // Server must be running for Unity to connect
-            // Server can be 'running' (database online) or 'degraded' (database offline but server running)
-            // Unity can connect to server even if database is offline
-            if (server.status !== 'running' && server.status !== 'degraded') {
+            // Server must be fully running with database online for Unity to connect
+            // Unity needs database for login, so server must be 'running' (not 'degraded')
+            // Startup sequence: Database → Server (with DB) → Unity → Simulation
+            if (server.status !== 'running') {
+                if (server.status === 'degraded') {
+                    return {
+                        should: false,
+                        reason: 'Server is running but database is offline - database must be online before Unity can start',
+                        confidence: 0.95
+                    };
+                }
                 return {
                     should: false,
                     reason: `Server is not running (status: ${server.status || 'unknown'})`,
@@ -463,14 +470,21 @@ class AIDecisionEngine extends EventEmitter {
                 };
             }
             
-            // Should start Unity if server is running (even if database is offline)
+            // Check database status explicitly (server.database should be true when status is 'running')
+            if (server.database !== true) {
+                return {
+                    should: false,
+                    reason: 'Database is not online - database must be started before Unity can start',
+                    confidence: 0.95
+                };
+            }
+            
+            // Should start Unity if server is fully running with database online
             return {
                 should: true,
-                reason: server.status === 'degraded' 
-                    ? 'Server is running (database offline, but Unity can still connect)'
-                    : 'Server is running, Unity should start',
-                confidence: 0.85,
-                priority: 'medium'
+                reason: 'Server is running with database online, Unity should start',
+                confidence: 0.9,
+                priority: 'high'
             };
         } catch (error) {
             return {
