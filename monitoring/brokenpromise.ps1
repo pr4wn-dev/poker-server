@@ -628,8 +628,8 @@ function Add-PendingIssue {
                         
                         Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ISSUE DETECTOR ERROR: $errorMsg" -ForegroundColor "Red"
                         return @{ success = $false; error = $errorJson.error; reason = $errorJson.reason }
-        }
-    } catch {
+                    }
+                } catch {
                     # Not JSON, try retry
                     $retryCount++
                     if ($retryCount -lt $maxRetries) {
@@ -672,19 +672,17 @@ function Add-PendingIssue {
                     break
                 }
             }
+            }
+        } catch {
+            Write-Warning "Add-PendingIssue legacy try error: $_"
         }
     } catch {
-        Write-Warning "Add-PendingIssue inner try error: $_"
-        # Continue to cleanup
+        Write-Warning "Add-PendingIssue outer try error: $_"
     } finally {
         # Clean up temp file
         if (Test-Path $tempFile) {
             Remove-Item $tempFile -Force -ErrorAction SilentlyContinue
         }
-    }
-    } catch {
-        Write-Warning "Add-PendingIssue outer try error: $_"
-        return $null
     }
     return $null
 }
