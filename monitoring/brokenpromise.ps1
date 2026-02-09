@@ -5943,14 +5943,18 @@ while ($monitoringActive) {
     } catch {
         # Main catch for try block at line 3487 (while loop main try)
         $errorMsg = $_.ToString()
+        $errorException = $_.Exception.Message
         $errorStackTrace = $_.ScriptStackTrace
         
         # Check if this is a console handle error (non-interactive context)
         $isConsoleHandleError = $errorMsg -match "handle is invalid|The handle is invalid|Console handle"
         
+        # Extract the actual error message (not just "Monitoring error: ...")
+        $actualError = if ($errorException) { $errorException } else { $errorMsg }
+        
         # Only write to console if we have an interactive console AND it's not a console handle error
         if ((Test-InteractiveConsole) -and -not $isConsoleHandleError) {
-            Write-Error "Monitoring error: $errorMsg"
+            Write-Error "Monitoring error: $actualError"
         }
         
         # CRITICAL: Log error to diagnostics file so we can see what's blocking the loop
@@ -5958,7 +5962,7 @@ while ($monitoringActive) {
         if (-not $isConsoleHandleError) {
             try {
                 $diagnosticsLog = Join-Path $script:projectRoot "logs\monitor-diagnostics.log"
-                $errorLogEntry = "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] [ERROR] Monitoring error: $errorMsg`nStack trace: $errorStackTrace`n"
+                $errorLogEntry = "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] [ERROR] Monitoring error: $actualError`nStack trace: $errorStackTrace`n"
                 Add-Content -Path $diagnosticsLog -Value $errorLogEntry -ErrorAction SilentlyContinue
             } catch {
                 # If logging fails and we have interactive console, try to write to console
@@ -5967,8 +5971,9 @@ while ($monitoringActive) {
                 }
             }
             # Update status file with error (only if not a console handle error)
+            # Use actual error message, not generic "Monitoring error"
             Update-MonitorStatus -statusUpdate @{
-                lastError = "Monitoring error: $errorMsg"
+                lastError = $actualError
                 lastErrorTime = (Get-Date).ToUniversalTime().ToString("o")
             } -ErrorAction SilentlyContinue
         }

@@ -33,18 +33,32 @@ function Invoke-AIIntegration {
 
 # Get investigation status from AI core
 function Get-AIInvestigationStatus {
-    $result = Invoke-AIIntegration -Command "get-investigation-status"
-    if ($result) {
-        return @{
-            Active = $result.active
-            Status = $result.status
-            StartTime = if ($result.startTime) { [DateTime]::Parse($result.startTime) } else { $null }
-            Timeout = $result.timeout
-            Progress = $result.progress
-            TimeRemaining = $result.timeRemaining
-            IssuesCount = $result.issuesCount
-            Issues = $result.issues
+    try {
+        $result = Invoke-AIIntegration -Command "get-investigation-status"
+        if ($result) {
+            $startTime = $null
+            if ($result.startTime) {
+                try {
+                    $startTime = [DateTime]::Parse($result.startTime)
+                } catch {
+                    # Invalid date format - log but don't fail
+                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] AI investigation status check failed: Failed to parse startTime '$($result.startTime)': $_" -ForegroundColor "Yellow"
+                }
+            }
+            return @{
+                Active = $result.active
+                Status = $result.status
+                StartTime = $startTime
+                Timeout = $result.timeout
+                Progress = $result.progress
+                TimeRemaining = $result.timeRemaining
+                IssuesCount = $result.issuesCount
+                Issues = $result.issues
+            }
         }
+    } catch {
+        # Log the actual error, not just "handle is invalid"
+        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [DIAGNOSTIC] AI investigation status check failed: $_" -ForegroundColor "Yellow"
     }
     return $null
 }
