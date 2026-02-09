@@ -99,22 +99,26 @@ class PromptGenerator extends EventEmitter {
             prompt += `2. Check if webSearchRequired is true\n`;
         }
         
-        // Step 3: Use learning system
+        // Step 3: Query learning system (ALWAYS - it's a tool to save time)
+        const stepNum = webSearchRequired && !webSearchRequired.resolved ? '5' : '3';
+        prompt += `${stepNum}. QUERY THE LEARNING SYSTEM to find solutions:\n`;
+        prompt += `   - Use queryLearning("What solutions worked for ${issue.issueType || 'this issue type'}?") or\n`;
+        prompt += `   - Use getBestSolution("${issue.issueType || 'error'}") to get the best known solution\n`;
+        prompt += `   - Check for matching patterns that solved similar issues\n`;
+        prompt += `   - The learning system is a tool to save you time - USE IT\n`;
+        
         if (learningKnowledge.hasSolutions) {
-            prompt += `${webSearchRequired && !webSearchRequired.resolved ? '5' : '3'}. Use the learning system's suggestions and solution templates\n`;
+            prompt += `   - Found solution: ${learningKnowledge.bestSolution?.method || 'check learning system'}\n`;
         }
         
         // Step 4: Fix the issue
-        prompt += `${webSearchRequired && !webSearchRequired.resolved ? (learningKnowledge.hasSolutions ? '6' : '5') : (learningKnowledge.hasSolutions ? '4' : '3')}. Fix the ${issue.errorType || 'error'}\n`;
+        prompt += `${webSearchRequired && !webSearchRequired.resolved ? '6' : '4'}. Fix the ${issue.errorType || 'error'} using the learning system's solution if available\n`;
         
         // Step 5: Call afterAIAction
-        prompt += `${webSearchRequired && !webSearchRequired.resolved ? (learningKnowledge.hasSolutions ? '7' : '6') : (learningKnowledge.hasSolutions ? '5' : '4')}. Call afterAIAction() with the outcome\n`;
-        
-        // Step 6: Work symbiotically
-        prompt += `${webSearchRequired && !webSearchRequired.resolved ? (learningKnowledge.hasSolutions ? '8' : '7') : (learningKnowledge.hasSolutions ? '6' : '5')}. Work symbiotically with the learning system throughout\n`;
+        prompt += `${webSearchRequired && !webSearchRequired.resolved ? '7' : '5'}. Call afterAIAction() with the outcome\n`;
         
         // Verification info
-        prompt += '\nSystem will verify: tool calls (web_search, beforeAIAction, afterAIAction), state (findings stored, webSearchRequired resolved), files (code changes)';
+        prompt += '\nSystem will verify: tool calls (web_search, beforeAIAction, afterAIAction, queryLearning/getBestSolution), state (findings stored, webSearchRequired resolved), files (code changes)';
         
         return {
             id: uuidv4(),
@@ -137,9 +141,12 @@ class PromptGenerator extends EventEmitter {
         prompt += 'You must:\n';
         prompt += '1. Stop what you\'re doing\n';
         prompt += `2. Call beforeAIAction() with the context of what you were trying to do\n`;
-        prompt += '3. Follow all suggestions and warnings from the learning system\n';
-        prompt += '4. Check for webSearchRequired\n';
-        prompt += '5. Only then proceed with your code changes\n';
+        prompt += '3. QUERY THE LEARNING SYSTEM using queryLearning() or getBestSolution() to find solutions\n';
+        prompt += '   - Ask "What solutions worked for this issue type?"\n';
+        prompt += '   - The learning system is a tool to save you time - USE IT\n';
+        prompt += '4. Follow all suggestions and warnings from the learning system\n';
+        prompt += '5. Check for webSearchRequired\n';
+        prompt += '6. Only then proceed with your code changes\n';
         
         prompt += '\nSystem will verify: beforeAIAction() was called, workflow was followed';
         
@@ -164,8 +171,10 @@ class PromptGenerator extends EventEmitter {
         prompt += 'You must:\n';
         prompt += `1. Search the web for: ${JSON.stringify(webSearchRequired?.searchTerms || [])}\n`;
         prompt += '2. Store all findings in the learning system using storeWebSearchKnowledge()\n';
-        prompt += '3. Mark webSearchRequired as resolved\n';
-        prompt += '4. Only then proceed with your fix attempt\n';
+        prompt += '3. QUERY THE LEARNING SYSTEM using queryLearning() or getBestSolution() to find solutions\n';
+        prompt += '   - The learning system may have solutions from previous fixes - CHECK IT\n';
+        prompt += '4. Mark webSearchRequired as resolved\n';
+        prompt += '5. Only then proceed with your fix attempt\n';
         
         prompt += '\nSystem will verify: web_search tool call, findings stored in learning.knowledge, webSearchRequired resolved';
         
