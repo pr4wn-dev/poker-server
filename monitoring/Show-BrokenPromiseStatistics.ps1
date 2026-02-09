@@ -54,12 +54,12 @@ function Show-BrokenPromiseStatistics {
         }
     }
     
-    # Header
-    $headerText = "BrokenPromise - THE THREE-HEADED GUARDIAN - LIVE STATISTICS"
-    Write-Host ("=" * $consoleWidth) -ForegroundColor Cyan
+    # Header - Reminder that AI should never be trusted
+    $headerText = "BrokenPromise - AI SHOULD NEVER BE TRUSTED - LIVE STATISTICS"
+    Write-Host ("=" * $consoleWidth) -ForegroundColor Red
     $headerPadding = [Math]::Max(0, [Math]::Floor(($consoleWidth - $headerText.Length) / 2))
-    Write-Host (" " * $headerPadding + $headerText) -ForegroundColor White
-    Write-Host ("=" * $consoleWidth) -ForegroundColor Cyan
+    Write-Host (" " * $headerPadding + $headerText) -ForegroundColor Yellow
+    Write-Host ("=" * $consoleWidth) -ForegroundColor Red
     
     # Top status bar
     $statusText = "ACTIVE"
@@ -345,6 +345,78 @@ function Show-BrokenPromiseStatistics {
         Write-Host "Also available in: logs\prompts-for-user.txt" -ForegroundColor Gray
         Write-Host ""
     }
+    
+    # Compliance Verification Section - Shows checks to detect if AI is lying
+    $workflow = if ($aiStats.workflow) { $aiStats.workflow } else { @{compliance=@{verifications=@()}} }
+    $verifications = if ($workflow.compliance -and $workflow.compliance.verifications) { $workflow.compliance.verifications } else { @() }
+    $recentVerifications = $verifications | Where-Object { 
+        if ($_.timestamp) {
+            $timeSince = (Get-Date).ToUniversalTime() - ([DateTimeOffset]::FromUnixTimeMilliseconds($_.timestamp).LocalDateTime)
+            $timeSince.TotalHours -lt 24
+        } else { $false }
+    } | Sort-Object -Property timestamp -Descending | Select-Object -First 5
+    
+    Write-Host ""
+    Write-Host ("=" * $consoleWidth) -ForegroundColor Magenta
+    Write-Host "🔍 COMPLIANCE VERIFICATION - DETECTING AI LIES" -ForegroundColor Yellow
+    Write-Host ("=" * $consoleWidth) -ForegroundColor Magenta
+    Write-Host ""
+    Write-Host "This section shows all checks performed to verify AI compliance:" -ForegroundColor White
+    Write-Host ""
+    Write-Host "VERIFICATION CHECKS PERFORMED:" -ForegroundColor Cyan
+    Write-Host "  ✓ Tool Calls - Did AI call required tools (web_search, beforeAIAction, afterAIAction)?" -ForegroundColor Gray
+    Write-Host "  ✓ State Changes - Are findings stored? Is webSearchRequired resolved?" -ForegroundColor Gray
+    Write-Host "  ✓ File Changes - Did AI actually modify code files as claimed?" -ForegroundColor Gray
+    Write-Host "  ✓ Workflow Compliance - Did AI call beforeAIAction() before coding?" -ForegroundColor Gray
+    Write-Host "  ✓ Learning System Usage - Did AI query the learning system when instructed?" -ForegroundColor Gray
+    Write-Host ""
+    
+    if ($recentVerifications -and $recentVerifications.Count -gt 0) {
+        Write-Host "RECENT VERIFICATION RESULTS:" -ForegroundColor Cyan
+        Write-Host ""
+        foreach ($verification in $recentVerifications) {
+            $complianceResult = if ($verification.complianceResult) { $verification.complianceResult } else { "unknown" }
+            $compliant = if ($verification.compliant) { $verification.compliant } else { $false }
+            $resultColor = if ($compliant) { "Green" } elseif ($complianceResult -eq "partial") { "Yellow" } else { "Red" }
+            $resultText = if ($compliant) { "COMPLIANT" } elseif ($complianceResult -eq "partial") { "PARTIAL" } else { "NON-COMPLIANT" }
+            
+            $timeAgo = if ($verification.timestamp) {
+                $timeSince = (Get-Date).ToUniversalTime() - ([DateTimeOffset]::FromUnixTimeMilliseconds($verification.timestamp).LocalDateTime)
+                if ($timeSince.TotalMinutes -lt 1) { "$([Math]::Round($timeSince.TotalSeconds))s ago" }
+                elseif ($timeSince.TotalHours -lt 1) { "$([Math]::Round($timeSince.TotalMinutes))m ago" }
+                else { "$([Math]::Round($timeSince.TotalHours))h ago" }
+            } else { "Unknown" }
+            
+            Write-Host "  [$resultText] $timeAgo" -ForegroundColor $resultColor
+            if ($verification.partsWorked -and $verification.partsWorked.Count -gt 0) {
+                Write-Host "    ✓ Worked: $($verification.partsWorked -join ', ')" -ForegroundColor Green
+            }
+            if ($verification.partsSkipped -and $verification.partsSkipped.Count -gt 0) {
+                Write-Host "    ✗ Skipped: $($verification.partsSkipped -join ', ')" -ForegroundColor Red
+            }
+            if ($verification.verification -and $verification.verification.missingToolCalls -and $verification.verification.missingToolCalls.Count -gt 0) {
+                Write-Host "    ⚠ Missing Tools: $($verification.verification.missingToolCalls -join ', ')" -ForegroundColor Yellow
+            }
+            Write-Host ""
+        }
+    } else {
+        Write-Host "No recent verifications yet - checks will appear here after prompts are delivered" -ForegroundColor Gray
+        Write-Host ""
+    }
+    
+    $totalVerifications = $verifications.Count
+    $compliantCount = ($verifications | Where-Object { $_.compliant -eq $true }).Count
+    $nonCompliantCount = ($verifications | Where-Object { $_.compliant -eq $false }).Count
+    $complianceRate = if ($totalVerifications -gt 0) { ($compliantCount / $totalVerifications) * 100 } else { 0 }
+    
+    Write-Host "VERIFICATION SUMMARY:" -ForegroundColor Cyan
+    Write-Host "  Total Verifications: $totalVerifications" -ForegroundColor White
+    Write-Host "  Compliant: $compliantCount" -ForegroundColor Green
+    Write-Host "  Non-Compliant: $nonCompliantCount" -ForegroundColor Red
+    Write-Host "  Compliance Rate: $([Math]::Round($complianceRate, 1))%" -ForegroundColor $(if ($complianceRate -ge 80) { "Green" } elseif ($complianceRate -ge 50) { "Yellow" } else { "Red" })
+    Write-Host ""
+    Write-Host ("=" * $consoleWidth) -ForegroundColor Magenta
+    Write-Host ""
     
     Write-Host ""
 }
