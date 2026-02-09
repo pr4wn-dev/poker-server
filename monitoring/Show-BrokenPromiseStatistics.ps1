@@ -9,6 +9,12 @@ function Show-BrokenPromiseStatistics {
         [string]$ServerUrl = "http://localhost:3000"
     )
     
+    # Helper function to create separator strings (PowerShell doesn't support string multiplication)
+    function New-Separator {
+        param([int]$Length, [string]$Char = "=")
+        return -join (1..[Math]::Max(1, $Length) | ForEach-Object { $Char })
+    }
+    
     # Get AI statistics
     $aiStats = Get-AILiveStatistics
     if (-not $aiStats) {
@@ -56,10 +62,11 @@ function Show-BrokenPromiseStatistics {
     
     # Header - Reminder that AI should never be trusted
     $headerText = "BrokenPromise - AI SHOULD NEVER BE TRUSTED - LIVE STATISTICS"
-    Write-Host ("=" * $consoleWidth) -ForegroundColor Red
+    Write-Host (New-Separator -Length $consoleWidth) -ForegroundColor Red
     $headerPadding = [Math]::Max(0, [Math]::Floor(($consoleWidth - $headerText.Length) / 2))
-    Write-Host (" " * $headerPadding + $headerText) -ForegroundColor Yellow
-    Write-Host ("=" * $consoleWidth) -ForegroundColor Red
+    $paddingStr = New-Separator -Length $headerPadding -Char " "
+    Write-Host ($paddingStr + $headerText) -ForegroundColor Yellow
+    Write-Host (New-Separator -Length $consoleWidth) -ForegroundColor Red
     
     # Top status bar
     $statusText = "ACTIVE"
@@ -119,7 +126,7 @@ function Show-BrokenPromiseStatistics {
     Write-Host "ACTIVITY: " -NoNewline -ForegroundColor White
     Write-Host $activityText -NoNewline -ForegroundColor $activityColor
     Write-Host ""
-    Write-Host ("-" * $consoleWidth) -ForegroundColor DarkGray
+    Write-Host (New-Separator -Length $consoleWidth -Char "-") -ForegroundColor DarkGray
     
     # Build three columns of data
     $col1Lines = @()
@@ -249,9 +256,9 @@ function Show-BrokenPromiseStatistics {
     $workflow = if ($aiStats.workflow) { $aiStats.workflow } else { @{violations=@{total=0;recent=0;recentList=@()}} }
     if ($workflow.violations.recent -gt 0) {
         Write-Host ""
-        Write-Host ("=" * $consoleWidth) -ForegroundColor Red
+        Write-Host (New-Separator -Length $consoleWidth) -ForegroundColor Red
         Write-Host "WORKFLOW VIOLATIONS DETECTED" -ForegroundColor Red
-        Write-Host ("=" * $consoleWidth) -ForegroundColor Red
+        Write-Host (New-Separator -Length $consoleWidth) -ForegroundColor Red
         
         $recentViolations = if ($workflow.violations.recentList) { $workflow.violations.recentList } else { @() }
         foreach ($violation in $recentViolations) {
@@ -275,16 +282,16 @@ function Show-BrokenPromiseStatistics {
         
         Write-Host ""
         Write-Host "Total Violations: $($workflow.violations.total)" -ForegroundColor Yellow
-        Write-Host ("=" * $consoleWidth) -ForegroundColor Red
+        Write-Host (New-Separator -Length $consoleWidth) -ForegroundColor Red
     }
     
     # Active Issues Details (full width, if any active issues)
     $activeIssues = if ($aiStats.issues -and $aiStats.issues.active) { $aiStats.issues.active } else { @{count=0;issues=@()} }
     if ($activeIssues.count -gt 0 -and $activeIssues.issues) {
         Write-Host ""
-        Write-Host ("=" * $consoleWidth) -ForegroundColor Yellow
+        Write-Host (New-Separator -Length $consoleWidth) -ForegroundColor Yellow
         Write-Host "ACTIVE ISSUES REQUIRING ATTENTION" -ForegroundColor White
-        Write-Host ("=" * $consoleWidth) -ForegroundColor Yellow
+        Write-Host (New-Separator -Length $consoleWidth) -ForegroundColor Yellow
         
         $displayedIssues = $activeIssues.issues | Select-Object -First 5
         foreach ($issue in $displayedIssues) {
@@ -298,16 +305,16 @@ function Show-BrokenPromiseStatistics {
         if ($activeIssues.count -gt 5) {
             Write-Host "  ... and $($activeIssues.count - 5) more" -ForegroundColor Gray
         }
-        Write-Host ("=" * $consoleWidth) -ForegroundColor Yellow
+        Write-Host (New-Separator -Length $consoleWidth) -ForegroundColor Yellow
     }
     
     # Misdiagnosis Prevention (full width, highest priority - prevents wasted time)
     $misdiagnosis = if ($aiStats.misdiagnosis) { $aiStats.misdiagnosis } else { @{totalPatterns=0;highFrequencyPatterns=@()} }
     if ($misdiagnosis.totalPatterns -gt 0 -and $misdiagnosis.highFrequencyPatterns -and $misdiagnosis.highFrequencyPatterns.Count -gt 0) {
         Write-Host ""
-        Write-Host ("=" * $consoleWidth) -ForegroundColor Magenta
+        Write-Host (New-Separator -Length $consoleWidth) -ForegroundColor Magenta
         Write-Host "[!] MISDIAGNOSIS PREVENTION - PREVENTS WASTED TIME" -ForegroundColor Yellow
-        Write-Host ("=" * $consoleWidth) -ForegroundColor Magenta
+        Write-Host (New-Separator -Length $consoleWidth) -ForegroundColor Magenta
         
         Write-Host "Total Patterns: $($misdiagnosis.totalPatterns)" -ForegroundColor White
         Write-Host "Total Time Wasted (Prevented): $([Math]::Round($misdiagnosis.totalTimeWasted / 60000, 1)) minutes" -ForegroundColor White
@@ -328,16 +335,16 @@ function Show-BrokenPromiseStatistics {
                 Write-Host "    Time Wasted: $minutesWasted minutes per occurrence" -ForegroundColor Gray
             }
         }
-        Write-Host ("=" * $consoleWidth) -ForegroundColor Magenta
+        Write-Host (New-Separator -Length $consoleWidth) -ForegroundColor Magenta
     }
     
     # Learning Insights (full width, if learning system has data)
     $learning = if ($aiStats.learning) { $aiStats.learning } else { @{patternsLearned=0;recentImprovements=@()} }
     if ($learning.patternsLearned -gt 0 -or ($learning.recentImprovements -and $learning.recentImprovements.Count -gt 0)) {
         Write-Host ""
-        Write-Host ("=" * $consoleWidth) -ForegroundColor Cyan
+        Write-Host (New-Separator -Length $consoleWidth) -ForegroundColor Cyan
         Write-Host "LEARNING SYSTEM INSIGHTS" -ForegroundColor White
-        Write-Host ("=" * $consoleWidth) -ForegroundColor Cyan
+        Write-Host (New-Separator -Length $consoleWidth) -ForegroundColor Cyan
         
         Write-Host "Patterns Learned: $($learning.patternsLearned)" -ForegroundColor White
         Write-Host "Knowledge Base: $($learning.knowledgeRules) rules" -ForegroundColor White
@@ -353,16 +360,16 @@ function Show-BrokenPromiseStatistics {
                 Write-Host "  - $descShort" -ForegroundColor Gray
             }
         }
-        Write-Host ("=" * $consoleWidth) -ForegroundColor Cyan
+        Write-Host (New-Separator -Length $consoleWidth) -ForegroundColor Cyan
     }
     
     # Prompt for user section
     $latestPrompt = Get-AILatestPrompt
     if ($latestPrompt -and -not $latestPrompt.delivered) {
         Write-Host ""
-        Write-Host ("=" * $consoleWidth) -ForegroundColor Yellow
+        Write-Host (New-Separator -Length $consoleWidth) -ForegroundColor Yellow
         Write-Host "[!] PROMPT FOR USER TO DELIVER TO AI" -ForegroundColor Yellow
-        Write-Host ("=" * $consoleWidth) -ForegroundColor Yellow
+        Write-Host (New-Separator -Length $consoleWidth) -ForegroundColor Yellow
         Write-Host ""
         Write-Host "Type: $($latestPrompt.Type)" -ForegroundColor White
         Write-Host "Generated: $($latestPrompt.Timestamp.ToString('yyyy-MM-dd HH:mm:ss'))" -ForegroundColor Gray
@@ -371,7 +378,7 @@ function Show-BrokenPromiseStatistics {
         Write-Host ""
         Write-Host $latestPrompt.Prompt -ForegroundColor White
         Write-Host ""
-        Write-Host ("=" * $consoleWidth) -ForegroundColor Yellow
+        Write-Host (New-Separator -Length $consoleWidth) -ForegroundColor Yellow
         Write-Host "Also available in: logs\prompts-for-user.txt" -ForegroundColor Gray
         Write-Host ""
     }
@@ -387,9 +394,9 @@ function Show-BrokenPromiseStatistics {
     } | Sort-Object -Property timestamp -Descending | Select-Object -First 5
     
     Write-Host ""
-    Write-Host ("=" * $consoleWidth) -ForegroundColor Magenta
-    Write-Host "🔍 COMPLIANCE VERIFICATION - DETECTING AI LIES" -ForegroundColor Yellow
-    Write-Host ("=" * $consoleWidth) -ForegroundColor Magenta
+    Write-Host (New-Separator -Length $consoleWidth) -ForegroundColor Magenta
+    Write-Host "[!] COMPLIANCE VERIFICATION - DETECTING AI LIES" -ForegroundColor Yellow
+    Write-Host (New-Separator -Length $consoleWidth) -ForegroundColor Magenta
     Write-Host ""
     Write-Host "This section shows all checks performed to verify AI compliance:" -ForegroundColor White
     Write-Host ""
@@ -445,7 +452,7 @@ function Show-BrokenPromiseStatistics {
     Write-Host "  Non-Compliant: $nonCompliantCount" -ForegroundColor Red
     Write-Host "  Compliance Rate: $([Math]::Round($complianceRate, 1))%" -ForegroundColor $(if ($complianceRate -ge 80) { "Green" } elseif ($complianceRate -ge 50) { "Yellow" } else { "Red" })
     Write-Host ""
-    Write-Host ("=" * $consoleWidth) -ForegroundColor Magenta
+    Write-Host (New-Separator -Length $consoleWidth) -ForegroundColor Magenta
     Write-Host ""
     
     Write-Host ""
