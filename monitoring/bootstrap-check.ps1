@@ -184,8 +184,23 @@ if (Test-Path $logsDir) {
     Write-Host "  ✗ Logs directory does not exist" -ForegroundColor Red
 }
 
-# Generate prompt if issues found
-if (($criticalIssues.Count -gt 0 -or $issues.Count -gt 0) -and -not $SkipPromptGeneration) {
+# If critical issues found, exit immediately (don't wait for prompt generation)
+if ($criticalIssues.Count -gt 0) {
+    Write-Host ""
+    Write-Host "[BOOTSTRAP] CRITICAL ISSUES DETECTED - BrokenPromise cannot start" -ForegroundColor Red
+    foreach ($issue in $criticalIssues) {
+        Write-Host "  ✗ $($issue.Type): $($issue.Message)" -ForegroundColor Red
+        if ($issue.Details) {
+            Write-Host "    Details: $($issue.Details)" -ForegroundColor Yellow
+        }
+    }
+    Write-Host ""
+    Write-Host "[BOOTSTRAP] Exiting - BrokenPromise will not start" -ForegroundColor Red
+    exit 1
+}
+
+# Generate prompt if issues found (only warnings at this point)
+if ($issues.Count -gt 0 -and -not $SkipPromptGeneration) {
     Write-Host ""
     Write-Host "[BOOTSTRAP] Issues detected - generating prompt..." -ForegroundColor Yellow
     
@@ -197,17 +212,6 @@ if (($criticalIssues.Count -gt 0 -or $issues.Count -gt 0) -and -not $SkipPromptG
     $promptText += "`r`n"
     $promptText += "BrokenPromise failed to start due to the following issue(s):`r`n"
     $promptText += "`r`n"
-    
-    if ($criticalIssues.Count -gt 0) {
-        $promptText += "CRITICAL ISSUES:`r`n"
-        foreach ($issue in $criticalIssues) {
-            $promptText += "`r`n- $($issue.Type): $($issue.Message)`r`n"
-            if ($issue.Details) {
-                $promptText += "  Details: $($issue.Details)`r`n"
-            }
-        }
-        $promptText += "`r`n"
-    }
     
     if ($issues.Count -gt 0) {
         $promptText += "WARNINGS:`r`n"
