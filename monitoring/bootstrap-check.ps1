@@ -195,7 +195,7 @@ if ($criticalIssues.Count -gt 0) {
         }
     }
     Write-Host ""
-    Write-Host "[BOOTSTRAP] Exiting - BrokenPromise will not start" -ForegroundColor Red
+    Write-Host '[BOOTSTRAP] Exiting - BrokenPromise will not start' -ForegroundColor Red
     exit 1
 }
 
