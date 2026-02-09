@@ -1,5 +1,5 @@
 {
-  "timestamp": 1770611228814,
+  "timestamp": 1770611284318,
   "investigation": {
     "active": true,
     "status": "starting",
@@ -99,6 +99,6 @@
   },
   "aiCore": {
     "active": true,
-    "lastSync": 1770611228799
+    "lastSync": 1770611284303
   }
 }
