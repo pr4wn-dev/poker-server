@@ -30,13 +30,18 @@ if (-not $SkipBootstrap) {
     $bootstrapScript = Join-Path $scriptDir "bootstrap-check.ps1"
     if (Test-Path $bootstrapScript) {
         Write-Host "[BROKENPROMISE] Running bootstrap check..." -ForegroundColor Cyan
-        & $bootstrapScript
-        if ($LASTEXITCODE -ne 0) {
+        $bootstrapResult = & $bootstrapScript 2>&1
+        $bootstrapExitCode = $LASTEXITCODE
+        if ($bootstrapExitCode -ne 0 -or $bootstrapResult -match "syntax error" -or $bootstrapResult -match "CRITICAL ISSUES") {
             Write-Host ""
-            Write-Host "[BROKENPROMISE] Bootstrap check failed - BrokenPromise cannot start" -ForegroundColor Red
+            Write-Host "[BROKENPROMISE] Bootstrap check FAILED - BrokenPromise cannot start" -ForegroundColor Red
+            Write-Host "[BROKENPROMISE] Syntax errors detected in brokenpromise.ps1" -ForegroundColor Red
             Write-Host "[BROKENPROMISE] Check logs\prompts-for-user.txt for prompt to give to AI" -ForegroundColor Yellow
             Write-Host "[BROKENPROMISE] Or run with -SkipBootstrap to bypass (not recommended)" -ForegroundColor Yellow
-            exit $LASTEXITCODE
+            Write-Host ""
+            Write-Host "Bootstrap check output:" -ForegroundColor Cyan
+            Write-Host $bootstrapResult
+            exit 1
         }
         Write-Host "[BROKENPROMISE] Bootstrap check passed - Starting BrokenPromise..." -ForegroundColor Green
         Write-Host ""

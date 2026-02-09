@@ -246,6 +246,9 @@ if (($criticalIssues.Count -gt 0 -or $issues.Count -gt 0) -and -not $SkipPromptG
     }
     
     # Return non-zero exit code to indicate failure
+    # Use exit code 1 to indicate failure
+    Write-Host ""
+    Write-Host "[BOOTSTRAP] FAILED - BrokenPromise cannot start" -ForegroundColor Red
     exit 1
 } else {
     Write-Host ""
