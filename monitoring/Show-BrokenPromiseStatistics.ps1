@@ -22,16 +22,35 @@ function Show-BrokenPromiseStatistics {
     $colWidth = [Math]::Floor(($consoleWidth - 6) / 3)  # 3 columns with separators
     
     # Only clear screen on first display, then update in place
-    if ($script:firstDisplay -eq $null) {
-        Clear-Host
-        $script:firstDisplay = $true
+    # Check if we have an interactive console first
+    try {
+        $isInteractive = $null -ne [Console]::WindowWidth -and $null -ne [Console]::WindowHeight
+    } catch {
+        $isInteractive = $false
+    }
+    
+    if ($isInteractive) {
+        if ($script:firstDisplay -eq $null) {
+            try {
+                Clear-Host
+                $script:firstDisplay = $true
+            } catch {
+                # Console handle invalid - skip
+                $script:firstDisplay = $true
+            }
+        } else {
+            try {
+                [Console]::CursorVisible = $false
+                Set-SafeCursorPosition -X 0 -Y 0 | Out-Null
+                Start-Sleep -Milliseconds 10
+            } catch {
+                # Console handle may be invalid - just continue
+            }
+        }
     } else {
-        try {
-            [Console]::CursorVisible = $false
-            Set-SafeCursorPosition -X 0 -Y 0 | Out-Null
-            Start-Sleep -Milliseconds 10
-        } catch {
-            # Console handle may be invalid - just continue
+        # Not interactive - just mark as displayed
+        if ($script:firstDisplay -eq $null) {
+            $script:firstDisplay = $true
         }
     }
     

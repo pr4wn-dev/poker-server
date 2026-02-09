@@ -77,6 +77,23 @@ if (-not $SkipBootstrap) {
     }
 }
 
+# Function to check if we're in an interactive console
+function Test-InteractiveConsole {
+    try {
+        # Check if we have a valid console handle
+        $null = [Console]::WindowWidth
+        $null = [Console]::WindowHeight
+        # Check if output is redirected (non-interactive)
+        if ([Environment]::UserInteractive -and $Host.UI.RawUI) {
+            return $true
+        }
+        return $false
+    } catch {
+        # Console handle invalid - not interactive
+        return $false
+    }
+}
+
 # Colors for output (define FIRST before any use)
 function Write-Status { param($message, $color = "White") Write-Host "[$(Get-Date -Format 'HH:mm:ss')] $message" -ForegroundColor $color }
 function Write-Info { param($message) Write-Status $message "Cyan" }
@@ -909,16 +926,17 @@ function Set-SafeCursorPosition {
         [int]$Y = 0
     )
     
+    # Skip if not in interactive console
+    if (-not (Test-InteractiveConsole)) {
+        return $false
+    }
+    
     try {
         [Console]::SetCursorPosition($X, $Y)
         return $true
     } catch {
         # Console handle may be invalid (window resized/closed) - this is non-fatal
-        # Only log error once per minute to avoid spam
-        if ($script:lastConsoleError -eq $null -or ((Get-Date) - $script:lastConsoleError).TotalSeconds -gt 60) {
-            # Silently continue - don't spam errors
-            $script:lastConsoleError = Get-Date
-        }
+        # Silently continue - don't spam errors
         return $false
     }
 }
@@ -950,11 +968,17 @@ function Write-ConsoleOutput {
     }
     
     # Check if we've exceeded max console lines - if so, clear and reset
-    if ($script:consoleLineCount -ge $script:maxConsoleLines) {
+    # Only if we have an interactive console
+    if ((Test-InteractiveConsole) -and $script:consoleLineCount -ge $script:maxConsoleLines) {
         # Clear the console output area
-        $windowHeight = [Console]::WindowHeight
-        $startClearLine = $script:consoleOutputStartLine
-        $endClearLine = [Math]::Min($windowHeight - 1, $script:consoleOutputStartLine + $script:maxConsoleLines)
+        try {
+            $windowHeight = [Console]::WindowHeight
+            $startClearLine = $script:consoleOutputStartLine
+            $endClearLine = [Math]::Min($windowHeight - 1, $script:consoleOutputStartLine + $script:maxConsoleLines)
+        } catch {
+            # Console handle invalid - skip clearing
+            return
+        }
         
         for ($line = $startClearLine; $line -le $endClearLine; $line++) {
             if (Set-SafeCursorPosition -X 0 -Y $line) {
@@ -969,29 +993,45 @@ function Write-ConsoleOutput {
     # Calculate current console output line
     $currentConsoleLine = $script:consoleOutputStartLine + $script:consoleLineCount
     
-    # Make sure we don't go past window height
-    $windowHeight = [Console]::WindowHeight
-    if ($currentConsoleLine -ge $windowHeight - 1) {
-        # Reset - clear and start over
-        $startClearLine = $script:consoleOutputStartLine
-        $endClearLine = [Math]::Min($windowHeight - 1, $script:consoleOutputStartLine + $script:maxConsoleLines)
-        
-        for ($line = $startClearLine; $line -le $endClearLine; $line++) {
-            if (Set-SafeCursorPosition -X 0 -Y $line) {
-                Write-Host (" " * [Console]::WindowWidth) -NoNewline
+    # Make sure we don't go past window height (only if interactive console)
+    if (Test-InteractiveConsole) {
+        try {
+            $windowHeight = [Console]::WindowHeight
+            if ($currentConsoleLine -ge $windowHeight - 1) {
+                # Reset - clear and start over
+                $startClearLine = $script:consoleOutputStartLine
+                $endClearLine = [Math]::Min($windowHeight - 1, $script:consoleOutputStartLine + $script:maxConsoleLines)
+                
+                for ($line = $startClearLine; $line -le $endClearLine; $line++) {
+                    if (Set-SafeCursorPosition -X 0 -Y $line) {
+                        Write-Host (" " * [Console]::WindowWidth) -NoNewline
+                    }
+                }
             }
+        } catch {
+            # Console handle invalid - skip window height check
         }
-        
-        $script:consoleLineCount = 0
-        $currentConsoleLine = $script:consoleOutputStartLine
+    }
+        } catch {
+            # Console handle invalid - skip window height check
+        }
     }
     
     # Truncate message to window width to prevent wrapping (leave 2 chars margin)
-    $maxMessageLength = [Console]::WindowWidth - 2
-    $truncatedMessage = if ($Message.Length -gt $maxMessageLength) {
-        $Message.Substring(0, $maxMessageLength - 3) + "..."
-    } else {
-        $Message
+    # Only if we have an interactive console
+    $truncatedMessage = $Message
+    if (Test-InteractiveConsole) {
+        try {
+            $maxMessageLength = [Console]::WindowWidth - 2
+            $truncatedMessage = if ($Message.Length -gt $maxMessageLength) {
+                $Message.Substring(0, $maxMessageLength - 3) + "..."
+            } else {
+                $Message
+            }
+        } catch {
+            # Console handle invalid - use message as-is
+            $truncatedMessage = $Message
+        }
     }
     
     # Write the message (hide cursor during write to prevent flicker)
@@ -5902,23 +5942,36 @@ while ($monitoringActive) {
         }
     } catch {
         # Main catch for try block at line 3487 (while loop main try)
-        $errorMsg = "Monitoring error: $_"
+        $errorMsg = $_.ToString()
         $errorStackTrace = $_.ScriptStackTrace
-        Write-Error $errorMsg
-        # CRITICAL: Log error to diagnostics file so we can see what's blocking the loop
-        try {
-            $diagnosticsLog = Join-Path $script:projectRoot "logs\monitor-diagnostics.log"
-            $errorLogEntry = "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] [ERROR] $errorMsg`nStack trace: $errorStackTrace`n"
-            Add-Content -Path $diagnosticsLog -Value $errorLogEntry -ErrorAction SilentlyContinue
-        } catch {
-            # If logging fails, at least try to write to console
-            Write-Host "[$(Get-Date -Format 'HH:mm:ss')] CRITICAL: Failed to log error to diagnostics: $_" -ForegroundColor "Red"
+        
+        # Check if this is a console handle error (non-interactive context)
+        $isConsoleHandleError = $errorMsg -match "handle is invalid|The handle is invalid|Console handle"
+        
+        # Only write to console if we have an interactive console AND it's not a console handle error
+        if ((Test-InteractiveConsole) -and -not $isConsoleHandleError) {
+            Write-Error "Monitoring error: $errorMsg"
         }
-        # Update status file with error
-        Update-MonitorStatus -statusUpdate @{
-            lastError = $errorMsg
-            lastErrorTime = (Get-Date).ToUniversalTime().ToString("o")
-        } -ErrorAction SilentlyContinue
+        
+        # CRITICAL: Log error to diagnostics file so we can see what's blocking the loop
+        # But skip console handle errors in non-interactive contexts (they're expected)
+        if (-not $isConsoleHandleError) {
+            try {
+                $diagnosticsLog = Join-Path $script:projectRoot "logs\monitor-diagnostics.log"
+                $errorLogEntry = "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] [ERROR] Monitoring error: $errorMsg`nStack trace: $errorStackTrace`n"
+                Add-Content -Path $diagnosticsLog -Value $errorLogEntry -ErrorAction SilentlyContinue
+            } catch {
+                # If logging fails and we have interactive console, try to write to console
+                if (Test-InteractiveConsole) {
+                    Write-Host "[$(Get-Date -Format 'HH:mm:ss')] CRITICAL: Failed to log error to diagnostics: $_" -ForegroundColor "Red" -ErrorAction SilentlyContinue
+                }
+            }
+            # Update status file with error (only if not a console handle error)
+            Update-MonitorStatus -statusUpdate @{
+                lastError = "Monitoring error: $errorMsg"
+                lastErrorTime = (Get-Date).ToUniversalTime().ToString("o")
+            } -ErrorAction SilentlyContinue
+        }
     }
     
     Start-Sleep -Seconds $checkInterval
