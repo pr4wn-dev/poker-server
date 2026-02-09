@@ -5967,28 +5967,28 @@ while ($monitoringActive) {
             try {
                 $key = [Console]::ReadKey($true)  # $true = don't display the key
                 if ($key.Key -eq 'X' -and $key.Modifiers -eq 'Control') {
-                # Ctrl+X to exit focus mode
-                $pendingInfo = Get-PendingIssuesInfo
-                if ($pendingInfo.InFocusMode) {
-                    # Use non-blocking async call
-                    $nodeResult = Invoke-NodeAsync -ScriptPath $nodeScript -Arguments @("--exit-focus") -JobTimeout 5
-                    $result = if ($nodeResult.Output) { $nodeResult.Output } else { "" }
-                    if ($nodeResult.Success -and $nodeResult.ExitCode -eq 0) {
-                        $exitResult = $result | ConvertFrom-Json -ErrorAction SilentlyContinue
-                        if ($exitResult -and $exitResult.success) {
-                            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] FOCUS MODE EXITED (Ctrl+X)" -ForegroundColor "Yellow"
-                            if ($exitResult.reason -eq 'exited_and_promoted_next') {
-                                Write-ConsoleOutput -Message "  Next queued issue promoted to focus mode" -ForegroundColor "Cyan"
-                            } else {
-                                Write-ConsoleOutput -Message "  Returning to normal monitoring" -ForegroundColor "Green"
+                    # Ctrl+X to exit focus mode
+                    $pendingInfo = Get-PendingIssuesInfo
+                    if ($pendingInfo.InFocusMode) {
+                        # Use non-blocking async call
+                        $nodeResult = Invoke-NodeAsync -ScriptPath $nodeScript -Arguments @("--exit-focus") -JobTimeout 5
+                        $result = if ($nodeResult.Output) { $nodeResult.Output } else { "" }
+                        if ($nodeResult.Success -and $nodeResult.ExitCode -eq 0) {
+                            $exitResult = $result | ConvertFrom-Json -ErrorAction SilentlyContinue
+                            if ($exitResult -and $exitResult.success) {
+                                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] FOCUS MODE EXITED (Ctrl+X)" -ForegroundColor "Yellow"
+                                if ($exitResult.reason -eq 'exited_and_promoted_next') {
+                                    Write-ConsoleOutput -Message "  Next queued issue promoted to focus mode" -ForegroundColor "Cyan"
+                                } else {
+                                    Write-ConsoleOutput -Message "  Returning to normal monitoring" -ForegroundColor "Green"
+                                }
+                                $isPaused = $false
+                                $currentIssue = $null
                             }
-                            $isPaused = $false
-                            $currentIssue = $null
                         }
+                    } else {
+                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] Not in focus mode - nothing to exit" -ForegroundColor "Gray"
                     }
-                } else {
-                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] Not in focus mode - nothing to exit" -ForegroundColor "Gray"
-                }
                 } elseif ($key.Key -eq 'Escape') {
                     # Escape key to show help
                     Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] Monitor Controls: Ctrl+X = Exit Focus Mode" -ForegroundColor "Cyan"
