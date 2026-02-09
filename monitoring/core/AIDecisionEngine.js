@@ -357,11 +357,11 @@ class AIDecisionEngine extends EventEmitter {
             const game = this.stateStore.getState('game') || {};
             const activeIssues = this.issueDetector.getActiveIssues();
             
-            // Server is already online
-            if (server.status === 'online') {
+            // Server is already running (online or degraded)
+            if (server.status === 'running' || server.status === 'degraded') {
                 return {
                     should: false,
-                    reason: 'Server already online',
+                    reason: `Server already running (status: ${server.status})`,
                     confidence: 1.0
                 };
             }
@@ -372,10 +372,10 @@ class AIDecisionEngine extends EventEmitter {
             // Check if there are critical issues that might require server restart
             const criticalIssues = activeIssues.filter(i => i.severity === 'critical' && i.source === 'server');
             
-            // STARTUP SCENARIO: If server is offline and Unity is not running, start server first
+            // STARTUP SCENARIO: If server is not running and Unity is not running, start server first
             // This handles the initial startup sequence: Server → Unity → Simulation
-            // In simulation mode or when Unity automation is enabled, server must be online first
-            const isStartupScenario = server.status !== 'online' && 
+            // In simulation mode or when Unity automation is enabled, server must be running first
+            const isStartupScenario = server.status !== 'running' && server.status !== 'degraded' && 
                                       unity.status !== 'running' && 
                                       unity.status !== 'starting' && 
                                       unity.status !== 'connected';
