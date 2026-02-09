@@ -226,7 +226,14 @@ cd C:\Projects\poker-server
 
 The AI and Learning System work together as one unified entity. **See [WORKFLOW.md](WORKFLOW.md) for complete details.**
 
+**NEW: Prompt-Based System** - The system now automatically detects issues, generates prompts for you to deliver to the AI, and verifies compliance. See [PROMPT_BASED_SYSTEM.md](PROMPT_BASED_SYSTEM.md) for details.
+
 **Quick Overview:**
+- **System Detects Issues** - Automatically monitors monitoring system errors, Unity game issues, and AI workflow violations
+- **System Generates Prompts** - Creates specific instructions for you to deliver to the AI (shown in BrokenPromise terminal)
+- **You Deliver Prompts** - Give AI direct instructions (which it will follow)
+- **System Verifies Compliance** - Automatically checks if AI actually did what was asked
+- **Learning System Learns** - Tracks prompt effectiveness, learns which prompts work, improves over time
 - **Before Action**: Call `beforeAIAction()` to get warnings, recommendations, solution templates, and **web search requirements** (if failures occurred)
 - **When Stuck**: Call `aiNeedsHelp()` to get similar problems, solutions, and **web search requirements** (if failures occurred)
 - **After Action**: Call `afterAIAction()` to teach the learning system (success or failure)
@@ -360,6 +367,8 @@ monitoring/
 - **Learning confidence tracking** - Quantifies learning effectiveness (cannot be masked)
 - **Automatic self-improvement** - Adjusts when confidence is low
 - **Symbiotic Workflow** - AI and Learning System work together as one unified entity (see **WORKFLOW.md**)
+- **NEW: Prompt-Based System** - Learning system learns about AI compliance, generates prompts for user to deliver, tracks prompt effectiveness (see [PROMPT_BASED_SYSTEM.md](PROMPT_BASED_SYSTEM.md))
+- **NEW: AI Compliance Tracking** - Learning system tracks which prompts work, which don't, learns how to get AI to comply reliably
 
 ### **Comprehensive Integrity**
 - Checks monitoring files

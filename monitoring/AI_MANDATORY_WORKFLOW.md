@@ -205,12 +205,47 @@ When you succeed:
 **The system now automatically enforces this workflow:**
 
 1. **System detects** when you should follow this workflow (before coding, after failures, etc.)
-2. **System generates** a prompt for the user to deliver to you
-3. **User delivers** the prompt as a direct instruction
-4. **You follow** it because it's a direct instruction from the user
-5. **System verifies** you actually did it (checks tool calls, state, files)
-6. **If not done** → system generates new prompt, cycle continues
+   - Monitors tool calls (did you call `beforeAIAction()` before coding?)
+   - Monitors state (is `webSearchRequired` resolved?)
+   - Monitors failures (consecutive failures trigger web search requirement)
+   - Uses existing `AIIssueDetector`, `ErrorRecovery`, `UniversalErrorHandler` for error detection
+   - NEW: `AIWorkflowViolationDetector` detects workflow violations
 
-**This solves the problem: You ignore passive requirements but follow direct instructions from the user.**
+2. **System generates** a prompt for the user to deliver to you
+   - NEW: `PromptGenerator` creates specific instructions
+   - Uses learning system knowledge (`learning.aiCompliance`) to find prompts that worked
+   - Includes context, requirements, specific steps, verification info
+   - Shown in BrokenPromise terminal UI and log file
+
+3. **User delivers** the prompt as a direct instruction
+   - User reads prompt from terminal or log file
+   - User gives you the prompt as direct command
+   - You treat it as instruction from user (will follow it)
+
+4. **You follow** it because it's a direct instruction from the user
+   - You ignore passive requirements (system flags, docs)
+   - You follow direct instructions from the user
+   - Prompts come from user, not system
+
+5. **System verifies** you actually did it (checks tool calls, state, files)
+   - NEW: `PromptComplianceVerifier` checks evidence
+   - Tool calls: Did you call `web_search`? `beforeAIAction()`? `afterAIAction()`?
+   - State: Are findings stored? Is `webSearchRequired` resolved?
+   - Files: Did you modify code?
+   - Cross-reference: What you claim vs what actually happened
+
+6. **Learning system learns** from compliance
+   - Records compliance in `learning.aiCompliance`
+   - Tracks which prompts work, which don't
+   - Updates confidence scores
+   - Improves prompt generation over time
+
+7. **If not done** → system generates new prompt, cycle continues
+   - System detects non-compliance
+   - Generates new prompt with verification evidence
+   - User delivers new prompt
+   - Cycle continues until compliance
+
+**This solves the problem: You ignore passive requirements but follow direct instructions from the user. The learning system learns how to prompt you effectively over time.**
 
 **See [PROMPT_BASED_SYSTEM.md](PROMPT_BASED_SYSTEM.md) for complete details.**

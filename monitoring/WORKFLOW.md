@@ -9,7 +9,15 @@
 
 This document describes how the AI (you) and the Learning System (BrokenPromise) work together as one unified entity. The workflow is designed to be proactive, intelligent, and continuously improving.
 
-**NEW: Prompt-Based System** - The system now uses a prompt-based approach where the system automatically detects issues, generates prompts for the user to deliver, and verifies compliance. See [PROMPT_BASED_SYSTEM.md](PROMPT_BASED_SYSTEM.md) for details.
+**NEW: Prompt-Based System** - The system now uses a prompt-based approach where the system automatically detects issues, generates prompts for the user to deliver, and verifies compliance. The learning system learns which prompts work and improves over time. See [PROMPT_BASED_SYSTEM.md](PROMPT_BASED_SYSTEM.md) for complete details.
+
+**How Prompt-Based System Integrates:**
+- System automatically detects when you should follow this workflow
+- System generates prompts for the user to deliver to you
+- User delivers prompts as direct instructions (which you will follow)
+- System verifies you actually did what was asked
+- Learning system learns from compliance, improves prompt generation
+- If you don't comply, system generates new prompt, cycle continues
 
 ---
 
@@ -480,7 +488,43 @@ core.afterAIAction({
 4. **Track Everything** - Code changes, patterns, outcomes
 5. **Learn from Both Successes and Failures** - Both teach valuable lessons
 6. **Predict and Prevent** - Don't just fix, prevent issues
+7. **NEW: Prompt-Based Enforcement** - System automatically enforces workflow via prompts you can't ignore
+8. **NEW: Learning System Learns About You** - Tracks which prompts work, improves over time
 
 ---
 
-**The workflow is designed to make you and the learning system continuously improve together. Use it, and you'll both get smarter over time.**
+## 🔄 NEW: Prompt-Based Workflow Enforcement
+
+**The Problem:**
+- You ignore passive requirements (system flags, workflow docs)
+- You bypass workflow checks
+- You don't follow the symbiotic workflow
+
+**The Solution:**
+- System automatically detects when you should follow workflow
+- System generates prompts for the user to deliver to you
+- User delivers prompts as direct instructions (which you will follow)
+- System verifies you actually did what was asked
+- Learning system learns from compliance, improves prompt generation
+
+**How It Works:**
+1. **System Detects**: Issue detected, workflow violation detected, failure detected
+2. **System Generates Prompt**: Creates specific instructions based on context and what worked before
+3. **Prompt Displayed**: Shown in BrokenPromise terminal UI and log file
+4. **User Delivers**: User gives you the prompt as direct instruction
+5. **You Follow**: You treat it as command from user (will follow it)
+6. **System Verifies**: Checks tool calls, state, files to confirm you did it
+7. **Learning System Learns**: Records compliance in `learning.aiCompliance`, improves prompts
+8. **If Not Done**: System generates new prompt, cycle continues
+
+**Integration with Existing Workflow:**
+- Prompt-based system enforces the same workflow (beforeAIAction, web search, afterAIAction)
+- But delivers it via user prompts instead of passive requirements
+- Learning system learns which prompts work, which don't
+- Gets better at prompting you over time
+
+**See [PROMPT_BASED_SYSTEM.md](PROMPT_BASED_SYSTEM.md) for complete details.**
+
+---
+
+**The workflow is designed to make you and the learning system continuously improve together. The prompt-based system ensures you actually follow the workflow, and the learning system learns how to prompt you effectively over time.**
