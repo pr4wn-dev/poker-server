@@ -290,6 +290,13 @@ class AILearningEngineMySQL extends EventEmitter {
             Date.now(),
             attempt.duration || attempt.timeSpent || 0
         ]);
+        } catch (error) {
+            // LEARNING SYSTEM FIX: Handle pool closed errors gracefully
+            if (error.message && error.message.includes('Pool is closed')) {
+                return; // Silently skip if pool is closed
+            }
+            throw error; // Re-throw other errors
+        }
     }
 
     /**
