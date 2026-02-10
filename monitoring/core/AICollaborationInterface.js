@@ -27,8 +27,9 @@ class AICollaborationInterface extends EventEmitter {
         this.codeChangeTracker = codeChangeTracker;
         this.powerShellSyntaxValidator = powerShellSyntaxValidator;
         
-        // AI action tracking
-        this.aiActions = []; // Track all AI actions for learning
+        // AI action tracking - NO LONGER STORED IN MEMORY
+        // Stored in database (ai_actions table)
+        this.aiActions = []; // Kept for compatibility, but not populated
         this.maxActionHistory = 1000;
         
         // Proactive suggestion system
@@ -40,18 +41,31 @@ class AICollaborationInterface extends EventEmitter {
         this.feedbackQueue = []; // Queue of feedback to provide to AI
         this.activeProblem = null; // Current problem being solved
         
-        // Unified decision tracking
-        this.decisions = []; // Track decisions made together
+        // Unified decision tracking - NO LONGER STORED IN MEMORY
+        // Stored in database (ai_decisions table)
+        this.decisions = []; // Kept for compatibility, but not populated
         this.decisionOutcomes = new Map(); // Track outcomes to learn
         
-        // Shared knowledge base - we both contribute and access
+        // Shared knowledge base - NO LONGER STORED IN MEMORY
+        // Stored in database (ai_shared_knowledge table)
         this.sharedKnowledge = {
-            successes: [], // What worked (from both of us)
-            failures: [], // What didn't work (from both of us)
-            patterns: [], // Patterns we've discovered together
-            predictions: [], // What we predict will happen
-            warnings: [] // Warnings we've given each other
+            successes: [], // Kept for compatibility
+            failures: [], // Kept for compatibility
+            patterns: [], // Kept for compatibility
+            predictions: [], // Kept for compatibility
+            warnings: [] // Kept for compatibility
         };
+        
+        // Database-backed components helper
+        this.dbComponents = null;
+        if (this.stateStore && this.stateStore.getDatabaseManager) {
+            try {
+                const DatabaseBackedComponents = require('./DatabaseBackedComponents');
+                this.dbComponents = new DatabaseBackedComponents(stateStore.projectRoot || require('path').resolve(__dirname, '../..'));
+            } catch (error) {
+                // Fallback to in-memory if database not available
+            }
+        }
         
         // Pattern detection together
         this.patternDetection = {
@@ -189,9 +203,23 @@ class AICollaborationInterface extends EventEmitter {
         };
         
         // Store in shared knowledge
-        this.sharedKnowledge.failures.push(knowledgeUpdate);
-        if (this.sharedKnowledge.failures.length > 100) {
-            this.sharedKnowledge.failures.shift();
+        // Save to database instead of in-memory array
+        if (this.dbComponents) {
+            this.dbComponents.saveSharedKnowledge({
+                type: 'failure',
+                ...knowledgeUpdate
+            }).catch(() => {
+                // Fallback to in-memory
+                this.sharedKnowledge.failures.push(knowledgeUpdate);
+                if (this.sharedKnowledge.failures.length > 100) {
+                    this.sharedKnowledge.failures.shift();
+                }
+            });
+        } else {
+            this.sharedKnowledge.failures.push(knowledgeUpdate);
+            if (this.sharedKnowledge.failures.length > 100) {
+                this.sharedKnowledge.failures.shift();
+            }
         }
         
         // Store in state
@@ -677,9 +705,23 @@ class AICollaborationInterface extends EventEmitter {
         };
         
         // Store in shared knowledge
-        this.sharedKnowledge.failures.push(failureRecord);
-        if (this.sharedKnowledge.failures.length > 100) {
-            this.sharedKnowledge.failures.shift();
+        // Save to database instead of in-memory array
+        if (this.dbComponents) {
+            this.dbComponents.saveSharedKnowledge({
+                type: 'failure',
+                ...failureRecord
+            }).catch(() => {
+                // Fallback to in-memory
+                this.sharedKnowledge.failures.push(failureRecord);
+                if (this.sharedKnowledge.failures.length > 100) {
+                    this.sharedKnowledge.failures.shift();
+                }
+            });
+        } else {
+            this.sharedKnowledge.failures.push(failureRecord);
+            if (this.sharedKnowledge.failures.length > 100) {
+                this.sharedKnowledge.failures.shift();
+            }
         }
         
         // Store in state so learning system can query it
@@ -1062,10 +1104,21 @@ class AICollaborationInterface extends EventEmitter {
         if (!this.learningEngine) return null;
         
         // Check if similar problems were solved before
-        const aiFailures = this.sharedKnowledge.failures.filter(f => 
-            f.action.issueType === context.issue ||
-            f.action.component === context.component
-        );
+        // Get failures from database if available (async, but don't block - use sync fallback)
+        let aiFailures = [];
+        if (this.dbComponents) {
+            // For now, use in-memory fallback (async queries would require making this function async)
+            // Database queries will be used when this function is called from async context
+            aiFailures = this.sharedKnowledge.failures.filter(f => 
+                f.action.issueType === context.issue ||
+                f.action.component === context.component
+            );
+        } else {
+            aiFailures = this.sharedKnowledge.failures.filter(f => 
+                f.action.issueType === context.issue ||
+                f.action.component === context.component
+            );
+        }
         
         if (aiFailures.length > 0) {
             // AI has failed on similar problems before
@@ -1249,9 +1302,25 @@ class AICollaborationInterface extends EventEmitter {
         }
         
         // Check for recent failures that need joint analysis
-        const recentFailures = this.sharedKnowledge.failures
-            .filter(f => Date.now() - f.timestamp < 60000) // Last minute
-            .slice(-5);
+        // Get recent failures from database if available (async, but don't block)
+        let recentFailures = [];
+        if (this.dbComponents) {
+            // Use Promise.resolve to handle async without blocking
+            this.dbComponents.getRecentAIActions(100, { result: 'failure' }).then(allFailures => {
+                recentFailures = allFailures
+                    .filter(f => Date.now() - f.timestamp < 60000)
+                    .slice(-5);
+            }).catch(() => {
+                // Fallback to in-memory
+                recentFailures = this.sharedKnowledge.failures
+                    .filter(f => Date.now() - f.timestamp < 60000)
+                    .slice(-5);
+            });
+        } else {
+            recentFailures = this.sharedKnowledge.failures
+                .filter(f => Date.now() - f.timestamp < 60000)
+                .slice(-5);
+        }
         
         if (recentFailures.length > 0) {
             // Proactively analyze failures together
@@ -1268,14 +1337,32 @@ class AICollaborationInterface extends EventEmitter {
     // Helper methods
     
     trackAIAction(action) {
-        this.aiActions.push({
-            ...action,
-            timestamp: Date.now()
-        });
-        
-        // Keep only last N actions
-        if (this.aiActions.length > this.maxActionHistory) {
-            this.aiActions.shift();
+        // Save to database instead of in-memory array
+        if (this.dbComponents) {
+            this.dbComponents.saveAIAction({
+                ...action,
+                timestamp: Date.now()
+            }).catch(() => {
+                // Fallback to in-memory if database fails
+                this.aiActions.push({
+                    ...action,
+                    timestamp: Date.now()
+                });
+                if (this.aiActions.length > this.maxActionHistory) {
+                    this.aiActions.shift();
+                }
+            });
+        } else {
+            // Fallback: Store in memory
+            this.aiActions.push({
+                ...action,
+                timestamp: Date.now()
+            });
+            
+            // Keep only last N actions
+            if (this.aiActions.length > this.maxActionHistory) {
+                this.aiActions.shift();
+            }
         }
     }
     

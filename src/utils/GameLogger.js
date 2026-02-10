@@ -1,10 +1,13 @@
 /**
  * GameLogger - Highly verbose logging for poker game events
- * Saves to logs/game.log for easy viewing, clearing, and editing
+ * Saves to MySQL database (if available) or logs/game.log file (fallback)
  */
 
 const fs = require('fs');
 const path = require('path');
+
+// Check if database logging should be used
+const USE_DB_LOGGING = process.env.BROKENPROMISE_USE_DB_LOGGING !== 'false';
 
 class GameLogger {
     constructor() {
@@ -12,8 +15,21 @@ class GameLogger {
         this.logFile = path.join(this.logDir, 'game.log');
         this.maxLogSize = 10 * 1024 * 1024; // 10MB max log file size
         this.backupCount = 5; // Keep 5 backup files
+        this.useDatabase = USE_DB_LOGGING;
+        this.dbLogger = null;
         
-        // Ensure log directory exists
+        // Initialize database logger if enabled
+        if (this.useDatabase) {
+            try {
+                const DatabaseLogger = require('../../monitoring/core/DatabaseLogger');
+                this.dbLogger = new DatabaseLogger(path.join(__dirname, '../..'));
+            } catch (error) {
+                // Fallback to file logging
+                this.useDatabase = false;
+            }
+        }
+        
+        // Ensure log directory exists (for fallback)
         if (!fs.existsSync(this.logDir)) {
             fs.mkdirSync(this.logDir, { recursive: true });
         }
@@ -84,6 +100,30 @@ class GameLogger {
                 return; // Don't log card visibility entries
             }
             
+            // Use database if available
+            if (this.useDatabase && this.dbLogger) {
+                // Async write to database (don't block)
+                this.dbLogger.writeLog(level, category, message, data).catch(() => {
+                    // Fallback to file if database fails
+                    this._writeToFile(level, category, message, data);
+                });
+                return;
+            }
+            
+            // Fallback to file logging
+            this._writeToFile(level, category, message, data);
+        } catch (error) {
+            // Can't use gameLogger here (would cause infinite loop), use minimal error handling
+            // Write directly to stderr as last resort
+            process.stderr.write(`[GameLogger] Error writing log: ${error.message}\n`);
+        }
+    }
+
+    /**
+     * Write log entry to file (fallback method)
+     */
+    _writeToFile(level, category, message, data = null) {
+        try {
             this.rotateLog();
             
             const timestamp = this.getTimestamp();
@@ -106,9 +146,7 @@ class GameLogger {
                 fs.appendFileSync(this.logFile, logEntry, { flag: 'a' });
             }
         } catch (error) {
-            // Can't use gameLogger here (would cause infinite loop), use minimal error handling
-            // Write directly to stderr as last resort
-            process.stderr.write(`[GameLogger] Error writing log: ${error.message}\n`);
+            // Silently fail
         }
     }
     

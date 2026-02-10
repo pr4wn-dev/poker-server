@@ -18,29 +18,43 @@ class AILogProcessor extends EventEmitter {
         this.stateStore = stateStore;
         this.logFile = path.join(projectRoot, 'logs', 'game.log');
         
-        // Processed logs by source
+        // Processed logs by source - NO LONGER STORED IN MEMORY
+        // Stored in database (log_processed table)
         this.logs = {
             server: [],
             unity: [],
             database: [],
             game: [],
             monitoring: []
-        };
+        }; // Kept for compatibility, but not populated
         
-        // Patterns AI has learned
-        this.patterns = new Map();
+        // Patterns AI has learned - NO LONGER STORED IN MEMORY
+        // Stored in database (log_patterns table)
+        this.patterns = new Map(); // Kept for compatibility, but not populated
         
         // Last read position
         this.lastPosition = 0;
         
-        // Processing stats
+        // Processing stats - NO LONGER STORED IN MEMORY
+        // Stored in database (log_processing_stats table)
         this.stats = {
             totalProcessed: 0,
             errorsFound: 0,
             warningsFound: 0,
             patternsDetected: 0,
             lastProcessed: null
-        };
+        }; // Kept for compatibility, but updated in database
+        
+        // Database-backed components helper
+        this.dbComponents = null;
+        if (this.stateStore && this.stateStore.getDatabaseManager) {
+            try {
+                const DatabaseBackedComponents = require('./DatabaseBackedComponents');
+                this.dbComponents = new DatabaseBackedComponents(projectRoot);
+            } catch (error) {
+                // Fallback to in-memory if database not available
+            }
+        }
         
         // Prevent concurrent log checks
         this._checkingLogs = false;
@@ -205,10 +219,18 @@ class AILogProcessor extends EventEmitter {
         
         // Check for errors/warnings
         if (parsed.level === 'error') {
-            this.stats.errorsFound++;
+            if (this.dbComponents) {
+                this.dbComponents.updateLogStats('errorsFound', 1).catch(() => {});
+            } else {
+                this.stats.errorsFound++;
+            }
             this.emit('error', parsed);
         } else if (parsed.level === 'warning') {
-            this.stats.warningsFound++;
+            if (this.dbComponents) {
+                this.dbComponents.updateLogStats('warningsFound', 1).catch(() => {});
+            } else {
+                this.stats.warningsFound++;
+            }
             this.emit('warning', parsed);
         }
         
@@ -343,7 +365,17 @@ class AILogProcessor extends EventEmitter {
         if (parsed.level === 'error') {
             const pattern = this.extractPattern(parsed.message);
             if (pattern) {
-                if (!this.patterns.has(pattern)) {
+                // Save pattern to database instead of in-memory Map
+            if (this.dbComponents) {
+                this.dbComponents.saveLogPattern({
+                    key: pattern,
+                    pattern: pattern,
+                    source: this.categorizeSource(parsed),
+                    firstSeen: parsed.timestamp
+                }).catch(() => {});
+            }
+            
+            if (!this.patterns.has(pattern)) {
                     this.patterns.set(pattern, {
                         count: 0,
                         firstSeen: parsed.timestamp,
@@ -360,7 +392,11 @@ class AILogProcessor extends EventEmitter {
                     patternData.examples.push(parsed);
                 }
                 
-                this.stats.patternsDetected++;
+                if (this.dbComponents) {
+                    this.dbComponents.updateLogStats('patternsDetected', 1).catch(() => {});
+                } else {
+                    this.stats.patternsDetected++;
+                }
                 this.emit('patternDetected', { pattern, data: patternData });
             }
         }

@@ -16,8 +16,21 @@ class AIDecisionEngine extends EventEmitter {
         this.issueDetector = issueDetector;
         this.fixTracker = fixTracker;
         
-        // Decision history
-        this.decisions = [];
+        // Decision history - NO LONGER STORED IN MEMORY
+        // Stored in database (ai_decisions table)
+        this.decisions = []; // Kept for compatibility, but not populated
+        
+        // Database-backed components helper
+        this.dbComponents = null;
+        if (this.stateStore && this.stateStore.getDatabaseManager) {
+            try {
+                const DatabaseBackedComponents = require('./DatabaseBackedComponents');
+                const projectRoot = this.stateStore.projectRoot || require('path').resolve(__dirname, '../..');
+                this.dbComponents = new DatabaseBackedComponents(projectRoot);
+            } catch (error) {
+                // Fallback to in-memory if database not available
+            }
+        }
         
         // Don't start immediately - let AIMonitorCore call start() after all components are ready
         // this.start();
@@ -75,15 +88,33 @@ class AIDecisionEngine extends EventEmitter {
         // Execute decisions
         this.executeDecisions(decisions);
         
-        // Store decisions
-        this.decisions.push({
-            timestamp: Date.now(),
-            decisions
-        });
-        
-        // Keep only last 1000 decisions
-        if (this.decisions.length > 1000) {
-            this.decisions = this.decisions.slice(-1000);
+        // Store decisions in database instead of in-memory array
+        if (this.dbComponents) {
+            this.dbComponents.saveDecision({
+                type: 'full_decision_set',
+                ...decisions,
+                timestamp: Date.now()
+            }).catch(() => {
+                // Fallback to in-memory
+                this.decisions.push({
+                    timestamp: Date.now(),
+                    decisions
+                });
+                if (this.decisions.length > 1000) {
+                    this.decisions = this.decisions.slice(-1000);
+                }
+            });
+        } else {
+            // Fallback: Store in memory
+            this.decisions.push({
+                timestamp: Date.now(),
+                decisions
+            });
+            
+            // Keep only last 1000 decisions
+            if (this.decisions.length > 1000) {
+                this.decisions = this.decisions.slice(-1000);
+            }
         }
         
         // Emit decisions

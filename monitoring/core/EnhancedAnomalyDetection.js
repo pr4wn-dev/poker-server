@@ -25,18 +25,32 @@ class EnhancedAnomalyDetection extends EventEmitter {
         this.minSamples = 20; // Need at least 20 samples before detecting anomalies
         this.anomalyThreshold = 3; // 3 standard deviations = anomaly
         
-        // Metric tracking
+        // Metric tracking - NO LONGER STORED IN MEMORY
+        // Stored in database (anomaly_metrics table)
         this.metrics = {
             responseTime: [],
             errorRate: [],
             chipChanges: [],
             playerActions: [],
             stateChanges: []
-        };
+        }; // Kept for compatibility, but not populated
         
-        // Anomaly history
-        this.anomalies = [];
+        // Anomaly history - NO LONGER STORED IN MEMORY
+        // Stored in database (anomaly_detections table)
+        this.anomalies = []; // Kept for compatibility, but not populated
         this.maxAnomaliesHistory = 1000;
+        
+        // Database-backed components helper
+        this.dbComponents = null;
+        if (this.stateStore && this.stateStore.getDatabaseManager) {
+            try {
+                const DatabaseBackedComponents = require('./DatabaseBackedComponents');
+                const projectRoot = this.stateStore.projectRoot || require('path').resolve(__dirname, '../..');
+                this.dbComponents = new DatabaseBackedComponents(projectRoot);
+            } catch (error) {
+                // Fallback to in-memory if database not available
+            }
+        }
         
         // Start monitoring
         this.startMonitoring();
@@ -255,9 +269,26 @@ class EnhancedAnomalyDetection extends EventEmitter {
         };
         
         // Add to history
-        this.anomalies.push(anomaly);
-        if (this.anomalies.length > this.maxAnomaliesHistory) {
-            this.anomalies.shift();
+        // Save to database instead of in-memory array
+        if (this.dbComponents) {
+            this.dbComponents.saveAnomaly({
+                metricName: metricName,
+                type: 'statistical',
+                severity: anomaly.severity,
+                ...anomaly
+            }).catch(() => {
+                // Fallback to in-memory
+                this.anomalies.push(anomaly);
+                if (this.anomalies.length > this.maxAnomaliesHistory) {
+                    this.anomalies.shift();
+                }
+            });
+        } else {
+            // Fallback: Store in memory
+            this.anomalies.push(anomaly);
+            if (this.anomalies.length > this.maxAnomaliesHistory) {
+                this.anomalies.shift();
+            }
         }
         
         // Report to issue detector

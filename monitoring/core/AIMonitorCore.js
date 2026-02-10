@@ -245,6 +245,20 @@ class AIMonitorCore {
         // For now, we'll track via state updates
         // Note: setupToolCallTracking will be implemented when we have tool system hooks
         
+        // Code Analysis Instrumentation (automatic logging injection)
+        try {
+            const CodeAnalysisInstrumentation = require('./CodeAnalysisInstrumentation');
+            this.codeAnalysis = new CodeAnalysisInstrumentation(
+                this.projectRoot,
+                this.stateStore,
+                this.learningEngine
+            );
+            this.errorRecovery.recordSuccess('codeAnalysis');
+        } catch (error) {
+            this.errorRecovery.recordError('codeAnalysis', error);
+            // Don't throw - code analysis is optional
+        }
+        
         // Initialize workflow violation detector
         this.workflowViolationDetector = new AIWorkflowViolationDetector(
             this.stateStore,

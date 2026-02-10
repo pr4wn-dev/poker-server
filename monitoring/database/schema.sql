@@ -57,22 +57,26 @@ CREATE TABLE IF NOT EXISTS `learning_misdiagnosis_patterns` (
     INDEX `idx_time_wasted` (`time_wasted`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- 4. Learning: Solution Patterns (Serves the Soul)
+-- 4. Learning: Solution Patterns (Serves the Soul - Enhanced for Misdiagnosis Prevention)
 CREATE TABLE IF NOT EXISTS `learning_patterns` (
     `pattern_key` VARCHAR(255) PRIMARY KEY,
     `issue_type` VARCHAR(255),
     `solution_method` VARCHAR(255),
+    `misdiagnosis_method` VARCHAR(255),
     `success_rate` DECIMAL(5,4) DEFAULT 0,
     `frequency` INT DEFAULT 0,
     `time_saved` BIGINT DEFAULT 0,
+    `time_wasted` BIGINT DEFAULT 0,
     `contexts` TEXT,
     `solutions` TEXT,
     `details` TEXT,
     `last_updated` BIGINT,
     INDEX `idx_issue_type` (`issue_type`),
     INDEX `idx_solution_method` (`solution_method`),
+    INDEX `idx_misdiagnosis_method` (`misdiagnosis_method`),
     INDEX `idx_success_rate` (`success_rate`),
-    INDEX `idx_frequency` (`frequency`)
+    INDEX `idx_frequency` (`frequency`),
+    INDEX `idx_time_wasted` (`time_wasted`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 5. Learning: Compliance Tracking (Serves the Soul)
@@ -145,4 +149,101 @@ CREATE TABLE IF NOT EXISTS `learning_solution_templates` (
     UNIQUE KEY `unique_template` (`template_key`),
     INDEX `idx_issue_type` (`issue_type`),
     INDEX `idx_success_rate` (`success_rate`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 10. Log Processing: Processed Logs
+CREATE TABLE IF NOT EXISTS `log_processed` (
+    `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `source` VARCHAR(50),
+    `level` VARCHAR(20),
+    `message` TEXT,
+    `timestamp` BIGINT NOT NULL,
+    `file_path` VARCHAR(500),
+    `line_number` INT,
+    `metadata` TEXT,
+    INDEX `idx_source` (`source`),
+    INDEX `idx_timestamp` (`timestamp`),
+    INDEX `idx_level` (`level`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 11. Log Processing: Patterns
+CREATE TABLE IF NOT EXISTS `log_patterns` (
+    `pattern_key` VARCHAR(255) PRIMARY KEY,
+    `pattern` VARCHAR(500),
+    `source` VARCHAR(50),
+    `frequency` INT DEFAULT 0,
+    `last_seen` BIGINT,
+    `details` TEXT,
+    INDEX `idx_source` (`source`),
+    INDEX `idx_frequency` (`frequency`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 12. Log Processing: Stats
+CREATE TABLE IF NOT EXISTS `log_processing_stats` (
+    `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `stat_key` VARCHAR(255) UNIQUE,
+    `stat_value` BIGINT DEFAULT 0,
+    `last_updated` BIGINT,
+    INDEX `idx_stat_key` (`stat_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 13. AI Actions: Action History
+CREATE TABLE IF NOT EXISTS `ai_actions` (
+    `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `action_type` VARCHAR(100),
+    `issue_type` VARCHAR(255),
+    `component` VARCHAR(255),
+    `file` VARCHAR(500),
+    `details` TEXT,
+    `timestamp` BIGINT NOT NULL,
+    INDEX `idx_action_type` (`action_type`),
+    INDEX `idx_issue_type` (`issue_type`),
+    INDEX `idx_timestamp` (`timestamp`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 14. AI Collaboration: Decisions
+CREATE TABLE IF NOT EXISTS `ai_decisions` (
+    `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `decision_type` VARCHAR(100),
+    `decision_data` TEXT,
+    `outcome` VARCHAR(50),
+    `timestamp` BIGINT NOT NULL,
+    INDEX `idx_decision_type` (`decision_type`),
+    INDEX `idx_timestamp` (`timestamp`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 15. AI Collaboration: Shared Knowledge
+CREATE TABLE IF NOT EXISTS `ai_shared_knowledge` (
+    `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `knowledge_type` VARCHAR(50),
+    `content` TEXT,
+    `source` VARCHAR(50),
+    `useful` TINYINT(1) DEFAULT 1,
+    `timestamp` BIGINT NOT NULL,
+    INDEX `idx_knowledge_type` (`knowledge_type`),
+    INDEX `idx_source` (`source`),
+    INDEX `idx_timestamp` (`timestamp`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 16. Anomaly Detection: Metrics
+CREATE TABLE IF NOT EXISTS `anomaly_metrics` (
+    `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `metric_name` VARCHAR(100),
+    `metric_value` DECIMAL(10,2),
+    `timestamp` BIGINT NOT NULL,
+    INDEX `idx_metric_name` (`metric_name`),
+    INDEX `idx_timestamp` (`timestamp`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 17. Anomaly Detection: Anomalies
+CREATE TABLE IF NOT EXISTS `anomaly_detections` (
+    `id` INT AUTO_INCREMENT PRIMARY KEY,
+    `metric_name` VARCHAR(100),
+    `anomaly_type` VARCHAR(50),
+    `severity` VARCHAR(20),
+    `details` TEXT,
+    `timestamp` BIGINT NOT NULL,
+    INDEX `idx_metric_name` (`metric_name`),
+    INDEX `idx_timestamp` (`timestamp`),
+    INDEX `idx_severity` (`severity`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

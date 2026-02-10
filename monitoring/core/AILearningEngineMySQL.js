@@ -243,13 +243,41 @@ class AILearningEngineMySQL extends EventEmitter {
     }
 
     /**
-     * Learn pattern (what works)
+     * Learn pattern (what works) - Enhanced with misdiagnosis context
      */
     async learnPattern(attempt) {
         if (!this.initialized) await this.initialize();
         
         const pool = this.dbManager.getPool();
         const patternKey = `pattern_${attempt.issueType}_${attempt.fixMethod}`;
+        
+        // Get previous failed attempts for this issue to capture misdiagnosis context
+        const [failedAttempts] = await pool.execute(`
+            SELECT fix_method, time_spent, misdiagnosis, wrong_approach
+            FROM learning_fix_attempts
+            WHERE issue_id = ? AND result = 'failure'
+            ORDER BY timestamp DESC
+            LIMIT 5
+        `, [attempt.issueId || '']);
+        
+        // Calculate misdiagnosis context
+        let misdiagnosisMethod = null;
+        let totalTimeWasted = 0;
+        
+        if (failedAttempts.length > 0) {
+            // Get the most recent failed method as the misdiagnosis
+            misdiagnosisMethod = failedAttempts[0].fix_method || failedAttempts[0].wrong_approach || failedAttempts[0].misdiagnosis;
+            // Sum time wasted on all failed attempts
+            totalTimeWasted = failedAttempts.reduce((sum, fa) => sum + (fa.time_spent || 0), 0);
+        }
+        
+        // Also check fixDetails for misdiagnosis info
+        if (attempt.fixDetails?.wrongApproach && !misdiagnosisMethod) {
+            misdiagnosisMethod = attempt.fixDetails.wrongApproach;
+        }
+        if (attempt.fixDetails?.timeWastedOnMisdiagnosis) {
+            totalTimeWasted += attempt.fixDetails.timeWastedOnMisdiagnosis;
+        }
         
         const [existing] = await pool.execute(
             'SELECT * FROM learning_patterns WHERE pattern_key = ?',
@@ -259,26 +287,33 @@ class AILearningEngineMySQL extends EventEmitter {
         const frequency = existing.length > 0 ? (existing[0].frequency + 1) : 1;
         const timeSaved = attempt.duration || attempt.timeSpent || 0;
         const totalTimeSaved = existing.length > 0 ? (existing[0].time_saved + timeSaved) : timeSaved;
+        const existingTimeWasted = existing.length > 0 ? (existing[0].time_wasted || 0) : 0;
+        const totalTimeWastedFinal = existingTimeWasted + totalTimeWasted;
         const successes = existing.length > 0 ? (existing[0].successes || 0) + 1 : 1;
         const failures = existing.length > 0 ? (existing[0].failures || 0) : 0;
         const successRate = successes / (successes + failures);
 
         await pool.execute(`
             INSERT INTO learning_patterns 
-            (pattern_key, issue_type, solution_method, success_rate, frequency, time_saved, last_updated, details)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            (pattern_key, issue_type, solution_method, misdiagnosis_method, success_rate, frequency, time_saved, time_wasted, last_updated, details)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON DUPLICATE KEY UPDATE
+            solution_method = VALUES(solution_method),
+            misdiagnosis_method = COALESCE(VALUES(misdiagnosis_method), misdiagnosis_method),
             success_rate = VALUES(success_rate),
             frequency = VALUES(frequency),
             time_saved = VALUES(time_saved),
+            time_wasted = VALUES(time_wasted),
             last_updated = VALUES(last_updated)
         `, [
             patternKey,
             attempt.issueType,
             attempt.fixMethod,
+            misdiagnosisMethod,
             successRate,
             frequency,
             totalTimeSaved,
+            totalTimeWastedFinal,
             Date.now(),
             JSON.stringify(attempt.fixDetails || {})
         ]);
