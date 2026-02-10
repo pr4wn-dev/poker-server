@@ -1,11 +1,11 @@
 {
-  "timestamp": 1770679771119,
+  "timestamp": 1770697771870,
   "investigation": {
     "active": false,
-    "status": "completed",
-    "startTime": 1770679617453,
+    "status": "inactive",
+    "startTime": null,
     "timeout": 15,
-    "progress": 100,
+    "progress": 0,
     "timeRemaining": 0,
     "issuesCount": 0
   },
@@ -17,62 +17,36 @@
     "server": {
       "status": "unknown",
       "health": 0,
-      "metrics": {
-        "uptime": 0,
-        "requests": 0,
-        "errors": 1,
-        "responseTime": 0,
-        "consecutiveErrors": 1
-      },
+      "metrics": {},
       "recentErrors": [],
       "trends": {
         "errorRate": null,
         "warningRate": null,
         "trend": "decreasing"
-      },
-      "lastCheck": 1770679512142
+      }
     },
     "database": {
       "status": "unknown",
       "health": 0,
-      "metrics": {
-        "uptime": 0,
-        "queries": 0,
-        "errors": 0,
-        "responseTime": 0
-      },
+      "metrics": {},
       "recentErrors": [],
       "trends": {
         "errorRate": null,
         "warningRate": null,
         "trend": "decreasing"
-      },
-      "lastCheck": null
+      }
     },
     "unity": {
-      "status": "paused",
+      "status": "unknown",
       "health": 0,
-      "metrics": {
-        "uptime": 0,
-        "fps": 0,
-        "connected": false,
-        "lastActivity": null,
-        "pausedReason": "1 critical issue(s) detected",
-        "pausedAt": 1770679248959
-      },
-      "uiState": {
-        "labels": [],
-        "images": [],
-        "sounds": [],
-        "animations": []
-      },
+      "metrics": {},
+      "uiState": {},
       "recentErrors": [],
       "trends": {
         "errorRate": null,
         "warningRate": null,
         "trend": "decreasing"
-      },
-      "lastCheck": null
+      }
     }
   },
   "recommendations": {
@@ -83,13 +57,13 @@
     },
     "pause": {
       "should": false,
-      "reason": "Unity already paused",
-      "confidence": 1
+      "reason": "Unity state not available",
+      "confidence": 0.5
     },
     "resume": {
       "should": false,
-      "reason": "Waiting for verification or issues still active",
-      "confidence": 0.8
+      "reason": "Unity state not available",
+      "confidence": 0.5
     },
     "fixes": [],
     "avoid": [],
@@ -101,6 +75,6 @@
   },
   "aiCore": {
     "active": true,
-    "lastSync": 1770679771103
+    "lastSync": 1770697771849
   }
 }
