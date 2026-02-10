@@ -22,28 +22,39 @@ class TerminalErrorMonitor extends EventEmitter {
         this.errorPatterns = [
             // JavaScript/Node.js errors
             {
+                pattern: /DeprecationWarning:.*/i,
+                type: 'deprecation_warning',
+                severity: 'medium',
+                category: 'javascript',
+                includeStack: true
+            },
+            {
                 pattern: /SyntaxError:.*/i,
                 type: 'syntax_error',
                 severity: 'high',
-                category: 'javascript'
+                category: 'javascript',
+                includeStack: true
             },
             {
                 pattern: /ReferenceError:.*/i,
                 type: 'reference_error',
                 severity: 'high',
-                category: 'javascript'
+                category: 'javascript',
+                includeStack: true
             },
             {
                 pattern: /TypeError:.*/i,
                 type: 'type_error',
                 severity: 'high',
-                category: 'javascript'
+                category: 'javascript',
+                includeStack: true
             },
             {
                 pattern: /Error:.*/i,
                 type: 'general_error',
                 severity: 'medium',
-                category: 'general'
+                category: 'general',
+                includeStack: true
             },
             {
                 pattern: /Invalid string escape/i,
@@ -133,6 +144,59 @@ class TerminalErrorMonitor extends EventEmitter {
     }
 
     /**
+     * Extract stack trace from output
+     */
+    extractStackTrace(outputStr, errorMatchIndex) {
+        const lines = outputStr.split('\n');
+        const errorLineIndex = outputStr.substring(0, errorMatchIndex).split('\n').length - 1;
+        const stackTrace = [];
+        const filePathPattern = /at\s+(.+?)\s+\((.+?):(\d+):(\d+)\)/;
+        const modulePattern = /at\s+(.+?)\s+\((.+?)\)/;
+        const evalPattern = /\[eval\]:(\d+):(\d+)/;
+        
+        // Look for stack trace lines after the error (usually starts with "at")
+        for (let i = errorLineIndex + 1; i < lines.length && i < errorLineIndex + 20; i++) {
+            const line = lines[i].trim();
+            if (!line) continue;
+            
+            // Stack trace lines typically start with "at" or contain file paths
+            if (line.startsWith('at ') || line.match(filePathPattern) || line.match(modulePattern) || line.match(evalPattern)) {
+                stackTrace.push(line);
+            } else if (stackTrace.length > 0 && !line.match(/^\s*$/)) {
+                // If we've started collecting stack trace and hit a non-empty line that doesn't look like stack trace, stop
+                break;
+            }
+        }
+        
+        return stackTrace;
+    }
+    
+    /**
+     * Extract file path and line number from stack trace
+     */
+    extractFileInfo(outputStr) {
+        const filePathMatch = outputStr.match(/at\s+.+?\s+\((.+?):(\d+):(\d+)\)/);
+        if (filePathMatch) {
+            return {
+                file: filePathMatch[1],
+                line: parseInt(filePathMatch[2]),
+                column: parseInt(filePathMatch[3])
+            };
+        }
+        
+        const evalMatch = outputStr.match(/\[eval\]:(\d+):(\d+)/);
+        if (evalMatch) {
+            return {
+                file: '[eval]',
+                line: parseInt(evalMatch[1]),
+                column: parseInt(evalMatch[2])
+            };
+        }
+        
+        return null;
+    }
+
+    /**
      * Analyze terminal command output for errors
      */
     analyzeOutput(command, output, exitCode) {
@@ -145,7 +209,8 @@ class TerminalErrorMonitor extends EventEmitter {
                 severity: 'high',
                 message: `Command exited with code ${exitCode}`,
                 command: command,
-                exitCode: exitCode
+                exitCode: exitCode,
+                fullOutput: typeof output === 'string' ? output : JSON.stringify(output, null, 2)
             });
         }
         
@@ -156,14 +221,31 @@ class TerminalErrorMonitor extends EventEmitter {
             for (const errorPattern of this.errorPatterns) {
                 const matches = outputStr.match(errorPattern.pattern);
                 if (matches) {
+                    const matchIndex = outputStr.indexOf(matches[0]);
                     const error = {
                         type: errorPattern.type,
                         severity: errorPattern.severity,
                         category: errorPattern.category,
                         message: matches[0],
                         command: command,
-                        pattern: errorPattern.pattern.toString()
+                        pattern: errorPattern.pattern.toString(),
+                        fullOutput: outputStr, // ALWAYS include full output
+                        stackTrace: errorPattern.includeStack ? this.extractStackTrace(outputStr, matchIndex) : []
                     };
+                    
+                    // Extract file info from stack trace
+                    const fileInfo = this.extractFileInfo(outputStr);
+                    if (fileInfo) {
+                        error.file = fileInfo.file;
+                        error.lineNumber = fileInfo.line;
+                        error.column = fileInfo.column;
+                    } else {
+                        // Fallback: Extract line number if present
+                        const lineMatch = outputStr.match(/\[eval\]:(\d+)/i) || outputStr.match(/Line (\d+):/i);
+                        if (lineMatch) {
+                            error.lineNumber = parseInt(lineMatch[1]);
+                        }
+                    }
                     
                     if (errorPattern.specific) {
                         error.specific = errorPattern.specific;
@@ -171,12 +253,6 @@ class TerminalErrorMonitor extends EventEmitter {
                     
                     if (errorPattern.extractExitCode && matches[1]) {
                         error.exitCode = parseInt(matches[1]);
-                    }
-                    
-                    // Extract line number if present
-                    const lineMatch = outputStr.match(/\[eval\]:(\d+)/i) || outputStr.match(/Line (\d+):/i);
-                    if (lineMatch) {
-                        error.lineNumber = parseInt(lineMatch[1]);
                     }
                     
                     errors.push(error);
@@ -230,20 +306,39 @@ class TerminalErrorMonitor extends EventEmitter {
         const prompt = this.promptGenerator.generatePrompt(issue);
         
         if (prompt) {
+            // Build full error details with stack trace
+            let errorDetails = `Command: ${command}\n`;
+            errorDetails += `Error: ${error.message}\n`;
+            if (error.file) {
+                errorDetails += `File: ${error.file}`;
+                if (error.lineNumber) errorDetails += `:${error.lineNumber}`;
+                if (error.column) errorDetails += `:${error.column}`;
+                errorDetails += '\n';
+            } else if (error.lineNumber) {
+                errorDetails += `Line: ${error.lineNumber}\n`;
+            }
+            errorDetails += `Category: ${error.category}\n`;
+            errorDetails += `Severity: ${error.severity}\n`;
+            
+            // Include stack trace if available
+            if (error.stackTrace && error.stackTrace.length > 0) {
+                errorDetails += `\nStack Trace:\n`;
+                error.stackTrace.forEach((line, idx) => {
+                    errorDetails += `  ${idx + 1}. ${line}\n`;
+                });
+            }
+            
             // Enhance prompt with terminal-specific context
             prompt.prompt = `TERMINAL COMMAND ERROR DETECTED
 
-Command: ${command}
-Error: ${error.message}
-${error.lineNumber ? `Line: ${error.lineNumber}` : ''}
-Category: ${error.category}
-Severity: ${error.severity}
-
+${errorDetails}
 ${misdiagnosisPrevention.warnings.length > 0 ? '⚠️  MISDIAGNOSIS WARNING:\n' + misdiagnosisPrevention.warnings.map(w => `   - ${w.message}`).join('\n') + '\n' : ''}
 ${misdiagnosisPrevention.correctApproach ? `✅ CORRECT APPROACH: ${misdiagnosisPrevention.correctApproach}\n` : ''}
 
-Full Output:
-${typeof output === 'string' ? output.substring(0, 2000) : JSON.stringify(output, null, 2).substring(0, 2000)}
+FULL OUTPUT (includes stack trace, file paths, line numbers):
+═══════════════════════════════════════════════════════════════
+${typeof output === 'string' ? output : JSON.stringify(output, null, 2)}
+═══════════════════════════════════════════════════════════════
 
 ${prompt.prompt}
 
@@ -271,6 +366,28 @@ Follow the workflow in @README.md (31-61) to fix this error.`;
         const promptFile = path.join(logsDir, 'prompts-for-user.txt');
         const timestamp = new Date().toISOString();
         
+        // Build error details with stack trace
+        let errorDetails = `Command: ${command}\n`;
+        errorDetails += `Error: ${error.message}\n`;
+        if (error.file) {
+            errorDetails += `File: ${error.file}`;
+            if (error.lineNumber) errorDetails += `:${error.lineNumber}`;
+            if (error.column) errorDetails += `:${error.column}`;
+            errorDetails += '\n';
+        } else if (error.lineNumber) {
+            errorDetails += `Line: ${error.lineNumber}\n`;
+        }
+        errorDetails += `Category: ${error.category}\n`;
+        errorDetails += `Severity: ${error.severity}\n`;
+        
+        // Include stack trace if available
+        if (error.stackTrace && error.stackTrace.length > 0) {
+            errorDetails += `\nStack Trace:\n`;
+            error.stackTrace.forEach((line, idx) => {
+                errorDetails += `  ${idx + 1}. ${line}\n`;
+            });
+        }
+        
         const promptText = `═══════════════════════════════════════════════════════════════
   PROMPT FOR USER TO DELIVER TO AI
   Generated: ${timestamp}
@@ -279,14 +396,12 @@ Follow the workflow in @README.md (31-61) to fix this error.`;
 
 TERMINAL COMMAND ERROR DETECTED
 
-Command: ${command}
-Error: ${error.message}
-${error.lineNumber ? `Line: ${error.lineNumber}` : ''}
-Category: ${error.category}
-Severity: ${error.severity}
+${errorDetails}
 
-Full Output:
-${typeof output === 'string' ? output.substring(0, 2000) : JSON.stringify(output, null, 2).substring(0, 2000)}
+FULL OUTPUT (includes stack trace, file paths, line numbers):
+═══════════════════════════════════════════════════════════════
+${typeof output === 'string' ? output : JSON.stringify(output, null, 2)}
+═══════════════════════════════════════════════════════════════
 
 Fix this terminal command error. Follow the workflow in @README.md (31-61).
 

@@ -153,6 +153,21 @@ class PromptGenerator extends EventEmitter {
         prompt += `   - Include fixDetails.timeSpent (how long it took)\n`;
         prompt += `   - This helps the system learn and prevent future misdiagnosis\n`;
         
+        // CRITICAL: Always include full error output with stack traces
+        if (issue.output || issue.fullOutput || issue.errorMessage) {
+            prompt += '\n\n═══════════════════════════════════════════════════════════════\n';
+            prompt += 'FULL ERROR OUTPUT (includes stack trace, file paths, line numbers):\n';
+            prompt += '═══════════════════════════════════════════════════════════════\n';
+            if (issue.fullOutput) {
+                prompt += issue.fullOutput;
+            } else if (issue.output) {
+                prompt += typeof issue.output === 'string' ? issue.output : JSON.stringify(issue.output, null, 2);
+            } else if (issue.errorMessage) {
+                prompt += issue.errorMessage;
+            }
+            prompt += '\n═══════════════════════════════════════════════════════════════\n';
+        }
+        
         // Verification info
         prompt += '\nSystem will verify: tool calls (web_search, beforeAIAction, afterAIAction, queryLearning/getBestSolution), state (findings stored, webSearchRequired resolved), files (code changes)';
         

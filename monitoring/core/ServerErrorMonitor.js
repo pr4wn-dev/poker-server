@@ -122,7 +122,8 @@ class ServerErrorMonitor extends EventEmitter {
                     issueType: 'server_health_error',
                     errorMessage: healthCheck.error || 'Server is not responding',
                     timestamp: Date.now(),
-                    consecutiveErrors: this.consecutiveErrors
+                    consecutiveErrors: this.consecutiveErrors,
+                    fullOutput: JSON.stringify(healthCheck, null, 2) // Include full health check response
                 };
 
                 // Only generate prompt if this is a new error or error persists
@@ -175,7 +176,9 @@ class ServerErrorMonitor extends EventEmitter {
                 issueType: 'server_health_error',
                 errorMessage: error.message,
                 timestamp: Date.now(),
-                consecutiveErrors: this.consecutiveErrors
+                consecutiveErrors: this.consecutiveErrors,
+                fullOutput: error.stack || error.message, // Include stack trace if available
+                stackTrace: error.stack ? error.stack.split('\n') : []
             };
 
             this.emit('serverError', errorObj);
