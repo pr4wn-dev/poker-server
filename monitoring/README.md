@@ -30,10 +30,16 @@ cd C:\Projects\poker-server
 ```
 When fixing ANY issue, you MUST follow this exact workflow:
 
+**PREREQUISITE: Ensure HTTP Integration Server is Running**
+- The HTTP server (port 3001) must be running for workflow compliance
+- If server is not running: Run `monitoring/scripts/ensure-http-server.ps1` OR start BrokenPromise.ps1
+- Server auto-starts when BrokenPromise.ps1 runs, but may not be running when working outside of it
+
 1. Call beforeAIAction() with the issue context FIRST
    - This checks for misdiagnosis patterns (what NOT to do)
    - This provides solutions that worked before
    - HEED THE WARNINGS - they prevent wasted time
+   - **If server not running**: Start it first (see prerequisite above)
 
 2. Check if webSearchRequired is true
    - If true: Search web using provided terms, store findings, THEN continue
