@@ -7,7 +7,6 @@
  */
 
 const http = require('http');
-const url = require('url');
 const path = require('path');
 const BrokenPromiseIntegration = require('./BrokenPromiseIntegration');
 const gameLogger = require('../../src/utils/GameLogger');
@@ -59,7 +58,13 @@ const server = http.createServer(async (req, res) => {
     }
     
     try {
-        const parsedUrl = url.parse(req.url, true);
+        // Use WHATWG URL API instead of deprecated url.parse()
+        const urlObj = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+        const parsedUrl = {
+            pathname: urlObj.pathname,
+            query: Object.fromEntries(urlObj.searchParams),
+            path: urlObj.pathname + urlObj.search
+        };
         const command = parsedUrl.pathname.substring(1); // Remove leading /
         
         // Ping command doesn't need initialization
