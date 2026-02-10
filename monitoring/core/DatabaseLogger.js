@@ -40,6 +40,18 @@ class DatabaseLogger {
             await this.initialize();
         }
 
+        // For terminal commands, store full output in metadata
+        let metadata = data ? JSON.stringify(data) : null;
+        if (category === 'terminal_command' && data?.output) {
+            // Store full output in metadata (TEXT field can handle large data)
+            metadata = JSON.stringify({
+                command: data.command || null,
+                output: data.output, // Full output with stack traces
+                exitCode: data.exitCode || null,
+                timestamp: data.timestamp || Date.now()
+            });
+        }
+        
         const logEntry = {
             source: this._determineSource(category),
             level: level,
@@ -47,7 +59,7 @@ class DatabaseLogger {
             timestamp: Date.now(),
             file_path: data?.file || null,
             line_number: data?.line || null,
-            metadata: data ? JSON.stringify(data) : null
+            metadata: metadata
         };
 
         // Add to batch

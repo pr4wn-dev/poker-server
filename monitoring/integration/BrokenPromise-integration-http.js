@@ -175,18 +175,39 @@ const server = http.createServer(async (req, res) => {
                 result = await integration.afterAIAction(actionData2, resultData);
                 break;
             case 'monitor-terminal-command':
-                // CRITICAL FIX: PowerShell sends command, output, exitCode as separate query params OR as args array
-                // Support both formats for compatibility
+                // DATABASE APPROACH: Read from temp file (like Add-PendingIssue) to avoid encoding issues
+                const fs = require('fs');
                 let command, output, exitCode;
-                if (args.length >= 3) {
-                    // Format 1: args is JSON array [command, output, exitCode]
+                
+                if (parsedUrl.query.file) {
+                    // Format 1: Temp file path (NEW - preferred)
+                    try {
+                        const filePath = Buffer.from(parsedUrl.query.file, 'base64').toString('utf8');
+                        if (fs.existsSync(filePath)) {
+                            const fileContent = fs.readFileSync(filePath, 'utf8');
+                            const commandData = JSON.parse(fileContent);
+                            command = commandData.command || '';
+                            output = commandData.output || '';
+                            exitCode = commandData.exitCode !== undefined ? commandData.exitCode : 0;
+                            
+                            // Store in database for querying/history
+                            await integration.storeTerminalCommand(command, output, exitCode);
+                        } else {
+                            result = { success: false, reason: 'Temp file not found' };
+                            break;
+                        }
+                    } catch (error) {
+                        result = { success: false, reason: `Failed to read temp file: ${error.message}` };
+                        break;
+                    }
+                } else if (args.length >= 3) {
+                    // Format 2: args is JSON array [command, output, exitCode] (backward compatibility)
                     command = args[0] || '';
                     output = args[1] || '';
                     exitCode = args[2] !== undefined ? args[2] : 0;
                 } else {
-                    // Format 2: Separate query parameters (PowerShell current format)
+                    // Format 3: Separate query parameters (legacy)
                     command = args[0] || parsedUrl.query.command || '';
-                    // Try to get output from query params (may be Base64 encoded)
                     if (parsedUrl.query.output) {
                         try {
                             output = Buffer.from(parsedUrl.query.output, 'base64').toString('utf8');

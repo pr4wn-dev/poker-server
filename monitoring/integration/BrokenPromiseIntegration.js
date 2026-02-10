@@ -340,6 +340,42 @@ class BrokenPromiseIntegration {
     /**
      * Monitor terminal command for errors
      */
+    /**
+     * Store terminal command in database for querying/history
+     */
+    async storeTerminalCommand(command, output, exitCode) {
+        try {
+            const DatabaseLogger = require('../core/DatabaseLogger');
+            const dbLogger = new DatabaseLogger(this.projectRoot);
+            await dbLogger.initialize();
+            
+            // Store in log_processed table with source='terminal_command'
+            const metadata = {
+                command: command.substring(0, 500), // Truncate very long commands
+                exitCode: exitCode,
+                outputLength: output ? output.length : 0
+            };
+            
+            const level = exitCode !== 0 ? 'error' : 'info';
+            const message = `Terminal command: ${command.substring(0, 200)}${command.length > 200 ? '...' : ''}`;
+            
+            // Store full output in metadata (database TEXT field handles large data)
+            await dbLogger.writeLog(level, 'terminal_command', message, {
+                file: 'terminal',
+                line: null,
+                command: command,
+                output: output, // Full output stored here
+                exitCode: exitCode,
+                timestamp: Date.now()
+            });
+        } catch (error) {
+            // Silently fail - don't block error monitoring
+            gameLogger.warn('MONITORING', '[MONITOR_INTEGRATION] Failed to store terminal command in database', {
+                error: error.message
+            });
+        }
+    }
+
     async monitorTerminalCommand(command, output, exitCode) {
         try {
             if (!this.aiCore) {

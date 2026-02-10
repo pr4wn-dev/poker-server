@@ -35,14 +35,36 @@ function Invoke-CommandWithErrorDetection {
         
         # Check for errors and monitor
         if ($exitCode -ne 0 -or $output -match 'Error:|SyntaxError|ReferenceError|TypeError|Invalid string escape') {
-            # Call HTTP server to monitor error
+            # DATABASE APPROACH: Write to temp file (like Add-PendingIssue) to avoid encoding issues
             try {
-                # CRITICAL FIX: Send as JSON array in args parameter (not separate query params)
-                # This ensures the HTTP server receives all data correctly
-                $argsArray = @($Command, $output, $exitCode) | ConvertTo-Json -Compress
-                $argsEncoded = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($argsArray))
+                $commandData = @{
+                    command = $Command
+                    output = $output
+                    exitCode = $exitCode
+                    timestamp = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+                }
                 
-                $uri = "http://127.0.0.1:3001/monitor-terminal-command?args=$argsEncoded"
+                $jsonData = $commandData | ConvertTo-Json -Compress -Depth 10
+                
+                # Verify JSON is valid
+                try {
+                    $null = $jsonData | ConvertFrom-Json -ErrorAction Stop
+                } catch {
+                    Write-Warning "Failed to create valid JSON for terminal command: $_"
+                    return @{
+                        Success = $exitCode -eq 0
+                        Output = $output
+                        ExitCode = $exitCode
+                    }
+                }
+                
+                $tempFile = Join-Path $env:TEMP "terminal-command-$(Get-Date -Format 'yyyyMMddHHmmss')-$(Get-Random).json"
+                [System.IO.File]::WriteAllText($tempFile, $jsonData, [System.Text.UTF8Encoding]::new($false))
+                Start-Sleep -Milliseconds 100
+                
+                # Call HTTP server with temp file path
+                $filePathEncoded = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($tempFile))
+                $uri = "http://127.0.0.1:3001/monitor-terminal-command?file=$filePathEncoded"
                 $response = Invoke-WebRequest -Uri $uri -Method GET -UseBasicParsing -TimeoutSec 5 -ErrorAction SilentlyContinue
                 
                 if ($response) {
@@ -50,6 +72,12 @@ function Invoke-CommandWithErrorDetection {
                     if ($result.success -and $result.errorsDetected -gt 0) {
                         Write-Host "⚠️  Terminal error detected! Check logs\prompts-for-user.txt" -ForegroundColor Yellow
                     }
+                }
+                
+                # Clean up temp file after processing
+                if (Test-Path $tempFile) {
+                    Start-Sleep -Milliseconds 500
+                    Remove-Item $tempFile -Force -ErrorAction SilentlyContinue
                 }
             } catch {
                 # HTTP server might not be running - that's okay
@@ -66,14 +94,35 @@ function Invoke-CommandWithErrorDetection {
         $errorOutput = $_.Exception.Message
         $exitCode = 1
         
-        # Monitor error
+        # Monitor error (DATABASE APPROACH: temp file)
         try {
-            # CRITICAL FIX: Send as JSON array in args parameter (not separate query params)
-            $argsArray = @($Command, $errorOutput, 1) | ConvertTo-Json -Compress
-            $argsEncoded = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($argsArray))
+            $commandData = @{
+                command = $Command
+                output = $errorOutput
+                exitCode = 1
+                timestamp = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+            }
             
-            $uri = "http://127.0.0.1:3001/monitor-terminal-command?args=$argsEncoded"
+            $jsonData = $commandData | ConvertTo-Json -Compress -Depth 10
+            
+            try {
+                $null = $jsonData | ConvertFrom-Json -ErrorAction Stop
+            } catch {
+                # Skip if JSON invalid
+            }
+            
+            $tempFile = Join-Path $env:TEMP "terminal-command-$(Get-Date -Format 'yyyyMMddHHmmss')-$(Get-Random).json"
+            [System.IO.File]::WriteAllText($tempFile, $jsonData, [System.Text.UTF8Encoding]::new($false))
+            Start-Sleep -Milliseconds 100
+            
+            $filePathEncoded = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($tempFile))
+            $uri = "http://127.0.0.1:3001/monitor-terminal-command?file=$filePathEncoded"
             $response = Invoke-WebRequest -Uri $uri -Method GET -UseBasicParsing -TimeoutSec 5 -ErrorAction SilentlyContinue
+            
+            if (Test-Path $tempFile) {
+                Start-Sleep -Milliseconds 500
+                Remove-Item $tempFile -Force -ErrorAction SilentlyContinue
+            }
         } catch {
             # HTTP server might not be running
         }
