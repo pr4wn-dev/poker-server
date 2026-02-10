@@ -516,6 +516,135 @@ if (help.webSearchRequired) {
 // help.patterns - similar problems
 ```
 
+### **Prompts to Give AI to Use All Systems**
+
+**Use these prompts to ensure the AI uses all BrokenPromise systems:**
+
+#### **Prompt 1: Use Learning System Before Fixing**
+```
+Before fixing any issue, you MUST:
+1. Call beforeAIAction() with the issue context
+2. Query the learning system using queryLearning() or getBestSolution()
+3. Check for misdiagnosis patterns (what NOT to do)
+4. Use the learning system's solution if available
+5. Call afterAIAction() with the outcome
+
+Do NOT attempt fixes without checking the learning system first.
+```
+
+#### **Prompt 2: Check for Misdiagnosis Patterns**
+```
+When fixing issues, you MUST:
+1. Call beforeAIAction() - it will warn you about misdiagnosis patterns
+2. HEED THE WARNINGS - they prevent wasted time
+3. Check learning_misdiagnosis_patterns table for what NOT to do
+4. Use the correct approach from learning_patterns table
+5. Report what you did in afterAIAction()
+
+The learning system knows what was tried before and failed - USE IT.
+```
+
+#### **Prompt 3: Use Web Search When Required**
+```
+If beforeAIAction() returns webSearchRequired: true, you MUST:
+1. Search the web using the provided search terms
+2. Store all findings using storeWebSearchKnowledge()
+3. DO NOT continue with fix until search is complete
+4. Use findings from web search in your fix
+5. Mark webSearchRequired as resolved after fixing
+
+Web search is MANDATORY when required - do not skip it.
+```
+
+#### **Prompt 4: Follow Exact Workflow**
+```
+You MUST follow the exact workflow:
+1. Call beforeAIAction() FIRST
+2. Check webSearchRequired - if true, search web FIRST
+3. Query learning system (queryLearning or getBestSolution)
+4. Fix using learning system's solution
+5. Call afterAIAction() LAST
+
+The system verifies all steps - skipping any step = non-compliance.
+```
+
+#### **Prompt 5: Use Learning System for All Issues**
+```
+For EVERY issue you encounter:
+1. Check if learning system has solutions: queryLearning("What solutions worked for [issue type]?")
+2. Check for misdiagnosis patterns: beforeAIAction() will warn you
+3. Use getBestSolution([issue type]) to get the best known solution
+4. Follow the solution template if available
+5. Report outcome in afterAIAction()
+
+The learning system is a tool to save time - USE IT for every issue.
+```
+
+#### **Prompt 6: Check Pre-Flight Errors**
+```
+If BrokenPromise fails to start:
+1. Check logs\prompts-for-user.txt for the generated prompt
+2. The prompt will tell you exactly what to do
+3. Follow the workflow in the prompt
+4. Use the learning system solutions provided in the prompt
+5. Fix all pre-flight check failures before starting BrokenPromise
+
+Pre-flight checks prevent errors - fix them first.
+```
+
+#### **Prompt 7: Monitor All Systems**
+```
+When working on issues, remember:
+1. Server errors are monitored every 5 seconds - check ServerErrorMonitor
+2. Unity errors generate prompts automatically - check logs\prompts-for-user.txt
+3. All errors at all phases generate prompts - nothing is missed
+4. Use the learning system for solutions to all errors
+5. Follow the exact workflow for every fix
+
+The system monitors everything - use it to your advantage.
+```
+
+#### **Prompt 8: Use Learning System Knowledge Base**
+```
+The learning system stores:
+- Solutions that worked before (learning_patterns)
+- What NOT to do (learning_misdiagnosis_patterns)
+- Failed methods (learning_failed_methods)
+- Web search findings (learning_knowledge)
+- Solution templates (learning_solution_templates)
+
+Query these tables BEFORE attempting fixes - they save hours of time.
+```
+
+#### **Prompt 9: Verify Compliance**
+```
+After every action, the system verifies:
+- Did you call beforeAIAction()? (tracked)
+- Did you search web when required? (tracked)
+- Did you query learning system? (tracked)
+- Did you call afterAIAction()? (tracked)
+- Did you follow the suggested approach? (verified)
+
+Non-compliance is detected automatically - follow the workflow.
+```
+
+#### **Prompt 10: Use All BrokenPromise Features**
+```
+BrokenPromise has these systems - USE THEM:
+1. Learning System - queryLearning(), getBestSolution(), beforeAIAction()
+2. Misdiagnosis Prevention - warnings in beforeAIAction()
+3. Web Search Integration - storeWebSearchKnowledge()
+4. Prompt Generation - check logs\prompts-for-user.txt
+5. Compliance Verification - system checks automatically
+6. Pre-Flight Checks - run before startup
+7. Server Error Monitoring - continuous monitoring
+8. State Store - getState(), updateState()
+9. Issue Detection - automatic detection
+10. Pattern Learning - learns from all fixes
+
+Use ALL these systems - they work together to save time.
+```
+
 ### **What NOT to Do**
 
 - ❌ **DO NOT** skip `beforeAIAction()` check
@@ -523,6 +652,9 @@ if (help.webSearchRequired) {
 - ❌ **DO NOT** attempt fixes without checking learning system first
 - ❌ **DO NOT** skip `afterAIAction()` reporting
 - ❌ **DO NOT** bypass web search when required
+- ❌ **DO NOT** ignore misdiagnosis warnings
+- ❌ **DO NOT** skip querying learning system
+- ❌ **DO NOT** use approaches marked as misdiagnosis
 
 **VIOLATING THESE RULES = WASTING USER'S TIME AND MONEY**
 
