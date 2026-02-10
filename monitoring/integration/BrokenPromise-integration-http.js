@@ -190,6 +190,16 @@ const server = http.createServer(async (req, res) => {
                             output = commandData.output || '';
                             exitCode = commandData.exitCode !== undefined ? commandData.exitCode : 0;
                             
+                            // DEBUG: Log what we're receiving
+                            const gameLogger = require('../../src/utils/GameLogger');
+                            gameLogger.info('MONITORING', '[HTTP_SERVER] Terminal command from temp file', {
+                                commandLength: command ? command.length : 0,
+                                outputLength: output ? output.length : 0,
+                                exitCode: exitCode,
+                                hasOutput: !!output,
+                                outputPreview: output ? output.substring(0, 200) : 'EMPTY'
+                            });
+                            
                             // Store in database for querying/history
                             await integration.storeTerminalCommand(command, output, exitCode);
                         } else {

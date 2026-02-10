@@ -441,7 +441,27 @@ Fix this terminal command error. Follow the workflow in @README.md (31-61).
      * Monitor a terminal command (call this after run_terminal_cmd)
      */
     async monitorCommand(command, output, exitCode) {
+        // DEBUG: Log what we're receiving
+        gameLogger.info('MONITORING', '[TERMINAL_ERROR_MONITOR] monitorCommand called', {
+            commandLength: command ? command.length : 0,
+            outputLength: output ? output.length : 0,
+            exitCode: exitCode,
+            hasOutput: !!output,
+            outputType: typeof output,
+            outputPreview: output ? output.substring(0, 200) : 'EMPTY'
+        });
+        
         const errors = this.analyzeOutput(command, output, exitCode);
+        
+        // DEBUG: Log what errors were found
+        gameLogger.info('MONITORING', '[TERMINAL_ERROR_MONITOR] Errors found', {
+            errorCount: errors.length,
+            errors: errors.map(e => ({
+                type: e.type,
+                hasFullOutput: !!e.fullOutput,
+                fullOutputLength: e.fullOutput ? e.fullOutput.length : 0
+            }))
+        });
         
         if (errors.length > 0) {
             for (const error of errors) {
