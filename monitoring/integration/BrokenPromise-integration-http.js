@@ -175,9 +175,29 @@ const server = http.createServer(async (req, res) => {
                 result = await integration.afterAIAction(actionData2, resultData);
                 break;
             case 'monitor-terminal-command':
-                const command = args[0] || '';
-                const output = args[1] || '';
-                const exitCode = args[2] !== undefined ? args[2] : 0;
+                // CRITICAL FIX: PowerShell sends command, output, exitCode as separate query params OR as args array
+                // Support both formats for compatibility
+                let command, output, exitCode;
+                if (args.length >= 3) {
+                    // Format 1: args is JSON array [command, output, exitCode]
+                    command = args[0] || '';
+                    output = args[1] || '';
+                    exitCode = args[2] !== undefined ? args[2] : 0;
+                } else {
+                    // Format 2: Separate query parameters (PowerShell current format)
+                    command = args[0] || parsedUrl.query.command || '';
+                    // Try to get output from query params (may be Base64 encoded)
+                    if (parsedUrl.query.output) {
+                        try {
+                            output = Buffer.from(parsedUrl.query.output, 'base64').toString('utf8');
+                        } catch {
+                            output = decodeURIComponent(parsedUrl.query.output);
+                        }
+                    } else {
+                        output = args[1] || '';
+                    }
+                    exitCode = parsedUrl.query.exitCode !== undefined ? parseInt(parsedUrl.query.exitCode) : (args[2] !== undefined ? args[2] : 0);
+                }
                 result = await integration.monitorTerminalCommand(command, output, exitCode);
                 break;
             case 'ping':

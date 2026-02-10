@@ -37,10 +37,12 @@ function Invoke-CommandWithErrorDetection {
         if ($exitCode -ne 0 -or $output -match 'Error:|SyntaxError|ReferenceError|TypeError|Invalid string escape') {
             # Call HTTP server to monitor error
             try {
-                $commandEncoded = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($Command))
-                $outputEncoded = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($output))
+                # CRITICAL FIX: Send as JSON array in args parameter (not separate query params)
+                # This ensures the HTTP server receives all data correctly
+                $argsArray = @($Command, $output, $exitCode) | ConvertTo-Json -Compress
+                $argsEncoded = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($argsArray))
                 
-                $uri = "http://127.0.0.1:3001/monitor-terminal-command?args=$commandEncoded&output=$outputEncoded&exitCode=$exitCode"
+                $uri = "http://127.0.0.1:3001/monitor-terminal-command?args=$argsEncoded"
                 $response = Invoke-WebRequest -Uri $uri -Method GET -UseBasicParsing -TimeoutSec 5 -ErrorAction SilentlyContinue
                 
                 if ($response) {
@@ -66,10 +68,11 @@ function Invoke-CommandWithErrorDetection {
         
         # Monitor error
         try {
-            $commandEncoded = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($Command))
-            $outputEncoded = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($errorOutput))
+            # CRITICAL FIX: Send as JSON array in args parameter (not separate query params)
+            $argsArray = @($Command, $errorOutput, 1) | ConvertTo-Json -Compress
+            $argsEncoded = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($argsArray))
             
-            $uri = "http://127.0.0.1:3001/monitor-terminal-command?args=$commandEncoded&output=$outputEncoded&exitCode=1"
+            $uri = "http://127.0.0.1:3001/monitor-terminal-command?args=$argsEncoded"
             $response = Invoke-WebRequest -Uri $uri -Method GET -UseBasicParsing -TimeoutSec 5 -ErrorAction SilentlyContinue
         } catch {
             # HTTP server might not be running
