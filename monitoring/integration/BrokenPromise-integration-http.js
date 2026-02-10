@@ -41,6 +41,13 @@ async function ensureInitialized() {
     }
 }
 
+// Start initialization in background (non-blocking)
+ensureInitialized().catch(err => {
+    gameLogger.error('MONITORING', '[INTEGRATION_HTTP] Background initialization error', {
+        error: err.message
+    });
+});
+
 const server = http.createServer(async (req, res) => {
     // CORS headers
     res.setHeader('Access-Control-Allow-Origin', '*');
@@ -57,6 +64,19 @@ const server = http.createServer(async (req, res) => {
     try {
         const parsedUrl = url.parse(req.url, true);
         const command = parsedUrl.pathname.substring(1); // Remove leading /
+        
+        // Ping command doesn't need initialization
+        if (command === 'ping') {
+            res.writeHead(200);
+            res.end(JSON.stringify({ 
+                success: true, 
+                message: 'Server is alive', 
+                initialized: integration !== null,
+                timestamp: Date.now() 
+            }));
+            return;
+        }
+        
         let args = [];
         if (parsedUrl.query.args) {
             try {
@@ -73,6 +93,7 @@ const server = http.createServer(async (req, res) => {
             }
         }
         
+        // Ensure initialized (will wait if still initializing)
         await ensureInitialized();
         
         let result;
