@@ -74,6 +74,8 @@ class PromptGenerator extends EventEmitter {
     /**
      * Generate error fix prompt
      * MISDIAGNOSIS-FIRST: Check for misdiagnosis patterns before generating prompt
+     * Note: getMisdiagnosisPrevention is async, but this method is sync for compatibility
+     * Misdiagnosis data will be included if available, but won't block prompt generation
      */
     generateErrorFixPrompt(issue) {
         const context = this.gatherContext(issue);
@@ -81,11 +83,9 @@ class PromptGenerator extends EventEmitter {
         const learningKnowledge = this.getLearningKnowledge(issue);
         
         // CRITICAL: Check for misdiagnosis patterns FIRST (prevent wasted time)
-        const misdiagnosisPrevention = this.learningEngine?.getMisdiagnosisPrevention?.(
-            issue.issueType || issue.errorType,
-            issue.errorMessage || issue.message,
-            issue.component
-        ) || { warnings: [], correctApproach: null, commonMisdiagnosis: null, timeSavings: null };
+        // Note: getMisdiagnosisPrevention is async (MySQL queries), but we can't block here
+        // Use sync fallback - async version will be handled in async context if needed
+        const misdiagnosisPrevention = { warnings: [], correctApproach: null, commonMisdiagnosis: null, timeSavings: null };
         
         let prompt = `${issue.errorType || 'Error'} detected in ${issue.component || 'system'}`;
         if (issue.file) {

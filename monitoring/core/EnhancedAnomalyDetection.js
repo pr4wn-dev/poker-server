@@ -107,9 +107,12 @@ class EnhancedAnomalyDetection extends EventEmitter {
         this.recordMetric('playerActions', detectionRate);
         
         // State change metrics
-        const eventLog = state.eventLog || [];
-        const recentEvents = eventLog.slice(-10);
-        this.recordMetric('stateChanges', recentEvents.length);
+        // EventLog no longer stored in state - generated on-demand from database
+        // Use getStateHistory() if needed, or skip this metric
+        // const eventLog = state.eventLog || [];
+        // const recentEvents = eventLog.slice(-10);
+        // this.recordMetric('stateChanges', recentEvents.length);
+        // Skip stateChanges metric - EventLog is now on-demand
     }
     
     /**

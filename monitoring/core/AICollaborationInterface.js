@@ -315,13 +315,13 @@ class AICollaborationInterface extends EventEmitter {
         // Get proactive suggestions from learning system
         if (this.learningEngine) {
             // Check for misdiagnosis patterns FIRST (prevent wasted time)
-            const misdiagnosisPrevention = this.learningEngine.getMisdiagnosisPrevention(
+            const misdiagnosisPrevention = await Promise.resolve(this.learningEngine.getMisdiagnosisPrevention(
                 action.issueType,
                 action.errorMessage || action.details?.errorMessage,
                 action.component
-            );
+            ));
             
-            if (misdiagnosisPrevention.warnings.length > 0) {
+            if (misdiagnosisPrevention && misdiagnosisPrevention.warnings && misdiagnosisPrevention.warnings.length > 0) {
                 // Add misdiagnosis warnings (high priority - prevent wasted time)
                 suggestions.warnings.unshift(...misdiagnosisPrevention.warnings);
                 

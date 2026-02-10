@@ -69,9 +69,9 @@ class AutoFixEngine extends EventEmitter {
                 const details = issue.details || {};
                 if (details.path) {
                     // Get last known good value
-                    const history = this.stateStore.getStateHistory(details.path, 300000); // Last 5 minutes
-                    if (history.length > 1) {
-                        const goodValue = history[history.length - 2].value;
+                    const history = await Promise.resolve(this.stateStore.getStateHistory(details.path, 300000)); // Last 5 minutes
+                    if (history && history.length > 1) {
+                        const goodValue = history[history.length - 2].newValue || history[history.length - 2].value;
                         this.stateStore.updateState(details.path, goodValue);
                         return { success: true, reason: 'State reset to last known good value' };
                     }
@@ -117,9 +117,9 @@ class AutoFixEngine extends EventEmitter {
                 // Rollback the state change that caused the issue
                 const rootCause = issue.rootCause;
                 if (rootCause && rootCause.path) {
-                    const history = this.stateStore.getStateHistory(rootCause.path, 300000);
-                    if (history.length > 1) {
-                        const previousValue = history[history.length - 2].value;
+                    const history = await Promise.resolve(this.stateStore.getStateHistory(rootCause.path, 300000));
+                    if (history && history.length > 1) {
+                        const previousValue = history[history.length - 2].newValue || history[history.length - 2].value;
                         this.stateStore.updateState(rootCause.path, previousValue);
                         return { success: true, reason: 'Rolled back to previous state' };
                     }

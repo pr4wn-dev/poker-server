@@ -2724,12 +2724,12 @@ class AILearningEngine extends EventEmitter {
      * Get misdiagnosis prevention advice for an issue
      * MISDIAGNOSIS-FIRST: Core prevention mechanism
      */
-    getMisdiagnosisPrevention(issueType, errorMessage, component) {
-        // OPTIMIZATION: Try lightweight query first (avoids loading 7.7MB file)
+    async getMisdiagnosisPrevention(issueType, errorMessage, component) {
+        // OPTIMIZATION: Try lightweight query first (MySQL indexed queries, instant results)
         // Fallback to full system if lightweight doesn't have data
         try {
             const lightweightQuery = require('../query-learning-lightweight');
-            const lightweightResult = lightweightQuery.queryLearning(issueType, errorMessage, component);
+            const lightweightResult = await lightweightQuery.queryLearning(issueType, errorMessage, component);
             
             // If lightweight query has results, use them (fast path)
             if (lightweightResult.warnings && lightweightResult.warnings.length > 0) {
@@ -2739,10 +2739,10 @@ class AILearningEngine extends EventEmitter {
                     commonMisdiagnosis: lightweightResult.commonMisdiagnosis,
                     timeSavings: lightweightResult.timeSavings,
                     failedMethods: lightweightResult.failedMethods || [],
-                    source: 'lightweight' // Track that we used lightweight query
+                    source: lightweightResult.source || 'lightweight' // Track that we used lightweight query
                 };
             }
-            
+
             // If lightweight has failed methods, include them even if no warnings
             if (lightweightResult.failedMethods && lightweightResult.failedMethods.length > 0) {
                 return {
@@ -2751,7 +2751,7 @@ class AILearningEngine extends EventEmitter {
                     commonMisdiagnosis: lightweightResult.commonMisdiagnosis,
                     timeSavings: lightweightResult.timeSavings,
                     failedMethods: lightweightResult.failedMethods,
-                    source: 'lightweight'
+                    source: lightweightResult.source || 'lightweight'
                 };
             }
         } catch (error) {

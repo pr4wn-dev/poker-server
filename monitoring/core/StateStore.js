@@ -183,9 +183,10 @@ class StateStore extends EventEmitter {
             }
         };
         
-        // Event log - Complete history of all state changes
-        this.eventLog = [];
-        this.maxEventLogSize = 10000; // Keep last 10k events
+        // Event log - NO LONGER STORED IN MEMORY
+        // Generated on-demand from state_changes table (MySQL) or empty array (JSON fallback)
+        this.eventLog = []; // Kept for compatibility, but not populated
+        this.maxEventLogSize = 0; // Don't store events in memory
         
         // Listeners for state changes
         this.listeners = new Map(); // path -> [callbacks]
@@ -321,7 +322,8 @@ class StateStore extends EventEmitter {
         // Always update in-memory state (for compatibility and immediate access)
         this._setState(path, value);
         
-        // Log event
+        // Event logging is now handled by DatabaseManager (MySQL) or skipped (JSON fallback)
+        // No longer storing events in memory - generated on-demand from database
         const event = {
             timestamp: Date.now(),
             path,
@@ -329,11 +331,14 @@ class StateStore extends EventEmitter {
             newValue: value,
             metadata
         };
-        this.eventLog.push(event);
         
-        // Trim event log if too large
-        if (this.eventLog.length > this.maxEventLogSize) {
-            this.eventLog = this.eventLog.slice(-this.maxEventLogSize);
+        // Only log to eventLog if MySQL is not available (fallback mode)
+        if (!this.useMySQL) {
+            this.eventLog.push(event);
+            // Trim event log if too large (only in fallback mode)
+            if (this.eventLog.length > 1000) {
+                this.eventLog = this.eventLog.slice(-1000);
+            }
         }
         
         // Update metadata
@@ -405,8 +410,28 @@ class StateStore extends EventEmitter {
     /**
      * Get state history for a path
      * AI can see how state changed over time
+     * Uses on-demand generation from database (MySQL) or in-memory eventLog (JSON fallback)
+     * Works both sync (JSON fallback) and async (MySQL)
      */
     getStateHistory(path, timeRange = null) {
+        // Use MySQL if available (on-demand generation from state_changes table)
+        if (this.useMySQL && this.dbManager) {
+            // Return promise for async operation
+            return (async () => {
+                try {
+                    if (!this.dbManager.initialized) {
+                        await this.dbManager.initialize();
+                    }
+                    return await this.dbManager.getStateHistory(path, timeRange);
+                } catch (error) {
+                    // Fallback to in-memory eventLog if MySQL fails
+                    gameLogger.warn('MONITORING', '[StateStore] MySQL getStateHistory failed, using fallback', { error: error.message });
+                    // Fall through to fallback
+                }
+            })();
+        }
+        
+        // Fallback: Use in-memory eventLog (JSON mode) - synchronous
         let events = this.eventLog.filter(e => e.path === path || e.path.startsWith(path + '.'));
         
         if (timeRange) {
@@ -769,7 +794,8 @@ class StateStore extends EventEmitter {
             // Create data object with arrays already in place
             const data = {
                 state: serializedState,
-                eventLog: this.eventLog.slice(-1000), // Save last 1000 events (reduce size)
+                // EventLog no longer saved - generated on-demand from database (MySQL) or empty (JSON fallback)
+                eventLog: [], // Empty - events are in database or not stored
                 timestamp: Date.now(),
                 version: '2.0.0' // Schema version for migration tracking
             };
@@ -852,9 +878,10 @@ class StateStore extends EventEmitter {
                     this.state = this._deserializeState(data.state);
                 }
                 
-                if (data.eventLog) {
-                    this.eventLog = data.eventLog;
-                }
+                // EventLog no longer loaded - generated on-demand from database (MySQL) or empty (JSON fallback)
+                // if (data.eventLog) {
+                //     this.eventLog = data.eventLog;
+                // }
                 
                 // CRITICAL: Repair state after loading to ensure arrays are arrays
                 this._repairState();

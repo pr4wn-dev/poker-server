@@ -2,17 +2,100 @@
 /**
  * Lightweight Learning System Query
  * 
- * Queries learning system WITHOUT loading entire state file
- * Only loads learning.learning section for fast queries
+ * Queries learning system using MySQL (indexed queries, instant results)
+ * Falls back to JSON if MySQL not available
  */
 
 const fs = require('fs');
 const path = require('path');
 
 const projectRoot = path.resolve(__dirname, '..');
-const stateFile = path.join(projectRoot, 'logs', 'ai-state-store.json');
 
-function queryLearning(issueType, errorMessage, component) {
+async function queryLearning(issueType, errorMessage, component) {
+    // Try MySQL first (fast, indexed queries)
+    try {
+        const DatabaseManager = require('./core/DatabaseManager');
+        const dbManager = new DatabaseManager(projectRoot);
+        await dbManager.initialize();
+        const pool = dbManager.getPool();
+        
+        // Query misdiagnosis patterns (indexed, instant)
+        const [patterns] = await pool.execute(`
+            SELECT * FROM learning_misdiagnosis_patterns 
+            WHERE (symptom LIKE ? OR issue_type = ? OR component = ?)
+            AND (frequency > 0 OR actual_root_cause IS NOT NULL)
+            ORDER BY frequency DESC, time_wasted DESC
+            LIMIT 10
+        `, [`%${errorMessage || ''}%`, issueType || '', component || '']);
+        
+        const result = {
+            warnings: [],
+            correctApproach: null,
+            commonMisdiagnosis: null,
+            timeSavings: null,
+            failedMethods: [],
+            source: 'mysql'
+        };
+        
+        for (const pattern of patterns) {
+            // Check symptom match
+            let symptomMatch = false;
+            if (pattern.symptom) {
+                const symptomPatterns = pattern.symptom.split('|');
+                const searchText = (errorMessage || issueType || '').toLowerCase();
+                symptomMatch = symptomPatterns.some(sp => searchText.includes(sp.trim().toLowerCase()));
+            }
+            
+            const componentMatch = !component || !pattern.component || 
+                pattern.component === component || pattern.component === 'any' ||
+                (component.toLowerCase().includes('powershell') && pattern.component === 'PowerShell');
+            
+            if (symptomMatch || (issueType && pattern.issue_type === issueType) || componentMatch) {
+                result.warnings.push({
+                    type: 'MISDIAGNOSIS_WARNING',
+                    message: `Common misdiagnosis: ${pattern.common_misdiagnosis}`,
+                    actualRootCause: pattern.actual_root_cause,
+                    correctApproach: pattern.correct_approach,
+                    frequency: pattern.frequency || 0,
+                    timeWasted: pattern.time_wasted || 0
+                });
+                
+                if (!result.correctApproach && pattern.correct_approach) {
+                    result.correctApproach = pattern.correct_approach;
+                }
+                if (!result.commonMisdiagnosis && pattern.common_misdiagnosis) {
+                    result.commonMisdiagnosis = pattern.common_misdiagnosis;
+                }
+                if (pattern.time_wasted) {
+                    result.timeSavings = (result.timeSavings || 0) + pattern.time_wasted;
+                }
+            }
+        }
+        
+        // Get failed methods
+        if (issueType) {
+            const [failedMethods] = await pool.execute(`
+                SELECT * FROM learning_failed_methods 
+                WHERE issue_type = ?
+                ORDER BY frequency DESC, time_wasted DESC
+                LIMIT 10
+            `, [issueType]);
+            
+            result.failedMethods = failedMethods.map(fm => ({
+                method: fm.method,
+                frequency: fm.frequency,
+                timeWasted: fm.time_wasted
+            }));
+        }
+        
+        await dbManager.close();
+        return result;
+    } catch (mysqlError) {
+        // Fallback to JSON if MySQL fails
+    }
+    
+    // Fallback: Use JSON file (slower, but works)
+    const stateFile = path.join(projectRoot, 'logs', 'ai-state-store.json');
     if (!fs.existsSync(stateFile)) {
         return {
             warnings: [],
@@ -20,12 +103,13 @@ function queryLearning(issueType, errorMessage, component) {
             commonMisdiagnosis: null,
             timeSavings: null,
             failedMethods: [],
-            error: 'State file not found'
+            error: 'State file not found',
+            source: 'json-fallback'
         };
     }
 
     try {
-        // Read only the learning section from JSON (streaming parse would be better, but this is simpler)
+        // Read only the learning section from JSON
         const fileContent = fs.readFileSync(stateFile, 'utf8');
         const data = JSON.parse(fileContent);
         
