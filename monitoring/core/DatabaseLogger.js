@@ -73,6 +73,12 @@ class DatabaseLogger {
 
         try {
             const pool = this.dbManager.getPool();
+            if (!pool || pool._closed) {
+                // Pool is closed, clear batch to prevent memory leak
+                this.batch = [];
+                return;
+            }
+            
             const values = this.batch.map(entry => [
                 entry.source,
                 entry.level,
@@ -94,6 +100,21 @@ class DatabaseLogger {
             // Silently fail - don't block application
             this.batch = [];
         }
+    }
+
+    /**
+     * Flush all pending logs to database (called on shutdown)
+     * Ensures no data loss when system shuts down
+     */
+    async flush() {
+        // Clear any pending timeout
+        if (this.batchTimeout) {
+            clearTimeout(this.batchTimeout);
+            this.batchTimeout = null;
+        }
+        
+        // Flush remaining batch
+        await this._flushBatch();
     }
 
     /**
