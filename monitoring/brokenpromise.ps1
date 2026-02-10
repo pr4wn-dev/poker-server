@@ -772,25 +772,23 @@ function Add-PendingIssue {
                     }
                 }
                 break
-            } catch {
-                $retryCount++
-                if ($retryCount -lt $maxRetries) {
-                    Write-ConsoleOutput -Message "  Retry $($retryCount)/$($maxRetries): Exception - $($_.Exception.Message)" -ForegroundColor "Yellow"
-                    Start-Sleep -Milliseconds 500
-                    continue
-                } else {
-                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ISSUE DETECTOR EXCEPTION after $maxRetries attempts: $_" -ForegroundColor "Red"
-                    Update-MonitorStatus -statusUpdate @{
-                        issueDetectorStatus = "exception"
-                        lastIssueDetectorError = $_.Exception.Message
-                        lastIssueDetectorErrorTime = (Get-Date).ToUniversalTime().ToString("o")
-                    }
-                    break
-                }
-            }
             }
         } catch {
-            Write-Warning "Add-PendingIssue legacy try error: $_"
+            # Catch errors from the while loop or inner try blocks
+            $retryCount++
+            if ($retryCount -lt $maxRetries) {
+                Write-ConsoleOutput -Message "  Retry $($retryCount)/$($maxRetries): Exception - $($_.Exception.Message)" -ForegroundColor "Yellow"
+                Start-Sleep -Milliseconds 500
+                continue
+            } else {
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] ISSUE DETECTOR EXCEPTION after $maxRetries attempts: $_" -ForegroundColor "Red"
+                Update-MonitorStatus -statusUpdate @{
+                    issueDetectorStatus = "exception"
+                    lastIssueDetectorError = $_.Exception.Message
+                    lastIssueDetectorErrorTime = (Get-Date).ToUniversalTime().ToString("o")
+                }
+                break
+            }
         }
     } catch {
         Write-Warning "Add-PendingIssue outer try error: $_"
