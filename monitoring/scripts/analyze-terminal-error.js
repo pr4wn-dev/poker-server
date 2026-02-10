@@ -23,7 +23,10 @@ async function analyzeTerminalError() {
     
     try {
         const integration = new BrokenPromiseIntegration(projectRoot, { startSyncLoop: false });
-        await integration.initialize();
+        // Initialize AI Core if needed (it's lazy, so accessing aiCore will create it)
+        if (integration.aiCore && integration.aiCore.initialize && typeof integration.aiCore.initialize === 'function') {
+            await integration.aiCore.initialize();
+        }
         
         const errors = await integration.aiCore.monitorTerminalCommand(command, output, exitCode);
         

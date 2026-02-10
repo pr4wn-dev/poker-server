@@ -346,8 +346,10 @@ class BrokenPromiseIntegration {
                 gameLogger.warn('MONITORING', '[MONITOR_INTEGRATION] AI Core not initialized for monitorTerminalCommand');
                 return { success: false, reason: 'AI Core not available' };
             }
-            // Ensure AI Core is fully initialized
-            await this.aiCore.initialize();
+            // Ensure AI Core is fully initialized (initialize is async)
+            if (this.aiCore.initialize && typeof this.aiCore.initialize === 'function') {
+                await this.aiCore.initialize();
+            }
             const errors = await this.aiCore.monitorTerminalCommand(command, output, exitCode);
             return { success: true, errorsDetected: errors.length, errors: errors };
         } catch (error) {
