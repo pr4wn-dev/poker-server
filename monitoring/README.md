@@ -567,54 +567,6 @@ if (help.webSearchRequired) {
 // help.patterns - similar problems
 ```
 
-### **Prompts to Give AI - Simple Guide**
-
-**Use this ONE prompt for most situations. It covers everything:**
-
-```
-When fixing ANY issue, you MUST follow this exact workflow:
-
-1. Call beforeAIAction() with the issue context FIRST
-   - This checks for misdiagnosis patterns (what NOT to do)
-   - This provides solutions that worked before
-   - HEED THE WARNINGS - they prevent wasted time
-
-2. Check if webSearchRequired is true
-   - If true: Search web using provided terms, store findings, THEN continue
-   - If false: Continue to step 3
-
-3. Query the learning system
-   - Use queryLearning("What solutions worked for [issue type]?") OR
-   - Use getBestSolution([issue type])
-   - The learning system is a tool to save time - USE IT
-
-4. Fix the issue using the learning system's solution
-   - Use the correct approach from learning system
-   - DO NOT use approaches marked as misdiagnosis
-
-5. Call afterAIAction() with the outcome LAST
-   - Include what you did, how long it took, success/failure
-   - This helps the system learn
-
-The system verifies all steps automatically. Skipping any step = non-compliance.
-```
-
-**Special Situations:**
-
-#### **If BrokenPromise Won't Start:**
-```
-BrokenPromise failed to start. Check logs\prompts-for-user.txt - it contains the exact prompt with all details. Follow the workflow in that prompt. The learning system solutions are already included.
-```
-
-#### **If You See an Error in logs\prompts-for-user.txt:**
-```
-There's a prompt in logs\prompts-for-user.txt for an error. Read that prompt and follow its exact workflow. It already includes learning system solutions and misdiagnosis warnings.
-```
-
-#### **If You're Stuck:**
-```
-I'm stuck on this issue. Use aiNeedsHelp() to get suggestions from the learning system. Check if webSearchRequired is true - if so, search web first. Then use the suggestions provided.
-```
 
 ### **What NOT to Do**
 
