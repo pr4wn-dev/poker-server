@@ -160,6 +160,15 @@ const server = http.createServer(async (req, res) => {
                 const queryText = args[0] || '';
                 result = await integration.query(queryText);
                 break;
+            case 'before-ai-action':
+                const actionData = args[0] || {};
+                result = await integration.beforeAIAction(actionData);
+                break;
+            case 'after-ai-action':
+                const actionData2 = args[0] || {};
+                const resultData = args[1] || {};
+                result = await integration.afterAIAction(actionData2, resultData);
+                break;
             case 'ping':
                 result = { success: true, message: 'Server is alive', timestamp: Date.now() };
                 break;

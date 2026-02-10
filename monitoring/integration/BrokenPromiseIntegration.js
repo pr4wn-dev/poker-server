@@ -822,6 +822,58 @@ class BrokenPromiseIntegration {
     }
     
     /**
+     * Call beforeAIAction - Check for misdiagnosis patterns and get suggestions
+     */
+    async beforeAIAction(action) {
+        try {
+            if (!this.aiCore) {
+                return { 
+                    warnings: [], 
+                    recommendations: [], 
+                    patterns: [], 
+                    alternatives: [], 
+                    confidence: null,
+                    webSearchRequired: false,
+                    webSearchTerms: []
+                };
+            }
+            return await this.aiCore.beforeAIAction(action);
+        } catch (error) {
+            gameLogger.error('MONITORING', '[MONITOR_INTEGRATION] beforeAIAction error', {
+                error: error.message,
+                stack: error.stack
+            });
+            return { 
+                warnings: [{ type: 'ERROR', message: error.message }], 
+                recommendations: [], 
+                patterns: [], 
+                alternatives: [], 
+                confidence: null,
+                webSearchRequired: false,
+                webSearchTerms: []
+            };
+        }
+    }
+    
+    /**
+     * Call afterAIAction - Record outcome for learning
+     */
+    async afterAIAction(action, result) {
+        try {
+            if (!this.aiCore) {
+                return { success: false, reason: 'AI core not available' };
+            }
+            return await this.aiCore.afterAIAction(action, result);
+        } catch (error) {
+            gameLogger.error('MONITORING', '[MONITOR_INTEGRATION] afterAIAction error', {
+                error: error.message,
+                stack: error.stack
+            });
+            return { success: false, reason: error.message };
+        }
+    }
+    
+    /**
      * Cleanup
      */
     destroy() {
