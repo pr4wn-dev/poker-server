@@ -99,13 +99,26 @@ class PromptComplianceVerifier extends EventEmitter {
             'afterAIAction_called'
         ];
         
-        // Check if beforeAIAction was called
+        // Check if beforeAIAction was called (check both state and tool calls)
         const lastBeforeAction = this.stateStore.getState('ai.lastBeforeActionCall');
-        if (lastBeforeAction && (Date.now() - lastBeforeAction) < 300000) { // Within 5 minutes
+        const beforeActionCalls = this.getRecentToolCalls('beforeAIAction');
+        if ((lastBeforeAction && (Date.now() - lastBeforeAction) < 300000) || beforeActionCalls.length > 0) {
             verification.partsWorked.push('beforeAIAction_called');
             verification.verification.toolCalls.push('beforeAIAction');
         } else {
             verification.partsSkipped.push('beforeAIAction_called');
+        }
+        
+        // Check if learning system was queried (check for queryLearning or getBestSolution calls)
+        const queryCalls = this.getRecentToolCalls('queryLearning');
+        const getBestSolutionCalls = this.getRecentToolCalls('getBestSolution');
+        // Also check if learning patterns were queried via scripts
+        const learningQueried = this.stateStore.getState('ai.learningQueried') || false;
+        if (queryCalls.length > 0 || getBestSolutionCalls.length > 0 || learningQueried) {
+            verification.partsWorked.push('learning_system_queried');
+            verification.verification.toolCalls.push('queryLearning');
+        } else {
+            verification.partsSkipped.push('learning_system_queried');
         }
         
         // Check web search if required
@@ -157,9 +170,10 @@ class PromptComplianceVerifier extends EventEmitter {
             }
         }
         
-        // Check if afterAIAction was called
+        // Check if afterAIAction was called (check both state and tool calls)
         const lastAfterAction = this.stateStore.getState('ai.lastAfterActionCall');
-        if (lastAfterAction && (Date.now() - lastAfterAction) < 300000) { // Within 5 minutes
+        const afterActionCalls = this.getRecentToolCalls('afterAIAction');
+        if ((lastAfterAction && (Date.now() - lastAfterAction) < 300000) || afterActionCalls.length > 0) {
             verification.partsWorked.push('afterAIAction_called');
             verification.verification.toolCalls.push('afterAIAction');
         } else {
@@ -242,12 +256,35 @@ class PromptComplianceVerifier extends EventEmitter {
     
     /**
      * Get recent tool calls (we'll need to track these)
+     * FIX: Also check stateStore for tool calls tracked by AICollaborationInterface
      */
     getRecentToolCalls(toolName) {
-        return this.recentToolCalls.filter(call => 
+        // Check in-memory array first
+        const inMemoryCalls = this.recentToolCalls.filter(call => 
             call.tool === toolName && 
             (Date.now() - call.timestamp) < 300000 // Within 5 minutes
         );
+        
+        // Also check stateStore for tool calls tracked by AICollaborationInterface
+        const stateToolCalls = this.stateStore.getState('ai.recentToolCalls') || [];
+        const stateCalls = stateToolCalls.filter(call => 
+            call.tool === toolName && 
+            (Date.now() - call.timestamp) < 300000
+        );
+        
+        // Combine and deduplicate by timestamp
+        const allCalls = [...inMemoryCalls, ...stateCalls];
+        const uniqueCalls = [];
+        const seen = new Set();
+        for (const call of allCalls) {
+            const key = `${call.tool}-${call.timestamp}`;
+            if (!seen.has(key)) {
+                seen.add(key);
+                uniqueCalls.push(call);
+            }
+        }
+        
+        return uniqueCalls;
     }
     
     /**

@@ -312,6 +312,18 @@ class AICollaborationInterface extends EventEmitter {
             component: action.component,
             file: action.file || action.filePath
         });
+        
+        // Emit toolCall event so compliance verifier can track it
+        this.emit('toolCall', {
+            tool: 'beforeAIAction',
+            params: {
+                action: action.type || 'unknown',
+                issueType: action.issueType,
+                component: action.component,
+                file: action.file || action.filePath
+            },
+            timestamp: timestamp
+        });
         const suggestions = {
             warnings: [],
             recommendations: [],
@@ -515,6 +527,19 @@ class AICollaborationInterface extends EventEmitter {
             component: action.component,
             file: action.file || action.filePath,
             success: result.success !== false
+        });
+        
+        // Emit toolCall event so compliance verifier can track it
+        this.emit('toolCall', {
+            tool: 'afterAIAction',
+            params: {
+                action: action.type || 'unknown',
+                issueType: action.issueType,
+                component: action.component,
+                file: action.file || action.filePath,
+                success: result.success !== false
+            },
+            timestamp: timestamp
         });
         
         // AUTOMATIC COMPLIANCE VERIFICATION: Verify compliance for latest prompt
@@ -1176,6 +1201,18 @@ class AICollaborationInterface extends EventEmitter {
      * Query learning system - unified interface
      */
     queryLearning(question) {
+        // Track learning system query for compliance verification
+        this.trackToolCall('queryLearning', {
+            question: question,
+            timestamp: Date.now()
+        });
+        this.emit('toolCall', {
+            tool: 'queryLearning',
+            params: { question: question },
+            timestamp: Date.now()
+        });
+        // Mark that learning system was queried
+        this.stateStore.updateState('ai.learningQueried', true);
         if (!this.learningEngine) {
             return { error: 'Learning engine not available' };
         }
