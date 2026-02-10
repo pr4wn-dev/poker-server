@@ -2,6 +2,10 @@
 # Bridge between PowerShell BrokenPromise and AI core
 
 $script:aiIntegrationScript = Join-Path $PSScriptRoot "integration\BrokenPromise-integration.js"
+$script:aiIntegrationHttpServer = Join-Path $PSScriptRoot "integration\BrokenPromise-integration-http.js"
+$script:persistentServerProcess = $null
+$script:persistentServerPort = 3001
+$script:usePersistentServer = $true  # LEARNING SYSTEM FIX: Use persistent HTTP server to prevent memory issues
 
 # Test all systems during startup
 function Test-BrokenPromiseSystems {
@@ -271,13 +275,136 @@ function Test-BrokenPromiseSystems {
     return $allPassed
 }
 
+# LEARNING SYSTEM FIX: Persistent HTTP server to prevent memory heap overflow
+# Reuses single process instead of spawning new process for each command
+function Start-PersistentIntegrationServer {
+    # Check if server is already running
+    try {
+        $response = Invoke-WebRequest -Uri "http://127.0.0.1:$($script:persistentServerPort)/ping" -TimeoutSec 2 -ErrorAction Stop
+        if ($response.StatusCode -eq 200) {
+            return $true
+        }
+    } catch {
+        # Server not running, start it
+    }
+    
+    if ($script:persistentServerProcess -and !$script:persistentServerProcess.HasExited) {
+        return $true
+    }
+    
+    if (!(Test-Path $script:aiIntegrationHttpServer)) {
+        Write-Warning "Persistent HTTP server script not found, falling back to per-command spawning"
+        $script:usePersistentServer = $false
+        return $false
+    }
+    
+    try {
+        $psi = New-Object System.Diagnostics.ProcessStartInfo
+        $psi.FileName = "node"
+        $psi.Arguments = "`"$script:aiIntegrationHttpServer`""
+        $psi.UseShellExecute = $false
+        $psi.RedirectStandardOutput = $true
+        $psi.RedirectStandardError = $true
+        $psi.CreateNoWindow = $true
+        
+        $script:persistentServerProcess = New-Object System.Diagnostics.Process
+        $script:persistentServerProcess.StartInfo = $psi
+        [void]$script:persistentServerProcess.Start()
+        
+        # Wait for server to be ready (check HTTP endpoint)
+        $maxWait = 10
+        $waited = 0
+        $ready = $false
+        while ($waited -lt $maxWait -and !$ready) {
+            Start-Sleep -Milliseconds 500
+            $waited += 0.5
+            try {
+                $response = Invoke-WebRequest -Uri "http://127.0.0.1:$($script:persistentServerPort)/ping" -TimeoutSec 1 -ErrorAction Stop
+                if ($response.StatusCode -eq 200) {
+                    $ready = $true
+                }
+            } catch {
+                # Not ready yet
+            }
+        }
+        
+        if ($ready) {
+            return $true
+        } else {
+            Write-Warning "Persistent HTTP server did not become ready, falling back to per-command spawning"
+            Stop-PersistentIntegrationServer
+            $script:usePersistentServer = $false
+            return $false
+        }
+    } catch {
+        Write-Warning "Failed to start persistent HTTP server: $_, falling back to per-command spawning"
+        $script:usePersistentServer = $false
+        return $false
+    }
+}
+
+function Stop-PersistentIntegrationServer {
+    if ($script:persistentServerProcess -and !$script:persistentServerProcess.HasExited) {
+        try {
+            # Try graceful shutdown via HTTP
+            try {
+                Invoke-WebRequest -Uri "http://127.0.0.1:$($script:persistentServerPort)/shutdown" -TimeoutSec 1 -ErrorAction Stop | Out-Null
+            } catch {
+                # Ignore
+            }
+            
+            # Wait for graceful shutdown (max 2 seconds)
+            if (!$script:persistentServerProcess.WaitForExit(2000)) {
+                $script:persistentServerProcess.Kill()
+            }
+        } catch {
+            # Force kill if graceful shutdown fails
+            try {
+                $script:persistentServerProcess.Kill()
+            } catch {
+                # Ignore errors
+            }
+        }
+    }
+    $script:persistentServerProcess = $null
+}
+
 # Helper function to call AI integration
+# LEARNING SYSTEM FIX: Uses persistent server when available to prevent memory issues
 function Invoke-AIIntegration {
     param(
         [string]$Command,
         [string[]]$Arguments = @()
     )
     
+    # Try persistent HTTP server first (if enabled)
+    if ($script:usePersistentServer) {
+        # Ensure server is running
+        if (!(Start-PersistentIntegrationServer)) {
+            # Fall back to per-command spawning
+            $script:usePersistentServer = $false
+        } else {
+            try {
+                # Send command to persistent HTTP server
+                $argsEncoded = [System.Web.HttpUtility]::UrlEncode(($Arguments | ConvertTo-Json -Compress))
+                $uri = "http://127.0.0.1:$($script:persistentServerPort)/$Command"
+                if ($Arguments.Count -gt 0) {
+                    $uri += "?args=$argsEncoded"
+                }
+                
+                $response = Invoke-WebRequest -Uri $uri -TimeoutSec 30 -ErrorAction Stop
+                if ($response.StatusCode -eq 200) {
+                    return $response.Content | ConvertFrom-Json
+                }
+            } catch {
+                Write-Warning "Persistent HTTP server error: $_, falling back to per-command spawning"
+                Stop-PersistentIntegrationServer
+                $script:usePersistentServer = $false
+            }
+        }
+    }
+    
+    # Fallback: per-command spawning (original behavior)
     try {
         $allArgs = @($Command) + $Arguments
         $result = & node $script:aiIntegrationScript $allArgs 2>&1
