@@ -281,7 +281,36 @@ function Test-BrokenPromiseSystems {
 # LEARNING SYSTEM FIX: Persistent HTTP server to prevent memory heap overflow
 # Reuses single process instead of spawning new process for each command
 function Start-PersistentIntegrationServer {
-    # Check if server is already running and healthy
+    # CRITICAL FIX: Kill any existing processes on port 3001 FIRST
+    # This ensures we always start with fresh code, not old cached code
+    try {
+        $netstatOutput = netstat -ano | Select-String ":$($script:persistentServerPort)"
+        if ($netstatOutput) {
+            foreach ($line in $netstatOutput) {
+                if ($line -match '\s+(\d+)\s*$') {
+                    $processId = [int]$matches[1]
+                    try {
+                        $process = Get-Process -Id $processId -ErrorAction SilentlyContinue
+                        if ($process -and $process.ProcessName -eq 'node') {
+                            # Check if it's our integration server
+                            $cmdLine = (Get-CimInstance Win32_Process -Filter "ProcessId = $processId" -ErrorAction SilentlyContinue).CommandLine
+                            if ($cmdLine -and $cmdLine -like "*BrokenPromise-integration-http.js*") {
+                                Write-Info "Killing old HTTP integration server process (PID: $processId) to load fresh code..."
+                                Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
+                                Start-Sleep -Milliseconds 500
+                            }
+                        }
+                    } catch {
+                        # Ignore errors
+                    }
+                }
+            }
+        }
+    } catch {
+        # Ignore errors during port check
+    }
+    
+    # Check if server is already running and healthy (after killing old processes)
     try {
         $response = Invoke-WebRequest -Uri "http://127.0.0.1:$($script:persistentServerPort)/ping" -TimeoutSec 2 -ErrorAction Stop
         if ($response.StatusCode -eq 200) {
