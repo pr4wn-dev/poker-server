@@ -28,7 +28,8 @@ $totalSizeMB = [math]::Round($totalSize / 1MB, 2)
 $totalSizeGB = [math]::Round($totalSize / 1GB, 2)
 
 Write-Host "Found $($corruptedFiles.Count) corrupted files" -ForegroundColor Yellow
-Write-Host "Total size: $totalSizeMB MB ($totalSizeGB GB)" -ForegroundColor Yellow
+Write-Host "Total size: $totalSizeMB MB" -ForegroundColor Yellow
+Write-Host "Total size: $totalSizeGB GB" -ForegroundColor Yellow
 Write-Host ""
 
 # Keep the 2 most recent files (in case we need to recover something)
@@ -45,7 +46,9 @@ $sizeToDelete = ($filesToDelete | Measure-Object -Property Length -Sum).Sum
 $sizeToDeleteMB = [math]::Round($sizeToDelete / 1MB, 2)
 $sizeToDeleteGB = [math]::Round($sizeToDelete / 1GB, 2)
 
-Write-Host "Will delete $($filesToDelete.Count) files ($sizeToDeleteMB MB / $sizeToDeleteGB GB)" -ForegroundColor Cyan
+Write-Host "Will delete $($filesToDelete.Count) files" -ForegroundColor Cyan
+Write-Host "Size to delete: $sizeToDeleteMB MB" -ForegroundColor Cyan
+Write-Host "Size to delete: $sizeToDeleteGB GB" -ForegroundColor Cyan
 Write-Host "Keeping $filesToKeep most recent files for safety" -ForegroundColor Gray
 Write-Host ""
 
@@ -72,7 +75,8 @@ foreach ($file in $filesToDelete) {
 Write-Host ""
 Write-Host "=== CLEANUP COMPLETE ===" -ForegroundColor Green
 Write-Host "Deleted: $deleted files" -ForegroundColor Green
-Write-Host "Freed: $sizeToDeleteMB MB ($sizeToDeleteGB GB)" -ForegroundColor Green
+Write-Host "Freed: $sizeToDeleteMB MB" -ForegroundColor Green
+Write-Host "Freed: $sizeToDeleteGB GB" -ForegroundColor Green
 if ($errors -gt 0) {
     Write-Host "Errors: $errors files" -ForegroundColor Red
 }
