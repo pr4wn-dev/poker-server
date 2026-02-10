@@ -48,6 +48,7 @@ When fixing ANY issue, you MUST follow this exact workflow:
 3. Query the learning system
    - Use queryLearning("What solutions worked for [issue type]?") OR
    - Use getBestSolution([issue type])
+   - **For database queries**: Use `monitoring/scripts/query-learning-patterns.js [search_term]` instead of `node -e` with complex SQL
    - The learning system is a tool to save time - USE IT
 
 4. Fix the issue using the learning system's solution
