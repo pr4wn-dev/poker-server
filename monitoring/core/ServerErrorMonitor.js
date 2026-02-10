@@ -3,10 +3,18 @@
  * 
  * Monitors server health and errors, generates prompts for all server issues
  * Integrates with prompt generation system
+ * 
+ * FIXED: Removed url.parse() - now using WHATWG URL API (new URL())
+ * Version: 2.0 - url.parse() removed
  */
 
 const EventEmitter = require('events');
 const gameLogger = require('../../src/utils/GameLogger');
+
+// Clear require cache to ensure fresh code loads
+if (require.cache[__filename]) {
+    delete require.cache[__filename];
+}
 
 class ServerErrorMonitor extends EventEmitter {
     constructor(stateStore, promptGenerator, serverUrl = 'http://localhost:3000') {
