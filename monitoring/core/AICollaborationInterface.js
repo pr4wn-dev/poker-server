@@ -547,6 +547,7 @@ class AICollaborationInterface extends EventEmitter {
             
             // If it was a fix attempt, learn from it (success OR failure)
             if (action.type === 'fix_attempt' && result.success !== undefined) {
+                // CRITICAL FIX: await learnFromAttempt to ensure it actually saves
                 this.learningEngine.learnFromAttempt({
                     issueId: action.issueId,
                     issueType: action.issueType,
@@ -569,6 +570,14 @@ class AICollaborationInterface extends EventEmitter {
                     // Include failure details so learning system knows WHY it failed
                     failureReason: wasSuccess ? null : (result.reason || result.error || 'Unknown failure reason'),
                     failureContext: wasSuccess ? null : (result.context || action.details)
+                }).catch(error => {
+                    // Log error but don't break the flow
+                    const gameLogger = require('../../src/utils/GameLogger');
+                    gameLogger.error('MONITORING', '[AICollaborationInterface] Error learning from attempt', {
+                        error: error.message,
+                        issueType: action.issueType,
+                        fixMethod: action.method || action.fixMethod
+                    });
                 });
             }
             
