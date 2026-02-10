@@ -466,10 +466,21 @@ class AILearningEngineMySQL extends EventEmitter {
             }
             
             // Import and run seeding script
-            const seedPatterns = require('../../scripts/seed-error-patterns');
-            await seedPatterns();
-            
-            this.emit('patterns-seeded');
+            // LEARNING SYSTEM FIX: Wrap in try-catch to prevent console.error from seed script triggering ConsoleOverride
+            // The seed script uses console.error which would trigger ConsoleOverride -> learning system -> closed pool cascade
+            try {
+                const seedPatterns = require('../../scripts/seed-error-patterns');
+                await seedPatterns();
+                this.emit('patterns-seeded');
+            } catch (seedError) {
+                // LEARNING SYSTEM FIX: Use gameLogger instead of console.error to avoid triggering ConsoleOverride
+                // ConsoleOverride would trigger learning system which tries to use the pool, causing cascade
+                gameLogger.warn('MONITORING', '[AILearningEngineMySQL] Failed to seed initial patterns', {
+                    error: seedError.message,
+                    stack: seedError.stack
+                });
+                // Don't re-throw - seeding failure shouldn't break initialization
+            }
         } catch (error) {
             // LEARNING SYSTEM FIX: Use gameLogger instead of console.error to avoid triggering ConsoleOverride
             // ConsoleOverride would trigger learning system which tries to use the pool, causing cascade

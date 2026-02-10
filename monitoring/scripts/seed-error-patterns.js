@@ -18,7 +18,9 @@ async function seedPatterns() {
         await dbManager.initialize();
         const pool = dbManager.getPool();
         
-        console.log('Seeding error patterns into learning system...');
+        // Use process.stdout.write instead of console.log to avoid triggering ConsoleOverride
+        // ConsoleOverride would try to use learning system which might use closed pool
+        process.stdout.write('Seeding error patterns into learning system...\n');
         
         const patterns = [
             // Pattern 1: JavaScript Heap Out of Memory
@@ -270,13 +272,16 @@ async function seedPatterns() {
             ]);
         }
         
-        console.log(`✓ Seeded ${patterns.length} error patterns`);
-        console.log(`✓ Seeded ${misdiagnosisPatterns.length} misdiagnosis patterns`);
-        console.log(`✓ Seeded ${failedMethods.length} failed methods`);
-        console.log('Learning system ready to prevent misdiagnosis!');
+        // Use process.stdout.write instead of console.log to avoid triggering ConsoleOverride
+        process.stdout.write(`✓ Seeded ${patterns.length} error patterns\n`);
+        process.stdout.write(`✓ Seeded ${misdiagnosisPatterns.length} misdiagnosis patterns\n`);
+        process.stdout.write(`✓ Seeded ${failedMethods.length} failed methods\n`);
+        process.stdout.write('Learning system ready to prevent misdiagnosis!\n');
         
     } catch (error) {
-        console.error('Error seeding patterns:', error);
+        // Use process.stderr.write instead of console.error to avoid triggering ConsoleOverride
+        // ConsoleOverride would try to use learning system which might use closed pool
+        process.stderr.write(`Error seeding patterns: ${error.message}\n`);
         throw error;
     } finally {
         if (dbManager && dbManager.pool) {
@@ -290,7 +295,8 @@ if (require.main === module) {
     seedPatterns().then(() => {
         process.exit(0);
     }).catch(error => {
-        console.error('Failed to seed patterns:', error);
+        // Use process.stderr.write instead of console.error to avoid triggering ConsoleOverride
+        process.stderr.write(`Failed to seed patterns: ${error.message}\n`);
         process.exit(1);
     });
 }
