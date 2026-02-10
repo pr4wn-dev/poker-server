@@ -279,13 +279,17 @@ class TerminalErrorMonitor extends EventEmitter {
             errorType: error.type,
             severity: error.severity,
             component: 'AI_Terminal_Command',
-            file: error.lineNumber ? `[eval]:${error.lineNumber}` : 'terminal',
+            file: error.file || (error.lineNumber ? `[eval]:${error.lineNumber}` : 'terminal'),
             errorMessage: error.message,
             message: `Terminal command error: ${error.message}`,
             command: command,
             output: output,
+            fullOutput: error.fullOutput || output, // CRITICAL: Include full output with stack traces
+            stackTrace: error.stackTrace || [], // Include extracted stack trace
             category: error.category,
-            specific: error.specific
+            specific: error.specific,
+            lineNumber: error.lineNumber,
+            column: error.column
         };
 
         // Get misdiagnosis prevention from learning system
