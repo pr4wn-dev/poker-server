@@ -348,66 +348,66 @@ The cycle repeats:
 
 ## 💻 Usage Examples
 
-### **Before Every Action - Mandatory Workflow**
+### **Exact Workflow - Step by Step (MANDATORY)**
 
-**CRITICAL**: You MUST follow this workflow for EVERY action:
+**CRITICAL**: You MUST follow these EXACT steps for EVERY action. This is the workflow the system generates and verifies:
+
+#### **Workflow A: Standard Fix (No Web Search Required)**
 
 ```javascript
-// 1. Get suggestions from learning system
+// STEP 1: Call beforeAIAction() - MANDATORY FIRST STEP
 const suggestions = core.beforeAIAction({
     type: 'fix_attempt', // or 'code_change', 'debugging', etc.
-    method: 'your_method',
-    issueType: 'your_issue_type',
-    component: 'your_component',
-    file: 'path/to/file',
+    issueType: 'your_issue_type', // e.g., 'memory_heap_overflow', 'null_reference_state'
+    component: 'your_component', // e.g., 'Server', 'Unity', 'Monitoring'
+    file: 'path/to/file', // file being modified
     details: { /* your details */ }
 });
 
-// 2. CHECK FOR WEB SEARCH REQUIREMENT (MANDATORY)
+// The learning system will:
+// - Check for misdiagnosis patterns and warn you
+// - Provide solutions that worked before
+// - Show what NOT to do
+// - HEED THE WARNINGS - they prevent wasted time
+
+// STEP 2: Check if webSearchRequired is true
 if (suggestions.webSearchRequired) {
-    // LEARNING SYSTEM IS TELLING YOU TO SEARCH ONLINE
-    // YOU MUST DO THIS BEFORE CONTINUING
-    
-    const searchTerms = suggestions.webSearchTerms;
-    const urgency = suggestions.webSearchUrgency; // 'high' or 'critical'
-    
-    // SEARCH ONLINE (MANDATORY)
-    const searchResults = await web_search(searchTerms.join(' '));
-    
-    // STORE FINDINGS IN LEARNING SYSTEM (MANDATORY)
-    await storeWebSearchKnowledge(searchResults, searchTerms, {
-        issueType: 'your_issue_type',
-        component: 'your_component',
-        urgency: urgency
-    });
-    
-    // DO NOT CONTINUE WITH FIX UNTIL YOU'VE SEARCHED AND STORED FINDINGS
-    return; // Stop here until search is complete
+    // If true, you MUST follow Workflow B instead
+    // DO NOT continue with this workflow
+    return;
 }
 
-// 3. Review warnings and recommendations
-if (suggestions.warnings.length > 0) {
-    // HEED THESE WARNINGS - they're from the learning system
-    for (const warning of suggestions.warnings) {
-        if (warning.priority === 'critical') {
-            // CRITICAL WARNING - DO NOT IGNORE
-        }
-    }
-}
+// STEP 3: QUERY THE LEARNING SYSTEM - MANDATORY
+// The learning system is a tool to save you time - USE IT
+const learningResults = await core.queryLearning(
+    `What solutions worked for ${suggestions.issueType}?`
+);
+// OR use:
+const bestSolution = await core.getBestSolution(suggestions.issueType);
 
-// 4. Use recommendations (learned solutions that worked before)
-if (suggestions.recommendations.length > 0) {
-    const bestRecommendation = suggestions.recommendations[0];
-    // Use the recommended approach
-}
+// Check for:
+// - Matching patterns that solved similar issues
+// - Misdiagnosis patterns (what NOT to do)
+// - Solution templates with code examples
 
-// 5. Take action (only after steps 1-4)
-// ... your fix code ...
+// STEP 4: Fix the issue using the learning system's solution
+// - Use the correct approach from learning system
+// - DO NOT use approaches marked as misdiagnosis
+// - Follow the solution template if available
 
-// 6. Report outcome (MANDATORY)
-core.afterAIAction(action, {
+// ... your fix code using the learned solution ...
+
+// STEP 5: Call afterAIAction() - MANDATORY LAST STEP
+core.afterAIAction({
     success: true, // or false
     description: 'What happened',
+    fixDetails: {
+        approach: 'What you actually did',
+        timeSpent: 5000, // milliseconds
+        method: 'your_method',
+        issueType: suggestions.issueType,
+        component: suggestions.component
+    },
     codeChanges: [/* actual changes made */],
     // If failure:
     reason: 'Why it failed',
@@ -415,7 +415,84 @@ core.afterAIAction(action, {
     whatWentWrong: 'What went wrong',
     whatShouldHaveHappened: 'What should have happened'
 });
+
+// This helps the system learn and prevent future misdiagnosis
 ```
+
+#### **Workflow B: Fix with Web Search Required**
+
+```javascript
+// STEP 1: Call beforeAIAction() - MANDATORY FIRST STEP
+const suggestions = core.beforeAIAction({
+    type: 'fix_attempt',
+    issueType: 'your_issue_type',
+    component: 'your_component',
+    file: 'path/to/file',
+    details: { /* your details */ }
+});
+
+// STEP 2: Check if webSearchRequired is true
+// (It should be after consecutive failures)
+if (!suggestions.webSearchRequired) {
+    // If false, follow Workflow A instead
+    return;
+}
+
+// STEP 3: Search the web - MANDATORY BEFORE CONTINUING
+const searchTerms = suggestions.webSearchTerms; // Array of search terms
+const searchResults = await web_search(searchTerms.join(' '));
+
+// STEP 4: Store all findings in the learning system - MANDATORY
+await core.storeWebSearchKnowledge(searchResults, searchTerms, {
+    issueType: suggestions.issueType,
+    component: suggestions.component,
+    urgency: suggestions.webSearchUrgency // 'high' or 'critical'
+});
+
+// DO NOT CONTINUE WITH FIX UNTIL YOU'VE SEARCHED AND STORED FINDINGS
+
+// STEP 5: QUERY THE LEARNING SYSTEM - MANDATORY
+// The learning system may have solutions from previous fixes - CHECK IT
+const learningResults = await core.queryLearning(
+    `What solutions worked for ${suggestions.issueType}?`
+);
+// OR use:
+const bestSolution = await core.getBestSolution(suggestions.issueType);
+
+// STEP 6: Fix the issue using the learning system's solution
+// - Use the correct approach from learning system
+// - DO NOT use approaches marked as misdiagnosis
+// - Use findings from web search if applicable
+
+// ... your fix code using the learned solution and web search findings ...
+
+// STEP 7: Call afterAIAction() - MANDATORY LAST STEP
+core.afterAIAction({
+    success: true, // or false
+    description: 'What happened',
+    fixDetails: {
+        approach: 'What you actually did',
+        timeSpent: 5000, // milliseconds
+        method: 'your_method',
+        issueType: suggestions.issueType,
+        component: suggestions.component,
+        webSearchUsed: true,
+        webSearchTerms: searchTerms
+    },
+    codeChanges: [/* actual changes made */]
+});
+
+// Mark webSearchRequired as resolved
+await core.markWebSearchResolved(suggestions.issueType);
+```
+
+#### **System Verification**
+
+The system will verify:
+- ✅ Tool calls: `web_search`, `beforeAIAction`, `afterAIAction`, `queryLearning`/`getBestSolution`
+- ✅ State changes: Findings stored, `webSearchRequired` resolved
+- ✅ File changes: Code modifications made
+- ✅ Compliance: All steps followed in order
 
 ### **When Stuck - Get Help**
 
@@ -449,22 +526,37 @@ if (help.webSearchRequired) {
 
 **VIOLATING THESE RULES = WASTING USER'S TIME AND MONEY**
 
-### **Quick Reference**
+### **Quick Reference - Exact Workflow Steps**
 
-**BEFORE ACTION:**
-1. ✅ Call `beforeAIAction()`
-2. ✅ Check `webSearchRequired` - if true, SEARCH ONLINE FIRST
-3. ✅ Review warnings and recommendations
-4. ✅ Proceed with action
+**STANDARD FIX (No Web Search):**
+1. ✅ Call `beforeAIAction()` with context
+2. ✅ Check `webSearchRequired` - if true, follow Web Search workflow
+3. ✅ Query learning system (`queryLearning()` or `getBestSolution()`)
+4. ✅ Fix issue using learning system's solution
+5. ✅ Call `afterAIAction()` with outcome
 
-**AFTER ACTION:**
-1. ✅ Call `afterAIAction()` with outcome
-2. ✅ If failed, learning system will require web search for next attempt
+**FIX WITH WEB SEARCH REQUIRED:**
+1. ✅ Call `beforeAIAction()` with context
+2. ✅ Check `webSearchRequired` - MUST be true
+3. ✅ Search the web using provided search terms
+4. ✅ Store findings in learning system (`storeWebSearchKnowledge()`)
+5. ✅ Query learning system (`queryLearning()` or `getBestSolution()`)
+6. ✅ Fix issue using learning system's solution and web search findings
+7. ✅ Call `afterAIAction()` with outcome
+8. ✅ Mark `webSearchRequired` as resolved
 
 **WHEN STUCK:**
-1. ✅ Call `aiNeedsHelp()`
+1. ✅ Call `aiNeedsHelp()` with context
 2. ✅ Check `webSearchRequired` - if true, SEARCH ONLINE FIRST
 3. ✅ Use suggestions and solutions provided
+4. ✅ Follow standard workflow after getting help
+
+**CRITICAL RULES:**
+- ❌ NEVER skip `beforeAIAction()` - it provides misdiagnosis warnings
+- ❌ NEVER ignore `webSearchRequired: true` - you MUST search first
+- ❌ NEVER skip querying learning system - it saves time
+- ❌ NEVER skip `afterAIAction()` - system needs to learn
+- ❌ NEVER use approaches marked as misdiagnosis - they waste time
 
 ---
 
