@@ -157,8 +157,9 @@ const server = http.createServer(async (req, res) => {
     }
 });
 
+// Start server immediately (before initialization completes)
 server.listen(PORT, '127.0.0.1', () => {
-    gameLogger.info('MONITORING', '[INTEGRATION_HTTP] Server started', {
+    gameLogger.info('MONITORING', '[INTEGRATION_HTTP] Server started (initializing in background)', {
         port: PORT,
         pid: process.pid
     });
@@ -166,7 +167,8 @@ server.listen(PORT, '127.0.0.1', () => {
         type: 'ready', 
         port: PORT,
         pid: process.pid,
-        timestamp: Date.now() 
+        timestamp: Date.now(),
+        note: 'Initialization happening in background'
     }));
 });
 
