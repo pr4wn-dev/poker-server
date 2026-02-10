@@ -68,10 +68,36 @@ Current cleanup order:
 4. AIMonitorCore.destroy() → Stops all background processes, destroys state store
 5. StateStoreMySQL.destroy() → Should close database connections
 
+## Unity & Server Lifecycle Management
+
+### ✅ Server Lifecycle
+- **Graceful Shutdown**: Handles SIGTERM/SIGINT, closes database, closes HTTP server
+- **Restart Loop Prevention**: Max 5 attempts with exponential backoff (60s → 120s → 240s → 480s)
+- **Crash Detection**: Checks if server is responding via health endpoint
+- **Cleanup on Shutdown**: Stops simulations, closes connections
+- **Location**: `src/server.js` lines 432-449
+
+### ✅ Unity Lifecycle
+- **Process Management**: PowerShell manages Unity process lifecycle
+- **Crash Detection**: Checks if Unity process is responding (not just existing)
+- **Restart Loop Prevention**: Max 5 attempts with exponential backoff (60s → 120s → 240s → 480s)
+- **Grace Period**: 90 seconds for Unity to start and connect
+- **Cleanup on Shutdown**: Stops Unity process gracefully
+- **Location**: `BrokenPromise.ps1` - `Restart-UnityIfNeeded()`, cleanup section
+
+### ✅ Restart Loop Prevention Features
+1. **Max Attempts**: 5 consecutive restarts before backing off
+2. **Exponential Backoff**: Cooldown increases with each attempt
+3. **Success Tracking**: Resets counter when service successfully starts
+4. **Cooldown Reset**: Counter resets after 5 minutes of stability
+5. **Crash Detection**: Detects hung/crashed processes before restarting
+
 ## Recommendations
 
-1. ✅ **HTTP Server**: Already has full lifecycle management
-2. ⚠️ **StateStoreMySQL**: Verify `destroy()` calls `close()`
-3. ⚠️ **HTTP Server Integration**: Ensure cleanup is called when integration is destroyed
-4. ✅ **AIMonitorCore**: Comprehensive cleanup already implemented
+1. ✅ **HTTP Server**: Full lifecycle management implemented
+2. ✅ **StateStoreMySQL**: `destroy()` calls `close()` - implemented
+3. ✅ **HTTP Server Integration**: Cleanup called on shutdown - implemented
+4. ✅ **AIMonitorCore**: Comprehensive cleanup implemented
 5. ✅ **BrokenPromiseIntegration**: Cleanup implemented
+6. ✅ **Server**: Graceful shutdown and restart loop prevention - implemented
+7. ✅ **Unity**: Process management and restart loop prevention - implemented
