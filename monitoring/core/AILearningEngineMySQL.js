@@ -178,6 +178,16 @@ class AILearningEngineMySQL extends EventEmitter {
         
         try {
             // Store fix attempt
+            const attemptId = attempt.issueId || `attempt-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+            const timestamp = attempt.timestamp || Date.now();
+            
+            gameLogger.info('MONITORING', '[AILearningEngineMySQL] Storing fix attempt', {
+                attemptId,
+                issueType: attempt.issueType,
+                fixMethod: attempt.fixMethod,
+                result: attempt.result
+            });
+            
             await pool.execute(`
             INSERT INTO learning_fix_attempts 
             (id, issue_id, issue_type, fix_method, result, time_spent, misdiagnosis, correct_approach, wrong_approach, actual_root_cause, timestamp, component, details)
@@ -190,20 +200,25 @@ class AILearningEngineMySQL extends EventEmitter {
             wrong_approach = VALUES(wrong_approach),
             actual_root_cause = VALUES(actual_root_cause)
         `, [
-            attempt.issueId || `attempt-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-            attempt.issueId,
+            attemptId,
+            attempt.issueId || null,
             attempt.issueType,
             attempt.fixMethod,
             attempt.result,
             attempt.duration || attempt.timeSpent || 0,
-            attempt.fixDetails?.wrongApproach || attempt.fixDetails?.misdiagnosis,
-            attempt.fixDetails?.correctApproach,
-            attempt.fixDetails?.wrongApproach,
-            attempt.fixDetails?.actualRootCause,
-            attempt.timestamp || Date.now(),
-            attempt.component,
+            attempt.fixDetails?.wrongApproach || attempt.fixDetails?.misdiagnosis || null,
+            attempt.fixDetails?.correctApproach || null,
+            attempt.fixDetails?.wrongApproach || null,
+            attempt.fixDetails?.actualRootCause || null,
+            timestamp,
+            attempt.component || null,
             JSON.stringify(attempt.fixDetails || {})
         ]);
+            
+            gameLogger.info('MONITORING', '[AILearningEngineMySQL] Fix attempt stored successfully', {
+                attemptId,
+                issueType: attempt.issueType
+            });
 
             // Track misdiagnosis patterns
             if (attempt.result === 'failure' && attempt.fixDetails?.wrongApproach) {
