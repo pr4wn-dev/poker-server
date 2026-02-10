@@ -294,9 +294,13 @@ class PromptGenerator extends EventEmitter {
      */
     getLearningKnowledge(issue) {
         // CRITICAL: Check misdiagnosis patterns FIRST (most valuable)
+        // Note: getMisdiagnosisPrevention is async, but this method is sync
+        // We'll handle it in async context if available
+        const issueType = issue.issueType || issue.errorType || 'unknown';
+        const errorMessage = issue.errorMessage || issue.message || '';
         const misdiagnosisPrevention = this.learningEngine?.getMisdiagnosisPrevention?.(
-            issue.issueType || issue.errorType,
-            issue.errorMessage || issue.message,
+            issueType,
+            errorMessage,
             issue.component
         ) || { warnings: [], correctApproach: null };
         

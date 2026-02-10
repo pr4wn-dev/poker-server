@@ -430,14 +430,19 @@ class AILearningEngineMySQL extends EventEmitter {
         if (!pool || pool._closed) {
             return null; // Return null if pool is closed
         }
-        
+
+        // Ensure issueType is not undefined
+        if (!issueType || issueType === 'unknown') {
+            return null;
+        }
+
         try {
             const [rows] = await pool.execute(`
-            SELECT * FROM learning_patterns 
-            WHERE issue_type = ?
-            ORDER BY success_rate DESC, frequency DESC
-            LIMIT 1
-        `, [issueType]);
+                SELECT * FROM learning_patterns
+                WHERE issue_type = ?
+                ORDER BY success_rate DESC, frequency DESC
+                LIMIT 1
+            `, [issueType]);
         
             if (rows.length === 0) return null;
             
