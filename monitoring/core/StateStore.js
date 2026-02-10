@@ -735,6 +735,14 @@ class StateStore extends EventEmitter {
      * ENHANCED: Added file locking and atomic write to prevent corruption
      */
     save() {
+        // Skip JSON save if MySQL is enabled
+        if (this.useMySQL && this.dbManager) {
+            // State is already saved in database via updateState
+            // Just update metadata timestamp
+            this.state.metadata.lastUpdate = Date.now();
+            return;
+        }
+        
         // Prevent concurrent saves
         if (this._saving) {
             return; // Already saving, skip this call
