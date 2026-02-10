@@ -90,6 +90,13 @@ class TerminalErrorMonitor extends EventEmitter {
                 category: 'powershell'
             },
             {
+                pattern: /Missing closing.*in statement block/i,
+                type: 'syntax_error',
+                severity: 'high',
+                category: 'powershell',
+                specific: 'missing_brace'
+            },
+            {
                 pattern: /Cannot bind argument to parameter/i,
                 type: 'parameter_error',
                 severity: 'medium',
