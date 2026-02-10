@@ -440,6 +440,19 @@ class AICollaborationInterface extends EventEmitter {
             // Get best solution from learning system
             if (action.issueType) {
                 const bestSolution = this.learningEngine.getBestSolution(action.issueType);
+                // Track learning system query for compliance verification
+                this.trackToolCall('getBestSolution', {
+                    issueType: action.issueType,
+                    timestamp: Date.now()
+                });
+                this.emit('toolCall', {
+                    tool: 'getBestSolution',
+                    params: { issueType: action.issueType },
+                    timestamp: Date.now()
+                });
+                // Mark that learning system was queried
+                this.stateStore.updateState('ai.learningQueried', true);
+                
                 if (bestSolution) {
                     suggestions.recommendations.push({
                         type: 'LEARNED_SOLUTION',
