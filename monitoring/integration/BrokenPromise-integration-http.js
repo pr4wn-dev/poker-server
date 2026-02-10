@@ -90,8 +90,28 @@ const server = http.createServer(async (req, res) => {
             }
         }
         
-        // Ensure initialized (will wait if still initializing)
-        await ensureInitialized();
+        // LEARNING SYSTEM FIX: Initialize with timeout to prevent hanging
+        // If initialization fails or times out, return error instead of hanging
+        let initResult;
+        try {
+            const initPromise = ensureInitialized();
+            const timeoutPromise = new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Initialization timeout after 10 seconds')), 10000)
+            );
+            initResult = await Promise.race([initPromise, timeoutPromise]);
+        } catch (error) {
+            gameLogger.error('MONITORING', '[INTEGRATION_HTTP] Initialization failed or timed out', {
+                error: error.message,
+                command: command
+            });
+            res.writeHead(503); // Service Unavailable
+            res.end(JSON.stringify({ 
+                error: 'AI Core initialization failed or timed out',
+                message: error.message,
+                suggestion: 'The system may be experiencing memory issues. Try again in a moment.'
+            }));
+            return;
+        }
         
         let result;
         
