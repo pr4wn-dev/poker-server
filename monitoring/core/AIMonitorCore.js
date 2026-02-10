@@ -81,6 +81,7 @@ class AIMonitorCore {
         this._codeChangeTracker = null;
         this._collaborationInterface = null;
         this._promptGenerator = null;
+        this._terminalErrorMonitor = null;
         this._complianceVerifier = null;
         this._codeAnalysis = null;
         this._workflowViolationDetector = null;

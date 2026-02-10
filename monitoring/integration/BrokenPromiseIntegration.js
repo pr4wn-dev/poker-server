@@ -336,6 +336,29 @@ class BrokenPromiseIntegration {
             this.aiCore.stateStore.updateState('ai.deliveredPrompts', deliveredPrompts);
         }
     }
+
+    /**
+     * Monitor terminal command for errors
+     */
+    async monitorTerminalCommand(command, output, exitCode) {
+        try {
+            if (!this.aiCore) {
+                gameLogger.warn('MONITORING', '[MONITOR_INTEGRATION] AI Core not initialized for monitorTerminalCommand');
+                return { success: false, reason: 'AI Core not available' };
+            }
+            // Ensure AI Core is fully initialized
+            await this.aiCore.initialize();
+            const errors = await this.aiCore.monitorTerminalCommand(command, output, exitCode);
+            return { success: true, errorsDetected: errors.length, errors: errors };
+        } catch (error) {
+            gameLogger.error('MONITORING', '[MONITOR_INTEGRATION] monitorTerminalCommand error', {
+                command: command.substring(0, 100),
+                error: error.message,
+                stack: error.stack
+            });
+            return { success: false, reason: error.message };
+        }
+    }
     
     /**
      * Get investigation status from AI core

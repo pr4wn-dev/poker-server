@@ -169,6 +169,12 @@ const server = http.createServer(async (req, res) => {
                 const resultData = args[1] || {};
                 result = await integration.afterAIAction(actionData2, resultData);
                 break;
+            case 'monitor-terminal-command':
+                const command = args[0] || '';
+                const output = args[1] || '';
+                const exitCode = args[2] !== undefined ? args[2] : 0;
+                result = await integration.monitorTerminalCommand(command, output, exitCode);
+                break;
             case 'ping':
                 result = { success: true, message: 'Server is alive', timestamp: Date.now() };
                 break;
