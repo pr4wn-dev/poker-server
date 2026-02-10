@@ -60,13 +60,13 @@ class ServerErrorMonitor extends EventEmitter {
     async checkServerHealth() {
         try {
             const http = require('http');
-            const url = require('url');
             
-            const parsedUrl = url.parse(`${this.serverUrl}/health`);
+            // Use WHATWG URL API instead of deprecated url.parse()
+            const urlObj = new URL(`${this.serverUrl}/health`);
             const options = {
-                hostname: parsedUrl.hostname,
-                port: parsedUrl.port || 3000,
-                path: parsedUrl.path,
+                hostname: urlObj.hostname,
+                port: urlObj.port || 3000,
+                path: urlObj.pathname + urlObj.search,
                 method: 'GET',
                 timeout: 2000
             };
