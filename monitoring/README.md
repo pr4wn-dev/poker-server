@@ -35,6 +35,12 @@ When fixing ANY issue, you MUST follow this exact workflow:
 - If server is not running: Run `monitoring/scripts/ensure-http-server.ps1` OR start BrokenPromise.ps1
 - Server auto-starts when BrokenPromise.ps1 runs, but may not be running when working outside of it
 
+**TERMINAL ERROR DETECTION:**
+- All terminal command errors are now automatically detected and written to `logs/prompts-for-user.txt`
+- After running terminal commands, errors are automatically analyzed for: SyntaxError, ReferenceError, TypeError, PowerShell errors, database errors, connection errors, exit codes
+- To manually analyze a terminal error: `node monitoring/scripts/analyze-terminal-error.js "<command>" "<output>" <exitCode>`
+- Errors are automatically detected and prompts are generated with misdiagnosis prevention
+
 1. Call beforeAIAction() with the issue context FIRST
    - This checks for misdiagnosis patterns (what NOT to do)
    - This provides solutions that worked before
