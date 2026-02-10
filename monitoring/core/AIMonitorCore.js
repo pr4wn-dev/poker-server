@@ -652,6 +652,42 @@ class AIMonitorCore {
         }
         return this._promptGenerator;
     }
+
+    /**
+     * Terminal Error Monitor - Detects errors in AI terminal commands
+     */
+    get terminalErrorMonitor() {
+        if (!this._terminalErrorMonitor) {
+            try {
+                const TerminalErrorMonitor = require('./TerminalErrorMonitor');
+                this._terminalErrorMonitor = new TerminalErrorMonitor(
+                    this._stateStore,
+                    this.promptGenerator,
+                    this.learningEngine
+                );
+                this._errorRecovery.recordSuccess('terminalErrorMonitor');
+                this._initializedComponents.add('terminalErrorMonitor');
+            } catch (error) {
+                this._errorRecovery.recordError('terminalErrorMonitor', error);
+                throw error;
+            }
+        }
+        return this._terminalErrorMonitor;
+    }
+    
+    /**
+     * Monitor terminal command for errors
+     */
+    async monitorTerminalCommand(command, output, exitCode) {
+        try {
+            return await this.terminalErrorMonitor.monitorCommand(command, output, exitCode);
+        } catch (error) {
+            gameLogger.warn('MONITORING', '[AI_MONITOR_CORE] Terminal error monitoring failed', {
+                error: error.message
+            });
+            return [];
+        }
+    }
     
     /**
      * LEARNING SYSTEM FIX: Setup prompt generator event listeners
