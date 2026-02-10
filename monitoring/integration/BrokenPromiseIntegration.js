@@ -349,22 +349,16 @@ class BrokenPromiseIntegration {
             const dbLogger = new DatabaseLogger(this.projectRoot);
             await dbLogger.initialize();
             
-            // Store in log_processed table with source='terminal_command'
-            const metadata = {
-                command: command.substring(0, 500), // Truncate very long commands
-                exitCode: exitCode,
-                outputLength: output ? output.length : 0
-            };
-            
             const level = exitCode !== 0 ? 'error' : 'info';
             const message = `Terminal command: ${command.substring(0, 200)}${command.length > 200 ? '...' : ''}`;
             
             // Store full output in metadata (database TEXT field handles large data)
+            // DatabaseLogger will handle the terminal_command category specially
             await dbLogger.writeLog(level, 'terminal_command', message, {
                 file: 'terminal',
                 line: null,
                 command: command,
-                output: output, // Full output stored here
+                output: output, // Full output with stack traces stored here
                 exitCode: exitCode,
                 timestamp: Date.now()
             });
