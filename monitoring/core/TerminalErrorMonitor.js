@@ -335,6 +335,16 @@ class TerminalErrorMonitor extends EventEmitter {
             // Enhance prompt with terminal-specific context
             // CRITICAL: Use error.fullOutput (has stack traces) instead of raw output
             const fullOutputToShow = error.fullOutput || output;
+            
+            // Log what we're capturing for debugging
+            gameLogger.info('MONITORING', '[TERMINAL_ERROR_MONITOR] Generating prompt with full output', {
+                hasFullOutput: !!error.fullOutput,
+                fullOutputLength: error.fullOutput ? error.fullOutput.length : 0,
+                outputLength: typeof output === 'string' ? output.length : 0,
+                hasStackTrace: error.stackTrace && error.stackTrace.length > 0,
+                stackTraceLength: error.stackTrace ? error.stackTrace.length : 0
+            });
+            
             prompt.prompt = `TERMINAL COMMAND ERROR DETECTED
 
 ${errorDetails}
