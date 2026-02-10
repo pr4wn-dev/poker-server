@@ -517,6 +517,35 @@ class AICollaborationInterface extends EventEmitter {
             success: result.success !== false
         });
         
+        // AUTOMATIC COMPLIANCE VERIFICATION: Verify compliance for latest prompt
+        // Access complianceVerifier via stateStore's aiCore reference (set by AIMonitorCore)
+        try {
+            const prompts = this.stateStore.getState('ai.prompts') || [];
+            if (prompts.length > 0) {
+                const latestPrompt = prompts[prompts.length - 1];
+                // Only verify if prompt is recent (within last 10 minutes)
+                if (latestPrompt.timestamp && (Date.now() - latestPrompt.timestamp) < 600000) {
+                    // Get complianceVerifier from stateStore (AIMonitorCore sets this)
+                    const complianceVerifier = this.stateStore.complianceVerifier;
+                    if (complianceVerifier && typeof complianceVerifier.verifyCompliance === 'function') {
+                        // Verify compliance for this prompt
+                        const verification = complianceVerifier.verifyCompliance(latestPrompt);
+                        // Store verification result (already done by verifyCompliance, but ensure it's accessible)
+                        this.stateStore.updateState(`ai.compliance.${latestPrompt.id}`, verification);
+                        // Update latest compliance result for display
+                        this.stateStore.updateState('ai.latestCompliance', verification);
+                        // Emit event so UI can update
+                        this.emit('complianceUpdated', verification);
+                    }
+                }
+            }
+        } catch (error) {
+            // Don't break the flow if compliance verification fails
+            gameLogger.warn('MONITORING', '[AICollaborationInterface] Error verifying compliance', {
+                error: error.message
+            });
+        }
+        
         // Calculate time spent (if action had a start time)
         const timeSpent = action.startTime ? (timestamp - action.startTime) : (result.duration || 0);
         

@@ -513,6 +513,11 @@ class AIMonitorCore {
                     this._codeChangeTracker,
                     this._powerShellSyntaxValidator
                 );
+                
+                // Set complianceVerifier reference in stateStore so collaborationInterface can access it
+                if (this._stateStore && this.complianceVerifier) {
+                    this._stateStore.complianceVerifier = this.complianceVerifier;
+                }
                 this._errorRecovery.recordSuccess('collaborationInterface');
                 this._initializedComponents.add('collaborationInterface');
                 
@@ -1700,6 +1705,13 @@ class AIMonitorCore {
             return;
         }
         this.collaborationInterface.afterAIAction(action, result);
+        
+        // AUTOMATIC COMPLIANCE VERIFICATION: Verify compliance after action
+        // Pass complianceVerifier reference to collaborationInterface if needed
+        if (this.complianceVerifier && this.collaborationInterface) {
+            // Ensure complianceVerifier is accessible for automatic verification
+            // (The collaborationInterface will access it via communicationInterface or stateStore)
+        }
     }
     
     /**
