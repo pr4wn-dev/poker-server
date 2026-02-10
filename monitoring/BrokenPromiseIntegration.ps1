@@ -6,6 +6,9 @@ $script:aiIntegrationHttpServer = Join-Path $PSScriptRoot "integration\BrokenPro
 $script:persistentServerProcess = $null
 $script:persistentServerPort = 3001
 $script:usePersistentServer = $true  # LEARNING SYSTEM FIX: Use persistent HTTP server to prevent memory issues
+$script:serverRestartAttempts = 0
+$script:maxServerRestartAttempts = 3
+$script:lastServerFailureTime = $null
 
 # Test all systems during startup
 function Test-BrokenPromiseSystems {
@@ -278,18 +281,44 @@ function Test-BrokenPromiseSystems {
 # LEARNING SYSTEM FIX: Persistent HTTP server to prevent memory heap overflow
 # Reuses single process instead of spawning new process for each command
 function Start-PersistentIntegrationServer {
-    # Check if server is already running
+    # Check if server is already running and healthy
     try {
         $response = Invoke-WebRequest -Uri "http://127.0.0.1:$($script:persistentServerPort)/ping" -TimeoutSec 2 -ErrorAction Stop
         if ($response.StatusCode -eq 200) {
+            # Server is running and responding
+            $script:serverRestartAttempts = 0  # Reset restart counter on success
             return $true
         }
     } catch {
-        # Server not running, start it
+        # Server not running or not responding - check if process exists but is dead
+        if ($script:persistentServerProcess -and $script:persistentServerProcess.HasExited) {
+            # Process died - clean it up
+            $script:persistentServerProcess = $null
+        }
+    }
+    
+    # Check if we've exceeded max restart attempts
+    if ($script:serverRestartAttempts -ge $script:maxServerRestartAttempts) {
+        $timeSinceLastFailure = if ($script:lastServerFailureTime) { 
+            (Get-Date) - $script:lastServerFailureTime 
+        } else { 
+            [TimeSpan]::MaxValue 
+        }
+        
+        # Reset counter after 5 minutes
+        if ($timeSinceLastFailure.TotalMinutes -gt 5) {
+            $script:serverRestartAttempts = 0
+        } else {
+            Write-Warning "Persistent server restart attempts exceeded ($($script:serverRestartAttempts)/$($script:maxServerRestartAttempts)), falling back to per-command spawning"
+            $script:usePersistentServer = $false
+            return $false
+        }
     }
     
     if ($script:persistentServerProcess -and !$script:persistentServerProcess.HasExited) {
-        return $true
+        # Process exists but server not responding - might be stuck, kill it
+        Write-Warning "Persistent server process exists but not responding - restarting..."
+        Stop-PersistentIntegrationServer
     }
     
     if (!(Test-Path $script:aiIntegrationHttpServer)) {
@@ -329,16 +358,22 @@ function Start-PersistentIntegrationServer {
         }
         
         if ($ready) {
+            $script:serverRestartAttempts = 0  # Reset on successful start
             return $true
         } else {
-            Write-Warning "Persistent HTTP server did not become ready, falling back to per-command spawning"
+            Write-Warning "Persistent HTTP server did not become ready, attempting restart..."
             Stop-PersistentIntegrationServer
-            $script:usePersistentServer = $false
+            $script:serverRestartAttempts++
+            $script:lastServerFailureTime = Get-Date
+            # Don't disable yet - allow retries
             return $false
         }
     } catch {
-        Write-Warning "Failed to start persistent HTTP server: $_, falling back to per-command spawning"
-        $script:usePersistentServer = $false
+        Write-Warning "Failed to start persistent HTTP server: $_, attempting restart..."
+        Stop-PersistentIntegrationServer
+        $script:serverRestartAttempts++
+        $script:lastServerFailureTime = Get-Date
+        # Don't disable yet - allow retries
         return $false
     }
 }
@@ -350,7 +385,7 @@ function Stop-PersistentIntegrationServer {
             try {
                 Invoke-WebRequest -Uri "http://127.0.0.1:$($script:persistentServerPort)/shutdown" -TimeoutSec 1 -ErrorAction Stop | Out-Null
             } catch {
-                # Ignore
+                # Ignore - server might already be down
             }
             
             # Wait for graceful shutdown (max 2 seconds)
@@ -367,6 +402,43 @@ function Stop-PersistentIntegrationServer {
         }
     }
     $script:persistentServerProcess = $null
+}
+
+# Cleanup function - call this when BrokenPromise shuts down
+function Stop-AllIntegrationServers {
+    Stop-PersistentIntegrationServer
+    
+    # Also kill any orphaned integration server processes on port 3001
+    try {
+        $netstatOutput = netstat -ano | Select-String ":3001"
+        if ($netstatOutput) {
+            foreach ($line in $netstatOutput) {
+                if ($line -match '\s+(\d+)\s*$') {
+                    $processId = [int]$matches[1]
+                    try {
+                        $process = Get-Process -Id $processId -ErrorAction SilentlyContinue
+                        if ($process -and $process.ProcessName -eq 'node') {
+                            # Check if it's our integration server
+                            $cmdLine = (Get-CimInstance Win32_Process -Filter "ProcessId = $processId" -ErrorAction SilentlyContinue).CommandLine
+                            if ($cmdLine -and $cmdLine -like "*BrokenPromise-integration-http.js*") {
+                                Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
+                            }
+                        }
+                    } catch {
+                        # Ignore errors
+                    }
+                }
+            }
+        }
+    } catch {
+        # Ignore errors during cleanup
+    }
+}
+
+# Export cleanup function so BrokenPromise.ps1 can call it
+# Also register cleanup on PowerShell exit
+$null = Register-EngineEvent -SourceIdentifier PowerShell.Exiting -Action {
+    Stop-AllIntegrationServers
 }
 
 # Helper function to call AI integration
@@ -400,9 +472,34 @@ function Invoke-AIIntegration {
                     return $response.Content | ConvertFrom-Json
                 }
             } catch {
-                Write-Warning "Persistent HTTP server error: $_, falling back to per-command spawning"
+                # Server error - try to restart
+                Write-Warning "Persistent HTTP server error: $_"
                 Stop-PersistentIntegrationServer
-                $script:usePersistentServer = $false
+                $script:serverRestartAttempts++
+                $script:lastServerFailureTime = Get-Date
+                
+                # Try to restart (if under max attempts)
+                if ($script:serverRestartAttempts -lt $script:maxServerRestartAttempts) {
+                    Write-Info "Attempting to restart persistent server (attempt $($script:serverRestartAttempts)/$($script:maxServerRestartAttempts))..."
+                    Start-Sleep -Milliseconds 500
+                    if (Start-PersistentIntegrationServer) {
+                        # Retry the command
+                        try {
+                            $response = Invoke-WebRequest -Uri $uri -TimeoutSec 30 -ErrorAction Stop
+                            if ($response.StatusCode -eq 200) {
+                                return $response.Content | ConvertFrom-Json
+                            }
+                        } catch {
+                            # Restart failed, fall through to fallback
+                        }
+                    }
+                }
+                
+                # If restart failed or max attempts reached, fall back
+                if ($script:serverRestartAttempts -ge $script:maxServerRestartAttempts) {
+                    Write-Warning "Max restart attempts reached, falling back to per-command spawning"
+                    $script:usePersistentServer = $false
+                }
             }
         }
     }
