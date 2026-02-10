@@ -206,7 +206,38 @@ The cycle repeats:
 - Batch writes (performance)
 - Falls back to file if database unavailable
 
-### **7. Comprehensive Integrity Checks** ✅
+### **7. Pre-Flight Check System** ✅
+
+**Runs BEFORE BrokenPromise starts** to ensure all systems are ready:
+- Node.js version check (>= 18)
+- Required files exist
+- Logs directory exists
+- NPM dependencies installed
+- Database connection works
+- Unity path configured correctly
+- Ports 3000 and 3001 available
+
+**Features**:
+- Uses learning system for solutions
+- Generates prompts for all failures
+- Includes misdiagnosis warnings
+- Blocks startup until fixed
+- Automatic fixes when possible
+
+**See**: `monitoring/PRE_FLIGHT_CHECK.md` for details
+
+### **8. Server Error Monitoring** ✅
+
+**Continuous server health monitoring**:
+- Checks server health every 5 seconds
+- Detects connection errors, timeouts, failures
+- Generates prompts automatically for all server errors
+- Tracks consecutive errors
+- Updates state with server status
+
+**See**: `monitoring/core/ServerErrorMonitor.js`
+
+### **9. Comprehensive Integrity Checks** ✅
 
 **System Verification**:
 - Checks monitoring files
@@ -220,7 +251,7 @@ The cycle repeats:
 - Detects when AI is lying
 - Comprehensive compliance tracking
 
-### **8. Automated Rule Enforcement** ✅
+### **10. Automated Rule Enforcement** ✅
 
 **Console.* Enforcement**:
 - Runtime override (automatic routing to gameLogger)
@@ -233,7 +264,7 @@ The cycle repeats:
 - Auto-refinement (improves rules)
 - Predictive prevention (predicts violations)
 
-### **9. Error Recovery & Resilience** ✅
+### **11. Error Recovery & Resilience** ✅
 
 **Self-Healing System**:
 - Catches all errors (UniversalErrorHandler)
@@ -241,7 +272,7 @@ The cycle repeats:
 - Tracks error patterns
 - Learns from recovery attempts
 
-### **10. Performance Monitoring** ✅
+### **12. Performance Monitoring** ✅
 
 **System Metrics**:
 - Operation timing
@@ -607,9 +638,17 @@ BROKENPROMISE_USE_DB_LOGGING="false" # Fallback to file
 
 ---
 
-## 📚 Additional Information
+## 📚 Documentation
 
-All system information is contained in this README. Historical planning and status documents have been removed to reduce clutter. The system is production-ready and fully documented above.
+**Comprehensive Guides**:
+- **`COMPREHENSIVE_PROMPT_GENERATION.md`** - Complete prompt generation system (ALL phases)
+- **`PRE_FLIGHT_CHECK.md`** - Pre-flight check system details
+- **`LIFECYCLE_MANAGEMENT.md`** - Unity and Server lifecycle management
+- **`UNITY_SERVER_LIFECYCLE.md`** - Detailed lifecycle documentation
+
+**Additional Information**:
+
+All system information is contained in this README and the documentation files above. The system is production-ready and fully documented.
 
 ---
 
@@ -618,13 +657,16 @@ All system information is contained in this README. Historical planning and stat
 1. **MySQL Database Backend** - 99.9% memory reduction, instant queries
 2. **Misdiagnosis Prevention** - Core learning feature, prevents wasted time
 3. **Automatic Issue Detection** - Multi-method detection (state, patterns, anomalies, causal)
-4. **Prompt-Based Workflow** - System generates prompts, verifies compliance
-5. **Code Analysis Instrumentation** - Automatic logging injection
-6. **Database-Backed Logging** - All logs in database, fast queries
-7. **Learning System** - Gets smarter over time, tracks misdiagnosis patterns
-8. **Compliance Verification** - Detects when AI is lying
-9. **Self-Healing** - Error recovery and resilience
-10. **Performance Optimized** - Zero complaints solution
+4. **Comprehensive Prompt Generation** - ALL errors at ALL phases generate prompts automatically
+5. **Pre-Flight Checks** - Ensures all systems ready before startup
+6. **Server Error Monitoring** - Continuous monitoring every 5 seconds
+7. **Prompt-Based Workflow** - System generates prompts, verifies compliance
+8. **Code Analysis Instrumentation** - Automatic logging injection
+9. **Database-Backed Logging** - All logs in database, fast queries
+10. **Learning System** - Gets smarter over time, tracks misdiagnosis patterns
+11. **Compliance Verification** - Detects when AI is lying
+12. **Self-Healing** - Error recovery and resilience
+13. **Performance Optimized** - Zero complaints solution
 
 ---
 
