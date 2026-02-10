@@ -40,8 +40,22 @@ class AIMonitorCore {
     constructor(projectRoot) {
         this.projectRoot = projectRoot;
         
-        // Initialize core components
-        this.stateStore = new StateStore(projectRoot);
+        // Use MySQL if available, otherwise JSON
+        const USE_MYSQL = process.env.BROKENPROMISE_USE_MYSQL !== 'false';
+        if (USE_MYSQL) {
+            try {
+                const StateStoreMySQL = require('./StateStoreMySQL');
+                this.stateStore = new StateStoreMySQL(projectRoot);
+                this.useMySQL = true;
+            } catch (error) {
+                // Fallback to JSON
+                this.stateStore = new StateStore(projectRoot);
+                this.useMySQL = false;
+            }
+        } else {
+            this.stateStore = new StateStore(projectRoot);
+            this.useMySQL = false;
+        }
         
         // Initialize error recovery and performance monitor first
         this.errorRecovery = new ErrorRecovery(this.stateStore);
@@ -87,8 +101,21 @@ class AIMonitorCore {
             this.errorRecovery.recordSuccess('fixTracker');
             
             // Initialize learning engine (needs fixTracker)
-            this.learningEngine = new AILearningEngine(this.stateStore, this.issueDetector, this.fixTracker);
-            this.errorRecovery.recordSuccess('learningEngine');
+            // Use MySQL version if MySQL is enabled
+            if (this.useMySQL) {
+                try {
+                    const AILearningEngineMySQL = require('./AILearningEngineMySQL');
+                    this.learningEngine = new AILearningEngineMySQL(this.stateStore, this.issueDetector, this.fixTracker);
+                    this.errorRecovery.recordSuccess('learningEngine');
+                } catch (error) {
+                    // Fallback to JSON version
+                    this.learningEngine = new AILearningEngine(this.stateStore, this.issueDetector, this.fixTracker);
+                    this.errorRecovery.recordSuccess('learningEngine');
+                }
+            } else {
+                this.learningEngine = new AILearningEngine(this.stateStore, this.issueDetector, this.fixTracker);
+                this.errorRecovery.recordSuccess('learningEngine');
+            }
             
             // Connect learning engine to fix tracker
             this.fixTracker.on('attemptRecorded', (attempt) => {

@@ -16,11 +16,27 @@ const path = require('path');
 const EventEmitter = require('events');
 const gameLogger = require('../../src/utils/GameLogger');
 
+// Check if MySQL should be used (via environment variable or config)
+const USE_MYSQL = process.env.BROKENPROMISE_USE_MYSQL !== 'false'; // Default to true if MySQL available
+
 class StateStore extends EventEmitter {
     constructor(projectRoot) {
         super();
         this.projectRoot = projectRoot;
         this.persistenceFile = path.join(projectRoot, 'logs', 'ai-state-store.json');
+        this.useMySQL = USE_MYSQL;
+        
+        // Initialize MySQL if enabled
+        if (this.useMySQL) {
+            try {
+                const DatabaseManager = require('./DatabaseManager');
+                this.dbManager = new DatabaseManager(projectRoot);
+            } catch (error) {
+                // MySQL not available, fallback to JSON
+                this.useMySQL = false;
+                gameLogger.warn('MONITORING', '[StateStore] MySQL not available, using JSON fallback', { error: error.message });
+            }
+        }
         
         // Complete state - AI can query anything
         this.state = {
@@ -284,7 +300,25 @@ class StateStore extends EventEmitter {
         
         const oldValue = this.getState(path);
         
-        // Update state atomically
+        // Use MySQL if available (async, but don't block)
+        if (this.useMySQL && this.dbManager) {
+            // Initialize if needed (async, don't block)
+            if (!this.dbManager.initialized) {
+                this.dbManager.initialize().catch(err => {
+                    gameLogger.warn('MONITORING', '[StateStore] MySQL init failed, using JSON fallback', { error: err.message });
+                    this.useMySQL = false;
+                });
+            }
+            
+            // Update MySQL (async, don't block)
+            if (this.dbManager.initialized) {
+                this.dbManager.updateState(path, value).catch(err => {
+                    gameLogger.warn('MONITORING', '[StateStore] MySQL update failed', { error: err.message });
+                });
+            }
+        }
+        
+        // Always update in-memory state (for compatibility and immediate access)
         this._setState(path, value);
         
         // Log event
@@ -315,6 +349,7 @@ class StateStore extends EventEmitter {
     
     /**
      * Get state - AI can query anything
+     * Uses in-memory state (MySQL updates are async, so we read from memory)
      */
     getState(path = null) {
         if (!path) {
