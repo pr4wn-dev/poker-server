@@ -1490,6 +1490,9 @@ class AIMonitorCore {
      */
     destroy() {
         // Stop all background intervals
+        if (this.serverErrorMonitor) {
+            this.serverErrorMonitor.stop();
+        }
         if (this.serverStateCapture) {
             this.serverStateCapture.stop();
         }
