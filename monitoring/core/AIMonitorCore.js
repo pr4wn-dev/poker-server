@@ -107,6 +107,11 @@ class AIMonitorCore {
                     const AILearningEngineMySQL = require('./AILearningEngineMySQL');
                     this.learningEngine = new AILearningEngineMySQL(this.stateStore, this.issueDetector, this.fixTracker);
                     this.errorRecovery.recordSuccess('learningEngine');
+                    
+                    // Seed initial error patterns (non-blocking)
+                    this.learningEngine.seedInitialPatterns().catch(err => {
+                        gameLogger.warn('BrokenPromise', '[LEARNING] Failed to seed initial patterns', { error: err.message });
+                    });
                 } catch (error) {
                     // Fallback to JSON version
                     this.learningEngine = new AILearningEngine(this.stateStore, this.issueDetector, this.fixTracker);

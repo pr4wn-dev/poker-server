@@ -326,15 +326,29 @@ class BrokenPromiseIntegration {
         const investigation = this.aiCore.stateStore.getState('monitoring.investigation');
         const activeIssues = this.aiCore.issueDetector.getActiveIssues();
         
+        // Null check: Provide default for investigation state
+        if (!investigation || typeof investigation !== 'object') {
+            return {
+                active: false,
+                status: 'inactive',
+                startTime: null,
+                timeout: 15,
+                progress: 0,
+                timeRemaining: 0,
+                issues: activeIssues || [],
+                issuesCount: (activeIssues || []).length
+            };
+        }
+        
         return {
             active: investigation.status === 'active' || investigation.status === 'starting',
-            status: investigation.status,
-            startTime: investigation.startTime,
+            status: investigation.status || 'inactive',
+            startTime: investigation.startTime || null,
             timeout: investigation.timeout || 15,
             progress: investigation.progress || 0,
             timeRemaining: investigation.timeRemaining || 0,
-            issues: activeIssues,
-            issuesCount: activeIssues.length
+            issues: activeIssues || [],
+            issuesCount: (activeIssues || []).length
         };
     }
     

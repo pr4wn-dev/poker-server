@@ -206,12 +206,40 @@ class AIDecisionEngine extends EventEmitter {
         const unity = this.stateStore.getState('system.unity');
         const activeIssues = this.issueDetector.getActiveIssues();
         
+        // Null check: Provide default for unity state
+        if (!unity || typeof unity !== 'object') {
+            return {
+                should: false,
+                reason: 'Unity state not available',
+                confidence: 0.5
+            };
+        }
+        
         // Already paused
         if (unity.status === 'paused') {
             return {
                 should: false,
                 reason: 'Unity already paused',
                 confidence: 1.0
+            };
+        }
+        
+        // Null check: Provide default for investigation state
+        if (!investigation || typeof investigation !== 'object') {
+            // No investigation state, check other conditions
+            const criticalIssues = activeIssues.filter(i => i.severity === 'critical');
+            if (criticalIssues.length > 0) {
+                return {
+                    should: true,
+                    reason: `${criticalIssues.length} critical issue(s) detected`,
+                    confidence: 0.9,
+                    priority: 'critical'
+                };
+            }
+            return {
+                should: false,
+                reason: 'No investigation state, no critical issues',
+                confidence: 0.5
             };
         }
         

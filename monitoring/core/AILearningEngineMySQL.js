@@ -353,6 +353,38 @@ class AILearningEngineMySQL extends EventEmitter {
         // Data is already saved in database via learnFromAttempt
         // This method exists for compatibility
     }
+
+    /**
+     * Seed initial error patterns if they don't exist
+     * Called during initialization to ensure critical patterns are available
+     */
+    async seedInitialPatterns() {
+        if (!this.initialized) await this.initialize();
+        
+        const pool = this.dbManager.getPool();
+        
+        try {
+            // Check if patterns already exist
+            const [existing] = await pool.execute(`
+                SELECT COUNT(*) as count FROM learning_patterns 
+                WHERE pattern_key IN ('memory_heap_overflow', 'null_reference_state', 'verification_memory_overflow')
+            `);
+            
+            if (existing[0].count >= 3) {
+                // Patterns already seeded
+                return;
+            }
+            
+            // Import and run seeding script
+            const seedPatterns = require('../../scripts/seed-error-patterns');
+            await seedPatterns();
+            
+            this.emit('patterns-seeded');
+        } catch (error) {
+            // Don't fail initialization if seeding fails
+            console.error('[AILearningEngine] Failed to seed initial patterns:', error.message);
+        }
+    }
 }
 
 module.exports = AILearningEngineMySQL;
