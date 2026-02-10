@@ -39,13 +39,15 @@ class StateStoreMySQL extends EventEmitter {
 
     /**
      * Initialize database connection
+     * LEARNING SYSTEM FIX: Don't load state upfront - query on-demand
      */
     async initialize() {
         if (this.initialized) return;
         
         try {
             await this.dbManager.initialize();
-            await this.loadCoreState(); // Load only core state (game, system, monitoring)
+            // LEARNING SYSTEM FIX: Removed loadCoreState() - state will be loaded on-demand via getState()
+            // This prevents memory overflow during initialization
             this.initialized = true;
             this.emit('initialized');
         } catch (error) {
@@ -55,26 +57,13 @@ class StateStoreMySQL extends EventEmitter {
     }
 
     /**
-     * Load only core state (game, system, monitoring) - lazy load rest
-     */
-    async loadCoreState() {
-        const corePaths = ['game', 'system', 'monitoring', 'issues', 'fixes', 'ai', 'metadata', 'rules', 'process'];
-        
-        for (const path of corePaths) {
-            const value = await this.dbManager.getState(path);
-            if (value !== null) {
-                this.state[path] = value;
-            }
-        }
-    }
-
-    /**
      * Get state value by path (supports dot notation)
-     * Synchronous for compatibility, uses cache
+     * LEARNING SYSTEM FIX: Query database on-demand if not in cache/memory
+     * Synchronous for compatibility, but triggers async load if needed
      */
     getState(path = null) {
         if (!path) {
-            // Return in-memory state structure
+            // Return in-memory state structure (may be empty initially)
             return this.state;
         }
         
@@ -92,6 +81,14 @@ class StateStoreMySQL extends EventEmitter {
         let current = this.state;
         for (const part of parts) {
             if (current === null || current === undefined) {
+                // LEARNING SYSTEM FIX: If not in memory and initialized, trigger async load
+                // But return null immediately (synchronous compatibility)
+                if (this.initialized) {
+                    // Trigger async load (non-blocking)
+                    this.getStateAsync(path).catch(err => {
+                        gameLogger.warn('MONITORING', '[StateStoreMySQL] Async state load failed', { path, error: err.message });
+                    });
+                }
                 return null;
             }
             current = current[part];
@@ -101,7 +98,15 @@ class StateStoreMySQL extends EventEmitter {
             return current;
         }
         
-        // If not in memory, return null (will be loaded on demand if needed)
+        // LEARNING SYSTEM FIX: If not in memory and initialized, trigger async load
+        // But return null immediately (synchronous compatibility)
+        if (this.initialized) {
+            // Trigger async load (non-blocking)
+            this.getStateAsync(path).catch(err => {
+                gameLogger.warn('MONITORING', '[StateStoreMySQL] Async state load failed', { path, error: err.message });
+            });
+        }
+        
         return null;
     }
     

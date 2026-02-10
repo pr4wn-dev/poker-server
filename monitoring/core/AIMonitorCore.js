@@ -40,283 +40,636 @@ class AIMonitorCore {
     constructor(projectRoot) {
         this.projectRoot = projectRoot;
         
+        // LEARNING SYSTEM FIX: Lazy initialization - only create lightweight components in constructor
+        // All heavy components are created via getters on first access
+        
         // Use MySQL if available, otherwise JSON
         const USE_MYSQL = process.env.BROKENPROMISE_USE_MYSQL !== 'false';
         if (USE_MYSQL) {
             try {
                 const StateStoreMySQL = require('./StateStoreMySQL');
-                this.stateStore = new StateStoreMySQL(projectRoot);
+                this._stateStore = new StateStoreMySQL(projectRoot);
                 this.useMySQL = true;
             } catch (error) {
                 // Fallback to JSON
-                this.stateStore = new StateStore(projectRoot);
+                this._stateStore = new StateStore(projectRoot);
                 this.useMySQL = false;
             }
         } else {
-            this.stateStore = new StateStore(projectRoot);
+            this._stateStore = new StateStore(projectRoot);
             this.useMySQL = false;
         }
         
-        // Initialize error recovery and performance monitor first
-        this.errorRecovery = new ErrorRecovery(this.stateStore);
-        this.performanceMonitor = new PerformanceMonitor(this.stateStore);
+        // Initialize error recovery and performance monitor first (lightweight)
+        this._errorRecovery = new ErrorRecovery(this._stateStore);
+        this._performanceMonitor = new PerformanceMonitor(this._stateStore);
         
-        // Initialize process monitor (needs issueDetector, will be set after issueDetector is created)
-        this.processMonitor = null;
+        // LEARNING SYSTEM FIX: All other components are lazy - stored in _private properties
+        // Access via getters that create on-demand
+        this._logProcessor = null;
+        this._issueDetector = null;
+        this._processMonitor = null;
+        this._fixTracker = null;
+        this._learningEngine = null;
+        this._rulesEnforcer = null;
+        this._workflowEnforcer = null;
+        this._universalErrorHandler = null;
+        this._decisionEngine = null;
+        this._liveStatistics = null;
+        this._communicationInterface = null;
+        this._solutionTemplateEngine = null;
+        this._codeChangeTracker = null;
+        this._collaborationInterface = null;
+        this._promptGenerator = null;
+        this._complianceVerifier = null;
+        this._codeAnalysis = null;
+        this._workflowViolationDetector = null;
+        this._serverErrorMonitor = null;
+        this._powerShellSyntaxValidator = null;
+        this._commandExecutionMonitor = null;
+        this._integrityChecker = null;
+        this._loggingIntegrityChecker = null;
+        this._loggingAutoFix = null;
+        this._codeEnhancementSystem = null;
+        this._performanceAnalyzer = null;
+        this._serverStateCapture = null;
+        this._unityStateReporter = null;
+        this._stateVerificationContracts = null;
+        this._dependencyGraph = null;
+        this._enhancedAnomalyDetection = null;
+        this._causalAnalysis = null;
+        this._autoFixEngine = null;
         
-        // Rules enforcer needs learningEngine for self-learning - will be initialized after learningEngine
-        this.rulesEnforcer = null;
-        this.workflowEnforcer = null;
+        // Track which components have been initialized (for event listener setup)
+        this._initializedComponents = new Set();
+        this._eventListenersSetup = false;
         
-        // Initialize universal error handler (needs to be early, but after errorRecovery)
-        // Will be fully initialized after issueDetector and learningEngine are ready
-        this.universalErrorHandler = null; // Will be set after components are ready
-        
-        // Initialize learning engine (after fixTracker is ready)
-        
-        // Initialize core components (with error recovery tracking)
-        try {
-            this.logProcessor = new AILogProcessor(projectRoot, this.stateStore);
-            this.errorRecovery.recordSuccess('logProcessor');
-        } catch (error) {
-            this.errorRecovery.recordError('logProcessor', error);
-            throw error;
-        }
-        
-        try {
-            this.issueDetector = new AIIssueDetector(this.stateStore, this.logProcessor);
-            this.errorRecovery.recordSuccess('issueDetector');
-            
-            // Initialize process monitor (needs issueDetector)
-            const ProcessMonitor = require('./ProcessMonitor');
-            this.processMonitor = new ProcessMonitor(this.stateStore, this.issueDetector);
-            this.errorRecovery.recordSuccess('processMonitor');
-        } catch (error) {
-            this.errorRecovery.recordError('issueDetector', error);
-            throw error;
-        }
-        
-        try {
-            this.fixTracker = new AIFixTracker(this.stateStore, this.issueDetector);
-            this.errorRecovery.recordSuccess('fixTracker');
-            
-            // Initialize learning engine (needs fixTracker)
-            // Use MySQL version if MySQL is enabled
-            if (this.useMySQL) {
-                try {
-                    const AILearningEngineMySQL = require('./AILearningEngineMySQL');
-                    this.learningEngine = new AILearningEngineMySQL(this.stateStore, this.issueDetector, this.fixTracker);
-                    this.errorRecovery.recordSuccess('learningEngine');
-                    
-                    // Seed initial error patterns (non-blocking)
-                    this.learningEngine.seedInitialPatterns().catch(err => {
-                        gameLogger.warn('BrokenPromise', '[LEARNING] Failed to seed initial patterns', { error: err.message });
-                    });
-                } catch (error) {
-                    // Fallback to JSON version
-                    this.learningEngine = new AILearningEngine(this.stateStore, this.issueDetector, this.fixTracker);
-                    this.errorRecovery.recordSuccess('learningEngine');
-                }
-            } else {
-                this.learningEngine = new AILearningEngine(this.stateStore, this.issueDetector, this.fixTracker);
-                this.errorRecovery.recordSuccess('learningEngine');
+        gameLogger.info('MONITORING', '[AI_MONITOR_CORE] Constructor complete (lazy initialization)', {
+            message: 'Components will be created on-demand to prevent memory overflow'
+        });
+    }
+    
+    /**
+     * LEARNING SYSTEM FIX: Lazy getter for stateStore
+     */
+    get stateStore() {
+        return this._stateStore;
+    }
+    
+    /**
+     * LEARNING SYSTEM FIX: Lazy getter for errorRecovery
+     */
+    get errorRecovery() {
+        return this._errorRecovery;
+    }
+    
+    /**
+     * LEARNING SYSTEM FIX: Lazy getter for performanceMonitor
+     */
+    get performanceMonitor() {
+        return this._performanceMonitor;
+    }
+    
+    /**
+     * LEARNING SYSTEM FIX: Lazy getter for logProcessor
+     */
+    get logProcessor() {
+        if (!this._logProcessor) {
+            try {
+                this._logProcessor = new AILogProcessor(this.projectRoot, this._stateStore);
+                this._errorRecovery.recordSuccess('logProcessor');
+                this._initializedComponents.add('logProcessor');
+            } catch (error) {
+                this._errorRecovery.recordError('logProcessor', error);
+                throw error;
             }
-            
-            // Connect learning engine to fix tracker
-            this.fixTracker.on('attemptRecorded', (attempt) => {
-                this.learningEngine.learnFromAttempt(attempt);
-            });
-            
-            // NOW initialize rules enforcer (needs learningEngine for self-learning)
-            this.rulesEnforcer = new AIRulesEnforcer(this.stateStore, this.learningEngine);
-            this.errorRecovery.recordSuccess('rulesEnforcer');
-            
-            // Initialize workflow enforcer (needs rulesEnforcer and learningEngine)
-            // Note: powerShellSyntaxValidator will be set after it's initialized
-            const AIWorkflowEnforcer = require('./AIWorkflowEnforcer');
-            this.workflowEnforcer = null; // Will be set after powerShellSyntaxValidator is initialized
-            this.errorRecovery.recordSuccess('workflowEnforcer');
-            
-            // Connect ConsoleOverride to rules enforcer (so violations are learned from)
-            const ConsoleOverride = require('./ConsoleOverride');
-            ConsoleOverride.setViolationCallback((ruleId, context, details) => {
-                if (this.rulesEnforcer) {
-                    this.rulesEnforcer.recordViolation(ruleId, context, details);
+        }
+        return this._logProcessor;
+    }
+    
+    /**
+     * LEARNING SYSTEM FIX: Lazy getter for issueDetector
+     */
+    get issueDetector() {
+        if (!this._issueDetector) {
+            try {
+                this._issueDetector = new AIIssueDetector(this._stateStore, this.logProcessor);
+                this._errorRecovery.recordSuccess('issueDetector');
+                this._initializedComponents.add('issueDetector');
+                
+                // Initialize process monitor (needs issueDetector)
+                if (!this._processMonitor) {
+                    const ProcessMonitor = require('./ProcessMonitor');
+                    this._processMonitor = new ProcessMonitor(this._stateStore, this._issueDetector);
+                    this._errorRecovery.recordSuccess('processMonitor');
+                    this._initializedComponents.add('processMonitor');
                 }
-            });
-            
-            // NOW initialize universal error handler (needs issueDetector, errorRecovery, learningEngine)
-            this.universalErrorHandler = new UniversalErrorHandler(
-                this.stateStore,
-                this.issueDetector,
-                this.errorRecovery,
-                this.learningEngine
-            );
-            this.errorRecovery.recordSuccess('universalErrorHandler');
-        } catch (error) {
-            this.errorRecovery.recordError('fixTracker', error);
-            throw error;
+                
+                // Setup event listeners if not already done
+                this._setupComponentEventListeners();
+            } catch (error) {
+                this._errorRecovery.recordError('issueDetector', error);
+                throw error;
+            }
         }
-        
-        try {
-            this.decisionEngine = new AIDecisionEngine(this.stateStore, this.issueDetector, this.fixTracker);
-            this.errorRecovery.recordSuccess('decisionEngine');
-        } catch (error) {
-            this.errorRecovery.recordError('decisionEngine', error);
-            throw error;
+        return this._issueDetector;
+    }
+    
+    /**
+     * LEARNING SYSTEM FIX: Lazy getter for processMonitor
+     */
+    get processMonitor() {
+        if (!this._processMonitor) {
+            // Ensure issueDetector is created first (processMonitor depends on it)
+            this.issueDetector; // This will create processMonitor too
         }
-        
-        this.liveStatistics = new AILiveStatistics(
-            this.stateStore,
-            this.issueDetector,
-            this.fixTracker,
-            this.decisionEngine,
-            this.logProcessor
-        );
-        // Communication interface needs learning engine for confidence and rules enforcer - create after learning engine
-        this.communicationInterface = new AICommunicationInterface(
-            this.stateStore,
-            this.issueDetector,
-            this.fixTracker,
-            this.decisionEngine,
-            this.logProcessor,
-            this.liveStatistics,
-            this.learningEngine, // Pass learning engine for confidence tracking
-            this.rulesEnforcer // Pass rules enforcer - AI must never forget rules
-        );
-        
-        // Solution Template Engine (reusable solution templates)
-        try {
-            const SolutionTemplateEngine = require('./SolutionTemplateEngine');
-            this.solutionTemplateEngine = new SolutionTemplateEngine(
-                this.stateStore,
-                this.learningEngine
-            );
-            this.errorRecovery.recordSuccess('solutionTemplateEngine');
-        } catch (error) {
-            this.errorRecovery.recordError('solutionTemplateEngine', error);
-            throw error;
-        }
-        
-        // Code Change Tracker (learn from actual code changes)
-        try {
-            const CodeChangeTracker = require('./CodeChangeTracker');
-            this.codeChangeTracker = new CodeChangeTracker(
-                this.stateStore,
-                this.projectRoot
-            );
-            this.errorRecovery.recordSuccess('codeChangeTracker');
-        } catch (error) {
-            this.errorRecovery.recordError('codeChangeTracker', error);
-            throw error;
-        }
-        
-        // AI Collaboration Interface - WE ARE ONE
-        // This makes AI and Learning System completely symbiotic
-        const AICollaborationInterface = require('./AICollaborationInterface');
-        this.collaborationInterface = new AICollaborationInterface(
-            this.stateStore,
-            this.learningEngine,
-            this.issueDetector,
-            this.fixTracker,
-            this.communicationInterface,
-            this.solutionTemplateEngine,
-            this.codeChangeTracker,
-            this.powerShellSyntaxValidator
-        );
-        this.errorRecovery.recordSuccess('collaborationInterface');
-        
-        // Prompt-Based System Components
-        const PromptGenerator = require('./PromptGenerator');
-        const PromptComplianceVerifier = require('./PromptComplianceVerifier');
-        const AIWorkflowViolationDetector = require('./AIWorkflowViolationDetector');
-        
-        // Initialize prompt generator
-        this.promptGenerator = new PromptGenerator(
-            this.stateStore,
-            this.learningEngine,
-            this.collaborationInterface
-        );
-        this.errorRecovery.recordSuccess('promptGenerator');
-        
-        // Initialize compliance verifier
-        this.complianceVerifier = new PromptComplianceVerifier(
-            this.stateStore,
-            this.projectRoot
-        );
-        this.errorRecovery.recordSuccess('complianceVerifier');
-        
-        // Track tool calls (we'll need to hook into tool system or track manually)
-        // For now, we'll track via state updates
-        // Note: setupToolCallTracking will be implemented when we have tool system hooks
-        
-        // Code Analysis Instrumentation (automatic logging injection)
-        try {
-            const CodeAnalysisInstrumentation = require('./CodeAnalysisInstrumentation');
-            this.codeAnalysis = new CodeAnalysisInstrumentation(
-                this.projectRoot,
-                this.stateStore,
-                this.learningEngine
-            );
-            this.errorRecovery.recordSuccess('codeAnalysis');
-        } catch (error) {
-            this.errorRecovery.recordError('codeAnalysis', error);
-            // Don't throw - code analysis is optional
-        }
-        
-        // Initialize workflow violation detector
-        this.workflowViolationDetector = new AIWorkflowViolationDetector(
-            this.stateStore,
-            this.collaborationInterface,
-            this.complianceVerifier
-        );
-        this.errorRecovery.recordSuccess('workflowViolationDetector');
-        
-        // Hook up code change tracker to workflow violation detector
-        if (this.codeChangeTracker) {
-            this.codeChangeTracker.on('codeChanged', (data) => {
-                if (this.workflowViolationDetector && data.file) {
-                    this.workflowViolationDetector.recordCodeChange(data.file, data.changeType || 'modified');
+        return this._processMonitor;
+    }
+    
+    /**
+     * LEARNING SYSTEM FIX: Lazy getter for fixTracker
+     */
+    get fixTracker() {
+        if (!this._fixTracker) {
+            try {
+                this._fixTracker = new AIFixTracker(this._stateStore, this.issueDetector);
+                this._errorRecovery.recordSuccess('fixTracker');
+                this._initializedComponents.add('fixTracker');
+                
+                // Connect learning engine to fix tracker (if learning engine exists)
+                if (this._learningEngine) {
+                    this._fixTracker.on('attemptRecorded', (attempt) => {
+                        this._learningEngine.learnFromAttempt(attempt);
+                    });
                 }
-            });
+                
+                this._setupComponentEventListeners();
+            } catch (error) {
+                this._errorRecovery.recordError('fixTracker', error);
+                throw error;
+            }
         }
+        return this._fixTracker;
+    }
+    
+    /**
+     * LEARNING SYSTEM FIX: Lazy getter for learningEngine
+     */
+    get learningEngine() {
+        if (!this._learningEngine) {
+            try {
+                // Ensure fixTracker is created first
+                this.fixTracker;
+                
+                // Use MySQL version if MySQL is enabled
+                if (this.useMySQL) {
+                    try {
+                        const AILearningEngineMySQL = require('./AILearningEngineMySQL');
+                        this._learningEngine = new AILearningEngineMySQL(this._stateStore, this.issueDetector, this._fixTracker);
+                        this._errorRecovery.recordSuccess('learningEngine');
+                        
+                        // Seed initial error patterns (non-blocking)
+                        this._learningEngine.seedInitialPatterns().catch(err => {
+                            gameLogger.warn('BrokenPromise', '[LEARNING] Failed to seed initial patterns', { error: err.message });
+                        });
+                    } catch (error) {
+                        // Fallback to JSON version
+                        this._learningEngine = new AILearningEngine(this._stateStore, this.issueDetector, this._fixTracker);
+                        this._errorRecovery.recordSuccess('learningEngine');
+                    }
+                } else {
+                    this._learningEngine = new AILearningEngine(this._stateStore, this.issueDetector, this._fixTracker);
+                    this._errorRecovery.recordSuccess('learningEngine');
+                }
+                
+                this._initializedComponents.add('learningEngine');
+                
+                // Connect learning engine to fix tracker
+                this._fixTracker.on('attemptRecorded', (attempt) => {
+                    this._learningEngine.learnFromAttempt(attempt);
+                });
+                
+                this._setupComponentEventListeners();
+            } catch (error) {
+                this._errorRecovery.recordError('learningEngine', error);
+                throw error;
+            }
+        }
+        return this._learningEngine;
+    }
+    
+    /**
+     * LEARNING SYSTEM FIX: Lazy getter for rulesEnforcer
+     */
+    get rulesEnforcer() {
+        if (!this._rulesEnforcer) {
+            try {
+                // Ensure learningEngine is created first
+                this.learningEngine;
+                
+                this._rulesEnforcer = new AIRulesEnforcer(this._stateStore, this._learningEngine);
+                this._errorRecovery.recordSuccess('rulesEnforcer');
+                this._initializedComponents.add('rulesEnforcer');
+                
+                // Connect ConsoleOverride to rules enforcer
+                const ConsoleOverride = require('./ConsoleOverride');
+                ConsoleOverride.setViolationCallback((ruleId, context, details) => {
+                    if (this._rulesEnforcer) {
+                        this._rulesEnforcer.recordViolation(ruleId, context, details);
+                    }
+                });
+                
+                this._setupComponentEventListeners();
+            } catch (error) {
+                this._errorRecovery.recordError('rulesEnforcer', error);
+                throw error;
+            }
+        }
+        return this._rulesEnforcer;
+    }
+    
+    /**
+     * LEARNING SYSTEM FIX: Lazy getter for universalErrorHandler
+     */
+    get universalErrorHandler() {
+        if (!this._universalErrorHandler) {
+            try {
+                // Ensure dependencies are created
+                this.issueDetector;
+                this.learningEngine;
+                
+                this._universalErrorHandler = new UniversalErrorHandler(
+                    this._stateStore,
+                    this._issueDetector,
+                    this._errorRecovery,
+                    this._learningEngine
+                );
+                this._errorRecovery.recordSuccess('universalErrorHandler');
+                this._initializedComponents.add('universalErrorHandler');
+                
+                this._setupComponentEventListeners();
+            } catch (error) {
+                this._errorRecovery.recordError('universalErrorHandler', error);
+                throw error;
+            }
+        }
+        return this._universalErrorHandler;
+    }
+    
+    /**
+     * LEARNING SYSTEM FIX: Lazy getter for decisionEngine
+     */
+    get decisionEngine() {
+        if (!this._decisionEngine) {
+            try {
+                // Ensure dependencies are created
+                this.issueDetector;
+                this.fixTracker;
+                
+                this._decisionEngine = new AIDecisionEngine(this._stateStore, this._issueDetector, this._fixTracker);
+                this._errorRecovery.recordSuccess('decisionEngine');
+                this._initializedComponents.add('decisionEngine');
+                
+                // Start decision engine (after all components are initialized)
+                this._decisionEngine.start();
+                
+                this._setupComponentEventListeners();
+            } catch (error) {
+                this._errorRecovery.recordError('decisionEngine', error);
+                throw error;
+            }
+        }
+        return this._decisionEngine;
+    }
+    
+    /**
+     * LEARNING SYSTEM FIX: Helper method to setup component event listeners
+     * Called when components are first created
+     */
+    _setupComponentEventListeners() {
+        if (this._eventListenersSetup) return;
+        
+        // Only setup listeners that don't require all components
+        // Full event listener setup happens when all components are accessed
+    }
+    
+    /**
+     * LEARNING SYSTEM FIX: Lazy getter for liveStatistics
+     */
+    get liveStatistics() {
+        if (!this._liveStatistics) {
+            // Ensure dependencies are created
+            this.issueDetector;
+            this.fixTracker;
+            this.decisionEngine;
+            this.logProcessor;
+            
+            this._liveStatistics = new AILiveStatistics(
+                this._stateStore,
+                this._issueDetector,
+                this._fixTracker,
+                this._decisionEngine,
+                this._logProcessor
+            );
+            this._initializedComponents.add('liveStatistics');
+        }
+        return this._liveStatistics;
+    }
+    
+    /**
+     * LEARNING SYSTEM FIX: Lazy getter for communicationInterface
+     */
+    get communicationInterface() {
+        if (!this._communicationInterface) {
+            // Ensure dependencies are created
+            this.issueDetector;
+            this.fixTracker;
+            this.decisionEngine;
+            this.logProcessor;
+            this.liveStatistics;
+            this.learningEngine;
+            this.rulesEnforcer;
+            
+            this._communicationInterface = new AICommunicationInterface(
+                this._stateStore,
+                this._issueDetector,
+                this._fixTracker,
+                this._decisionEngine,
+                this._logProcessor,
+                this._liveStatistics,
+                this._learningEngine,
+                this._rulesEnforcer
+            );
+            this._initializedComponents.add('communicationInterface');
+        }
+        return this._communicationInterface;
+    }
+    
+    /**
+     * LEARNING SYSTEM FIX: Lazy getter for solutionTemplateEngine
+     */
+    get solutionTemplateEngine() {
+        if (!this._solutionTemplateEngine) {
+            try {
+                // Ensure learningEngine is created
+                this.learningEngine;
+                
+                const SolutionTemplateEngine = require('./SolutionTemplateEngine');
+                this._solutionTemplateEngine = new SolutionTemplateEngine(
+                    this._stateStore,
+                    this._learningEngine
+                );
+                this._errorRecovery.recordSuccess('solutionTemplateEngine');
+                this._initializedComponents.add('solutionTemplateEngine');
+            } catch (error) {
+                this._errorRecovery.recordError('solutionTemplateEngine', error);
+                throw error;
+            }
+        }
+        return this._solutionTemplateEngine;
+    }
+    
+    /**
+     * LEARNING SYSTEM FIX: Lazy getter for codeChangeTracker
+     */
+    get codeChangeTracker() {
+        if (!this._codeChangeTracker) {
+            try {
+                const CodeChangeTracker = require('./CodeChangeTracker');
+                this._codeChangeTracker = new CodeChangeTracker(
+                    this._stateStore,
+                    this.projectRoot
+                );
+                this._errorRecovery.recordSuccess('codeChangeTracker');
+                this._initializedComponents.add('codeChangeTracker');
+                
+                // Hook up code change tracker to workflow violation detector (if it exists)
+                if (this._workflowViolationDetector) {
+                    this._codeChangeTracker.on('codeChanged', (data) => {
+                        if (this._workflowViolationDetector && data.file) {
+                            this._workflowViolationDetector.recordCodeChange(data.file, data.changeType || 'modified');
+                        }
+                    });
+                }
+            } catch (error) {
+                this._errorRecovery.recordError('codeChangeTracker', error);
+                throw error;
+            }
+        }
+        return this._codeChangeTracker;
+    }
+    
+    /**
+     * LEARNING SYSTEM FIX: Lazy getter for powerShellSyntaxValidator
+     */
+    get powerShellSyntaxValidator() {
+        if (!this._powerShellSyntaxValidator) {
+            try {
+                // Ensure dependencies are created
+                this.issueDetector;
+                this.learningEngine;
+                
+                const PowerShellSyntaxValidator = require('./PowerShellSyntaxValidator');
+                this._powerShellSyntaxValidator = new PowerShellSyntaxValidator(
+                    this.projectRoot,
+                    this._stateStore,
+                    this._issueDetector,
+                    this._learningEngine
+                );
+                this._errorRecovery.recordSuccess('powerShellSyntaxValidator');
+                this._initializedComponents.add('powerShellSyntaxValidator');
+            } catch (error) {
+                this._errorRecovery.recordError('powerShellSyntaxValidator', error);
+                throw error;
+            }
+        }
+        return this._powerShellSyntaxValidator;
+    }
+    
+    /**
+     * LEARNING SYSTEM FIX: Lazy getter for collaborationInterface
+     */
+    get collaborationInterface() {
+        if (!this._collaborationInterface) {
+            try {
+                // Ensure dependencies are created
+                this.learningEngine;
+                this.issueDetector;
+                this.fixTracker;
+                this.communicationInterface;
+                this.solutionTemplateEngine;
+                this.codeChangeTracker;
+                this.powerShellSyntaxValidator;
+                
+                const AICollaborationInterface = require('./AICollaborationInterface');
+                this._collaborationInterface = new AICollaborationInterface(
+                    this._stateStore,
+                    this._learningEngine,
+                    this._issueDetector,
+                    this._fixTracker,
+                    this._communicationInterface,
+                    this._solutionTemplateEngine,
+                    this._codeChangeTracker,
+                    this._powerShellSyntaxValidator
+                );
+                this._errorRecovery.recordSuccess('collaborationInterface');
+                this._initializedComponents.add('collaborationInterface');
+                
+                // Hook up event listeners
+                this._setupCollaborationInterfaceListeners();
+            } catch (error) {
+                this._errorRecovery.recordError('collaborationInterface', error);
+                throw error;
+            }
+        }
+        return this._collaborationInterface;
+    }
+    
+    /**
+     * LEARNING SYSTEM FIX: Setup collaboration interface event listeners
+     */
+    _setupCollaborationInterfaceListeners() {
+        if (!this._collaborationInterface) return;
         
         // Hook up violation detector to record beforeAIAction/afterAIAction calls
-        this.collaborationInterface.on('beforeAIAction', () => {
-            this.workflowViolationDetector.recordBeforeActionCall();
-        });
-        this.collaborationInterface.on('afterAIAction', () => {
-            this.workflowViolationDetector.recordAfterActionCall();
-        });
+        if (this._workflowViolationDetector) {
+            this._collaborationInterface.on('beforeAIAction', () => {
+                this._workflowViolationDetector.recordBeforeActionCall();
+            });
+            this._collaborationInterface.on('afterAIAction', () => {
+                this._workflowViolationDetector.recordAfterActionCall();
+            });
+        }
         
         // Hook up tool call tracking to compliance verifier
-        this.collaborationInterface.on('toolCall', (toolCall) => {
-            if (this.complianceVerifier) {
-                this.complianceVerifier.trackToolCall(toolCall.tool, toolCall.params);
+        if (this._complianceVerifier) {
+            this._collaborationInterface.on('toolCall', (toolCall) => {
+                this._complianceVerifier.trackToolCall(toolCall.tool, toolCall.params);
+            });
+        }
+        
+        // Hook up failure tracking to prompt generator
+        this._collaborationInterface.on('aiFailure', (failureRecord) => {
+            if (this._promptGenerator) {
+                const webSearchRequired = this._stateStore.getState('ai.learning.webSearchRequired');
+                if (webSearchRequired && !webSearchRequired.resolved) {
+                    const prompt = this._promptGenerator.generatePrompt({
+                        type: 'web_search_required',
+                        consecutiveFailures: webSearchRequired.consecutiveFailures,
+                        searchTerms: webSearchRequired.searchTerms,
+                        issueType: failureRecord.action?.issueType,
+                        component: failureRecord.action?.component,
+                        timestamp: Date.now()
+                    });
+                    if (prompt) {
+                        gameLogger.warn('BrokenPromise', '[PROMPT_SYSTEM] Generated prompt for web search requirement', {
+                            promptId: prompt.id,
+                            consecutiveFailures: webSearchRequired.consecutiveFailures
+                        });
+                    }
+                } else {
+                    const prompt = this._promptGenerator.generatePrompt({
+                        type: 'error_fix',
+                        errorType: failureRecord.failure?.reason || 'Failure',
+                        component: failureRecord.action?.component || 'unknown',
+                        issueType: failureRecord.action?.issueType || 'fix_failure',
+                        timestamp: Date.now()
+                    });
+                    if (prompt) {
+                        gameLogger.warn('BrokenPromise', '[PROMPT_SYSTEM] Generated prompt for fix failure', {
+                            promptId: prompt.id,
+                            issueType: failureRecord.action?.issueType
+                        });
+                    }
+                }
             }
         });
         
-        // Hook up violation detector to prompt generator
-        this.workflowViolationDetector.on('violationDetected', (violation) => {
-            const prompt = this.promptGenerator.generatePrompt({
-                type: 'workflow_violation',
-                violation: violation.violation,
-                file: violation.file,
-                timestamp: violation.timestamp
-            });
-            if (prompt) {
-                gameLogger.warn('BrokenPromise', '[PROMPT_SYSTEM] Generated prompt for workflow violation', {
-                    promptId: prompt.id,
-                    violation: violation.violation
-                });
+        // Hook up tool call tracking for compliance verification
+        this._collaborationInterface.on('toolCall', (toolCall) => {
+            if (this._complianceVerifier) {
+                const prompts = this._stateStore.getState('ai.prompts') || [];
+                const pendingPrompts = prompts.filter(p => !p.delivered && (Date.now() - (p.timestamp || 0)) < 600000);
+                
+                for (const prompt of pendingPrompts) {
+                    if (this._isToolCallRelevant(prompt, toolCall)) {
+                        setTimeout(() => {
+                            this.verifyPromptCompliance(prompt, { quickCheck: true });
+                        }, 5000);
+                    }
+                }
             }
+        });
+    }
+    
+    /**
+     * LEARNING SYSTEM FIX: Lazy getter for complianceVerifier
+     */
+    get complianceVerifier() {
+        if (!this._complianceVerifier) {
+            try {
+                const PromptComplianceVerifier = require('./PromptComplianceVerifier');
+                this._complianceVerifier = new PromptComplianceVerifier(
+                    this._stateStore,
+                    this.projectRoot
+                );
+                this._errorRecovery.recordSuccess('complianceVerifier');
+                this._initializedComponents.add('complianceVerifier');
+            } catch (error) {
+                this._errorRecovery.recordError('complianceVerifier', error);
+                throw error;
+            }
+        }
+        return this._complianceVerifier;
+    }
+    
+    /**
+     * LEARNING SYSTEM FIX: Lazy getter for promptGenerator
+     */
+    get promptGenerator() {
+        if (!this._promptGenerator) {
+            try {
+                // Ensure dependencies are created
+                this.learningEngine;
+                this.collaborationInterface;
+                
+                const PromptGenerator = require('./PromptGenerator');
+                this._promptGenerator = new PromptGenerator(
+                    this._stateStore,
+                    this._learningEngine,
+                    this._collaborationInterface
+                );
+                this._errorRecovery.recordSuccess('promptGenerator');
+                this._initializedComponents.add('promptGenerator');
+                
+                // Hook up prompt generator event listeners
+                this._setupPromptGeneratorListeners();
+            } catch (error) {
+                this._errorRecovery.recordError('promptGenerator', error);
+                throw error;
+            }
+        }
+        return this._promptGenerator;
+    }
+    
+    /**
+     * LEARNING SYSTEM FIX: Setup prompt generator event listeners
+     */
+    _setupPromptGeneratorListeners() {
+        if (!this._promptGenerator) return;
+        
+        // Hook up prompt generator to verify compliance after prompts are delivered
+        this._promptGenerator.on('promptGenerated', ({ prompt }) => {
+            const verificationTimeout = setTimeout(() => {
+                this.verifyPromptCompliance(prompt);
+            }, 300000);
+            prompt._verificationTimeout = verificationTimeout;
         });
         
         // Hook up error detection to prompt generator
-        if (this.errorRecovery) {
-            this.errorRecovery.on('error', ({ component, error }) => {
-                // Generate prompt for monitoring system errors
-                const prompt = this.promptGenerator.generatePrompt({
+        if (this._errorRecovery) {
+            this._errorRecovery.on('error', ({ component, error }) => {
+                const prompt = this._promptGenerator.generatePrompt({
                     type: 'error_fix',
                     errorType: error.message || 'Error',
                     component: component,
@@ -333,10 +686,9 @@ class AIMonitorCore {
         }
         
         // Hook up issue detection to prompt generator
-        if (this.issueDetector) {
-            this.issueDetector.on('issueDetected', (issue) => {
-                // Generate prompt for Unity game issues
-                const prompt = this.promptGenerator.generatePrompt({
+        if (this._issueDetector) {
+            this._issueDetector.on('issueDetected', (issue) => {
+                const prompt = this._promptGenerator.generatePrompt({
                     type: 'error_fix',
                     errorType: issue.type || 'Issue',
                     component: issue.component || 'Unity',
@@ -352,338 +704,519 @@ class AIMonitorCore {
                 }
             });
         }
-
-        // Hook up server error monitoring to prompt generator
-        const ServerErrorMonitor = require('./ServerErrorMonitor');
-        this.serverErrorMonitor = new ServerErrorMonitor(
-            this.stateStore,
-            this.promptGenerator,
-            process.env.SERVER_URL || 'http://localhost:3000'
-        );
-        this.serverErrorMonitor.on('serverError', (error) => {
-            // Prompt already generated by ServerErrorMonitor
-            gameLogger.warn('BrokenPromise', '[PROMPT_SYSTEM] Server error detected, prompt generated', {
-                error: error.errorMessage,
-                consecutiveErrors: error.consecutiveErrors
-            });
-        });
-        this.serverErrorMonitor.start();
         
-        // Hook up failure tracking to prompt generator (after failures)
-        if (this.collaborationInterface) {
-            this.collaborationInterface.on('aiFailure', (failureRecord) => {
-                // After failure, check if web search is required
-                const webSearchRequired = this.stateStore.getState('ai.learning.webSearchRequired');
-                if (webSearchRequired && !webSearchRequired.resolved) {
-                    const prompt = this.promptGenerator.generatePrompt({
-                        type: 'web_search_required',
-                        consecutiveFailures: webSearchRequired.consecutiveFailures,
-                        searchTerms: webSearchRequired.searchTerms,
-                        issueType: failureRecord.action?.issueType,
-                        component: failureRecord.action?.component,
-                        timestamp: Date.now()
+        // Hook up violation detector to prompt generator
+        if (this._workflowViolationDetector) {
+            this._workflowViolationDetector.on('violationDetected', (violation) => {
+                const prompt = this._promptGenerator.generatePrompt({
+                    type: 'workflow_violation',
+                    violation: violation.violation,
+                    file: violation.file,
+                    timestamp: violation.timestamp
+                });
+                if (prompt) {
+                    gameLogger.warn('BrokenPromise', '[PROMPT_SYSTEM] Generated prompt for workflow violation', {
+                        promptId: prompt.id,
+                        violation: violation.violation
                     });
-                    if (prompt) {
-                        gameLogger.warn('BrokenPromise', '[PROMPT_SYSTEM] Generated prompt for web search requirement', {
-                            promptId: prompt.id,
-                            consecutiveFailures: webSearchRequired.consecutiveFailures
-                        });
-                    }
-                } else {
-                    // Generate error fix prompt for the failure
-                    const prompt = this.promptGenerator.generatePrompt({
-                        type: 'error_fix',
-                        errorType: failureRecord.failure?.reason || 'Failure',
-                        component: failureRecord.action?.component || 'unknown',
-                        issueType: failureRecord.action?.issueType || 'fix_failure',
-                        timestamp: Date.now()
-                    });
-                    if (prompt) {
-                        gameLogger.warn('BrokenPromise', '[PROMPT_SYSTEM] Generated prompt for fix failure', {
-                            promptId: prompt.id,
-                            issueType: failureRecord.action?.issueType
-                        });
-                    }
                 }
             });
         }
         
-        // Hook up prompt generator to verify compliance after prompts are delivered
-        this.promptGenerator.on('promptGenerated', ({ prompt }) => {
-            // Schedule verification after a delay (give AI time to act)
-            const verificationTimeout = setTimeout(() => {
-                this.verifyPromptCompliance(prompt);
-            }, 300000); // Check after 5 minutes
-            
-            // Store timeout so we can cancel if prompt is delivered early
-            prompt._verificationTimeout = verificationTimeout;
-        });
-        
         // Verify compliance when prompt is marked as delivered
-        this.stateStore.on('stateChanged', (event) => {
+        this._stateStore.on('stateChanged', (event) => {
             if (event.path === 'ai.deliveredPrompts') {
-                // A prompt was marked as delivered - verify immediately
-                const deliveredPrompts = this.stateStore.getState('ai.deliveredPrompts') || [];
+                const deliveredPrompts = this._stateStore.getState('ai.deliveredPrompts') || [];
                 if (deliveredPrompts.length > 0) {
                     const latestDeliveredId = deliveredPrompts[deliveredPrompts.length - 1];
-                    const prompts = this.stateStore.getState('ai.prompts') || [];
+                    const prompts = this._stateStore.getState('ai.prompts') || [];
                     const prompt = prompts.find(p => p.id === latestDeliveredId);
                     if (prompt) {
-                        // Cancel scheduled verification and verify now
                         if (prompt._verificationTimeout) {
                             clearTimeout(prompt._verificationTimeout);
                         }
-                        // Verify after a short delay to allow AI to complete actions
                         setTimeout(() => {
                             this.verifyPromptCompliance(prompt);
-                        }, 30000); // 30 seconds after delivery
+                        }, 30000);
                     }
                 }
             }
         });
-        
-        // Verify compliance when tool calls are made (real-time verification)
-        this.collaborationInterface.on('toolCall', (toolCall) => {
-            // Check if there's a pending prompt that requires this tool
-            const prompts = this.stateStore.getState('ai.prompts') || [];
-            const pendingPrompts = prompts.filter(p => !p.delivered && (Date.now() - (p.timestamp || 0)) < 600000); // Last 10 minutes
-            
-            for (const prompt of pendingPrompts) {
-                // Check if this tool call satisfies part of the prompt
-                if (this._isToolCallRelevant(prompt, toolCall)) {
-                    // Schedule a quick verification check
-                    setTimeout(() => {
-                        this.verifyPromptCompliance(prompt, { quickCheck: true });
-                    }, 5000); // 5 seconds after relevant tool call
-                }
+    }
+    
+    /**
+     * LEARNING SYSTEM FIX: Lazy getter for codeAnalysis
+     */
+    get codeAnalysis() {
+        if (!this._codeAnalysis) {
+            try {
+                // Ensure learningEngine is created
+                this.learningEngine;
+                
+                const CodeAnalysisInstrumentation = require('./CodeAnalysisInstrumentation');
+                this._codeAnalysis = new CodeAnalysisInstrumentation(
+                    this.projectRoot,
+                    this._stateStore,
+                    this._learningEngine
+                );
+                this._errorRecovery.recordSuccess('codeAnalysis');
+                this._initializedComponents.add('codeAnalysis');
+            } catch (error) {
+                this._errorRecovery.recordError('codeAnalysis', error);
+                // Don't throw - code analysis is optional
             }
-        });
-        
-        // Initialize PowerShell syntax validator (needs issueDetector and learningEngine)
-        const PowerShellSyntaxValidator = require('./PowerShellSyntaxValidator');
-        this.powerShellSyntaxValidator = new PowerShellSyntaxValidator(
-            this.projectRoot,
-            this.stateStore,
-            this.issueDetector,
-            this.learningEngine
-        );
-        this.errorRecovery.recordSuccess('powerShellSyntaxValidator');
-        
-        // Initialize command execution monitor (needs issueDetector and learningEngine)
-        const CommandExecutionMonitor = require('./CommandExecutionMonitor');
-        this.commandExecutionMonitor = new CommandExecutionMonitor(
-            this.stateStore,
-            this.issueDetector,
-            this.learningEngine
-        );
-        this.errorRecovery.recordSuccess('commandExecutionMonitor');
-        
-        // NOW initialize workflow enforcer (needs powerShellSyntaxValidator)
-        if (!this.workflowEnforcer) {
-            const AIWorkflowEnforcer = require('./AIWorkflowEnforcer');
-            this.workflowEnforcer = new AIWorkflowEnforcer(
-                this.stateStore,
-                this.rulesEnforcer,
-                this.learningEngine,
-                this.powerShellSyntaxValidator
-            );
         }
-        
-        this.integrityChecker = new IntegrityChecker(
-            projectRoot,
-            this.stateStore,
-            this.issueDetector
-        );
-        
-        // Logging Integrity Checker (Phase 5)
-        try {
-            const LoggingIntegrityChecker = require('./LoggingIntegrityChecker');
-            this.loggingIntegrityChecker = new LoggingIntegrityChecker(
-                projectRoot,
-                this.stateStore,
-                this.issueDetector
-            );
-            this.errorRecovery.recordSuccess('loggingIntegrityChecker');
-        } catch (error) {
-            this.errorRecovery.recordError('loggingIntegrityChecker', error);
-            throw error;
+        return this._codeAnalysis;
+    }
+    
+    /**
+     * LEARNING SYSTEM FIX: Lazy getter for workflowViolationDetector
+     */
+    get workflowViolationDetector() {
+        if (!this._workflowViolationDetector) {
+            try {
+                // Ensure dependencies are created
+                this.collaborationInterface;
+                this.complianceVerifier;
+                
+                const AIWorkflowViolationDetector = require('./AIWorkflowViolationDetector');
+                this._workflowViolationDetector = new AIWorkflowViolationDetector(
+                    this._stateStore,
+                    this._collaborationInterface,
+                    this._complianceVerifier
+                );
+                this._errorRecovery.recordSuccess('workflowViolationDetector');
+                this._initializedComponents.add('workflowViolationDetector');
+                
+                // Hook up code change tracker to workflow violation detector
+                if (this._codeChangeTracker) {
+                    this._codeChangeTracker.on('codeChanged', (data) => {
+                        if (this._workflowViolationDetector && data.file) {
+                            this._workflowViolationDetector.recordCodeChange(data.file, data.changeType || 'modified');
+                        }
+                    });
+                }
+            } catch (error) {
+                this._errorRecovery.recordError('workflowViolationDetector', error);
+                throw error;
+            }
         }
-        
-        // Logging Auto-Fix (Phase 5)
-        try {
-            const LoggingAutoFix = require('./LoggingAutoFix');
-            this.loggingAutoFix = new LoggingAutoFix(
-                projectRoot,
-                this.stateStore,
-                this.issueDetector,
-                this.loggingIntegrityChecker
-            );
-            this.errorRecovery.recordSuccess('loggingAutoFix');
-        } catch (error) {
-            this.errorRecovery.recordError('loggingAutoFix', error);
-            throw error;
+        return this._workflowViolationDetector;
+    }
+    
+    /**
+     * LEARNING SYSTEM FIX: Lazy getter for serverErrorMonitor
+     */
+    get serverErrorMonitor() {
+        if (!this._serverErrorMonitor) {
+            try {
+                // Ensure promptGenerator is created
+                this.promptGenerator;
+                
+                const ServerErrorMonitor = require('./ServerErrorMonitor');
+                this._serverErrorMonitor = new ServerErrorMonitor(
+                    this._stateStore,
+                    this._promptGenerator,
+                    process.env.SERVER_URL || 'http://localhost:3000'
+                );
+                this._serverErrorMonitor.on('serverError', (error) => {
+                    gameLogger.warn('BrokenPromise', '[PROMPT_SYSTEM] Server error detected, prompt generated', {
+                        error: error.errorMessage,
+                        consecutiveErrors: error.consecutiveErrors
+                    });
+                });
+                this._serverErrorMonitor.start();
+                this._initializedComponents.add('serverErrorMonitor');
+            } catch (error) {
+                this._errorRecovery.recordError('serverErrorMonitor', error);
+                throw error;
+            }
         }
-        
-        // Code Enhancement System (Phase 5)
-        try {
-            const CodeEnhancementSystem = require('./CodeEnhancementSystem');
-            this.codeEnhancementSystem = new CodeEnhancementSystem(
-                projectRoot,
-                this.stateStore,
-                this.issueDetector
-            );
-            this.errorRecovery.recordSuccess('codeEnhancementSystem');
-        } catch (error) {
-            this.errorRecovery.recordError('codeEnhancementSystem', error);
-            throw error;
+        return this._serverErrorMonitor;
+    }
+    
+    /**
+     * LEARNING SYSTEM FIX: Lazy getter for commandExecutionMonitor
+     */
+    get commandExecutionMonitor() {
+        if (!this._commandExecutionMonitor) {
+            try {
+                // Ensure dependencies are created
+                this.issueDetector;
+                this.learningEngine;
+                
+                const CommandExecutionMonitor = require('./CommandExecutionMonitor');
+                this._commandExecutionMonitor = new CommandExecutionMonitor(
+                    this._stateStore,
+                    this._issueDetector,
+                    this._learningEngine
+                );
+                this._errorRecovery.recordSuccess('commandExecutionMonitor');
+                this._initializedComponents.add('commandExecutionMonitor');
+            } catch (error) {
+                this._errorRecovery.recordError('commandExecutionMonitor', error);
+                throw error;
+            }
         }
-        
-        // Performance Analyzer (Phase 7)
-        try {
-            const PerformanceAnalyzer = require('./PerformanceAnalyzer');
-            this.performanceAnalyzer = new PerformanceAnalyzer(
-                this.stateStore,
-                this.issueDetector,
-                this.fixTracker,
-                this.learningEngine,
-                this.performanceMonitor
-            );
-            this.errorRecovery.recordSuccess('performanceAnalyzer');
-        } catch (error) {
-            this.errorRecovery.recordError('performanceAnalyzer', error);
-            throw error;
+        return this._commandExecutionMonitor;
+    }
+    
+    /**
+     * LEARNING SYSTEM FIX: Lazy getter for workflowEnforcer
+     */
+    get workflowEnforcer() {
+        if (!this._workflowEnforcer) {
+            try {
+                // Ensure dependencies are created
+                this.rulesEnforcer;
+                this.learningEngine;
+                this.powerShellSyntaxValidator;
+                
+                const AIWorkflowEnforcer = require('./AIWorkflowEnforcer');
+                this._workflowEnforcer = new AIWorkflowEnforcer(
+                    this._stateStore,
+                    this._rulesEnforcer,
+                    this._learningEngine,
+                    this._powerShellSyntaxValidator
+                );
+                this._errorRecovery.recordSuccess('workflowEnforcer');
+                this._initializedComponents.add('workflowEnforcer');
+            } catch (error) {
+                this._errorRecovery.recordError('workflowEnforcer', error);
+                throw error;
+            }
         }
-        
-        // Server state capture (captures server health/metrics)
-        try {
-            this.serverStateCapture = new ServerStateCapture(
-                this.stateStore,
-                process.env.SERVER_URL || 'http://localhost:3000',
-                this.issueDetector, // Pass issue detector so it can report errors
-                this.errorRecovery  // Pass error recovery so it can track errors
-            );
-            this.errorRecovery.recordSuccess('serverStateCapture');
-        } catch (error) {
-            this.errorRecovery.recordError('serverStateCapture', error);
-            throw error;
+        return this._workflowEnforcer;
+    }
+    
+    /**
+     * LEARNING SYSTEM FIX: Lazy getter for integrityChecker
+     */
+    get integrityChecker() {
+        if (!this._integrityChecker) {
+            try {
+                // Ensure issueDetector is created
+                this.issueDetector;
+                
+                this._integrityChecker = new IntegrityChecker(
+                    this.projectRoot,
+                    this._stateStore,
+                    this._issueDetector
+                );
+                this._initializedComponents.add('integrityChecker');
+            } catch (error) {
+                this._errorRecovery.recordError('integrityChecker', error);
+                throw error;
+            }
         }
-        
-        // Unity state reporter (handles Unity UI/audio state reports)
-        try {
-            this.unityStateReporter = new UnityStateReporter(
-                this.stateStore,
-                this.issueDetector
-            );
-            this.errorRecovery.recordSuccess('unityStateReporter');
-        } catch (error) {
-            this.errorRecovery.recordError('unityStateReporter', error);
-            throw error;
+        return this._integrityChecker;
+    }
+    
+    /**
+     * LEARNING SYSTEM FIX: Lazy getter for loggingIntegrityChecker
+     */
+    get loggingIntegrityChecker() {
+        if (!this._loggingIntegrityChecker) {
+            try {
+                // Ensure issueDetector is created
+                this.issueDetector;
+                
+                const LoggingIntegrityChecker = require('./LoggingIntegrityChecker');
+                this._loggingIntegrityChecker = new LoggingIntegrityChecker(
+                    this.projectRoot,
+                    this._stateStore,
+                    this._issueDetector
+                );
+                this._errorRecovery.recordSuccess('loggingIntegrityChecker');
+                this._initializedComponents.add('loggingIntegrityChecker');
+                
+                // Start logging integrity checks
+                this._loggingIntegrityChecker.startPeriodicChecks();
+            } catch (error) {
+                this._errorRecovery.recordError('loggingIntegrityChecker', error);
+                throw error;
+            }
         }
-        
-        // State verification contracts (defines what "correct" state looks like)
-        try {
-            this.stateVerificationContracts = new StateVerificationContracts(
-                this.stateStore,
-                this.issueDetector
-            );
-            this.errorRecovery.recordSuccess('stateVerificationContracts');
-        } catch (error) {
-            this.errorRecovery.recordError('stateVerificationContracts', error);
-            throw error;
+        return this._loggingIntegrityChecker;
+    }
+    
+    /**
+     * LEARNING SYSTEM FIX: Lazy getter for loggingAutoFix
+     */
+    get loggingAutoFix() {
+        if (!this._loggingAutoFix) {
+            try {
+                // Ensure dependencies are created
+                this.issueDetector;
+                this.loggingIntegrityChecker;
+                
+                const LoggingAutoFix = require('./LoggingAutoFix');
+                this._loggingAutoFix = new LoggingAutoFix(
+                    this.projectRoot,
+                    this._stateStore,
+                    this._issueDetector,
+                    this._loggingIntegrityChecker
+                );
+                this._errorRecovery.recordSuccess('loggingAutoFix');
+                this._initializedComponents.add('loggingAutoFix');
+            } catch (error) {
+                this._errorRecovery.recordError('loggingAutoFix', error);
+                throw error;
+            }
         }
-        
-        // Dependency graph (maps relationships between components)
-        try {
-            this.dependencyGraph = new DependencyGraph(
-                this.stateStore,
-                this.issueDetector
-            );
-            this.errorRecovery.recordSuccess('dependencyGraph');
-        } catch (error) {
-            this.errorRecovery.recordError('dependencyGraph', error);
-            throw error;
+        return this._loggingAutoFix;
+    }
+    
+    /**
+     * LEARNING SYSTEM FIX: Lazy getter for codeEnhancementSystem
+     */
+    get codeEnhancementSystem() {
+        if (!this._codeEnhancementSystem) {
+            try {
+                // Ensure issueDetector is created
+                this.issueDetector;
+                
+                const CodeEnhancementSystem = require('./CodeEnhancementSystem');
+                this._codeEnhancementSystem = new CodeEnhancementSystem(
+                    this.projectRoot,
+                    this._stateStore,
+                    this._issueDetector
+                );
+                this._errorRecovery.recordSuccess('codeEnhancementSystem');
+                this._initializedComponents.add('codeEnhancementSystem');
+            } catch (error) {
+                this._errorRecovery.recordError('codeEnhancementSystem', error);
+                throw error;
+            }
         }
-        
-        // Enhanced anomaly detection (statistical analysis and pattern learning)
-        try {
-            this.enhancedAnomalyDetection = new EnhancedAnomalyDetection(
-                this.stateStore,
-                this.issueDetector
-            );
-            this.errorRecovery.recordSuccess('enhancedAnomalyDetection');
-        } catch (error) {
-            this.errorRecovery.recordError('enhancedAnomalyDetection', error);
-            throw error;
+        return this._codeEnhancementSystem;
+    }
+    
+    /**
+     * LEARNING SYSTEM FIX: Lazy getter for performanceAnalyzer
+     */
+    get performanceAnalyzer() {
+        if (!this._performanceAnalyzer) {
+            try {
+                // Ensure dependencies are created
+                this.issueDetector;
+                this.fixTracker;
+                this.learningEngine;
+                
+                const PerformanceAnalyzer = require('./PerformanceAnalyzer');
+                this._performanceAnalyzer = new PerformanceAnalyzer(
+                    this._stateStore,
+                    this._issueDetector,
+                    this._fixTracker,
+                    this._learningEngine,
+                    this._performanceMonitor
+                );
+                this._errorRecovery.recordSuccess('performanceAnalyzer');
+                this._initializedComponents.add('performanceAnalyzer');
+                
+                // Start performance analysis
+                this._performanceAnalyzer.startPeriodicAnalysis();
+            } catch (error) {
+                this._errorRecovery.recordError('performanceAnalyzer', error);
+                throw error;
+            }
         }
-        
-        // Causal analysis (trace state changes backwards, build causal chains)
-        try {
-            this.causalAnalysis = new CausalAnalysis(
-                this.stateStore,
-                this.issueDetector,
-                this.dependencyGraph
-            );
-            this.errorRecovery.recordSuccess('causalAnalysis');
-        } catch (error) {
-            this.errorRecovery.recordError('causalAnalysis', error);
-            throw error;
+        return this._performanceAnalyzer;
+    }
+    
+    /**
+     * LEARNING SYSTEM FIX: Lazy getter for serverStateCapture
+     */
+    get serverStateCapture() {
+        if (!this._serverStateCapture) {
+            try {
+                // Ensure dependencies are created
+                this.issueDetector;
+                
+                this._serverStateCapture = new ServerStateCapture(
+                    this._stateStore,
+                    process.env.SERVER_URL || 'http://localhost:3000',
+                    this._issueDetector,
+                    this._errorRecovery
+                );
+                this._errorRecovery.recordSuccess('serverStateCapture');
+                this._initializedComponents.add('serverStateCapture');
+                
+                // Start server state capture
+                this._serverStateCapture.start();
+            } catch (error) {
+                this._errorRecovery.recordError('serverStateCapture', error);
+                throw error;
+            }
         }
-        
-        // Auto-fix engine (automatically tries fixes from knowledge base)
-        try {
-            this.autoFixEngine = new AutoFixEngine(
-                this.stateStore,
-                this.issueDetector,
-                this.fixTracker,
-                this.learningEngine
-            );
-            this.errorRecovery.recordSuccess('autoFixEngine');
-        } catch (error) {
-            this.errorRecovery.recordError('autoFixEngine', error);
-            throw error;
+        return this._serverStateCapture;
+    }
+    
+    /**
+     * LEARNING SYSTEM FIX: Lazy getter for unityStateReporter
+     */
+    get unityStateReporter() {
+        if (!this._unityStateReporter) {
+            try {
+                // Ensure issueDetector is created
+                this.issueDetector;
+                
+                this._unityStateReporter = new UnityStateReporter(
+                    this._stateStore,
+                    this._issueDetector
+                );
+                this._errorRecovery.recordSuccess('unityStateReporter');
+                this._initializedComponents.add('unityStateReporter');
+            } catch (error) {
+                this._errorRecovery.recordError('unityStateReporter', error);
+                throw error;
+            }
         }
-        
-        // Connect AutoFixEngine to collaboration interface - when learning system succeeds, it teaches AI
-        // This happens after collaborationInterface is created (which happens after communicationInterface)
-        // So we'll set this up in setupEventListeners()
-        
-        // Wrap all components with error handler (AFTER all components are created)
-        this.wrapAllComponents();
-        
-        // Start server state capture
-        this.serverStateCapture.start();
-        
-        // Start decision engine (after all components are initialized)
-        this.decisionEngine.start();
-        
-        // Start logging integrity checks (Phase 5)
-        if (this.loggingIntegrityChecker) {
-            this.loggingIntegrityChecker.startPeriodicChecks();
+        return this._unityStateReporter;
+    }
+    
+    /**
+     * LEARNING SYSTEM FIX: Lazy getter for stateVerificationContracts
+     */
+    get stateVerificationContracts() {
+        if (!this._stateVerificationContracts) {
+            try {
+                // Ensure issueDetector is created
+                this.issueDetector;
+                
+                this._stateVerificationContracts = new StateVerificationContracts(
+                    this._stateStore,
+                    this._issueDetector
+                );
+                this._errorRecovery.recordSuccess('stateVerificationContracts');
+                this._initializedComponents.add('stateVerificationContracts');
+            } catch (error) {
+                this._errorRecovery.recordError('stateVerificationContracts', error);
+                throw error;
+            }
         }
-        
-        // Start performance analysis (Phase 7)
-        if (this.performanceAnalyzer) {
-            this.performanceAnalyzer.startPeriodicAnalysis();
+        return this._stateVerificationContracts;
+    }
+    
+    /**
+     * LEARNING SYSTEM FIX: Lazy getter for dependencyGraph
+     */
+    get dependencyGraph() {
+        if (!this._dependencyGraph) {
+            try {
+                // Ensure issueDetector is created
+                this.issueDetector;
+                
+                this._dependencyGraph = new DependencyGraph(
+                    this._stateStore,
+                    this._issueDetector
+                );
+                this._errorRecovery.recordSuccess('dependencyGraph');
+                this._initializedComponents.add('dependencyGraph');
+            } catch (error) {
+                this._errorRecovery.recordError('dependencyGraph', error);
+                throw error;
+            }
         }
+        return this._dependencyGraph;
+    }
+    
+    /**
+     * LEARNING SYSTEM FIX: Lazy getter for enhancedAnomalyDetection
+     */
+    get enhancedAnomalyDetection() {
+        if (!this._enhancedAnomalyDetection) {
+            try {
+                // Ensure issueDetector is created
+                this.issueDetector;
+                
+                this._enhancedAnomalyDetection = new EnhancedAnomalyDetection(
+                    this._stateStore,
+                    this._issueDetector
+                );
+                this._errorRecovery.recordSuccess('enhancedAnomalyDetection');
+                this._initializedComponents.add('enhancedAnomalyDetection');
+            } catch (error) {
+                this._errorRecovery.recordError('enhancedAnomalyDetection', error);
+                throw error;
+            }
+        }
+        return this._enhancedAnomalyDetection;
+    }
+    
+    /**
+     * LEARNING SYSTEM FIX: Lazy getter for causalAnalysis
+     */
+    get causalAnalysis() {
+        if (!this._causalAnalysis) {
+            try {
+                // Ensure dependencies are created
+                this.issueDetector;
+                this.dependencyGraph;
+                
+                this._causalAnalysis = new CausalAnalysis(
+                    this._stateStore,
+                    this._issueDetector,
+                    this._dependencyGraph
+                );
+                this._errorRecovery.recordSuccess('causalAnalysis');
+                this._initializedComponents.add('causalAnalysis');
+            } catch (error) {
+                this._errorRecovery.recordError('causalAnalysis', error);
+                throw error;
+            }
+        }
+        return this._causalAnalysis;
+    }
+    
+    /**
+     * LEARNING SYSTEM FIX: Lazy getter for autoFixEngine
+     */
+    get autoFixEngine() {
+        if (!this._autoFixEngine) {
+            try {
+                // Ensure dependencies are created
+                this.issueDetector;
+                this.fixTracker;
+                this.learningEngine;
+                
+                this._autoFixEngine = new AutoFixEngine(
+                    this._stateStore,
+                    this._issueDetector,
+                    this._fixTracker,
+                    this._learningEngine
+                );
+                this._errorRecovery.recordSuccess('autoFixEngine');
+                this._initializedComponents.add('autoFixEngine');
+                
+                // Connect AutoFixEngine to collaboration interface
+                if (this._collaborationInterface) {
+                    this._setupAutoFixEngineListeners();
+                }
+            } catch (error) {
+                this._errorRecovery.recordError('autoFixEngine', error);
+                throw error;
+            }
+        }
+        return this._autoFixEngine;
+    }
+    
+    /**
+     * LEARNING SYSTEM FIX: Setup auto-fix engine event listeners
+     */
+    _setupAutoFixEngineListeners() {
+        if (!this._autoFixEngine || !this._collaborationInterface) return;
         
-        // Setup event listeners
-        this.setupEventListeners();
-        
-        // Setup error recovery listeners
-        this.setupErrorRecoveryListeners();
-        
-        // Setup performance monitoring listeners
-        this.setupPerformanceListeners();
-        
-        // Setup logging integrity listeners (Phase 5)
-        this.setupLoggingIntegrityListeners();
-        
-        // Log initialization - all debug goes to log, not console
-        gameLogger.info('MONITORING', '[AI_MONITOR_CORE] Initialized', {
-            message: 'AI sees everything, knows everything, acts on everything',
-            integrityChecker: 'active',
-            errorRecovery: 'active',
-            performanceMonitoring: 'active'
+        // When learning system successfully fixes something, teach AI
+        this._autoFixEngine.on('fixSucceeded', (data) => {
+            const { issue, fix, result } = data;
+            this._collaborationInterface.learningSystemSucceeded({
+                type: 'auto_fix',
+                method: fix.method,
+                issueType: issue.type,
+                result: result,
+                timestamp: Date.now()
+            });
         });
     }
     
