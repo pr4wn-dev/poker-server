@@ -689,7 +689,8 @@ class AIDecisionEngine extends EventEmitter {
      * Start investigation
      */
     startInvestigation(decision) {
-        const investigation = this.stateStore.getState('monitoring.investigation');
+        // LEARNING SYSTEM FIX: Add null check before accessing state properties
+        const investigation = this.stateStore.getState('monitoring.investigation') || {};
         
         // Already starting or active
         if (investigation.status === 'starting' || investigation.status === 'active') {
@@ -782,7 +783,8 @@ class AIDecisionEngine extends EventEmitter {
         this._checkingState = true;
         
         try {
-            const investigation = this.stateStore.getState('monitoring.investigation');
+            // LEARNING SYSTEM FIX: Add null check before accessing state properties
+            const investigation = this.stateStore.getState('monitoring.investigation') || {};
             
             // Check if investigation should complete
             if (investigation.status === 'active' && investigation.startTime) {
@@ -818,8 +820,9 @@ class AIDecisionEngine extends EventEmitter {
      * Complete investigation
      */
     completeInvestigation() {
-        const investigation = this.stateStore.getState('monitoring.investigation');
-        const activeIssues = this.issueDetector.getActiveIssues();
+        // LEARNING SYSTEM FIX: Add null check before accessing state properties
+        const investigation = this.stateStore.getState('monitoring.investigation') || {};
+        const activeIssues = this.issueDetector ? this.issueDetector.getActiveIssues() : [];
         
         // Update state
         this.stateStore.updateState('monitoring.investigation', {
@@ -833,9 +836,9 @@ class AIDecisionEngine extends EventEmitter {
         // Add to history
         const history = investigation.history || [];
         history.push({
-            startTime: investigation.startTime,
+            startTime: investigation.startTime || Date.now(),
             completedAt: Date.now(),
-            duration: (Date.now() - investigation.startTime) / 1000,
+            duration: investigation.startTime ? (Date.now() - investigation.startTime) / 1000 : 0,
             issuesFound: activeIssues.length
         });
         this.stateStore.updateState('monitoring.investigation.history', history);
