@@ -962,12 +962,38 @@ class StateStore extends EventEmitter {
                     // Recovery failed, but continue with fresh state
                 }
                 
-                // Backup corrupted file
+                // Backup corrupted file (but limit to last 2 backups to prevent GB accumulation)
                 try {
                     if (fs.existsSync(this.persistenceFile)) {
                         const backupFile = this.persistenceFile + '.corrupted.' + Date.now();
                         fs.copyFileSync(this.persistenceFile, backupFile);
                         // DO NOT log to console
+                        
+                        // Cleanup old corrupted backups (keep only last 2)
+                        const logsDir = path.dirname(this.persistenceFile);
+                        try {
+                            const corruptedFiles = fs.readdirSync(logsDir)
+                                .filter(f => f.startsWith('ai-state-store.json.corrupted.'))
+                                .map(f => ({
+                                    name: f,
+                                    path: path.join(logsDir, f),
+                                    time: fs.statSync(path.join(logsDir, f)).mtimeMs
+                                }))
+                                .sort((a, b) => b.time - a.time); // Newest first
+                            
+                            // Delete all but the 2 most recent
+                            if (corruptedFiles.length > 2) {
+                                for (let i = 2; i < corruptedFiles.length; i++) {
+                                    try {
+                                        fs.unlinkSync(corruptedFiles[i].path);
+                                    } catch (cleanupError) {
+                                        // Ignore cleanup errors
+                                    }
+                                }
+                            }
+                        } catch (cleanupError) {
+                            // Ignore cleanup errors (directory might not exist, etc.)
+                        }
                     }
                 } catch (backupError) {
                     // Ignore backup errors (but UniversalErrorHandler will catch them)
