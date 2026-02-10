@@ -298,6 +298,128 @@ The cycle repeats:
 
 ---
 
+## 💻 Usage Examples
+
+### **Before Every Action - Mandatory Workflow**
+
+**CRITICAL**: You MUST follow this workflow for EVERY action:
+
+```javascript
+// 1. Get suggestions from learning system
+const suggestions = core.beforeAIAction({
+    type: 'fix_attempt', // or 'code_change', 'debugging', etc.
+    method: 'your_method',
+    issueType: 'your_issue_type',
+    component: 'your_component',
+    file: 'path/to/file',
+    details: { /* your details */ }
+});
+
+// 2. CHECK FOR WEB SEARCH REQUIREMENT (MANDATORY)
+if (suggestions.webSearchRequired) {
+    // LEARNING SYSTEM IS TELLING YOU TO SEARCH ONLINE
+    // YOU MUST DO THIS BEFORE CONTINUING
+    
+    const searchTerms = suggestions.webSearchTerms;
+    const urgency = suggestions.webSearchUrgency; // 'high' or 'critical'
+    
+    // SEARCH ONLINE (MANDATORY)
+    const searchResults = await web_search(searchTerms.join(' '));
+    
+    // STORE FINDINGS IN LEARNING SYSTEM (MANDATORY)
+    await storeWebSearchKnowledge(searchResults, searchTerms, {
+        issueType: 'your_issue_type',
+        component: 'your_component',
+        urgency: urgency
+    });
+    
+    // DO NOT CONTINUE WITH FIX UNTIL YOU'VE SEARCHED AND STORED FINDINGS
+    return; // Stop here until search is complete
+}
+
+// 3. Review warnings and recommendations
+if (suggestions.warnings.length > 0) {
+    // HEED THESE WARNINGS - they're from the learning system
+    for (const warning of suggestions.warnings) {
+        if (warning.priority === 'critical') {
+            // CRITICAL WARNING - DO NOT IGNORE
+        }
+    }
+}
+
+// 4. Use recommendations (learned solutions that worked before)
+if (suggestions.recommendations.length > 0) {
+    const bestRecommendation = suggestions.recommendations[0];
+    // Use the recommended approach
+}
+
+// 5. Take action (only after steps 1-4)
+// ... your fix code ...
+
+// 6. Report outcome (MANDATORY)
+core.afterAIAction(action, {
+    success: true, // or false
+    description: 'What happened',
+    codeChanges: [/* actual changes made */],
+    // If failure:
+    reason: 'Why it failed',
+    error: errorObject,
+    whatWentWrong: 'What went wrong',
+    whatShouldHaveHappened: 'What should have happened'
+});
+```
+
+### **When Stuck - Get Help**
+
+```javascript
+// Get help from learning system
+const help = core.aiNeedsHelp({
+    component: 'your_component',
+    issue: 'your_issue',
+    context: { /* your context */ }
+});
+
+// CHECK FOR WEB SEARCH REQUIREMENT (MANDATORY)
+if (help.webSearchRequired) {
+    // SAME AS ABOVE - SEARCH ONLINE FIRST
+    // DO NOT CONTINUE UNTIL SEARCHED
+}
+
+// Use suggestions from help
+// help.suggestions - what to do
+// help.solutions - solutions that worked before
+// help.patterns - similar problems
+```
+
+### **What NOT to Do**
+
+- ❌ **DO NOT** skip `beforeAIAction()` check
+- ❌ **DO NOT** ignore `webSearchRequired: true`
+- ❌ **DO NOT** attempt fixes without checking learning system first
+- ❌ **DO NOT** skip `afterAIAction()` reporting
+- ❌ **DO NOT** bypass web search when required
+
+**VIOLATING THESE RULES = WASTING USER'S TIME AND MONEY**
+
+### **Quick Reference**
+
+**BEFORE ACTION:**
+1. ✅ Call `beforeAIAction()`
+2. ✅ Check `webSearchRequired` - if true, SEARCH ONLINE FIRST
+3. ✅ Review warnings and recommendations
+4. ✅ Proceed with action
+
+**AFTER ACTION:**
+1. ✅ Call `afterAIAction()` with outcome
+2. ✅ If failed, learning system will require web search for next attempt
+
+**WHEN STUCK:**
+1. ✅ Call `aiNeedsHelp()`
+2. ✅ Check `webSearchRequired` - if true, SEARCH ONLINE FIRST
+3. ✅ Use suggestions and solutions provided
+
+---
+
 ## ❌ Deprecated/Removed Features
 
 ### **1. JSON File Storage** ❌ **REMOVED**
