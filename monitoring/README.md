@@ -39,19 +39,36 @@ The system continuously monitors:
 - Anomaly detection (statistical analysis)
 - Causal analysis (traces root causes)
 
-### **2. Prompt Generation**
+### **2. Comprehensive Prompt Generation** ✅
 
-When issues are detected, the system automatically:
+**ALL errors at ALL phases generate prompts automatically** - nothing is missed.
+
+**Phases Covered**:
+- **BEFORE startup**: Pre-flight checks (database, files, ports, Unity path, etc.)
+- **DURING startup**: Syntax errors, system verification failures
+- **DURING runtime**: Unity errors, server errors, monitoring errors, workflow violations
+- **AFTER fixes**: Non-compliance detection, verification failures
+
+**When issues are detected, the system automatically**:
 - Analyzes the issue context
-- Checks learning system for known solutions
+- Queries learning system for known solutions
 - Identifies misdiagnosis patterns (prevents wasted time)
-- Generates specific prompts for you to deliver to the AI
+- Generates specific prompts with learning system guidance
+- Writes prompts to `logs\prompts-for-user.txt`
 
 **Prompt Types**:
-- Fix instructions (with solution templates)
-- Web search requirements (after failures)
+- Fix instructions (with solution templates from learning system)
+- Web search requirements (after consecutive failures)
 - Workflow enforcement (use learning system)
 - Verification prompts (if AI didn't comply)
+- Pre-flight check failures (before BrokenPromise starts)
+- Server errors (continuous monitoring every 5 seconds)
+
+**Learning System Integration**:
+- Every prompt includes solutions that worked before
+- Misdiagnosis warnings (what NOT to do)
+- Success rates and time savings estimates
+- Frequency data (how often issue occurs)
 
 ### **3. AI Action & Compliance Verification**
 
