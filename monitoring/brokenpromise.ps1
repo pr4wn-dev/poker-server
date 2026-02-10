@@ -25,11 +25,13 @@ $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $script:projectRoot = Split-Path -Parent $scriptDir
 Set-Location $script:projectRoot
 
-# Bootstrap check - Run BEFORE anything else (after setting directories)
-# Check syntax directly in this process so we can actually stop execution
+# PRE-FLIGHT CHECK - Run BEFORE anything else
+# Ensures all systems are ready and uses learning system to fix issues
 if (-not $SkipBootstrap) {
-    Write-Host "[BROKENPROMISE] Running syntax check..." -ForegroundColor Cyan
+    Write-Host "[BROKENPROMISE] Running pre-flight checks..." -ForegroundColor Cyan
     
+    # Step 1: PowerShell syntax check
+    Write-Host "[BROKENPROMISE] Running syntax check..." -ForegroundColor Cyan
     $brokenPromisePath = Join-Path $scriptDir "brokenpromise.ps1"
     if (Test-Path $brokenPromisePath) {
         try {
@@ -74,6 +76,35 @@ if (-not $SkipBootstrap) {
             Write-Host "[BROKENPROMISE] Syntax check failed: $($_.Exception.Message)" -ForegroundColor Red
             exit 1
         }
+    }
+    
+    # Step 2: Pre-flight system check (uses learning system)
+    $preFlightScript = Join-Path $scriptDir "scripts\pre-flight-check.js"
+    if (Test-Path $preFlightScript) {
+        try {
+            $preFlightResult = & node $preFlightScript 2>&1
+            $exitCode = $LASTEXITCODE
+            
+            if ($exitCode -ne 0) {
+                Write-Host ""
+                Write-Host "[BROKENPROMISE] PRE-FLIGHT CHECKS FAILED" -ForegroundColor Red
+                Write-Host "[BROKENPROMISE] Issues found that must be fixed before startup:" -ForegroundColor Yellow
+                Write-Host $preFlightResult
+                Write-Host ""
+                Write-Host "[BROKENPROMISE] Fix the issues above before starting BrokenPromise" -ForegroundColor Red
+                Write-Host "[BROKENPROMISE] Or run with -SkipBootstrap to bypass (not recommended)" -ForegroundColor Yellow
+                Write-Host ""
+                exit 1
+            } else {
+                # Pre-flight passed - continue
+                Write-Host "[BROKENPROMISE] Pre-flight checks passed" -ForegroundColor Green
+            }
+        } catch {
+            Write-Host "[BROKENPROMISE] Pre-flight check failed: $_" -ForegroundColor Yellow
+            Write-Host "[BROKENPROMISE] Continuing anyway (pre-flight check may not be available)" -ForegroundColor Yellow
+        }
+    } else {
+        Write-Host "[BROKENPROMISE] Pre-flight check script not found - skipping" -ForegroundColor Yellow
     }
 }
 
@@ -640,36 +671,45 @@ function Add-PendingIssue {
         
         try {
             while ($retryCount -lt $maxRetries) {
-            try {
-                # Use non-blocking async call
-                $nodeResult = Invoke-NodeAsync -ScriptPath $nodeScript -Arguments @("--add-issue-file", $tempFile) -JobTimeout 5
-                $result = if ($nodeResult.Output) { $nodeResult.Output } else { $null }
-        if ($nodeResult.Success -and $nodeResult.ExitCode -eq 0 -and $result) {
-                    # Remove any non-JSON output (like warnings or errors)
-                    $jsonLines = $result -split "`n" | Where-Object { $_ -match '^\s*\{' -or $_ -match '^\s*\[' }
-                    $cleanResult = $jsonLines -join "`n"
-                    
-                    if ($cleanResult) {
-                        $jsonResult = $cleanResult | ConvertFrom-Json -ErrorAction SilentlyContinue
-                        if ($jsonResult -and $jsonResult.success) {
-                            # Success - return result
-            return $jsonResult
-                        } elseif ($jsonResult -and -not $jsonResult.success) {
-                            # JSON error response - check if retryable
-                            $lastError = $jsonResult
-                            if ($jsonResult.reason -eq "file_locked" -or $jsonResult.reason -eq "json_parse_error") {
-                                # Retryable error
-                                $retryCount++
-                                if ($retryCount -lt $maxRetries) {
-                                    Write-ConsoleOutput -Message "  Retry $($retryCount)/$($maxRetries): $($jsonResult.error)" -ForegroundColor "Yellow"
-                                    Start-Sleep -Milliseconds 500
-                                    continue
+                try {
+                    # Use non-blocking async call
+                    $nodeResult = Invoke-NodeAsync -ScriptPath $nodeScript -Arguments @("--add-issue-file", $tempFile) -JobTimeout 5
+                    $result = if ($nodeResult.Output) { $nodeResult.Output } else { $null }
+                    if ($nodeResult.Success -and $nodeResult.ExitCode -eq 0 -and $result) {
+                        # Remove any non-JSON output (like warnings or errors)
+                        $jsonLines = $result -split "`n" | Where-Object { $_ -match '^\s*\{' -or $_ -match '^\s*\[' }
+                        $cleanResult = $jsonLines -join "`n"
+                        
+                        if ($cleanResult) {
+                            $jsonResult = $cleanResult | ConvertFrom-Json -ErrorAction SilentlyContinue
+                            if ($jsonResult -and $jsonResult.success) {
+                                # Success - return result
+                                return $jsonResult
+                            } elseif ($jsonResult -and -not $jsonResult.success) {
+                                # JSON error response - check if retryable
+                                $lastError = $jsonResult
+                                if ($jsonResult.reason -eq "file_locked" -or $jsonResult.reason -eq "json_parse_error") {
+                                    # Retryable error
+                                    $retryCount++
+                                    if ($retryCount -lt $maxRetries) {
+                                        Write-ConsoleOutput -Message "  Retry $($retryCount)/$($maxRetries): $($jsonResult.error)" -ForegroundColor "Yellow"
+                                        Start-Sleep -Milliseconds 500
+                                        continue
+                                    }
+                                } else {
+                                    # Non-retryable error
+                                    break
                                 }
-                            } else {
-                                # Non-retryable error
-                                break
                             }
                         }
+                    }
+                } catch {
+                    # Handle errors in inner try block
+                    $retryCount++
+                    if ($retryCount -lt $maxRetries) {
+                        Write-ConsoleOutput -Message "  Retry $($retryCount)/$($maxRetries): Inner try error" -ForegroundColor "Yellow"
+                        Start-Sleep -Milliseconds 500
+                        continue
                     }
                 }
                 
@@ -2034,20 +2074,25 @@ function Kill-Port3000Processes {
 
 # Function to display statistics in a formatted layout
 function Show-Statistics {
-    # AI-FIRST: Always use AI-powered statistics (no fallback to legacy)
+    # UNIFIED DISPLAY: Always show full statistics including prompts
+    # This is the main display - console output should not overwrite this
     if ($script:aiIntegrationEnabled) {
         try {
             $aiStats = Get-AILiveStatistics
             if ($aiStats) {
+                # Show full unified display with all information including prompts
                 Show-BrokenPromiseStatistics -LegacyStats $stats -LogFile $logFile -ServerUrl $serverUrl
                 return
             } else {
-                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [ERROR] AI statistics unavailable - display may be incomplete" -ForegroundColor "Red"
-                # Still show basic info even if AI stats fail
+                # AI stats unavailable - show minimal info but don't spam console
+                # The display will show an error, no need to also write to console
             }
         } catch {
-            Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [ERROR] AI statistics failed: $_" -ForegroundColor "Red"
-            # Still show basic info even if AI stats fail
+            # Display will handle showing errors, don't duplicate in console output
+            # Only log if it's a critical failure
+            if ($_.Exception.Message -notmatch "timeout|unavailable") {
+                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] [ERROR] AI statistics failed: $_" -ForegroundColor "Red"
+            }
         }
     }
     
@@ -2881,12 +2926,36 @@ function Show-Statistics {
 
 # Function to start server if not running
 function Start-ServerIfNeeded {
-    # Check if server was just restarted (within last 60 seconds) - don't restart again during cooldown
+    # LIFECYCLE MANAGEMENT: Prevent restart loops with attempt tracking and exponential backoff
+    
+    # Reset restart counter if enough time has passed (5 minutes)
+    if ($script:serverRestartAttemptsResetTime -and (Get-Date) -gt $script:serverRestartAttemptsResetTime) {
+        $script:serverRestartAttempts = 0
+        $script:serverRestartAttemptsResetTime = $null
+    }
+    
+    # Check if we've exceeded max restart attempts
+    if ($script:serverRestartAttempts -ge $script:maxServerRestartAttempts) {
+        $backoffTime = $script:serverRestartBackoffSeconds * [math]::Pow(2, $script:serverRestartAttempts - 1)  # Exponential backoff
+        $resetTime = if ($script:lastServerRestart) { 
+            $script:lastServerRestart.AddSeconds($backoffTime) 
+        } else { 
+            (Get-Date).AddSeconds($backoffTime) 
+        }
+        $script:serverRestartAttemptsResetTime = $resetTime
+        
+        $maxAttemptsMsg = "[$(Get-Date -Format 'HH:mm:ss')] SERVER: Max restart attempts reached ($($script:serverRestartAttempts)/$($script:maxServerRestartAttempts)) - backing off for $([math]::Round($backoffTime))s"
+        Write-ConsoleOutput -Message $maxAttemptsMsg -ForegroundColor "Red"
+        return $false
+    }
+    
+    # Check if server was just restarted (cooldown period with exponential backoff)
     $serverJustRestarted = $false
+    $cooldownSeconds = $script:serverRestartBackoffSeconds * [math]::Pow(2, [math]::Min($script:serverRestartAttempts, 3))  # Exponential backoff: 60s, 120s, 240s, 480s max
     if ($script:lastServerRestart -and $script:lastServerRestart -is [DateTime]) {
         try {
             $timeSinceServerRestart = (Get-Date) - $script:lastServerRestart
-            if ($timeSinceServerRestart.TotalSeconds -lt 60) {
+            if ($timeSinceServerRestart.TotalSeconds -lt $cooldownSeconds) {
                 $serverJustRestarted = $true
             }
         } catch {
@@ -2899,12 +2968,14 @@ function Start-ServerIfNeeded {
     if ($serverJustRestarted) {
         # Give the server time to start - check if it's actually running
         if (Test-ServerRunning) {
-            # Server is running, no need to restart
+            # Server is running - reset restart counter on success
+            $script:serverRestartAttempts = 0
+            $script:serverRestartAttemptsResetTime = $null
             return $true
         } else {
             # Server was just restarted but not responding yet - wait a bit more
-            # Don't kill processes yet, give it more time
-            $cooldownMsg = "[$(Get-Date -Format 'HH:mm:ss')] Server was just restarted (cooldown active) - waiting for it to become ready..."
+            $remainingCooldown = [math]::Round($cooldownSeconds - $timeSinceServerRestart.TotalSeconds)
+            $cooldownMsg = "[$(Get-Date -Format 'HH:mm:ss')] SERVER: Cooldown active ($remainingCooldown s remaining) - waiting for server to become ready..."
             Write-ConsoleOutput -Message $cooldownMsg -ForegroundColor "Gray"
             return $false
         }
@@ -3088,6 +3159,29 @@ function Restart-UnityIfNeeded {
         return $true  # Unity path not configured
     }
     
+    # LIFECYCLE MANAGEMENT: Prevent restart loops with attempt tracking and exponential backoff
+    
+    # Reset restart counter if enough time has passed (5 minutes)
+    if ($script:unityRestartAttemptsResetTime -and (Get-Date) -gt $script:unityRestartAttemptsResetTime) {
+        $script:unityRestartAttempts = 0
+        $script:unityRestartAttemptsResetTime = $null
+    }
+    
+    # Check if we've exceeded max restart attempts
+    if ($script:unityRestartAttempts -ge $script:maxUnityRestartAttempts) {
+        $backoffTime = $script:unityRestartBackoffSeconds * [math]::Pow(2, $script:unityRestartAttempts - 1)  # Exponential backoff
+        $resetTime = if ($script:lastUnityRestart) { 
+            $script:lastUnityRestart.AddSeconds($backoffTime) 
+        } else { 
+            (Get-Date).AddSeconds($backoffTime) 
+        }
+        $script:unityRestartAttemptsResetTime = $resetTime
+        
+        $maxAttemptsMsg = "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Max restart attempts reached ($($script:unityRestartAttempts)/$($script:maxUnityRestartAttempts)) - backing off for $([math]::Round($backoffTime))s"
+        Write-ConsoleOutput -Message $maxAttemptsMsg -ForegroundColor "Red"
+        return $false
+    }
+    
     try {
         # Check if Unity is running
         $unityProcess = Get-Process -Name "Unity" -ErrorAction SilentlyContinue
@@ -3115,6 +3209,9 @@ function Restart-UnityIfNeeded {
         if ($isUnityRunning -and $isConnected -and -not $wasUnityRunning) {
             Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Detected existing Unity instance (PID: $($unityProcess.Id)) - using it" -ForegroundColor "Green"
             Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Already connected to server - no restart needed" -ForegroundColor "Green"
+            # Unity is healthy - reset restart counter
+            $script:unityRestartAttempts = 0
+            $script:unityRestartAttemptsResetTime = $null
         }
         
         # Log Unity startup when process first appears
@@ -3215,6 +3312,9 @@ function Restart-UnityIfNeeded {
             # Unity will automatically enter play mode via InitializeOnLoad
             Start-Process -FilePath $config.unity.executablePath -ArgumentList $unityArgs -WindowStyle Normal
             Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Unity started, will check connection status (90s grace period)" -ForegroundColor "Cyan"
+            # Track restart attempt
+            $script:lastUnityRestart = Get-Date
+            $script:unityRestartAttempts++
             # Don't wait here - let the main loop check connection status with grace period
             # Give Unity a moment to actually start the process before checking again
             Start-Sleep -Seconds 5
@@ -3244,17 +3344,43 @@ function Restart-UnityIfNeeded {
             }
             
             if (-not $recentConnectionAttempt) {
-                Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Unity running but not connected (no recent connection attempts), restarting..." -ForegroundColor "Yellow"
-                Stop-Process -Name "Unity" -Force -ErrorAction SilentlyContinue
-                Start-Sleep -Seconds 2
-                # Restart Unity (recursive call, but will hit the "not running" branch)
-                return Restart-UnityIfNeeded
+                # Check cooldown before restarting
+                $cooldownSeconds = $script:unityRestartBackoffSeconds * [math]::Pow(2, [math]::Min($script:unityRestartAttempts, 3))  # Exponential backoff
+                $shouldRestart = $true
+                if ($script:lastUnityRestart -and $script:lastUnityRestart -is [DateTime]) {
+                    $timeSinceLastRestart = (Get-Date) - $script:lastUnityRestart
+                    if ($timeSinceLastRestart.TotalSeconds -lt $cooldownSeconds) {
+                        $remainingCooldown = [math]::Round($cooldownSeconds - $timeSinceLastRestart.TotalSeconds)
+                        Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Cooldown active ($remainingCooldown s remaining) - waiting before restart" -ForegroundColor "Gray"
+                        $shouldRestart = $false
+                    }
+                }
+                
+                if ($shouldRestart) {
+                    Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Unity running but not connected (no recent connection attempts), restarting... (attempt $($script:unityRestartAttempts + 1)/$($script:maxUnityRestartAttempts))" -ForegroundColor "Yellow"
+                    Stop-Process -Name "Unity" -Force -ErrorAction SilentlyContinue
+                    Start-Sleep -Seconds 2
+                    # Restart Unity (recursive call, but will hit the "not running" branch)
+                    return Restart-UnityIfNeeded
+                } else {
+                    return $true
+                }
             } else {
                 # Unity is trying to connect - wait a bit more
+                # Reset restart counter if Unity is making progress
+                if ($script:unityRestartAttempts -gt 0) {
+                    $script:unityRestartAttempts = 0
+                    $script:unityRestartAttemptsResetTime = $null
+                }
                 return $true
             }
         }
         # Unity is running and connected (or still in grace period) - all good
+        # Reset restart counter on success
+        if ($isConnected) {
+            $script:unityRestartAttempts = 0
+            $script:unityRestartAttemptsResetTime = $null
+        }
         return $true
     } catch {
         Write-ConsoleOutput -Message "[$(Get-Date -Format 'HH:mm:ss')] UNITY: Error restarting Unity: $_" -ForegroundColor "Red"
@@ -3663,28 +3789,34 @@ try {
         Start-Sleep -Seconds 1  # Brief wait for processes to terminate
     }
     
-    # Step 4: Start server in background (port 3000 should now be free, all node processes killed)
+            # Step 4: Start server in background (port 3000 should now be free, all node processes killed)
             $serverProcess = Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$PWD'; npm start" -WindowStyle Minimized -PassThru
     Write-Info "Server starting (PID: $($serverProcess.Id)). Waiting for server to be ready..."
             
             # Wait up to 30 seconds for server to start
             $maxWait = 30
             $waited = 0
+            $serverStarted = $false
             while ($waited -lt $maxWait) {
                 Start-Sleep -Seconds 2
                 $waited += 2
                 if (Test-ServerRunning) {
             Write-Success "Server is now online!"
             $script:lastServerRestart = Get-Date  # Track server restart time to prevent killing it during startup
+            $serverStarted = $true
             break
         }
     }
     
-    if (-not (Test-ServerRunning)) {
-        Write-Warning "Server failed to start within $maxWait seconds"
+    if ($serverStarted) {
+        # Server started successfully - reset restart counter
+        $script:serverRestartAttempts = 0
+        $script:serverRestartAttemptsResetTime = $null
     } else {
-        # Even if we didn't break early, if server is running now, set the cooldown
+        # Server failed to start - increment restart counter
+        $script:serverRestartAttempts++
         $script:lastServerRestart = Get-Date
+        Write-Warning "Server failed to start within $maxWait seconds (attempt $($script:serverRestartAttempts)/$($script:maxServerRestartAttempts))"
     }
     } catch {
         Write-Error "Failed to restart server: $_"
@@ -3741,6 +3873,17 @@ $lastUnityWarning = Get-Date
 $serviceCheckInterval = 30  # Check services every 30 seconds
 $script:simulationEndTime = $null  # Track when simulation ended for idle detection
 $script:lastServerRestart = $null  # Track when server was last restarted (to prevent restart loops)
+$script:serverRestartAttempts = 0  # Track consecutive server restart attempts
+$script:serverRestartAttemptsResetTime = $null  # When to reset restart counter
+$script:maxServerRestartAttempts = 5  # Max consecutive restarts before giving up
+$script:serverRestartBackoffSeconds = 60  # Base cooldown between restarts
+
+$script:lastUnityRestart = $null  # Track when Unity was last restarted
+$script:unityRestartAttempts = 0  # Track consecutive Unity restart attempts
+$script:unityRestartAttemptsResetTime = $null  # When to reset restart counter
+$script:maxUnityRestartAttempts = 5  # Max consecutive restarts before giving up
+$script:unityRestartBackoffSeconds = 60  # Base cooldown between restarts
+
 $script:simulationStartTime = $null  # Track when we first detected a simulation starting (after monitor started)
 $script:monitorStartTime = Get-Date  # Track when monitor started to ignore old simulations
 $script:investigationCheckLogged = $false  # Track if we've logged the investigation check diagnostic message
@@ -6164,3 +6307,45 @@ while ($monitoringActive) {
 }
 
 Write-Info "Monitoring stopped"
+
+# LIFECYCLE MANAGEMENT: Cleanup all systems on shutdown
+
+# 1. Stop persistent integration server
+if (Get-Command Stop-AllIntegrationServers -ErrorAction SilentlyContinue) {
+    Stop-AllIntegrationServers
+}
+
+# 2. Stop Unity gracefully (if running)
+try {
+    $unityProcess = Get-Process -Name "Unity" -ErrorAction SilentlyContinue
+    if ($unityProcess) {
+        Write-Info "Stopping Unity process (PID: $($unityProcess.Id))..."
+        # Try graceful shutdown first (Unity may handle SIGTERM)
+        Stop-Process -Id $unityProcess.Id -ErrorAction SilentlyContinue
+        Start-Sleep -Seconds 2
+        # Force kill if still running
+        $stillRunning = Get-Process -Id $unityProcess.Id -ErrorAction SilentlyContinue
+        if ($stillRunning) {
+            Stop-Process -Id $unityProcess.Id -Force -ErrorAction SilentlyContinue
+        }
+    }
+} catch {
+    Write-Warning "Error stopping Unity: $_"
+}
+
+# 3. Stop server gracefully (if running)
+try {
+    if (Test-ServerRunning) {
+        Write-Info "Stopping server gracefully..."
+        # Try to stop via API first (graceful)
+        try {
+            Invoke-WebRequest -Uri "$serverUrl/api/simulations/stop-all" -Method POST -TimeoutSec 2 -ErrorAction Stop | Out-Null
+        } catch {
+            # API may not be available
+        }
+        # Kill processes on port 3000
+        Kill-Port3000Processes
+    }
+} catch {
+    Write-Warning "Error stopping server: $_"
+}

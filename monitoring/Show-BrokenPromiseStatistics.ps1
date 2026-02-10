@@ -363,23 +363,32 @@ function Show-BrokenPromiseStatistics {
         Write-Host (New-Separator -Length $consoleWidth) -ForegroundColor Cyan
     }
     
-    # Prompt for user section
+    # Prompt for user section - ALWAYS SHOW PROMINENTLY (highest priority)
     $latestPrompt = Get-AILatestPrompt
     if ($latestPrompt -and -not $latestPrompt.delivered) {
         Write-Host ""
         Write-Host (New-Separator -Length $consoleWidth) -ForegroundColor Yellow
-        Write-Host "[!] PROMPT FOR USER TO DELIVER TO AI" -ForegroundColor Yellow
+        Write-Host "[!] ⚠️  PROMPT FOR USER TO DELIVER TO AI ⚠️" -ForegroundColor Yellow
         Write-Host (New-Separator -Length $consoleWidth) -ForegroundColor Yellow
         Write-Host ""
         Write-Host "Type: $($latestPrompt.Type)" -ForegroundColor White
         Write-Host "Generated: $($latestPrompt.Timestamp.ToString('yyyy-MM-dd HH:mm:ss'))" -ForegroundColor Gray
         Write-Host ""
+        Write-Host "═══════════════════════════════════════════════════════════════" -ForegroundColor Cyan
         Write-Host "Copy and paste this prompt to the AI:" -ForegroundColor Cyan
+        Write-Host "═══════════════════════════════════════════════════════════════" -ForegroundColor Cyan
         Write-Host ""
         Write-Host $latestPrompt.Prompt -ForegroundColor White
         Write-Host ""
         Write-Host (New-Separator -Length $consoleWidth) -ForegroundColor Yellow
         Write-Host "Also available in: logs\prompts-for-user.txt" -ForegroundColor Gray
+        Write-Host ""
+    } elseif (-not $latestPrompt) {
+        # Show if no prompts available (so user knows system is working)
+        Write-Host ""
+        Write-Host (New-Separator -Length $consoleWidth) -ForegroundColor Gray
+        Write-Host "PROMPT SYSTEM: No pending prompts - system monitoring normally" -ForegroundColor Gray
+        Write-Host (New-Separator -Length $consoleWidth) -ForegroundColor Gray
         Write-Host ""
     }
     
