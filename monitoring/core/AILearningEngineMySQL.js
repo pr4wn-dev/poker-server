@@ -7,6 +7,7 @@
 
 const EventEmitter = require('events');
 const DatabaseManager = require('./DatabaseManager');
+const gameLogger = require('../../src/utils/GameLogger');
 
 class AILearningEngineMySQL extends EventEmitter {
     constructor(stateStore, issueDetector, fixTracker) {
@@ -43,8 +44,14 @@ class AILearningEngineMySQL extends EventEmitter {
         
         const pool = this.dbManager.getPool();
         
-        // Query misdiagnosis patterns (indexed, instant results)
-        const [patterns] = await pool.execute(`
+        // LEARNING SYSTEM FIX: Check if pool is closed before using it
+        if (!pool || pool._closed) {
+            return { warnings: [], correctApproach: null, commonMisdiagnosis: null, timeSavings: null, failedMethods: [], source: 'mysql' };
+        }
+        
+        try {
+            // Query misdiagnosis patterns (indexed, instant results)
+            const [patterns] = await pool.execute(`
             SELECT * FROM learning_misdiagnosis_patterns 
             WHERE (symptom LIKE ? OR issue_type = ? OR component = ?)
             AND (frequency > 0 OR actual_root_cause IS NOT NULL)
@@ -113,7 +120,14 @@ class AILearningEngineMySQL extends EventEmitter {
             }));
         }
 
-        return result;
+            return result;
+        } catch (error) {
+            // LEARNING SYSTEM FIX: Handle pool closed errors gracefully
+            if (error.message && error.message.includes('Pool is closed')) {
+                return { warnings: [], correctApproach: null, commonMisdiagnosis: null, timeSavings: null, failedMethods: [], source: 'mysql' };
+            }
+            throw error; // Re-throw other errors
+        }
     }
 
     /**
@@ -124,8 +138,19 @@ class AILearningEngineMySQL extends EventEmitter {
         
         const pool = this.dbManager.getPool();
         
-        // Store fix attempt
-        await pool.execute(`
+        // LEARNING SYSTEM FIX: Check if pool is closed before using it
+        // Prevents "Pool is closed" errors when pool is destroyed during cleanup
+        if (!pool || pool._closed) {
+            gameLogger.warn('MONITORING', '[AILearningEngineMySQL] Cannot learn from attempt - pool is closed', {
+                issueType: attempt.issueType,
+                fixMethod: attempt.fixMethod
+            });
+            return; // Silently skip if pool is closed
+        }
+        
+        try {
+            // Store fix attempt
+            await pool.execute(`
             INSERT INTO learning_fix_attempts 
             (id, issue_id, issue_type, fix_method, result, time_spent, misdiagnosis, correct_approach, wrong_approach, actual_root_cause, timestamp, component, details)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -152,19 +177,33 @@ class AILearningEngineMySQL extends EventEmitter {
             JSON.stringify(attempt.fixDetails || {})
         ]);
 
-        // Track misdiagnosis patterns
-        if (attempt.result === 'failure' && attempt.fixDetails?.wrongApproach) {
-            await this.trackMisdiagnosis(attempt);
-        }
+            // Track misdiagnosis patterns
+            if (attempt.result === 'failure' && attempt.fixDetails?.wrongApproach) {
+                await this.trackMisdiagnosis(attempt);
+            }
 
-        // Track failed methods
-        if (attempt.result === 'failure' && attempt.fixMethod) {
-            await this.trackFailedMethod(attempt);
-        }
+            // Track failed methods
+            if (attempt.result === 'failure' && attempt.fixMethod) {
+                await this.trackFailedMethod(attempt);
+            }
 
-        // Learn patterns
-        if (attempt.result === 'success') {
-            await this.learnPattern(attempt);
+            // Learn patterns
+            if (attempt.result === 'success') {
+                await this.learnPattern(attempt);
+            }
+        } catch (error) {
+            // LEARNING SYSTEM FIX: Handle pool closed errors gracefully
+            // Don't trigger console.error which would cause a cascade
+            if (error.message && error.message.includes('Pool is closed')) {
+                // Silently skip - pool is being destroyed, can't learn right now
+                return;
+            }
+            // For other errors, log but don't throw (don't break the system)
+            const gameLogger = require('../../src/utils/GameLogger');
+            gameLogger.warn('MONITORING', '[AILearningEngineMySQL] Error learning from attempt', {
+                error: error.message,
+                issueType: attempt.issueType
+            });
         }
     }
 
@@ -175,6 +214,11 @@ class AILearningEngineMySQL extends EventEmitter {
         if (!this.initialized) await this.initialize();
         
         const pool = this.dbManager.getPool();
+        
+        // LEARNING SYSTEM FIX: Check if pool is closed before using it
+        if (!pool || pool._closed) {
+            return; // Silently skip if pool is closed
+        }
         const patternKey = `misdiagnosis_${attempt.issueType}_${attempt.fixMethod}`;
         
         // Get or create pattern
@@ -226,7 +270,13 @@ class AILearningEngineMySQL extends EventEmitter {
         
         const pool = this.dbManager.getPool();
         
-        await pool.execute(`
+        // LEARNING SYSTEM FIX: Check if pool is closed before using it
+        if (!pool || pool._closed) {
+            return; // Silently skip if pool is closed
+        }
+        
+        try {
+            await pool.execute(`
             INSERT INTO learning_failed_methods (issue_type, method, frequency, time_wasted, last_attempt)
             VALUES (?, ?, 1, ?, ?)
             ON DUPLICATE KEY UPDATE
@@ -249,6 +299,13 @@ class AILearningEngineMySQL extends EventEmitter {
         if (!this.initialized) await this.initialize();
         
         const pool = this.dbManager.getPool();
+        
+        // LEARNING SYSTEM FIX: Check if pool is closed before using it
+        if (!pool || pool._closed) {
+            return; // Silently skip if pool is closed
+        }
+        
+        try {
         const patternKey = `pattern_${attempt.issueType}_${attempt.fixMethod}`;
         
         // Get previous failed attempts for this issue to capture misdiagnosis context
@@ -317,6 +374,13 @@ class AILearningEngineMySQL extends EventEmitter {
             Date.now(),
             JSON.stringify(attempt.fixDetails || {})
         ]);
+        } catch (error) {
+            // LEARNING SYSTEM FIX: Handle pool closed errors gracefully
+            if (error.message && error.message.includes('Pool is closed')) {
+                return; // Silently skip if pool is closed
+            }
+            throw error; // Re-throw other errors
+        }
     }
 
     /**
@@ -327,23 +391,36 @@ class AILearningEngineMySQL extends EventEmitter {
         
         const pool = this.dbManager.getPool();
         
-        const [rows] = await pool.execute(`
+        // LEARNING SYSTEM FIX: Check if pool is closed before using it
+        if (!pool || pool._closed) {
+            return null; // Return null if pool is closed
+        }
+        
+        try {
+            const [rows] = await pool.execute(`
             SELECT * FROM learning_patterns 
             WHERE issue_type = ?
             ORDER BY success_rate DESC, frequency DESC
             LIMIT 1
         `, [issueType]);
         
-        if (rows.length === 0) return null;
-        
-        const pattern = rows[0];
-        return {
-            method: pattern.solution_method,
-            successRate: pattern.success_rate,
-            frequency: pattern.frequency,
-            timeSaved: pattern.time_saved,
-            source: 'mysql'
-        };
+            if (rows.length === 0) return null;
+            
+            const pattern = rows[0];
+            return {
+                method: pattern.solution_method,
+                successRate: pattern.success_rate,
+                frequency: pattern.frequency,
+                timeSaved: pattern.time_saved,
+                source: 'mysql'
+            };
+        } catch (error) {
+            // LEARNING SYSTEM FIX: Handle pool closed errors gracefully
+            if (error.message && error.message.includes('Pool is closed')) {
+                return null; // Return null if pool is closed
+            }
+            throw error; // Re-throw other errors
+        }
     }
 
     /**
@@ -363,6 +440,12 @@ class AILearningEngineMySQL extends EventEmitter {
         
         const pool = this.dbManager.getPool();
         
+        // LEARNING SYSTEM FIX: Check if pool is closed before using it
+        if (!pool || pool._closed) {
+            gameLogger.warn('MONITORING', '[AILearningEngineMySQL] Cannot seed patterns - pool is closed');
+            return; // Silently skip if pool is closed
+        }
+        
         try {
             // Check if patterns already exist
             const [existing] = await pool.execute(`
@@ -381,8 +464,12 @@ class AILearningEngineMySQL extends EventEmitter {
             
             this.emit('patterns-seeded');
         } catch (error) {
+            // LEARNING SYSTEM FIX: Use gameLogger instead of console.error to avoid triggering ConsoleOverride
+            // ConsoleOverride would trigger learning system which tries to use the pool, causing cascade
             // Don't fail initialization if seeding fails
-            console.error('[AILearningEngine] Failed to seed initial patterns:', error.message);
+            gameLogger.warn('MONITORING', '[AILearningEngineMySQL] Failed to seed initial patterns', {
+                error: error.message
+            });
         }
     }
 }
