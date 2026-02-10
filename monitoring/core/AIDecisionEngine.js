@@ -275,9 +275,28 @@ class AIDecisionEngine extends EventEmitter {
      * Should we resume Unity?
      */
     shouldResumeUnity() {
-        const verification = this.stateStore.getState('monitoring.verification');
-        const unity = this.stateStore.getState('system.unity');
-        const activeIssues = this.issueDetector.getActiveIssues();
+        // LEARNING SYSTEM FIX: Add null checks before accessing state properties
+        // Pattern from shouldPauseUnity() - prevents "Cannot read properties of null" errors
+        if (!this.stateStore || typeof this.stateStore.getState !== 'function') {
+            return {
+                should: false,
+                reason: 'StateStore not available',
+                confidence: 0
+            };
+        }
+        
+        const verification = this.stateStore.getState('monitoring.verification') || {};
+        const unity = this.stateStore.getState('system.unity') || {};
+        const activeIssues = this.issueDetector ? this.issueDetector.getActiveIssues() : [];
+        
+        // Null check: Provide default for unity state
+        if (!unity || typeof unity !== 'object' || !unity.status) {
+            return {
+                should: false,
+                reason: 'Unity state not available',
+                confidence: 0.5
+            };
+        }
         
         // Not paused
         if (unity.status !== 'paused') {
@@ -285,6 +304,16 @@ class AIDecisionEngine extends EventEmitter {
                 should: false,
                 reason: 'Unity not paused',
                 confidence: 1.0
+            };
+        }
+        
+        // Null check: Provide default for verification state
+        if (!verification || typeof verification !== 'object') {
+            // No verification state - can't resume yet
+            return {
+                should: false,
+                reason: 'Verification state not available',
+                confidence: 0.5
             };
         }
         
