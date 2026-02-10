@@ -6252,15 +6252,15 @@ while ($monitoringActive) {
             $script:lastWindowCheck = $now
         }
         
-        # Update statistics display periodically
-        # CRITICAL: Sync with Update-MonitorStatus timer to avoid reading stale data
-        # Update every 5 seconds (reduced from 10 for more responsive display)
-        # BUT: Don't update if we just wrote console output (prevents flashing)
-        # Only update if console output line hasn't changed recently (reduced to 1 second for faster updates)
+        # Update unified statistics display periodically
+        # UNIFIED DISPLAY: Show full stats including prompts every 5 seconds
+        # Display takes priority - console output should not prevent updates
+        # Only wait briefly after console output to prevent flashing (0.5s instead of 1s)
         $timeSinceLastConsoleOutput = if ($script:lastConsoleOutputTime) { ($now - $script:lastConsoleOutputTime).TotalSeconds } else { 999 }
-        # SYNC FIX: Wait at least 0.5s after status update to ensure file is written, then check our own timer
+        # SYNC FIX: Wait at least 0.5s after status update to ensure file is written
         $timeSinceStatusUpdate = if ($lastStatusUpdate) { ($now - $lastStatusUpdate).TotalSeconds } else { 999 }
-        if (($timeSinceStatusUpdate -ge 0.5 -and ($now - $lastStatsUpdate).TotalSeconds -ge 5) -and $timeSinceLastConsoleOutput -gt 1) {
+        # Update display every 5 seconds, but allow updates even with recent console output (just wait 0.5s)
+        if (($timeSinceStatusUpdate -ge 0.5 -and ($now - $lastStatsUpdate).TotalSeconds -ge 5) -and $timeSinceLastConsoleOutput -gt 0.5) {
             Show-Statistics
             $lastStatsUpdate = $now
         }
