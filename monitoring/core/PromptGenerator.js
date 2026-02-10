@@ -357,16 +357,155 @@ class PromptGenerator extends EventEmitter {
     
     /**
      * Write prompt to file for user to read
+     * CRITICAL FIX: Only writes prompts for active, undelivered issues
+     * Removes old prompts for same issue and keeps only recent undelivered prompts
      */
     writePromptToFile(prompt) {
         const fs = require('fs');
         const path = require('path');
         const promptFile = path.join(this.stateStore.projectRoot, 'logs', 'prompts-for-user.txt');
         
+        // Check if prompt was already delivered
+        const deliveredPrompts = this.stateStore.getState('ai.deliveredPrompts') || [];
+        if (deliveredPrompts.includes(prompt.id)) {
+            gameLogger.info('BrokenPromise', '[PROMPT_GENERATOR] Skipping prompt - already delivered', {
+                promptId: prompt.id
+            });
+            return; // Don't write delivered prompts
+        }
+        
+        // Check if issue is still active (if we have issue info)
+        if (prompt.issue) {
+            try {
+                // Try to get active issues to check if this one is still active
+                // Note: We can't directly access issueDetector, but we can check state
+                const activeIssues = this.stateStore.getState('issues.active') || [];
+                const issueMatches = activeIssues.filter(activeIssue => {
+                    const promptIssueType = (prompt.issue.issueType || prompt.issue.type || '').toLowerCase();
+                    const activeIssueType = (activeIssue.type || '').toLowerCase();
+                    const promptComponent = (prompt.issue.component || '').toLowerCase();
+                    const activeComponent = (activeIssue.component || '').toLowerCase();
+                    
+                    // Match if type and component match
+                    return (promptIssueType && activeIssueType && 
+                            (promptIssueType === activeIssueType || 
+                             promptIssueType.includes(activeIssueType) || 
+                             activeIssueType.includes(promptIssueType))) &&
+                           (promptComponent && activeComponent &&
+                            (promptComponent === activeComponent ||
+                             promptComponent.includes(activeComponent) ||
+                             activeComponent.includes(promptComponent)));
+                });
+                
+                // If no matching active issues found, don't write prompt
+                if (issueMatches.length === 0) {
+                    gameLogger.info('BrokenPromise', '[PROMPT_GENERATOR] Skipping prompt - issue no longer active', {
+                        promptId: prompt.id,
+                        issueType: prompt.issue.issueType || prompt.issue.type
+                    });
+                    return; // Issue is resolved, don't write prompt
+                }
+            } catch (error) {
+                // If we can't check, write the prompt anyway (better to show than hide)
+                gameLogger.warn('BrokenPromise', '[PROMPT_GENERATOR] Could not check if issue is active', {
+                    error: error.message
+                });
+            }
+        }
+        
+        // Read existing prompts from file and filter
+        let existingPromptsText = '';
+        if (fs.existsSync(promptFile)) {
+            try {
+                const fileContent = fs.readFileSync(promptFile, 'utf8');
+                // Split by separator to get individual prompts
+                const separator = '═══════════════════════════════════════════════════════════════';
+                const promptBlocks = fileContent.split(separator).filter(block => block.trim().length > 0);
+                
+                // Group blocks into complete prompts (header + content)
+                const completePrompts = [];
+                for (let i = 0; i < promptBlocks.length; i += 2) {
+                    if (promptBlocks[i] && promptBlocks[i + 1]) {
+                        const header = promptBlocks[i].trim();
+                        const content = promptBlocks[i + 1].trim();
+                        if (header.includes('PROMPT FOR USER') && content.length > 0) {
+                            // Extract info from header
+                            const typeMatch = header.match(/Type:\s*(\S+)/);
+                            const idMatch = header.match(/ID:\s*(\S+)/);
+                            const generatedMatch = header.match(/Generated:\s*([^\n]+)/);
+                            
+                            // Check if this prompt is for the same issue (if we have issue info)
+                            let isDuplicate = false;
+                            if (prompt.issue && typeMatch) {
+                                const promptIssueType = (prompt.issue.issueType || prompt.issue.type || '').toLowerCase();
+                                const promptComponent = (prompt.issue.component || '').toLowerCase();
+                                const contentLower = content.toLowerCase();
+                                
+                                // Check if existing prompt is for same issue
+                                if (promptIssueType && contentLower.includes(promptIssueType) &&
+                                    promptComponent && contentLower.includes(promptComponent)) {
+                                    isDuplicate = true; // Same issue, remove old one
+                                }
+                            }
+                            
+                            // Check if prompt was delivered (check state or content)
+                            const promptId = idMatch ? idMatch[1] : null;
+                            const isDelivered = promptId && deliveredPrompts.includes(promptId);
+                            const contentLower = content.toLowerCase();
+                            const mentionsDelivered = contentLower.includes('[delivered]') || 
+                                                     contentLower.includes('already fixed') ||
+                                                     contentLower.includes('resolved');
+                            
+                            // Check age (remove if >24 hours old)
+                            let isTooOld = false;
+                            if (generatedMatch) {
+                                try {
+                                    const generatedDate = new Date(generatedMatch[1]);
+                                    if (!isNaN(generatedDate.getTime())) {
+                                        const age = Date.now() - generatedDate.getTime();
+                                        if (age > 24 * 60 * 60 * 1000) { // 24 hours
+                                            isTooOld = true;
+                                        }
+                                    }
+                                } catch (e) {
+                                    // Can't parse date, assume not too old
+                                }
+                            }
+                            
+                            // Keep prompt if: not duplicate, not delivered, not too old
+                            if (!isDuplicate && !isDelivered && !mentionsDelivered && !isTooOld) {
+                                completePrompts.push({
+                                    header,
+                                    content,
+                                    fullText: separator + header + separator + content + separator
+                                });
+                            }
+                        }
+                    }
+                }
+                
+                // Keep only last 10 prompts
+                if (completePrompts.length > 10) {
+                    completePrompts.splice(0, completePrompts.length - 10);
+                }
+                
+                // Rebuild text
+                existingPromptsText = completePrompts.map(p => p.fullText).join('\n\n');
+            } catch (error) {
+                gameLogger.warn('BrokenPromise', '[PROMPT_GENERATOR] Could not read/parse existing prompts', {
+                    error: error.message
+                });
+                // If parsing fails, clear file to start fresh
+                existingPromptsText = '';
+            }
+        }
+        
+        // Build new prompt text
         const promptText = `═══════════════════════════════════════════════════════════════
   PROMPT FOR USER TO DELIVER TO AI
   Generated: ${new Date(prompt.timestamp).toISOString()}
   Type: ${prompt.type}
+  ID: ${prompt.id}
 ═══════════════════════════════════════════════════════════════
 
 ${prompt.prompt}
@@ -375,7 +514,17 @@ ${prompt.prompt}
 `;
         
         try {
-            fs.appendFileSync(promptFile, promptText, 'utf8');
+            // Write all prompts back to file (existing + new)
+            const allPromptsText = existingPromptsText + 
+                                   (existingPromptsText ? '\n\n' : '') + 
+                                   promptText;
+            fs.writeFileSync(promptFile, allPromptsText, 'utf8');
+            
+            gameLogger.info('BrokenPromise', '[PROMPT_GENERATOR] Wrote prompt to file', {
+                promptId: prompt.id,
+                type: prompt.type,
+                existingPromptsCount: existingPrompts.length
+            });
         } catch (error) {
             gameLogger.error('BrokenPromise', '[PROMPT_GENERATOR] Failed to write prompt to file', {
                 error: error.message,
