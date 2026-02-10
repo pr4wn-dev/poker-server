@@ -57,7 +57,21 @@ const server = http.createServer(async (req, res) => {
     try {
         const parsedUrl = url.parse(req.url, true);
         const command = parsedUrl.pathname.substring(1); // Remove leading /
-        const args = parsedUrl.query.args ? JSON.parse(decodeURIComponent(parsedUrl.query.args)) : [];
+        let args = [];
+        if (parsedUrl.query.args) {
+            try {
+                // Try Base64 decode first (PowerShell encoding)
+                const decoded = Buffer.from(parsedUrl.query.args, 'base64').toString('utf8');
+                args = JSON.parse(decoded);
+            } catch {
+                // Fall back to URL decode
+                try {
+                    args = JSON.parse(decodeURIComponent(parsedUrl.query.args));
+                } catch {
+                    args = [];
+                }
+            }
+        }
         
         await ensureInitialized();
         
@@ -110,6 +124,18 @@ const server = http.createServer(async (req, res) => {
                 break;
             case 'ping':
                 result = { success: true, message: 'Server is alive', timestamp: Date.now() };
+                break;
+            case 'shutdown':
+                result = { success: true, message: 'Shutting down' };
+                // Schedule shutdown after response
+                setTimeout(() => {
+                    if (integration && integration.aiCore) {
+                        try {
+                            integration.aiCore.destroy();
+                        } catch (e) {}
+                    }
+                    server.close(() => process.exit(0));
+                }, 100);
                 break;
             default:
                 result = { error: `Unknown command: ${command}` };

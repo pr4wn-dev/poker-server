@@ -386,9 +386,12 @@ function Invoke-AIIntegration {
         } else {
             try {
                 # Send command to persistent HTTP server
-                $argsEncoded = [System.Web.HttpUtility]::UrlEncode(($Arguments | ConvertTo-Json -Compress))
                 $uri = "http://127.0.0.1:$($script:persistentServerPort)/$Command"
                 if ($Arguments.Count -gt 0) {
+                    # URL encode arguments (PowerShell native method)
+                    $argsJson = $Arguments | ConvertTo-Json -Compress
+                    $argsBytes = [System.Text.Encoding]::UTF8.GetBytes($argsJson)
+                    $argsEncoded = [Convert]::ToBase64String($argsBytes)
                     $uri += "?args=$argsEncoded"
                 }
                 
