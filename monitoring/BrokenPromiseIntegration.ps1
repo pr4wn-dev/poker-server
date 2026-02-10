@@ -282,6 +282,7 @@ function Test-BrokenPromiseSystems {
 # Reuses single process instead of spawning new process for each command
 function Start-PersistentIntegrationServer {
     # CRITICAL FIX: Kill any existing processes on port 3001 FIRST
+    # BUT: Don't kill the process we're currently tracking (if it's still running)
     # This ensures we always start with fresh code, not old cached code
     try {
         $netstatOutput = netstat -ano | Select-String ":$($script:persistentServerPort)"
@@ -290,6 +291,12 @@ function Start-PersistentIntegrationServer {
                 if ($line -match '\s+(\d+)\s*$') {
                     $processId = [int]$matches[1]
                     try {
+                        # Don't kill the process we're currently tracking (if it's still running)
+                        if ($script:persistentServerProcess -and !$script:persistentServerProcess.HasExited -and $script:persistentServerProcess.Id -eq $processId) {
+                            # This is our tracked process - skip it
+                            continue
+                        }
+                        
                         $process = Get-Process -Id $processId -ErrorAction SilentlyContinue
                         if ($process -and $process.ProcessName -eq 'node') {
                             # Check if it's our integration server
