@@ -12,7 +12,8 @@ const gameLogger = require('../../src/utils/GameLogger');
 class BrokenPromiseIntegration {
     constructor(projectRoot, options = {}) {
         this.projectRoot = projectRoot;
-        this.aiCore = new AIMonitorCore(projectRoot);
+        this._aiCore = null; // LEARNING SYSTEM FIX: Lazy initialization to prevent memory overflow
+        this._aiCoreInitialized = false;
         
         // Integration state
         this.integrationActive = true;
@@ -26,9 +27,21 @@ class BrokenPromiseIntegration {
             this.startSyncLoop();
         }
         
-        gameLogger.info('MONITORING', '[MONITOR_INTEGRATION] Initialized', {
+        gameLogger.info('MONITORING', '[MONITOR_INTEGRATION] Initialized (lazy AI core)', {
             message: 'Bridging PowerShell monitor with AI core'
         });
+    }
+    
+    /**
+     * LEARNING SYSTEM FIX: Lazy getter for aiCore - only creates it when needed
+     * This prevents memory overflow during HTTP server startup
+     */
+    get aiCore() {
+        if (!this._aiCore) {
+            this._aiCore = new AIMonitorCore(this.projectRoot);
+            // Don't initialize here - let it initialize lazily when first used
+        }
+        return this._aiCore;
     }
     
     /**
@@ -57,6 +70,12 @@ class BrokenPromiseIntegration {
      * Reads monitor-status.json and updates AI core state
      */
     syncWithMonitor() {
+        // LEARNING SYSTEM FIX: Don't sync if aiCore isn't initialized yet
+        // This prevents memory overflow during HTTP server startup
+        if (!this._aiCore) {
+            return; // Skip sync until aiCore is actually needed
+        }
+        
         try {
             const fs = require('fs');
             const statusFile = path.join(this.projectRoot, 'monitoring', 'monitor-status.json');
@@ -812,8 +831,9 @@ class BrokenPromiseIntegration {
         this.stopSyncLoop();
         
         // Destroy AI core (stops all its intervals)
-        if (this.aiCore) {
-            this.aiCore.destroy();
+        // LEARNING SYSTEM FIX: Check _aiCore instead of aiCore getter to avoid creating it just to destroy it
+        if (this._aiCore) {
+            this._aiCore.destroy();
         }
     }
 }

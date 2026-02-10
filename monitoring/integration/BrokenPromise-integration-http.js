@@ -41,12 +41,9 @@ async function ensureInitialized() {
     }
 }
 
-// Start initialization in background (non-blocking)
-ensureInitialized().catch(err => {
-    gameLogger.error('MONITORING', '[INTEGRATION_HTTP] Background initialization error', {
-        error: err.message
-    });
-});
+// LEARNING SYSTEM FIX: Don't initialize in background - causes memory overflow
+// Initialize lazily only when a command that needs it is called
+// This prevents memory heap overflow during server startup
 
 const server = http.createServer(async (req, res) => {
     // CORS headers
