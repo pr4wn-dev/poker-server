@@ -333,6 +333,8 @@ class TerminalErrorMonitor extends EventEmitter {
             }
             
             // Enhance prompt with terminal-specific context
+            // CRITICAL: Use error.fullOutput (has stack traces) instead of raw output
+            const fullOutputToShow = error.fullOutput || output;
             prompt.prompt = `TERMINAL COMMAND ERROR DETECTED
 
 ${errorDetails}
@@ -341,7 +343,7 @@ ${misdiagnosisPrevention.correctApproach ? `✅ CORRECT APPROACH: ${misdiagnosis
 
 FULL OUTPUT (includes stack trace, file paths, line numbers):
 ═══════════════════════════════════════════════════════════════
-${typeof output === 'string' ? output : JSON.stringify(output, null, 2)}
+${typeof fullOutputToShow === 'string' ? fullOutputToShow : JSON.stringify(fullOutputToShow, null, 2)}
 ═══════════════════════════════════════════════════════════════
 
 ${prompt.prompt}
