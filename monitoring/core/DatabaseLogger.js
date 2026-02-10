@@ -133,6 +133,7 @@ class DatabaseLogger {
      * Determine log source from category
      */
     _determineSource(category) {
+        if (category === 'terminal_command') return 'terminal_command';
         if (category.includes('SERVER') || category.includes('SOCKET')) return 'server';
         if (category.includes('UNITY') || category.includes('CLIENT')) return 'unity';
         if (category.includes('DATABASE') || category.includes('DB')) return 'database';
