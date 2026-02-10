@@ -278,6 +278,112 @@ class StateStoreMySQL extends EventEmitter {
     getDatabaseManager() {
         return this.dbManager;
     }
+
+    /**
+     * Get status report (compatibility with StateStore interface)
+     */
+    getStatusReport() {
+        return {
+            timestamp: Date.now(),
+            state: this.state,
+            summary: {
+                systemHealth: this._calculateSystemHealth(),
+                gameState: this._calculateGameState(),
+                monitoringState: this._calculateMonitoringState(),
+                issueState: this._calculateIssueState(),
+                fixState: this._calculateFixState(),
+                learningState: this._calculateLearningState()
+            },
+            recommendations: this._generateRecommendations()
+        };
+    }
+
+    /**
+     * Calculate system health summary
+     */
+    _calculateSystemHealth() {
+        const server = this.getState('system.server') || {};
+        const unity = this.getState('system.unity') || {};
+        return {
+            server: server.status || 'unknown',
+            unity: unity.status || 'unknown',
+            database: this.initialized ? 'connected' : 'disconnected'
+        };
+    }
+
+    /**
+     * Calculate game state summary
+     */
+    _calculateGameState() {
+        const game = this.getState('game') || {};
+        return {
+            active: game.active || false,
+            phase: game.phase || 'unknown',
+            players: game.players || 0
+        };
+    }
+
+    /**
+     * Calculate monitoring state summary
+     */
+    _calculateMonitoringState() {
+        const monitoring = this.getState('monitoring') || {};
+        return {
+            active: monitoring.active !== false,
+            investigation: monitoring.investigation || { active: false }
+        };
+    }
+
+    /**
+     * Calculate issue state summary
+     */
+    _calculateIssueState() {
+        const issues = this.getState('issues') || {};
+        return {
+            active: issues.active || 0,
+            critical: issues.critical || 0
+        };
+    }
+
+    /**
+     * Calculate fix state summary
+     */
+    _calculateFixState() {
+        const fixes = this.getState('fixes') || {};
+        return {
+            inProgress: fixes.inProgress || 0,
+            recent: fixes.recent || 0
+        };
+    }
+
+    /**
+     * Calculate learning state summary
+     */
+    _calculateLearningState() {
+        const learning = this.getState('learning') || {};
+        return {
+            patterns: learning.patterns || 0,
+            confidence: learning.confidence || 0
+        };
+    }
+
+    /**
+     * Generate recommendations
+     */
+    _generateRecommendations() {
+        const recommendations = [];
+        const server = this.getState('system.server') || {};
+        const unity = this.getState('system.unity') || {};
+        
+        if (server.status !== 'running') {
+            recommendations.push('Server may need attention');
+        }
+        if (unity.status !== 'running' && unity.status !== 'connected') {
+            recommendations.push('Unity may need attention');
+        }
+        
+        return recommendations;
+    }
 }
 
 module.exports = StateStoreMySQL;
