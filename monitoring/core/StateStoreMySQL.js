@@ -255,6 +255,19 @@ class StateStoreMySQL extends EventEmitter {
     }
 
     /**
+     * Destroy - cleanup and close database connections
+     */
+    async destroy() {
+        // Clear cache
+        this.cache.clear();
+        
+        // Close database connections
+        await this.close();
+        
+        gameLogger.info('MONITORING', '[StateStoreMySQL] Destroyed and closed database connections');
+    }
+
+    /**
      * Get database manager (for direct queries)
      */
     getDatabaseManager() {

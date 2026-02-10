@@ -193,21 +193,30 @@ server.listen(PORT, '127.0.0.1', () => {
     }));
 });
 
-// Handle shutdown
-process.on('SIGINT', () => {
-    if (integration && integration.aiCore) {
-        try {
-            integration.aiCore.destroy();
-        } catch (e) {}
+// Handle shutdown - ensure all systems are cleaned up
+async function gracefulShutdown() {
+    try {
+        // Stop integration (stops sync loop and destroys AI core)
+        if (integration) {
+            integration.destroy();
+        }
+        
+        // Close server
+        server.close(() => {
+            process.exit(0);
+        });
+        
+        // Give server time to close (max 2 seconds)
+        setTimeout(() => {
+            process.exit(0);
+        }, 2000);
+    } catch (error) {
+        gameLogger.error('MONITORING', '[INTEGRATION_HTTP] Shutdown error', {
+            error: error.message
+        });
+        process.exit(1);
     }
-    server.close(() => process.exit(0));
-});
+}
 
-process.on('SIGTERM', () => {
-    if (integration && integration.aiCore) {
-        try {
-            integration.aiCore.destroy();
-        } catch (e) {}
-    }
-    server.close(() => process.exit(0));
-});
+process.on('SIGINT', gracefulShutdown);
+process.on('SIGTERM', gracefulShutdown);

@@ -1558,7 +1558,22 @@ class AIMonitorCore {
         }
         
         if (this.stateStore) {
-            this.stateStore.destroy();
+            // StateStoreMySQL.destroy() is async, but we can't await in destroy()
+            // It will close database connections properly
+            if (this.stateStore.destroy) {
+                if (typeof this.stateStore.destroy === 'function') {
+                    // Check if it's async
+                    const result = this.stateStore.destroy();
+                    if (result && typeof result.then === 'function') {
+                        // Async - handle it but don't block
+                        result.catch(err => {
+                            gameLogger.error('MONITORING', '[AI_MONITOR_CORE] StateStore destroy error', {
+                                error: err.message
+                            });
+                        });
+                    }
+                }
+            }
         }
         
         // CRITICAL: Also stop workflow enforcer if it has any intervals
