@@ -3562,8 +3562,8 @@ function Set-MinimumWindowSize {
         return
     }
     
-    $minWidth = 80   # Minimum width in characters
-    $minHeight = 45  # Minimum height in lines (stats ~30 lines + console ~15 lines)
+    $minWidth = 120  # Minimum width in characters (stats need 120 for 3 columns)
+    $minHeight = 60  # Minimum height in lines (header ~5 + stats ~30 + prompts ~10 + compliance ~15)
     
     # Store minimum size for checking
     $script:minWindowWidth = $minWidth
