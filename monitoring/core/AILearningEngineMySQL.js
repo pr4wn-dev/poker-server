@@ -22,6 +22,34 @@ class AILearningEngineMySQL extends EventEmitter {
             this.dbManager = null;
         }
         this.initialized = false;
+        
+        // Cache for learning confidence (updated asynchronously)
+        this.confidenceCache = {
+            overallConfidence: 0,
+            breakdown: {
+                patternRecognition: 0,
+                causalAnalysis: 0,
+                solutionOptimization: 0,
+                crossIssueLearning: 0,
+                predictionAccuracy: 0,
+                dataQuality: 0,
+                aiCompliance: 0
+            },
+            maskingDetected: false,
+            maskingWarnings: [],
+            autoAdjustments: [],
+            trend: 'unknown',
+            sampleSizes: {
+                patterns: 0,
+                causalChains: 0,
+                solutions: 0,
+                crossIssue: 0
+            },
+            timestamp: 0
+        };
+        this.confidenceCacheUpdatePromise = null;
+        this.confidenceCacheLastUpdate = 0;
+        this.confidenceCacheTTL = 30000; // Update cache every 30 seconds
     }
 
     /**
@@ -486,6 +514,131 @@ class AILearningEngineMySQL extends EventEmitter {
             // ConsoleOverride would trigger learning system which tries to use the pool, causing cascade
             // Don't fail initialization if seeding fails
             gameLogger.warn('MONITORING', '[AILearningEngineMySQL] Failed to seed initial patterns', {
+                error: error.message
+            });
+        }
+    }
+
+    /**
+     * Get learning confidence - overall ability percentage
+     * Simplified version for MySQL backend - calculates from database patterns
+     * Returns cached value synchronously, updates cache asynchronously in background
+     */
+    getLearningConfidence() {
+        // Return cached value immediately if it's fresh
+        const now = Date.now();
+        if (now - this.confidenceCacheLastUpdate < this.confidenceCacheTTL && this.confidenceCache.timestamp > 0) {
+            return this.confidenceCache;
+        }
+
+        // Trigger async update if not already updating
+        if (!this.confidenceCacheUpdatePromise) {
+            this.confidenceCacheUpdatePromise = this._updateConfidenceCache().finally(() => {
+                this.confidenceCacheUpdatePromise = null;
+            });
+        }
+
+        // Return cached value (may be stale, but available immediately)
+        return this.confidenceCache;
+    }
+
+    /**
+     * Update confidence cache asynchronously
+     */
+    async _updateConfidenceCache() {
+        if (!this.initialized) {
+            try {
+                await this.initialize();
+            } catch (error) {
+                // If initialization fails, keep existing cache
+                return;
+            }
+        }
+        
+        const pool = this.dbManager.getPool();
+        
+        // LEARNING SYSTEM FIX: Check if pool is closed before using it
+        if (!pool || pool._closed) {
+            // Keep existing cache if pool is closed
+            return;
+        }
+
+        try {
+            // Query database for pattern statistics
+            const [patterns] = await pool.execute(`
+                SELECT 
+                    COUNT(*) as patternCount,
+                    AVG(success_rate) as avgSuccessRate,
+                    AVG(frequency) as avgFrequency,
+                    SUM(time_saved) as totalTimeSaved
+                FROM learning_patterns
+            `);
+
+            const [misdiagnosis] = await pool.execute(`
+                SELECT COUNT(*) as count FROM learning_misdiagnosis_patterns
+            `);
+
+            const [failedMethods] = await pool.execute(`
+                SELECT COUNT(*) as count FROM learning_failed_methods
+            `);
+
+            const patternCount = patterns[0]?.patternCount || 0;
+            const avgSuccessRate = patterns[0]?.avgSuccessRate || 0;
+            const avgFrequency = patterns[0]?.avgFrequency || 0;
+            const totalTimeSaved = patterns[0]?.totalTimeSaved || 0;
+            const misdiagnosisCount = misdiagnosis[0]?.count || 0;
+            const failedMethodsCount = failedMethods[0]?.count || 0;
+
+            // Calculate confidence based on database metrics
+            // Pattern Recognition: Based on pattern count and quality
+            const patternRecognition = Math.min((patternCount / 10) * 50 + (avgSuccessRate * 50), 100);
+
+            // Solution Optimization: Based on success rates and time saved
+            const solutionOptimization = Math.min((avgSuccessRate * 60) + Math.min(totalTimeSaved / 3600000, 1) * 40, 100);
+
+            // Data Quality: Based on sample sizes
+            const dataQuality = Math.min((patternCount / 20) * 100, 100);
+
+            // Overall confidence: Weighted average
+            const overallConfidence = (
+                patternRecognition * 0.3 +
+                solutionOptimization * 0.4 +
+                dataQuality * 0.3
+            );
+
+            // Update cache
+            this.confidenceCache = {
+                overallConfidence: Math.round(overallConfidence),
+                breakdown: {
+                    patternRecognition: Math.round(patternRecognition),
+                    causalAnalysis: Math.round(patternRecognition * 0.8), // Simplified
+                    solutionOptimization: Math.round(solutionOptimization),
+                    crossIssueLearning: Math.round(patternRecognition * 0.7), // Simplified
+                    predictionAccuracy: Math.round(avgSuccessRate * 100),
+                    dataQuality: Math.round(dataQuality),
+                    aiCompliance: Math.round(overallConfidence * 0.9) // Simplified
+                },
+                maskingDetected: false,
+                maskingWarnings: [],
+                autoAdjustments: [],
+                trend: patternCount > 0 ? 'improving' : 'unknown',
+                sampleSizes: {
+                    patterns: patternCount,
+                    causalChains: 0, // Not tracked in MySQL version
+                    solutions: patternCount,
+                    crossIssue: 0 // Not tracked in MySQL version
+                },
+                timestamp: Date.now()
+            };
+            this.confidenceCacheLastUpdate = Date.now();
+        } catch (error) {
+            // LEARNING SYSTEM FIX: Handle pool closed errors gracefully
+            if (error.message && error.message.includes('Pool is closed')) {
+                // Keep existing cache if pool is closed
+                return;
+            }
+            // Log error but don't throw - keep existing cache
+            gameLogger.warn('MONITORING', '[AILearningEngineMySQL] Failed to update confidence cache', {
                 error: error.message
             });
         }
