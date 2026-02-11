@@ -537,11 +537,14 @@ class SocketBot {
     async register() {
         return new Promise((resolve, reject) => {
             const password = 'testpass123';
-            // Clean username - remove special characters that might cause issues
-            const cleanUsername = this.name.replace(/[^a-zA-Z0-9_]/g, '_');
+            // Clean username - remove special characters and truncate to 20 chars (DB limit)
+            let cleanUsername = this.name.replace(/[^a-zA-Z0-9_]/g, '_');
+            if (cleanUsername.length > 20) {
+                cleanUsername = cleanUsername.substring(0, 20);
+            }
             const email = `${cleanUsername.toLowerCase()}@test.com`;
             
-            this.log('INFO', 'Registering account...', { username: cleanUsername, email, originalName: this.name });
+            this.log('INFO', 'Registering account...', { username: cleanUsername, email, originalName: this.name, length: cleanUsername.length });
             
             this.socket.emit('register', { username: cleanUsername, email, password }, (response) => {
                 if (response && response.success) {
@@ -572,10 +575,13 @@ class SocketBot {
     async login() {
         return new Promise((resolve, reject) => {
             const password = 'testpass123';
-            // Clean username for login too
-            const cleanUsername = this.name.replace(/[^a-zA-Z0-9_]/g, '_');
+            // Clean username for login too - truncate to 20 chars (DB limit)
+            let cleanUsername = this.name.replace(/[^a-zA-Z0-9_]/g, '_');
+            if (cleanUsername.length > 20) {
+                cleanUsername = cleanUsername.substring(0, 20);
+            }
             
-            this.log('INFO', 'Logging in...', { username: cleanUsername, originalName: this.name });
+            this.log('INFO', 'Logging in...', { username: cleanUsername, originalName: this.name, length: cleanUsername.length });
             
             this.socket.emit('login', { username: cleanUsername, password }, (response) => {
                 if (response && response.success) {
