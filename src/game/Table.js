@@ -4387,6 +4387,10 @@ class Table {
             } : null).filter(Boolean)
         });
         
+        // SYSTEMATIC DEBUG: Track chip movement BEFORE bet (must be before any changes)
+        const totalChipsBeforeBet = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
+        const totalChipsAndPotBeforeBet = totalChipsBeforeBet + this.pot;
+        
         // SYSTEMATIC DEBUG: BET is ACTIVE - testing if call() is the problem
         player.chips -= amount;
         player.currentBet = amount;
@@ -4405,10 +4409,6 @@ class Table {
             phase: this.phase,
             stackTrace: new Error().stack?.split('\n').slice(2, 8).join(' | ') || 'NO_STACK'
         });
-        
-        // SYSTEMATIC DEBUG: Track chip movement during bet
-        const totalChipsBeforeBet = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
-        const totalChipsAndPotBeforeBet = totalChipsBeforeBet + this.pot;
         
         this.pot += amount;
         
@@ -4740,6 +4740,10 @@ class Table {
             } : null).filter(Boolean)
         });
         
+        // SYSTEMATIC DEBUG: Track chip movement BEFORE raise (must be before any changes)
+        const totalChipsBeforeRaise = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
+        const totalChipsAndPotBeforeRaise = totalChipsBeforeRaise + this.pot;
+        
         // SYSTEMATIC DEBUG: RAISE is ACTIVE - testing if call() is the problem
         player.chips -= additionalBet;
         player.currentBet = amount; // Set to total bet amount
@@ -4758,9 +4762,6 @@ class Table {
             phase: this.phase,
             stackTrace: new Error().stack?.split('\n').slice(2, 8).join(' | ') || 'NO_STACK'
         });
-        // SYSTEMATIC DEBUG: Track chip movement during raise
-        const totalChipsBeforeRaise = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
-        const totalChipsAndPotBeforeRaise = totalChipsBeforeRaise + this.pot;
         
         this.pot += additionalBet; // Only add the additional amount to pot
         
