@@ -9464,7 +9464,21 @@ class Table {
                 }
                 
                 const isSpectatorCheck = this.isSpectator(forPlayerId);
-                const needsItemAnteSubmissionValue = !isSpectatorCheck && this.itemAnteEnabled && !this.gameStarted && this.itemAnte && 
+                
+                // CRITICAL: Only show needsItemAnteSubmission if:
+                // 1. Player is not a spectator
+                // 2. Item ante is enabled
+                // 3. Game hasn't started
+                // 4. Item ante exists
+                // 5. Item ante is in INACTIVE (needs first item) or COLLECTING (needs submission) status
+                // 6. Player actually needs to submit (needs first item OR hasn't submitted yet)
+                const itemAnteStatus = this.itemAnte?.status;
+                const isCollectingPhase = itemAnteStatus === 'inactive' || itemAnteStatus === 'collecting';
+                const needsItemAnteSubmissionValue = !isSpectatorCheck && 
+                    this.itemAnteEnabled && 
+                    !this.gameStarted && 
+                    this.itemAnte && 
+                    isCollectingPhase &&
                     (this.itemAnte.needsFirstItem() || !this.itemAnte.hasSubmitted(forPlayerId));
                 
                 // DIAGNOSTIC: Log when spectator check is happening
@@ -9475,6 +9489,8 @@ class Table {
                         itemAnteEnabled: this.itemAnteEnabled,
                         gameStarted: this.gameStarted,
                         itemAnteExists: !!this.itemAnte,
+                        itemAnteStatus: itemAnteStatus,
+                        isCollectingPhase: isCollectingPhase,
                         needsFirstItem: this.itemAnte.needsFirstItem(),
                         hasSubmitted: forPlayerId ? this.itemAnte.hasSubmitted(forPlayerId) : false,
                         needsItemAnteSubmission: needsItemAnteSubmissionValue
