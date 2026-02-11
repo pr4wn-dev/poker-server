@@ -9457,12 +9457,17 @@ class Table {
             // Helper flags for Unity to know when to prompt for item
             // CRITICAL: Only set needsItemAnteSubmission for actual players in seats, NOT spectators
             needsItemAnteSubmission: (() => {
+                // CRITICAL: If forPlayerId is null (broadcast to all), return false to avoid showing prompt to spectators
+                if (!forPlayerId) {
+                    return false;
+                }
+                
                 const isSpectatorCheck = this.isSpectator(forPlayerId);
                 const needsItemAnteSubmissionValue = !isSpectatorCheck && this.itemAnteEnabled && !this.gameStarted && this.itemAnte && 
-                    (this.itemAnte.needsFirstItem() || (forPlayerId && !this.itemAnte.hasSubmitted(forPlayerId)));
+                    (this.itemAnte.needsFirstItem() || !this.itemAnte.hasSubmitted(forPlayerId));
                 
                 // DIAGNOSTIC: Log when spectator check is happening
-                if (forPlayerId && this.itemAnteEnabled && !this.gameStarted && this.itemAnte) {
+                if (this.itemAnteEnabled && !this.gameStarted && this.itemAnte) {
                     gameLogger.gameEvent(this.name, `[ITEM_ANTE] NEEDS_SUBMISSION_CHECK`, {
                         forPlayerId,
                         isSpectator: isSpectatorCheck,
