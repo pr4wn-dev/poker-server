@@ -654,6 +654,12 @@ class SocketBot {
             
             // ITEM ANTE: Check if we need to submit an item
             if (state.needsItemAnteSubmission && state.itemAnteEnabled) {
+                this.log('INFO', 'Item ante submission needed', { 
+                    needsItemAnteSubmission: state.needsItemAnteSubmission, 
+                    itemAnteEnabled: state.itemAnteEnabled,
+                    sidePotStatus: state.sidePot?.status,
+                    itemAnteSubmitted: this.itemAnteSubmitted
+                });
                 this._handleItemAnteSubmission(state);
             }
             
@@ -1144,10 +1150,15 @@ class SocketBot {
     async _handleItemAnteSubmission(state) {
         // Prevent duplicate submissions
         if (this.itemAnteSubmitted) {
+            this.log('INFO', 'Item ante already submitted, skipping');
             return;
         }
         
-        this.log('INFO', 'Item ante submission needed - getting items...');
+        this.log('INFO', 'Item ante submission needed - getting items...', {
+            sidePotStatus: state.sidePot?.status,
+            needsFirstItem: state.sidePot?.needsFirstItem,
+            hasSubmitted: state.sidePot?.hasSubmitted
+        });
         
         // First, get test items if we don't have any
         this.socket.emit('get_test_items', {}, async (response) => {
