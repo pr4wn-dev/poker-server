@@ -4036,6 +4036,9 @@ class Table {
             handNumber: this.handsPlayed
         });
         
+        // CRITICAL: Always log to console so we can see it even if game.log is empty
+        console.log(`[SYSTEMATIC_DEBUG] CALL AFTER SUBTRACT: Player=${player.name}, toCall=${toCall}, chipsLost=${chipsLostAfterSubtract}, expected=${toCall}`);
+        
         if (Math.abs(chipsLostAfterSubtract - toCall) > 0.01) {
             console.error(`[Table ${this.name}] ⚠️⚠️⚠️ [SYSTEMATIC_DEBUG] CALL BUG DETECTED: Chips lost after subtract! Expected ${toCall}, got ${chipsLostAfterSubtract}`);
             gameLogger.error(this.name, '[SYSTEMATIC_DEBUG] CALL BUG: Chips lost after subtract', {
@@ -4083,6 +4086,9 @@ class Table {
             expectedLoss: 0, // After adding to pot, total should be same (chips moved from player to pot)
             handNumber: this.handsPlayed
         });
+        
+        // CRITICAL: Always log to console so we can see it even if game.log is empty
+        console.log(`[SYSTEMATIC_DEBUG] CALL AFTER ADD TO POT: Player=${player.name}, toCall=${toCall}, chipsLost=${chipsLostAfterAdd}, expected=0`);
         
         if (Math.abs(chipsLostAfterAdd) > 0.01) {
             console.error(`[Table ${this.name}] ⚠️⚠️⚠️ [SYSTEMATIC_DEBUG] CALL BUG DETECTED: Chips lost after adding to pot! Lost: ${chipsLostAfterAdd}`);
