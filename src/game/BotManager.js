@@ -104,18 +104,18 @@ class BotManager {
         // In regular mode, all human players need to approve
         let humanPlayers;
         if (table.practiceMode) {
-            // In practice mode, only require approval from the table creator
-            humanPlayers = [table.creatorId];
+            // In practice mode, auto-approve (only creator can invite, and they're approving by inviting)
+            return this.confirmBot(tableId, emptySeat, bot);
         } else {
             // In regular mode, all human players need to approve
             humanPlayers = table.seats
                 .filter(s => s !== null && !s.isBot)
                 .map(s => s.playerId);
-        }
-        
-        // If only the creator is at the table (or in practice mode), auto-approve
-        if (humanPlayers.length <= 1 || (table.practiceMode && humanPlayers.length === 1 && humanPlayers[0] === inviterId)) {
-            return this.confirmBot(tableId, emptySeat, bot);
+            
+            // If only the creator is at the table, auto-approve
+            if (humanPlayers.length <= 1) {
+                return this.confirmBot(tableId, emptySeat, bot);
+            }
         }
         
         // Create pending bot entry
