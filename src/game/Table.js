@@ -6150,6 +6150,16 @@ class Table {
         this.clearTurnTimer();
         this._tracePhaseChange(GAME_PHASES.SHOWDOWN, 'ALL_ACTIONS_COMPLETE');
         
+        // SYSTEMATIC DEBUG: Track pot vs actual chips at showdown
+        const totalChipsAtShowdown = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
+        const totalChipsAndPotAtShowdown = totalChipsAtShowdown + this.pot;
+        const potValue = this.pot;
+        const totalBetsAtShowdown = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.totalBet || 0), 0);
+        
+        const showdownDebugLog = `[SYSTEMATIC_DEBUG] SHOWDOWN: Pot=${potValue}, TotalChips=${totalChipsAtShowdown}, TotalChipsAndPot=${totalChipsAndPotAtShowdown}, TotalBets=${totalBetsAtShowdown}\n`;
+        console.log(showdownDebugLog.trim());
+        fs.appendFileSync(path.join(__dirname, '../../logs/pot-award-debug.log'), new Date().toISOString() + ' ' + showdownDebugLog);
+        
         // CRITICAL FIX: If pot is already 0, it means it was awarded earlier (by fold)
         // Don't try to calculate side pots - just start a new hand
         if (this.pot === 0) {
@@ -6168,6 +6178,9 @@ class Table {
         
         gameLogger.gameEvent(this.name, 'SHOWDOWN STARTED', {
             pot: this.pot,
+            totalChipsAtShowdown,
+            totalChipsAndPotAtShowdown,
+            totalBetsAtShowdown,
             communityCards: this.communityCards?.map(c => `${c.rank}${c.suit}`),
             activePlayers: this.seats.filter(s => s && !s.isFolded).map(s => ({
                 name: s.name,
