@@ -159,6 +159,59 @@ Keep narrowing down until the problem disappears - the last chunk you commented 
 
 **Why it works:** Instead of guessing where the bug is, you systematically eliminate sections until you find the one causing the problem.
 
+## Recent Fixes (February 2026)
+
+### ✅ Fixed: Pot Amount Display Bug
+**Status:** FIXED  
+**Date:** February 11, 2026  
+**Severity:** CRITICAL  
+
+**Problem:** The `hand_result` event was sending the total pot amount (e.g., 15M) instead of the winner's individual award amount (e.g., 10.4M). This caused the client to display incorrect amounts, especially when pots were split between multiple winners.
+
+**Solution:**
+- Modified `showdown()` to calculate the winner's total award across all side pots they won
+- Changed `potAmount` in `hand_result` event to send individual award instead of total pot
+- Added `totalPot` as separate field for reference
+- Added comprehensive logging to track pot values and awards
+
+**Files Changed:**
+- `src/game/Table.js` (line 6554, 8916)
+
+**Verification:** All pot calculations now show `Discrepancy=0` and individual awards match actual amounts awarded.
+
+### ✅ Fixed: Missing totalBet in State
+**Status:** FIXED  
+**Date:** February 11, 2026  
+**Severity:** MEDIUM  
+
+**Problem:** Only `currentBet` was sent in state updates, which resets to 0 each betting round. This made it difficult for clients to display total bet amounts across all rounds of a hand.
+
+**Solution:**
+- Added `totalBet` field to seat data in `getState()`
+- `currentBet`: Bet in current round (resets each phase)
+- `totalBet`: Total bet in entire hand (across all rounds)
+
+**Files Changed:**
+- `src/game/Table.js` (line 9522)
+
+**Impact:** Clients can now correctly display total bet amounts throughout the hand.
+
+### ✅ Added: Comprehensive Pot Tracking Logging
+**Status:** ADDED  
+**Date:** February 11, 2026  
+
+**Added logging for:**
+- Pot values sent to clients (`getState`)
+- Showdown pot calculations
+- Pot awards vs initial pot comparisons
+- Hand complete events with award breakdowns
+- Chip movements during betting operations
+
+**Log Files:**
+- `logs/pot-award-debug.log` - Detailed pot award tracking
+- `logs/bet-raise-debug.log` - Betting operation tracking
+- `logs/call-debug.log` - Call operation tracking
+
 ## Known Issues
 
 ### Critical: Missing Chips / Money Loss
