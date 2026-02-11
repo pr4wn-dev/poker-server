@@ -940,4 +940,98 @@ If you have existing data in `ai-state-store.json`:
 
 ---
 
+## Recent Fixes (February 2026)
+
+### ✅ Fixed: Spectator Item Ante Submission Bug
+**Status:** FIXED  
+**Date:** February 11, 2026  
+**Severity:** MEDIUM  
+
+**Problem:** Spectators were incorrectly being prompted to submit items for item ante. The server was checking `needsItemAnteSubmission` for spectators, which should only apply to actual players in seats.
+
+**Solution:**
+- Modified `getState()` in `Table.js` to check `isSpectator(forPlayerId)` before setting `needsItemAnteSubmission`
+- Added spectator check to seat-level `needsItemAnteSubmission` calculation
+- Spectators now only see the item ante view panel (read-only), not the submission prompt
+
+**Files Changed:**
+- `src/game/Table.js` (lines 9458, 9532)
+
+**Impact:** Spectators can now view item ante items without being incorrectly prompted to submit their own items.
+
+### ✅ Fixed: Item Ante Missing Fields
+**Status:** FIXED  
+**Date:** February 11, 2026  
+**Severity:** HIGH  
+
+**Problem:** Item ante state was missing critical fields (`templateId`, `description`, `isGambleable`, `isTradeable`, `obtainedFrom`) needed by Unity to display item sprites/assets.
+
+**Solution:**
+- Added all missing fields to `ItemAnte.getState()` for `creatorItem`, `firstItem`, and `approvedItems`
+- Fixed `side_pot_started` and `side_pot_submission` events to send formatted items with all fields
+- Added null checks and default values throughout `ItemAnte.js`
+
+**Files Changed:**
+- `src/game/ItemAnte.js`
+- `src/sockets/SocketHandler.js`
+
+**Impact:** Unity can now correctly load and display item sprites/assets in item ante menus and pot display.
+
+### ✅ Fixed: Unity Item Ante Filtering
+**Status:** FIXED  
+**Date:** February 11, 2026  
+**Severity:** HIGH  
+
+**Problem:** Unity `InventoryPanel` was showing ALL items from inventory, not filtering by `isGambleable: true` for item ante selection.
+
+**Solution:**
+- Added `_isItemAnteMode` and `_minimumValue` fields to `InventoryPanel`
+- Modified `Show()` to accept item ante mode parameters
+- Added filtering to only show `isGambleable: true` items in item ante mode
+- Added minimum value filtering/highlighting (dimmed items below minimum, disabled buttons)
+- Added visual indicators (green/red value text, button text updates)
+
+**Files Changed:**
+- `Assets/Scripts/UI/Components/InventoryPanel.cs`
+- `Assets/Scripts/UI/Scenes/TableScene.cs`
+
+**Impact:** Players now only see eligible items for item ante, with clear visual feedback on minimum value requirements.
+
+### ✅ Fixed: Pot Amount Display Bug
+**Status:** FIXED  
+**Date:** February 11, 2026  
+**Severity:** CRITICAL  
+
+**Problem:** The `hand_result` event was sending the total pot amount (e.g., 15M) instead of the winner's individual award amount (e.g., 10.4M). This caused the client to display incorrect amounts, especially when pots were split between multiple winners.
+
+**Solution:**
+- Modified `showdown()` to calculate the winner's total award across all side pots they won
+- Changed `potAmount` in `hand_result` event to send individual award instead of total pot
+- Added `totalPot` as separate field for reference
+- Added comprehensive logging to track pot values and awards
+
+**Files Changed:**
+- `src/game/Table.js` (lines 6554, 8916)
+
+**Verification:** All pot calculations now show `Discrepancy=0` and individual awards match actual amounts awarded.
+
+### ✅ Fixed: Missing totalBet in State
+**Status:** FIXED  
+**Date:** February 11, 2026  
+**Severity:** MEDIUM  
+
+**Problem:** Only `currentBet` was sent in state updates, which resets to 0 each betting round. This made it difficult for clients to display total bet amounts across all rounds of a hand.
+
+**Solution:**
+- Added `totalBet` field to seat data in `getState()`
+- `currentBet`: Bet in current round (resets each phase)
+- `totalBet`: Total bet in entire hand (across all rounds)
+
+**Files Changed:**
+- `src/game/Table.js` (line 9522)
+
+**Impact:** Clients can now correctly display total bet amounts throughout the hand.
+
+---
+
 **BrokenPromise is a constant reminder that AI should never be trusted. The system monitors everything, detects issues automatically, enforces workflows, and verifies compliance. All data is stored in MySQL for optimal performance. The system is fully optimized, database-backed, and ready for production.**
