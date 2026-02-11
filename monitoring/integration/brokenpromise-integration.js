@@ -19,15 +19,20 @@ const integration = new BrokenPromiseIntegration(projectRoot, { startSyncLoop: f
 const command = process.argv[2];
 const args = process.argv.slice(3);
 
-// Set a global timeout to force exit if command takes too long (5 seconds max)
+// Commands that need longer timeout (startup tests, initialization)
+// AI Core initialization can take 20-30s when loading large state files (7.7MB+)
+const longTimeoutCommands = ['get-status-report', 'query', 'get-live-statistics'];
+const timeoutMs = longTimeoutCommands.includes(command) ? 30000 : 5000; // 30s for startup tests, 5s for others
+
+// Set a global timeout to force exit if command takes too long
 const globalTimeout = setTimeout(() => {
     // All errors go to gameLogger - BrokenPromise sees everything
     gameLogger.error('MONITORING', '[MONITOR_INTEGRATION_CLI] Command timeout', {
         command: command,
-        timeout: '5000ms'
+        timeout: `${timeoutMs}ms`
     });
     // Output JSON error for CLI (PowerShell needs this)
-    console.log(JSON.stringify({ error: 'Command timed out', command }));
+    console.log(JSON.stringify({ error: 'Command timed out', command, timeout: timeoutMs }));
     if (integration && integration.aiCore) {
         try {
             integration.aiCore.destroy();
@@ -36,7 +41,7 @@ const globalTimeout = setTimeout(() => {
         }
     }
     process.exit(1);
-}, 5000);
+}, timeoutMs);
 
 async function handleCommand() {
     try {
@@ -296,6 +301,19 @@ async function handleCommand() {
                 }
                 integration.markPromptDelivered(promptId);
                 console.log(JSON.stringify({ success: true, promptId }));
+                break;
+                
+            case 'get-compliance-verification':
+                const promptId2 = args[0];
+                if (!promptId2) {
+                    gameLogger.error('MONITORING', '[MONITOR_INTEGRATION_CLI] Missing promptId', {
+                        command: 'get-compliance-verification'
+                    });
+                    console.log(JSON.stringify({ error: 'promptId required' }));
+                    process.exit(1);
+                }
+                const verification = integration.getComplianceVerification(promptId2);
+                console.log(JSON.stringify(verification || { error: 'Verification not found' }));
                 break;
                 
             default:
