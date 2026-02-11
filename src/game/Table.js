@@ -6547,11 +6547,24 @@ class Table {
             setTimeout(() => {
                 // Emit for the main pot winner (first award)
                 const mainWinner = potAwards[0];
+                // CRITICAL FIX: potAmount should be the winner's INDIVIDUAL award, not the total pot
+                // Calculate the winner's total award across all side pots
+                const winnerTotalAward = potAwards
+                    .filter(a => a.playerId === mainWinner.playerId)
+                    .reduce((sum, a) => sum + a.amount, 0);
+                const totalPot = potAwards.reduce((sum, a) => sum + a.amount, 0);
+                
+                // SYSTEMATIC DEBUG: Log what we're sending to client
+                const handCompleteLog = `[SYSTEMATIC_DEBUG] HAND_COMPLETE: Winner=${mainWinner.name}, WinnerAward=${winnerTotalAward}, TotalPot=${totalPot}, AwardsCount=${potAwards.length}\n`;
+                console.log(handCompleteLog.trim());
+                fs.appendFileSync(path.join(__dirname, '../../logs/pot-award-debug.log'), new Date().toISOString() + ' ' + handCompleteLog);
+                
                 this.onHandComplete({
                     winnerId: mainWinner.playerId,
                     winnerName: mainWinner.name,
                     handName: mainWinner.handName,
-                    potAmount: potAwards.reduce((sum, a) => sum + a.amount, 0), // Total pot
+                    potAmount: winnerTotalAward, // FIX: Winner's individual award, not total pot
+                    totalPot: totalPot, // Add total pot as separate field for reference
                     potAwards: potAwards // All individual awards
                 });
             }, 100); // Small delay to ensure state broadcast happens first
