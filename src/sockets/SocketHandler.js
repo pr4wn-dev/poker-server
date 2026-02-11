@@ -1783,7 +1783,11 @@ class SocketHandler {
                     }
                 }
 
-                callback(result);
+                // CRITICAL: Unity client expects BOTH callback AND response event
+                if (callback && typeof callback === 'function') {
+                    callback(result);
+                }
+                socket.emit('submit_to_side_pot_response', result);
             });
 
             socket.on('opt_out_side_pot', (callback) => {
