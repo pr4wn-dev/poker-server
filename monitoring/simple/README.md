@@ -56,9 +56,13 @@ node simple/check-before-fix.js "pot not cleared" "clear pot at hand start"
 
 ## Data Storage
 
-All data stored in `simple/fix-history.json` - one simple JSON file.
+**Uses existing MySQL database** - no JSON files (JSON was proven to fail due to memory overhead).
 
-No MySQL, no 39 components, no learning engines - just simple tracking.
+Uses existing tables:
+- `learning_fix_attempts` - tracks what was tried
+- `learning_failed_methods` - tracks what NOT to do
+
+Simple wrapper scripts that directly query/write to MySQL - no 39 components, just 3 simple commands.
 
 ## Common Issues
 
@@ -68,3 +72,9 @@ Based on logs, common issues are:
 - `POT_MISMATCH` - Pot < sum of bets
 - `ACTION_REJECTED` - Not your turn errors
 - `VALIDATION_FAILURE` - Chip accounting failures
+
+## Requirements
+
+- MySQL database must be running (uses existing database from `.env`)
+- Database tables must exist (run `monitoring/database/schema.sql` if needed)
+- Uses existing `DatabaseManager` from monitoring system
