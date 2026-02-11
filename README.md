@@ -352,6 +352,11 @@ Keep narrowing down until the problem disappears - the last chunk you commented 
    - Calculate optimal cell width to fill available space perfectly
    - Force GridLayoutGroup recalculation by disabling/enabling and calling `SetLayoutHorizontal()`/`SetLayoutVertical()`
    - Formula: `optimalCellWidth = (availableWidth - (columns - 1) * spacing) / columns`
+7. **Window Resize Handler:** 
+   - Added `OnRectTransformDimensionsChange()` to handle window resizing
+   - Updates container width to match viewport width on resize
+   - Recalculates optimal cell width after container width update
+   - Ensures grid maintains proper sizing after window resize
 
 **Files Changed:**
 - `Assets/Scripts/UI/Components/InventoryPanel.cs` (Unity client)
@@ -364,6 +369,7 @@ Keep narrowing down until the problem disappears - the last chunk you commented 
 - Switch from `Mask` to `RectMask2D` component
 - `maskable=true` on all Image components
 - GridLayoutGroup cell size optimization to fill available width
+- Window resize handler with container width update and grid recalculation
 - Comprehensive diagnostics for Content/Viewport positioning
 
 **Verification:** 
@@ -371,6 +377,7 @@ Keep narrowing down until the problem disappears - the last chunk you commented 
 - Grid fills available width with optimal cell sizing
 - Items wrap correctly to next row instead of overflowing horizontally
 - No items are clipped by Mask component
+- Grid maintains proper sizing after window resize
 
 ## Known Issues
 
