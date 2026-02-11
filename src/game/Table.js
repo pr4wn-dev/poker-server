@@ -4380,7 +4380,32 @@ class Table {
             stackTrace: new Error().stack?.split('\n').slice(2, 8).join(' | ') || 'NO_STACK'
         });
         
+        // SYSTEMATIC DEBUG: Track chip movement during bet
+        const totalChipsBeforeBet = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
+        const totalChipsAndPotBeforeBet = totalChipsBeforeBet + this.pot;
+        
         this.pot += amount;
+        
+        // SYSTEMATIC DEBUG: Track chip movement after bet
+        const totalChipsAfterBet = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
+        const totalChipsAndPotAfterBet = totalChipsAfterBet + this.pot;
+        const chipsLostDuringBet = totalChipsAndPotBeforeBet - totalChipsAndPotAfterBet;
+        
+        const debugLogBet = `[SYSTEMATIC_DEBUG] BET: Player=${player.name}, Amount=${amount}, chipsLost=${chipsLostDuringBet}, expected=0\n`;
+        console.log(debugLogBet.trim());
+        fs.appendFileSync(path.join(__dirname, '../../logs/bet-raise-debug.log'), new Date().toISOString() + ' ' + debugLogBet);
+        
+        if (Math.abs(chipsLostDuringBet) > 0.01) {
+            console.error(`[Table ${this.name}] ⚠️⚠️⚠️ [SYSTEMATIC_DEBUG] BET BUG DETECTED! Chips lost: ${chipsLostDuringBet}`);
+            gameLogger.error(this.name, '[SYSTEMATIC_DEBUG] BET BUG: Chips lost during bet', {
+                player: player.name,
+                amount,
+                chipsLostDuringBet,
+                totalChipsAndPotBeforeBet,
+                totalChipsAndPotAfterBet,
+                handNumber: this.handsPlayed
+            });
+        }
         
         // ULTRA-VERBOSE: Log after operation with FULL STATE
         const chipsAfter = player.chips;
@@ -4707,7 +4732,33 @@ class Table {
             phase: this.phase,
             stackTrace: new Error().stack?.split('\n').slice(2, 8).join(' | ') || 'NO_STACK'
         });
+        // SYSTEMATIC DEBUG: Track chip movement during raise
+        const totalChipsBeforeRaise = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
+        const totalChipsAndPotBeforeRaise = totalChipsBeforeRaise + this.pot;
+        
         this.pot += additionalBet; // Only add the additional amount to pot
+        
+        // SYSTEMATIC DEBUG: Track chip movement after raise
+        const totalChipsAfterRaise = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
+        const totalChipsAndPotAfterRaise = totalChipsAfterRaise + this.pot;
+        const chipsLostDuringRaise = totalChipsAndPotBeforeRaise - totalChipsAndPotAfterRaise;
+        
+        const debugLogRaise = `[SYSTEMATIC_DEBUG] RAISE: Player=${player.name}, Amount=${amount}, AdditionalBet=${additionalBet}, chipsLost=${chipsLostDuringRaise}, expected=0\n`;
+        console.log(debugLogRaise.trim());
+        fs.appendFileSync(path.join(__dirname, '../../logs/bet-raise-debug.log'), new Date().toISOString() + ' ' + debugLogRaise);
+        
+        if (Math.abs(chipsLostDuringRaise) > 0.01) {
+            console.error(`[Table ${this.name}] ⚠️⚠️⚠️ [SYSTEMATIC_DEBUG] RAISE BUG DETECTED! Chips lost: ${chipsLostDuringRaise}`);
+            gameLogger.error(this.name, '[SYSTEMATIC_DEBUG] RAISE BUG: Chips lost during raise', {
+                player: player.name,
+                amount,
+                additionalBet,
+                chipsLostDuringRaise,
+                totalChipsAndPotBeforeRaise,
+                totalChipsAndPotAfterRaise,
+                handNumber: this.handsPlayed
+            });
+        }
         
         // ULTRA-VERBOSE: Log after operation with FULL STATE
         const chipsAfter = player.chips;
