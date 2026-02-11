@@ -1032,6 +1032,47 @@ If you have existing data in `ai-state-store.json`:
 
 **Impact:** Clients can now correctly display total bet amounts throughout the hand.
 
+### ✅ Fixed: Spectator Item Ante Submission Prompt (Refined)
+**Status:** FIXED  
+**Date:** February 12, 2026  
+**Severity:** MEDIUM  
+
+**Problem:** After initial fix, spectators were still seeing the item ante prompt when `getState(null)` was called (broadcast case), because `isSpectator(null)` returned `false`.
+
+**Solution:**
+- Added explicit check to return `false` for `needsItemAnteSubmission` when `forPlayerId` is `null` (broadcast case)
+- The client-side logic now handles whether to show the prompt based on its own player status
+- Added diagnostic logging to trace this logic
+
+**Files Changed:**
+- `src/game/Table.js` (line 9459, 9534)
+
+**Verification:** Spectators no longer see the item ante submission prompt, even during state broadcasts.
+
+### ✅ Cleaned Up: Verbose Logging Removed
+**Status:** COMPLETED  
+**Date:** February 12, 2026  
+**Severity:** LOW (Code Quality Improvement)  
+
+**Problem:** Logs were extremely verbose with routine operation logging, making it difficult to find actual errors and warnings. Logs were cluttered with informational messages about normal operations.
+
+**Solution:**
+- Removed verbose `Debug.Log` statements from Unity client:
+  - `SocketManager.cs`: Removed connection/disconnection logs, JSON parsing logs, emit logs
+  - `TableScene.cs`: Removed bot operation logs, item ante processing logs, countdown logs, button click logs, player join/leave logs
+  - `InventoryPanel.cs`: Removed detailed position/size/visibility diagnostics (kept only critical errors)
+- Removed verbose `gameLogger.gameEvent` statements from server:
+  - `SocketHandler.js`: Removed routine operation logs for authentication, inventory requests, table operations, simulation controls, bot management, player actions
+- Kept all error logs (`Debug.LogError`, `gameLogger.error`) and critical warnings
+
+**Files Changed:**
+- `Assets/Scripts/Networking/SocketManager.cs`
+- `Assets/Scripts/UI/Scenes/TableScene.cs`
+- `Assets/Scripts/UI/Components/InventoryPanel.cs`
+- `src/sockets/SocketHandler.js`
+
+**Impact:** Logs are now much cleaner and focused on actual problems. Routine operations no longer clutter the console.
+
 ---
 
 **BrokenPromise is a constant reminder that AI should never be trusted. The system monitors everything, detects issues automatically, enforces workflows, and verifies compliance. All data is stored in MySQL for optimal performance. The system is fully optimized, database-backed, and ready for production.**
