@@ -100,12 +100,21 @@ class BotManager {
         console.log(`[BotManager] Bot ${bot.name} created with ${actualBuyIn} chips at seat ${emptySeat}`);
         
         // Get list of human players who need to approve
-        const humanPlayers = table.seats
-            .filter(s => s !== null && !s.isBot)
-            .map(s => s.playerId);
+        // In practice mode, only the table creator needs to approve (socket bots shouldn't need to approve regular bots)
+        // In regular mode, all human players need to approve
+        let humanPlayers;
+        if (table.practiceMode) {
+            // In practice mode, only require approval from the table creator
+            humanPlayers = [table.creatorId];
+        } else {
+            // In regular mode, all human players need to approve
+            humanPlayers = table.seats
+                .filter(s => s !== null && !s.isBot)
+                .map(s => s.playerId);
+        }
         
-        // If only the creator is at the table, auto-approve
-        if (humanPlayers.length <= 1) {
+        // If only the creator is at the table (or in practice mode), auto-approve
+        if (humanPlayers.length <= 1 || (table.practiceMode && humanPlayers.length === 1 && humanPlayers[0] === inviterId)) {
             return this.confirmBot(tableId, emptySeat, bot);
         }
         
@@ -126,7 +135,8 @@ class BotManager {
         
         this.pendingBots.get(tableId).set(emptySeat, pendingEntry);
         
-        console.log(`[BotManager] ${bot.name} invited to table ${table.name} - awaiting ${humanPlayers.length - 1} approvals`);
+        const approvalsNeeded = humanPlayers.filter(id => id !== inviterId).length;
+        console.log(`[BotManager] ${bot.name} invited to table ${table.name} - awaiting ${approvalsNeeded} approvals (practiceMode=${table.practiceMode})`);
         
         return { 
             success: true, 
