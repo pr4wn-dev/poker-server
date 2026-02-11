@@ -264,14 +264,12 @@ class BotManager {
     async _handleBotItemAnte(tableId, seatIndex, bot) {
         const table = this.gameManager.tables.get(tableId);
         if (!table || !table.itemAnteEnabled || table.gameStarted || !table.itemAnte) {
-            console.log(`[BotManager] _handleBotItemAnte skipped: table=${!!table}, itemAnteEnabled=${table?.itemAnteEnabled}, gameStarted=${table?.gameStarted}, itemAnte=${!!table?.itemAnte}`);
             return;
         }
         
         // Only handle if item ante is INACTIVE (needs first item) or COLLECTING (needs submission)
         // Bots can start item ante if status is inactive, or submit if status is collecting
         if (table.itemAnte.status !== 'inactive' && table.itemAnte.status !== 'collecting') {
-            console.log(`[BotManager] _handleBotItemAnte skipped: item ante status is ${table.itemAnte.status}, not inactive or collecting`);
             return;
         }
         
@@ -279,10 +277,7 @@ class BotManager {
         const needsFirstItem = table.itemAnte.needsFirstItem();
         const hasSubmitted = table.itemAnte.hasSubmitted(bot.id);
         
-        console.log(`[BotManager] _handleBotItemAnte: ${bot.name}, needsFirstItem=${needsFirstItem}, hasSubmitted=${hasSubmitted}`);
-        
         if (!needsFirstItem && hasSubmitted) {
-            console.log(`[BotManager] ${bot.name} already submitted item for ante`);
             return; // Bot already submitted
         }
         
@@ -303,17 +298,13 @@ class BotManager {
                 item.rarity === 'common' || item.rarity === 'uncommon'
             ) || testItems[0];
             
-            console.log(`[BotManager] ${bot.name} starting item ante with: ${selectedItem.name}`);
             const result = table.startItemAnte(bot.id, selectedItem);
-            if (result.success) {
-                console.log(`[BotManager] ${bot.name} started item ante successfully`);
-            } else {
+            if (!result.success) {
                 console.error(`[BotManager] ${bot.name} failed to start item ante: ${result.error}`);
             }
         } else {
             // Subsequent item - must meet minimum value
             const minValue = table.itemAnte.minimumValue || 0;
-            console.log(`[BotManager] ${bot.name} needs to submit item, minimumValue=${minValue}`);
             selectedItem = testItems.find(item => (item.baseValue || 0) >= minValue);
             
             if (!selectedItem) {
@@ -321,7 +312,6 @@ class BotManager {
                 selectedItem = testItems.reduce((max, item) => 
                     (item.baseValue || 0) > (max.baseValue || 0) ? item : max
                 );
-                console.log(`[BotManager] ${bot.name} no item meets minimum, using highest value: ${selectedItem.name} (${selectedItem.baseValue})`);
             }
             
             if (!selectedItem) {
@@ -329,12 +319,9 @@ class BotManager {
                 return;
             }
             
-            console.log(`[BotManager] ${bot.name} submitting item to ante: ${selectedItem.name} (value: ${selectedItem.baseValue})`);
             try {
                 const result = table.submitToItemAnte(bot.id, selectedItem);
-                if (result.success) {
-                    console.log(`[BotManager] ${bot.name} submitted item successfully`);
-                } else {
+                if (!result.success) {
                     console.error(`[BotManager] ${bot.name} failed to submit item: ${result.error}`);
                 }
             } catch (error) {
@@ -349,35 +336,27 @@ class BotManager {
     checkBotsItemAnte(tableId) {
         const table = this.gameManager.tables.get(tableId);
         if (!table || !table.practiceMode || !table.itemAnteEnabled || table.gameStarted || !table.itemAnte) {
-            console.log(`[BotManager] checkBotsItemAnte skipped: table=${!!table}, practiceMode=${table?.practiceMode}, itemAnteEnabled=${table?.itemAnteEnabled}, gameStarted=${table?.gameStarted}, itemAnte=${!!table?.itemAnte}`);
             return;
         }
         
         // Only check bots if item ante is INACTIVE (needs first item) or COLLECTING (needs submission)
         // Bots can start item ante if status is inactive, or submit if status is collecting
         if (table.itemAnte.status !== 'inactive' && table.itemAnte.status !== 'collecting') {
-            console.log(`[BotManager] checkBotsItemAnte skipped: item ante status is ${table.itemAnte.status}, not inactive or collecting`);
             return;
         }
         
         const tableBots = this.activeBots.get(tableId);
         if (!tableBots) {
-            console.log(`[BotManager] checkBotsItemAnte: No active bots found for table ${tableId}`);
             return;
         }
-        
-        console.log(`[BotManager] checkBotsItemAnte: Checking ${tableBots.size} bots at table ${tableId}`);
         
         for (const [seatIndex, bot] of tableBots) {
             const needsFirstItem = table.itemAnte.needsFirstItem();
             const hasSubmitted = table.itemAnte.hasSubmitted(bot.id);
             
-            console.log(`[BotManager] checkBotsItemAnte: Bot ${bot.name} (seat ${seatIndex}), needsFirstItem=${needsFirstItem}, hasSubmitted=${hasSubmitted}, itemAnteHandled=${bot.itemAnteHandled}`);
-            
             // Only handle if bot needs to submit and hasn't already
             if ((needsFirstItem || !hasSubmitted) && !bot.itemAnteHandled) {
                 bot.itemAnteHandled = true; // Prevent duplicate handling
-                console.log(`[BotManager] checkBotsItemAnte: Triggering item ante submission for ${bot.name}`);
                 // Await the async method and handle errors
                 this._handleBotItemAnte(tableId, seatIndex, bot).catch(error => {
                     console.error(`[BotManager] checkBotsItemAnte: Error handling item ante for ${bot.name}:`, error);

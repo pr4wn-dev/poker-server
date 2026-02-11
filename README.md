@@ -292,6 +292,77 @@ Keep narrowing down until the problem disappears - the last chunk you commented 
 
 **Impact:** Logs are now much cleaner and focused on actual problems. Routine operations no longer clutter the console.
 
+### ✅ Fixed: Bot Item Ante Submission in Practice Mode
+**Status:** FIXED  
+**Date:** February 12, 2026  
+**Severity:** HIGH  
+
+**Problem:** Regular bots in practice mode were not automatically submitting items for item ante. The `_handleBotItemAnte` method was failing with `Cannot find module './Item'` error because the require path was incorrect.
+
+**Solution:**
+- Fixed Item module require path in `BotManager.js` from `'./Item'` to `'../models/Item'` (correct path from `src/game/` to `src/models/`)
+- Added proper error handling with async/await for bot item ante submission
+- Added `itemAnteHandled` flag to prevent duplicate submissions
+- Bots now automatically submit items after being confirmed in practice mode
+
+**Files Changed:**
+- `src/game/BotManager.js` (line 290)
+
+**Verification:** Bots now successfully submit items for item ante in practice mode. Server logs show: `[BotManager] Bot submitted item successfully`.
+
+### ✅ Fixed: Practice Mode Bot Auto-Approval with Socket Bots
+**Status:** FIXED  
+**Date:** February 12, 2026  
+**Severity:** HIGH  
+
+**Problem:** When socket bots were present at a practice table, regular bots could not join because they required approval from all "human players" (including socket bots). Socket bots are real players (not marked as `isBot`), so they were counted in the approval requirement, but they cannot approve regular bots, causing regular bots to remain pending indefinitely.
+
+**Solution:**
+- Modified `BotManager.inviteBot()` to auto-approve all bots in practice mode
+- In practice mode, only the table creator can invite bots, so no approval is needed
+- Regular mode still requires approval from all human players
+
+**Files Changed:**
+- `src/game/BotManager.js` (lines 102-110)
+
+**Verification:** Regular bots now auto-approve immediately in practice mode, regardless of socket bot presence.
+
+### ✅ Fixed: Socket Bot Invitation and Item Ante
+**Status:** FIXED  
+**Date:** February 12, 2026  
+**Severity:** MEDIUM  
+
+**Problem:** Socket bot invitation was not working correctly, and socket bots were not submitting items for item ante automatically.
+
+**Solution:**
+- Fixed socket bot username truncation to comply with database 20-character limit
+- Added explicit `checkBotsItemAnte` call after socket bot joins table
+- Fixed server response emission to always emit response events even if callback is missing
+- Socket bots now automatically submit items for item ante when joining practice tables
+
+**Files Changed:**
+- `src/sockets/SocketHandler.js` (lines 1254-1366)
+- `src/testing/SocketBot.js` (username truncation)
+
+**Verification:** Socket bots join successfully and automatically submit items for item ante in practice mode.
+
+### ✅ Cleaned Up: Bot Item Ante Verbose Logging
+**Status:** COMPLETED  
+**Date:** February 12, 2026  
+**Severity:** LOW (Code Quality Improvement)  
+
+**Problem:** Bot item ante logging was extremely verbose, with repeated logs for every check cycle, making it difficult to see actual errors.
+
+**Solution:**
+- Removed verbose informational logs from `checkBotsItemAnte` and `_handleBotItemAnte`
+- Kept only error logs for failed submissions
+- Removed repetitive status logs that were spamming the console
+
+**Files Changed:**
+- `src/game/BotManager.js`
+
+**Impact:** Bot item ante logs are now clean and only show errors when something goes wrong.
+
 ### ✅ Fixed: Unity InventoryPanel Off-Screen Positioning
 **Status:** FIXED  
 **Date:** February 12, 2026  
