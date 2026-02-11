@@ -32,12 +32,9 @@ class SocketHandler {
 
     initialize() {
         this.io.on('connection', (socket) => {
-            gameLogger.gameEvent('SYSTEM', `[SOCKET] CLIENT_CONNECTED`, { socketId: socket.id });
-
             // ============ Authentication ============
             
             socket.on('register', async (data, callback) => {
-                gameLogger.gameEvent('SYSTEM', `[AUTH] REGISTER_ATTEMPT`, { username: data?.username, email: data?.email });
                 if (!db.isConnected) {
                     const error = { success: false, error: 'Database offline' };
                     gameLogger.error('SYSTEM', '[AUTH] REGISTER_FAILED', { error: 'Database offline', username: data?.username });
@@ -48,13 +45,11 @@ class SocketHandler {
                 
                 const { username, password, email } = data;
                 const result = await userRepo.register(username, password, email);
-                gameLogger.gameEvent('SYSTEM', `[AUTH] REGISTER_RESULT`, { username, success: result.success, userId: result.userId, error: result.error });
                 
                 let response;
                 if (result.success) {
                     // Auto-login after registration
                     const loginResult = await userRepo.login(username, password);
-                    gameLogger.gameEvent('SYSTEM', `[AUTH] REGISTER_AUTO_LOGIN`, { username, success: loginResult.success });
                     if (loginResult.success) {
                         this.authenticateSocket(socket, loginResult.userId, loginResult.profile);
                     }
@@ -74,7 +69,6 @@ class SocketHandler {
             socket.on('login', async (data, callback) => {
                 try {
                     const username = data?.username || 'unknown';
-                    gameLogger.gameEvent('SYSTEM', `[AUTH] LOGIN_ATTEMPT`, { username });
                     
                     if (!db.isConnected) {
                         const error = { success: false, error: 'Database offline' };
@@ -95,7 +89,6 @@ class SocketHandler {
                     }
                     
                     const result = await userRepo.login(username, password);
-                    gameLogger.gameEvent('SYSTEM', `[AUTH] LOGIN_RESULT`, { username, success: result.success, userId: result.userId, error: result.error });
                     
                     let response;
                     if (result.success) {
@@ -147,47 +140,13 @@ class SocketHandler {
                     return;
                 }
                 
-                // ROOT TRACING: Track inventory request start
-                gameLogger.gameEvent('SYSTEM', `[INVENTORY] GET_INVENTORY_START`, {
-                    userId: user.userId,
-                    username: user.profile?.username,
-                    socketId: socket.id,
-                    stackTrace: new Error().stack?.split('\n').slice(2, 8).join(' | ') || 'NO_STACK'
-                });
-                
                 try {
                     const inventory = await userRepo.getInventory(user.userId);
                     
-                    // ROOT TRACING: Check for missing icons and log full inventory details
+                    // Warn if items missing icons (sprite loading will fail)
                     const itemsWithoutIcons = (inventory || []).filter(item => !item.icon || item.icon === 'default_item');
-                    const itemsWithIcons = (inventory || []).filter(item => item.icon && item.icon !== 'default_item');
-                    
-                    gameLogger.gameEvent('SYSTEM', `[INVENTORY] GET_INVENTORY_SUCCESS`, {
-                        userId: user.userId,
-                        username: user.profile?.username,
-                        totalItems: inventory?.length || 0,
-                        itemsWithIcons: itemsWithIcons.length,
-                        itemsWithoutIcons: itemsWithoutIcons.length,
-                        missingIconItems: itemsWithoutIcons.map(item => ({
-                            id: item.id,
-                            name: item.name,
-                            templateId: item.templateId,
-                            type: item.type,
-                            icon: item.icon || 'MISSING'
-                        })),
-                        itemTypes: (inventory || []).reduce((acc, item) => {
-                            acc[item.type] = (acc[item.type] || 0) + 1;
-                            return acc;
-                        }, {}),
-                        rarities: (inventory || []).reduce((acc, item) => {
-                            acc[item.rarity] = (acc[item.rarity] || 0) + 1;
-                            return acc;
-                        }, {})
-                    });
-                    
-                    // ROOT TRACING: Warn if items missing icons (sprite loading will fail)
                     if (itemsWithoutIcons.length > 0) {
-                        gameLogger.gameEvent('SYSTEM', `[INVENTORY] MISSING_ICONS_WARNING`, {
+                        gameLogger.warn('SYSTEM', `[INVENTORY] MISSING_ICONS_WARNING`, {
                             userId: user.userId,
                             count: itemsWithoutIcons.length,
                             items: itemsWithoutIcons.map(item => ({
@@ -198,30 +157,13 @@ class SocketHandler {
                         });
                     }
                     
-                    // SYSTEMATIC DEBUG: Log what we're sending to Unity
-                    const itemsWithTemplateId = (inventory || []).filter(item => item.templateId);
-                    const itemsWithoutTemplateId = (inventory || []).filter(item => !item.templateId);
-                    gameLogger.gameEvent('SYSTEM', `[INVENTORY] GET_INVENTORY_RESPONSE`, {
-                        userId: user.userId,
-                        totalItems: inventory?.length || 0,
-                        itemsWithTemplateId: itemsWithTemplateId.length,
-                        itemsWithoutTemplateId: itemsWithoutTemplateId.length,
-                        sampleItem: inventory && inventory.length > 0 ? {
-                            id: inventory[0].id,
-                            templateId: inventory[0].templateId,
-                            icon: inventory[0].icon,
-                            fields: Object.keys(inventory[0])
-                        } : null
-                    });
-                    
                     const response = { success: true, inventory };
                     if (callback && typeof callback === 'function') {
                         callback(response);
                     }
                     socket.emit('get_inventory_response', response);
                 } catch (error) {
-                    // ROOT TRACING: Log inventory error with full context
-                    gameLogger.gameEvent('SYSTEM', `[INVENTORY] GET_INVENTORY_ERROR`, {
+                    gameLogger.error('SYSTEM', `[INVENTORY] GET_INVENTORY_ERROR`, {
                         userId: user.userId,
                         username: user.profile?.username,
                         error: error.message,
@@ -514,7 +456,6 @@ class SocketHandler {
             
             socket.on('get_tables', (data, callback) => {
                 const tables = this.gameManager.getPublicTableList();
-                gameLogger.gameEvent('SYSTEM', `[LOBBY] GET_TABLES`, { tableCount: tables.length });
                 const response = { success: true, tables };
                 if (callback) callback(response);
                 socket.emit('get_tables_response', response);
@@ -522,7 +463,6 @@ class SocketHandler {
 
             socket.on('create_table', async (data, callback) => {
                 try {
-                    gameLogger.gameEvent('SYSTEM', `[TABLE] CREATE_REQUEST`, { data: data });
                     const user = this.getAuthenticatedUser(socket);
                     if (!user) {
                         gameLogger.error('SYSTEM', '[TABLE] CREATE_FAILED', { error: 'Not authenticated' });
@@ -547,7 +487,6 @@ class SocketHandler {
                         player.chips = dbUser.chips;
                     }
 
-                    gameLogger.gameEvent('SYSTEM', `[TABLE] CREATE_AUTHENTICATED`, { userId: user.userId, username: user.username });
                     const table = this.gameManager.createTable({
                         ...data,
                         creatorId: user.userId
@@ -588,7 +527,6 @@ class SocketHandler {
                         seatIndex: joinResult.success ? joinResult.seatIndex : -1,
                         state 
                     };
-                    gameLogger.gameEvent('SYSTEM', `[TABLE] CREATE_SUCCESS`, { userId: user.userId, tableId: response.tableId, seatIndex: response.seatIndex });
                     
                     if (callback) {
                         try {
@@ -599,7 +537,6 @@ class SocketHandler {
                     }
                     try {
                         socket.emit('create_table_response', response);
-                        gameLogger.gameEvent('SYSTEM', `[TABLE] RESPONSE_EMITTED`, { tableId: response.tableId });
                     } catch (err) {
                         gameLogger.error('SYSTEM', '[TABLE] EMIT_ERROR', { error: err.message, stack: err.stack });
                     }
@@ -635,11 +572,6 @@ class SocketHandler {
             socket.on('start_simulation', async (data, callback) => {
                 try {
                     const user = this.getAuthenticatedUser(socket);
-                    gameLogger.gameEvent('SYSTEM', `[SIMULATION] START_REQUEST`, { 
-                        userId: user?.userId || 'unauthenticated',
-                        username: user?.profile?.username || 'unknown',
-                        data: data
-                    });
                     
                     if (!user) {
                         const error = { success: false, error: 'Not authenticated' };
@@ -676,14 +608,6 @@ class SocketHandler {
                         itemAnteCollectionTime: itemAnteCollectionTime || 60000
                     });
                     
-                    gameLogger.gameEvent('SYSTEM', `[SIMULATION] START_RESULT`, { 
-                        userId: user.userId,
-                        username: user.profile?.username,
-                        success: result.success,
-                        tableId: result.tableId,
-                        error: result.error
-                    });
-                    
                     if (result.success) {
                         const simTable = this.gameManager.getTable(result.tableId);
                         if (!simTable) {
@@ -696,7 +620,6 @@ class SocketHandler {
                         
                         try {
                             this.setupTableCallbacks(simTable);
-                            gameLogger.gameEvent('SYSTEM', `[SIMULATION] CALLBACKS_SETUP`, { tableId: result.tableId });
                         } catch (err) {
                             gameLogger.error('SYSTEM', '[SIMULATION] CALLBACKS_SETUP_ERROR', { tableId: result.tableId, error: err.message, stack: err.stack });
                         }
@@ -705,7 +628,6 @@ class SocketHandler {
                             simTable.addSpectator(user.userId, user.profile?.username || 'Creator', socket.id);
                             socket.join(`table:${result.tableId}`);
                             socket.join(`spectator:${result.tableId}`);
-                            gameLogger.gameEvent('SYSTEM', `[SIMULATION] CREATOR_ADDED_AS_SPECTATOR`, { tableId: result.tableId, userId: user.userId });
                         } catch (err) {
                             gameLogger.error('SYSTEM', '[SIMULATION] ADD_SPECTATOR_ERROR', { tableId: result.tableId, userId: user.userId, error: err.message });
                         }
@@ -763,7 +685,6 @@ class SocketHandler {
             });
             
             socket.on('pause_simulation', (data, callback) => {
-                gameLogger.gameEvent('SYSTEM', `[SIMULATION] PAUSE_REQUEST`, { data: data });
                 const user = this.getAuthenticatedUser(socket);
                 if (!user) {
                     const error = { success: false, error: 'Not authenticated' };
@@ -786,7 +707,6 @@ class SocketHandler {
             });
             
             socket.on('resume_simulation', (data, callback) => {
-                gameLogger.gameEvent('SYSTEM', `[SIMULATION] RESUME_REQUEST`, { data: data });
                 const user = this.getAuthenticatedUser(socket);
                 if (!user) {
                     const error = { success: false, error: 'Not authenticated' };
@@ -809,7 +729,6 @@ class SocketHandler {
             });
             
             socket.on('stop_simulation', (data, callback) => {
-                gameLogger.gameEvent('SYSTEM', `[SIMULATION] STOP_REQUEST`, { data: data });
                 const user = this.getAuthenticatedUser(socket);
                 if (!user) {
                     const error = { success: false, error: 'Not authenticated' };
@@ -820,7 +739,6 @@ class SocketHandler {
                 const { tableId } = data;
                 const result = this.simulationManager.stopSimulation(tableId);
                 
-                gameLogger.gameEvent('SYSTEM', `[SIMULATION] STOP_RESULT`, { result: result });
                 if (callback) callback(result);
                 
                 if (result.success) {
@@ -840,7 +758,6 @@ class SocketHandler {
             });
             
             socket.on('set_simulation_speed', (data, callback) => {
-                gameLogger.gameEvent('SYSTEM', `[SIMULATION] SET_SPEED_REQUEST`, { data: data });
                 const { fastMode } = data;
                 this.simulationManager.setFastMode(fastMode === true);
                 if (callback) callback({ 
@@ -953,7 +870,6 @@ class SocketHandler {
 
             socket.on('leave_table', async (callback) => {
                 const respond = (response) => {
-                    gameLogger.gameEvent('SYSTEM', `[TABLE] LEAVE_RESPONSE`, { success: response.success, error: response.error || 'none' });
                     if (callback) callback(response);
                     socket.emit('leave_table_response', response);
                 };
@@ -963,8 +879,6 @@ class SocketHandler {
                     gameLogger.error('SYSTEM', '[TABLE] LEAVE_FAILED', { error: 'Not authenticated' });
                     return respond({ success: false, error: 'Not authenticated' });
                 }
-
-                gameLogger.gameEvent('SYSTEM', `[TABLE] LEAVE_REQUEST`, { userId: user.userId, username: user.profile?.username || 'unknown' });
                 
                 const player = this.gameManager.players.get(user.userId);
                 let tableId = player?.currentTableId;
@@ -978,14 +892,12 @@ class SocketHandler {
                         if (t.isSpectator(user.userId)) {
                             tableId = tid;
                             table = t;
-                            gameLogger.gameEvent('SYSTEM', `[TABLE] LEAVE_FOUND_SPECTATOR`, { userId: user.userId, username: user.profile?.username, tableId });
                             break;
                         }
                         // Also check if user is the creator (even if not in a seat or as spectator)
                         if (t.creatorId === user.userId && !tableId) {
                             tableId = tid;
                             table = t;
-                            gameLogger.gameEvent('SYSTEM', `[TABLE] LEAVE_FOUND_CREATOR`, { userId: user.userId, username: user.profile?.username, tableId });
                             break;
                         }
                     }
@@ -1004,7 +916,6 @@ class SocketHandler {
                         player.isSpectating = false;
                     }
                     
-                    gameLogger.gameEvent('SYSTEM', `[TABLE] SPECTATOR_LEFT`, { userId: user.userId, username: user.profile?.username, tableId });
                     return respond({ success: true });
                 }
                 
@@ -1023,8 +934,6 @@ class SocketHandler {
                         socket.to(`table:${tableId}`).emit('player_left', {
                             userId: user.userId
                         });
-                        
-                        gameLogger.gameEvent('SYSTEM', `[TABLE] PLAYER_LEFT`, { userId: user.userId, username: user.profile?.username || user.userId, tableId });
                     } else {
                         gameLogger.error('SYSTEM', '[TABLE] LEAVE_FAILED', { userId: user.userId, tableId, error: result.error });
                     }
@@ -1124,7 +1033,6 @@ class SocketHandler {
                 seat.chips += amount;
                 player.chips = seat.chips;
                 
-                gameLogger.gameEvent('SYSTEM', `[TABLE] REBUY`, { userId: user.userId, username: user.username, amount, tableId: table.id, tableName: table.name });
                 
                 // Broadcast updated state
                 this.broadcastTableState(player.currentTableId);
@@ -1146,7 +1054,6 @@ class SocketHandler {
             // Start the game (table creator only) - initiates ready-up phase
             socket.on('start_game', (data, callback) => {
                 const respond = (response) => {
-                    gameLogger.gameEvent('SYSTEM', `[TABLE] START_GAME_RESPONSE`, { success: response.success, error: response.error || 'none' });
                     if (callback) callback(response);
                     socket.emit('start_game_response', response);
                 };
@@ -1158,7 +1065,6 @@ class SocketHandler {
                 }
                 
                 const { tableId } = data;
-                gameLogger.gameEvent('SYSTEM', `[TABLE] START_GAME_REQUEST`, { userId: user.userId, tableId });
                 
                 const table = this.gameManager.getTable(tableId);
                 
@@ -1167,13 +1073,9 @@ class SocketHandler {
                     return respond({ success: false, error: 'Table not found' });
                 }
                 
-                gameLogger.gameEvent('SYSTEM', `[TABLE] START_GAME_TABLE_INFO`, { tableId, phase: table.phase, creatorId: table.creatorId, isSimulation: table.isSimulation, playerCount: table.getSeatedPlayerCount() });
-                
                 const result = table.startReadyUp(user.userId);
                 
                 if (result.success) {
-                    gameLogger.gameEvent('SYSTEM', `[TABLE] START_GAME_SUCCESS`, { tableId, tableName: table.name, userId: user.userId });
-                    
                     // Broadcast ready prompt to all players
                     this.io.to(`table:${tableId}`).emit('ready_prompt', {
                         tableId: tableId,
@@ -1211,8 +1113,6 @@ class SocketHandler {
                 const result = table.playerReady(user.userId);
                 
                 if (result.success) {
-                    gameLogger.gameEvent('SYSTEM', `[TABLE] PLAYER_READY`, { userId: user.userId, username: user.username, tableId: table.id, tableName: table.name });
-                    
                     // Broadcast player ready event
                     this.io.to(`table:${tableId}`).emit('player_readied', {
                         playerId: user.userId,
@@ -1258,8 +1158,6 @@ class SocketHandler {
                 if (result.success) {
                     if (result.pendingApproval) {
                         // Notify players that approval is needed
-                        gameLogger.gameEvent('SYSTEM', `[BOT] PENDING_APPROVAL`, { botName: result.bot.name, tableId: table.id });
-                        
                         this.io.to(`table:${tableId}`).emit('bot_invite_pending', {
                             seatIndex: result.seatIndex,
                             botName: result.bot.name,
@@ -1269,8 +1167,6 @@ class SocketHandler {
                         });
                     } else {
                         // Auto-approved (only creator at table)
-                        gameLogger.gameEvent('SYSTEM', `[BOT] AUTO_APPROVED`, { botName: result.bot.name, tableId: table.id });
-                        
                         this.broadcastTableState(tableId);
                         
                         this.io.to(`table:${tableId}`).emit('bot_joined', {
@@ -1308,8 +1204,6 @@ class SocketHandler {
                 if (result.success) {
                     if (result.bot) {
                         // All approved - bot is now active
-                        gameLogger.gameEvent('SYSTEM', `[BOT] FULLY_APPROVED`, { botName: result.bot.name, tableId: table.id });
-                        
                         this.broadcastTableState(tableId);
                         
                         this.io.to(`table:${tableId}`).emit('bot_joined', {
@@ -1347,7 +1241,6 @@ class SocketHandler {
                 const result = this.gameManager.rejectBot(tableId, seatIndex, user.userId);
                 
                 if (result.success) {
-                    gameLogger.gameEvent('SYSTEM', `[BOT] REJECTED`, { botName: result.botName, rejectedBy: user.username, userId: user.userId, tableId: table.id });
                     
                     this.io.to(`table:${tableId}`).emit('bot_rejected', {
                         seatIndex,
@@ -1382,8 +1275,6 @@ class SocketHandler {
                 const result = this.gameManager.removeBot(tableId, seatIndex);
                 
                 if (result.success) {
-                    gameLogger.gameEvent('SYSTEM', `[BOT] REMOVED`, { botName: result.botName, removedBy: user.username, userId: user.userId, tableId: table.id });
-                    
                     this.broadcastTableState(tableId);
                     
                     this.io.to(`table:${tableId}`).emit('bot_left', {
@@ -1458,7 +1349,6 @@ class SocketHandler {
                 seat.isSittingOut = true;
                 seat.sitOutTime = Date.now();
                 
-                gameLogger.gameEvent('SYSTEM', `[TABLE] PLAYER_SIT_OUT`, { userId: user.userId, username: user.username, tableId: table.id, tableName: table.name });
                 
                 // Notify other players
                 socket.to(`table:${table.id}`).emit('player_sitting_out', {
@@ -1503,8 +1393,6 @@ class SocketHandler {
                 
                 seat.isSittingOut = false;
                 seat.sitOutTime = null;
-                
-                gameLogger.gameEvent('SYSTEM', `[TABLE] PLAYER_SIT_BACK`, { userId: user.userId, username: user.username, tableId: table.id, tableName: table.name });
                 
                 // Notify other players
                 socket.to(`table:${table.id}`).emit('player_sitting_back', {
