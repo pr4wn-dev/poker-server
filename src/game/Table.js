@@ -3196,10 +3196,36 @@ class Table {
             } : null).filter(Boolean)
         });
         
+        // SYSTEMATIC DEBUG: Track chip movement during blind posting
+        const totalChipsBeforeBlind = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
+        const totalChipsAndPotBeforeBlind = totalChipsBeforeBlind + this.pot;
+        
         player.chips -= blindAmount;
         player.currentBet = blindAmount;
         player.totalBet = blindAmount;
         this.pot += blindAmount;
+        
+        // SYSTEMATIC DEBUG: Track chip movement after blind posting
+        const totalChipsAfterBlind = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
+        const totalChipsAndPotAfterBlind = totalChipsAfterBlind + this.pot;
+        const chipsLostDuringBlind = totalChipsAndPotBeforeBlind - totalChipsAndPotAfterBlind;
+        
+        const debugLogBlind = `[SYSTEMATIC_DEBUG] POST_BLIND: Player=${player.name}, Amount=${blindAmount}, BlindType=${amount === this.smallBlind ? 'small' : 'big'}, chipsLost=${chipsLostDuringBlind}, expected=0\n`;
+        console.log(debugLogBlind.trim());
+        fs.appendFileSync(path.join(__dirname, '../../logs/bet-raise-debug.log'), new Date().toISOString() + ' ' + debugLogBlind);
+        
+        if (Math.abs(chipsLostDuringBlind) > 0.01) {
+            console.error(`[Table ${this.name}] ⚠️⚠️⚠️ [SYSTEMATIC_DEBUG] BLIND POSTING BUG DETECTED! Chips lost: ${chipsLostDuringBlind}`);
+            gameLogger.error(this.name, '[SYSTEMATIC_DEBUG] BLIND POSTING BUG: Chips lost during blind posting', {
+                player: player.name,
+                blindAmount,
+                blindType: amount === this.smallBlind ? 'small' : 'big',
+                chipsLostDuringBlind,
+                totalChipsAndPotBeforeBlind,
+                totalChipsAndPotAfterBlind,
+                handNumber: this.handsPlayed
+            });
+        }
         
         // ULTRA-VERBOSE: Log after operation with FULL STATE
         const chipsAfter = player.chips;
@@ -5027,7 +5053,10 @@ class Table {
             } : null).filter(Boolean)
         });
         
-        // SYSTEMATIC DEBUG: ALL_IN is ACTIVE - testing if call() is the problem
+        // SYSTEMATIC DEBUG: Track chip movement during allIn
+        const totalChipsBeforeAllIn = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
+        const totalChipsAndPotBeforeAllIn = totalChipsBeforeAllIn + this.pot;
+        
         player.chips = 0;
         player.currentBet = newCurrentBet;
         const totalBetAfter = totalBetBefore + amount;
@@ -5046,6 +5075,27 @@ class Table {
             stackTrace: new Error().stack?.split('\n').slice(2, 8).join(' | ') || 'NO_STACK'
         });
         this.pot += amount; // Add all chips to pot
+        
+        // SYSTEMATIC DEBUG: Track chip movement after allIn
+        const totalChipsAfterAllIn = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
+        const totalChipsAndPotAfterAllIn = totalChipsAfterAllIn + this.pot;
+        const chipsLostDuringAllIn = totalChipsAndPotBeforeAllIn - totalChipsAndPotAfterAllIn;
+        
+        const debugLogAllIn = `[SYSTEMATIC_DEBUG] ALL_IN: Player=${player.name}, Amount=${amount}, chipsLost=${chipsLostDuringAllIn}, expected=0\n`;
+        console.log(debugLogAllIn.trim());
+        fs.appendFileSync(path.join(__dirname, '../../logs/bet-raise-debug.log'), new Date().toISOString() + ' ' + debugLogAllIn);
+        
+        if (Math.abs(chipsLostDuringAllIn) > 0.01) {
+            console.error(`[Table ${this.name}] ⚠️⚠️⚠️ [SYSTEMATIC_DEBUG] ALL_IN BUG DETECTED! Chips lost: ${chipsLostDuringAllIn}`);
+            gameLogger.error(this.name, '[SYSTEMATIC_DEBUG] ALL_IN BUG: Chips lost during allIn', {
+                player: player.name,
+                amount,
+                chipsLostDuringAllIn,
+                totalChipsAndPotBeforeAllIn,
+                totalChipsAndPotAfterAllIn,
+                handNumber: this.handsPlayed
+            });
+        }
         
         // ULTRA-VERBOSE: Log after operation with FULL STATE
         const chipsAfter = player.chips;
