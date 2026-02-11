@@ -7510,12 +7510,37 @@ class Table {
             const potBeforeAward = this.pot;
             const chipsBeforeAward = seat.chips;
             
+            // SYSTEMATIC DEBUG: Track chip movement during award in calculateAndAwardSidePots
+            const totalChipsBeforeAward = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
+            const totalChipsAndPotBeforeAward = totalChipsBeforeAward + this.pot;
+            
             // CRITICAL FIX: Decrement pot when awarding chips to prevent double-counting
             // Chips move from pot to player, so pot must decrease by award amount
             seat.chips += award.amount;
             this.pot -= award.amount; // FIX: Decrement pot to match chip transfer
             const chipsAfter = seat.chips;
             totalAwarded += award.amount;
+            
+            // SYSTEMATIC DEBUG: Track chip movement after award
+            const totalChipsAfterAward = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
+            const totalChipsAndPotAfterAward = totalChipsAfterAward + this.pot;
+            const chipsLostDuringAward = totalChipsAndPotBeforeAward - totalChipsAndPotAfterAward;
+            
+            const debugLogAward = `[SYSTEMATIC_DEBUG] CALCULATE_AND_AWARD_SIDE_POTS AWARD: Player=${award.name}, Amount=${award.amount}, chipsLost=${chipsLostDuringAward}, expected=0\n`;
+            console.log(debugLogAward.trim());
+            fs.appendFileSync(path.join(__dirname, '../../logs/pot-award-debug.log'), new Date().toISOString() + ' ' + debugLogAward);
+            
+            if (Math.abs(chipsLostDuringAward) > 0.01) {
+                console.error(`[Table ${this.name}] ⚠️⚠️⚠️ [SYSTEMATIC_DEBUG] POT AWARD BUG DETECTED in calculateAndAwardSidePots! Chips lost: ${chipsLostDuringAward}`);
+                gameLogger.error(this.name, '[SYSTEMATIC_DEBUG] POT AWARD BUG: Chips lost during award', {
+                    player: award.name,
+                    amount: award.amount,
+                    chipsLostDuringAward,
+                    totalChipsAndPotBeforeAward,
+                    totalChipsAndPotAfterAward,
+                    handNumber: this.handsPlayed
+                });
+            }
             
                 // CRITICAL: Clear totalBet and currentBet immediately after award for winners
             // NOTE: ALL players will have their totalBet/currentBet cleared after the loop completes
@@ -8316,10 +8341,35 @@ class Table {
                 reason: 'Everyone folded - winner takes pot'
             });
             
+            // SYSTEMATIC DEBUG: Track chip movement during award in awardPot
+            const totalChipsBeforeAward = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
+            const totalChipsAndPotBeforeAward = totalChipsBeforeAward + this.pot;
+            
             // CRITICAL FIX: Decrement pot when awarding chips to prevent double-counting
             // Chips move from pot to player, so pot must decrease by award amount
             seat.chips += potAmount;
             this.pot -= potAmount; // FIX: Decrement pot to match chip transfer
+            
+            // SYSTEMATIC DEBUG: Track chip movement after award
+            const totalChipsAfterAward = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
+            const totalChipsAndPotAfterAward = totalChipsAfterAward + this.pot;
+            const chipsLostDuringAward = totalChipsAndPotBeforeAward - totalChipsAndPotAfterAward;
+            
+            const debugLogAwardPot = `[SYSTEMATIC_DEBUG] AWARD_POT AWARD: Player=${winner.name}, Amount=${potAmount}, chipsLost=${chipsLostDuringAward}, expected=0\n`;
+            console.log(debugLogAwardPot.trim());
+            fs.appendFileSync(path.join(__dirname, '../../logs/pot-award-debug.log'), new Date().toISOString() + ' ' + debugLogAwardPot);
+            
+            if (Math.abs(chipsLostDuringAward) > 0.01) {
+                console.error(`[Table ${this.name}] ⚠️⚠️⚠️ [SYSTEMATIC_DEBUG] POT AWARD BUG DETECTED in awardPot! Chips lost: ${chipsLostDuringAward}`);
+                gameLogger.error(this.name, '[SYSTEMATIC_DEBUG] POT AWARD BUG: Chips lost during award', {
+                    player: winner.name,
+                    amount: potAmount,
+                    chipsLostDuringAward,
+                    totalChipsAndPotBeforeAward,
+                    totalChipsAndPotAfterAward,
+                    handNumber: this.handsPlayed
+                });
+            }
             
             // CRITICAL: Validate after operation
             this._validateChipMovement(movement, 'AWARD_POT_SIMPLE');
