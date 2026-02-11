@@ -292,6 +292,41 @@ Keep narrowing down until the problem disappears - the last chunk you commented 
 
 **Impact:** Logs are now much cleaner and focused on actual problems. Routine operations no longer clutter the console.
 
+### ✅ Fixed: Unity InventoryPanel Off-Screen Positioning
+**Status:** FIXED  
+**Date:** February 12, 2026  
+**Severity:** HIGH  
+
+**Problem:** The Unity `InventoryPanel` was being detected as off-screen, preventing items from being visible. The panel's RectTransform was not being properly positioned when the panel was activated, and the visibility check was failing for ScreenSpaceOverlay Canvas mode.
+
+**Solution:**
+- Modified `Show()` method to activate GameObject first, then reset RectTransform properties (anchorMin, anchorMax, anchoredPosition, sizeDelta, pivot) to fill the screen
+- Added `LayoutRebuilder.ForceRebuildLayoutImmediate()` and `Canvas.ForceUpdateCanvases()` to force layout recalculation after positioning
+- Fixed visibility check to properly handle ScreenSpaceOverlay Canvas mode (where world coordinates = screen coordinates)
+- Added tolerance to visibility check to account for edge cases
+
+**Files Changed:**
+- `Assets/Scripts/UI/Components/InventoryPanel.cs` (Unity client)
+
+**Verification:** Panel is now correctly positioned on-screen and items should be visible.
+
+### ✅ Fixed: Unity InventoryPanel Canvas Sorting Order Restoration
+**Status:** FIXED  
+**Date:** February 12, 2026  
+**Severity:** MEDIUM  
+
+**Problem:** When the `InventoryPanel` was opened, it increased its Canvas sorting order to 300 to render above other UI elements (like `MyChipsPanel` with sortingOrder 200). However, when the panel was closed, the sorting order was not restored, causing the Canvas to remain at 300 and cover other UI elements (like the create table layout).
+
+**Solution:**
+- Added `_originalCanvasSortingOrder` field to store the original sorting order
+- Save original sorting order when panel opens (in `Show()`)
+- Restore original sorting order when panel closes (in `Hide()`)
+
+**Files Changed:**
+- `Assets/Scripts/UI/Components/InventoryPanel.cs` (Unity client)
+
+**Verification:** Closing the inventory panel no longer covers other UI elements.
+
 ## Known Issues
 
 ### Critical: Missing Chips / Money Loss
