@@ -9456,8 +9456,27 @@ class Table {
             sidePot: this.getItemAnteState(forPlayerId),  // Keeping field name for Unity backward compatibility
             // Helper flags for Unity to know when to prompt for item
             // CRITICAL: Only set needsItemAnteSubmission for actual players in seats, NOT spectators
-            needsItemAnteSubmission: !this.isSpectator(forPlayerId) && this.itemAnteEnabled && !this.gameStarted && this.itemAnte && 
-                (this.itemAnte.needsFirstItem() || (forPlayerId && !this.itemAnte.hasSubmitted(forPlayerId))),
+            needsItemAnteSubmission: (() => {
+                const isSpectatorCheck = this.isSpectator(forPlayerId);
+                const needsItemAnteSubmissionValue = !isSpectatorCheck && this.itemAnteEnabled && !this.gameStarted && this.itemAnte && 
+                    (this.itemAnte.needsFirstItem() || (forPlayerId && !this.itemAnte.hasSubmitted(forPlayerId)));
+                
+                // DIAGNOSTIC: Log when spectator check is happening
+                if (forPlayerId && this.itemAnteEnabled && !this.gameStarted && this.itemAnte) {
+                    gameLogger.gameEvent(this.name, `[ITEM_ANTE] NEEDS_SUBMISSION_CHECK`, {
+                        forPlayerId,
+                        isSpectator: isSpectatorCheck,
+                        itemAnteEnabled: this.itemAnteEnabled,
+                        gameStarted: this.gameStarted,
+                        itemAnteExists: !!this.itemAnte,
+                        needsFirstItem: this.itemAnte.needsFirstItem(),
+                        hasSubmitted: forPlayerId ? this.itemAnte.hasSubmitted(forPlayerId) : false,
+                        needsItemAnteSubmission: needsItemAnteSubmissionValue
+                    });
+                }
+                
+                return needsItemAnteSubmissionValue;
+            })(),
             seats: this.seats.map((seat, index) => {
                 if (!seat) return null;
                 
