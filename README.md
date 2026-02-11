@@ -212,6 +212,86 @@ Keep narrowing down until the problem disappears - the last chunk you commented 
 - `logs/bet-raise-debug.log` - Betting operation tracking
 - `logs/call-debug.log` - Call operation tracking
 
+### ✅ Fixed: Spectator Item Ante Submission Prompt
+**Status:** FIXED  
+**Date:** February 12, 2026  
+**Severity:** MEDIUM  
+
+**Problem:** Spectators were incorrectly prompted to submit items for the item ante, even though they cannot participate as players. The `needsItemAnteSubmission` flag was being set to `true` for spectators.
+
+**Solution:**
+- Modified `Table.js` to explicitly check `!this.isSpectator(forPlayerId)` when determining `needsItemAnteSubmission` in `getState()`.
+- Added check to return `false` for `needsItemAnteSubmission` when `forPlayerId` is `null` (broadcast case).
+- This ensures the prompt is only shown to actual players in seats.
+
+**Files Changed:**
+- `src/game/Table.js` (line 9459, 9534)
+
+**Verification:** Spectators no longer see the item ante submission prompt.
+
+### ✅ Fixed: Item Ante Missing Fields for Unity Display
+**Status:** FIXED  
+**Date:** February 12, 2026  
+**Severity:** HIGH  
+
+**Problem:** The Unity client was unable to display item sprites/assets in the item ante pot and selection menu because critical fields like `templateId`, `description`, `isGambleable`, `isTradeable`, and `obtainedFrom` were missing from the item objects sent in `ItemAnte.getState()`, `side_pot_started`, and `side_pot_submission` events.
+
+**Solution:**
+- Added all necessary item fields to the item objects within `creatorItem`, `firstItem`, and `approvedItems` in `ItemAnte.getState()` in `src/game/ItemAnte.js`.
+- Ensured `side_pot_started` and `side_pot_submission` events in `src/sockets/SocketHandler.js` send fully formatted item objects.
+- Implemented null checks and default values for item properties to prevent client-side crashes.
+
+**Files Changed:**
+- `src/game/ItemAnte.js`
+- `src/sockets/SocketHandler.js`
+
+**Verification:** Unity client now receives complete item data for display.
+
+### ✅ Fixed: Unity Item Ante Filtering and Highlighting
+**Status:** FIXED  
+**Date:** February 12, 2026  
+**Severity:** MEDIUM  
+
+**Problem:** The Unity `InventoryPanel` was showing all items from a player's inventory in item ante mode, instead of filtering for `isGambleable: true` items. Additionally, there was no visual indication for items that met or did not meet the minimum value requirement.
+
+**Solution:**
+- Modified `Assets/Scripts/UI/Components/InventoryPanel.cs` to:
+  - Filter items by `isGambleable: true` when `isItemAnteMode` is active.
+  - Dim items (50% opacity) and disable their selection button if their `baseValue` is less than `_minimumValue`.
+  - Display red text `"$100 < $200"` for items below minimum, and green text for eligible items.
+  - Update button text to `"SELECT FOR ANTE"` or `"VALUE TOO LOW (Min: $200)"`.
+- Modified `Assets/Scripts/UI/Scenes/TableScene.cs` to pass `isItemAnteMode: true` and `minimumValue` to `InventoryPanel.Show()`.
+
+**Files Changed:**
+- `Assets/Scripts/UI/Components/InventoryPanel.cs`
+- `Assets/Scripts/UI/Scenes/TableScene.cs`
+
+**Verification:** Unity now correctly filters and visually guides players in item ante selection.
+
+### ✅ Cleaned Up: Verbose Logging Removed
+**Status:** COMPLETED  
+**Date:** February 12, 2026  
+**Severity:** LOW (Code Quality Improvement)  
+
+**Problem:** Logs were extremely verbose with routine operation logging, making it difficult to find actual errors and warnings. Logs were cluttered with informational messages about normal operations.
+
+**Solution:**
+- Removed verbose `Debug.Log` statements from Unity client:
+  - `SocketManager.cs`: Removed connection/disconnection logs, JSON parsing logs, emit logs
+  - `TableScene.cs`: Removed bot operation logs, item ante processing logs, countdown logs, button click logs, player join/leave logs
+  - `InventoryPanel.cs`: Removed detailed position/size/visibility diagnostics (kept only critical errors)
+- Removed verbose `gameLogger.gameEvent` statements from server:
+  - `SocketHandler.js`: Removed routine operation logs for authentication, inventory requests, table operations, simulation controls, bot management, player actions
+- Kept all error logs (`Debug.LogError`, `gameLogger.error`) and critical warnings
+
+**Files Changed:**
+- `Assets/Scripts/Networking/SocketManager.cs`
+- `Assets/Scripts/UI/Scenes/TableScene.cs`
+- `Assets/Scripts/UI/Components/InventoryPanel.cs`
+- `src/sockets/SocketHandler.js`
+
+**Impact:** Logs are now much cleaner and focused on actual problems. Routine operations no longer clutter the console.
+
 ## Known Issues
 
 ### Critical: Missing Chips / Money Loss
