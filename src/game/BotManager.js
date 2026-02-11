@@ -303,6 +303,7 @@ class BotManager {
         } else {
             // Subsequent item - must meet minimum value
             const minValue = table.itemAnte.minimumValue || 0;
+            console.log(`[BotManager] ${bot.name} needs to submit item, minimumValue=${minValue}`);
             selectedItem = testItems.find(item => (item.baseValue || 0) >= minValue);
             
             if (!selectedItem) {
@@ -310,14 +311,24 @@ class BotManager {
                 selectedItem = testItems.reduce((max, item) => 
                     (item.baseValue || 0) > (max.baseValue || 0) ? item : max
                 );
+                console.log(`[BotManager] ${bot.name} no item meets minimum, using highest value: ${selectedItem.name} (${selectedItem.baseValue})`);
+            }
+            
+            if (!selectedItem) {
+                console.error(`[BotManager] ${bot.name} failed to find any item to submit`);
+                return;
             }
             
             console.log(`[BotManager] ${bot.name} submitting item to ante: ${selectedItem.name} (value: ${selectedItem.baseValue})`);
-            const result = table.submitToItemAnte(bot.id, selectedItem);
-            if (result.success) {
-                console.log(`[BotManager] ${bot.name} submitted item successfully`);
-            } else {
-                console.error(`[BotManager] ${bot.name} failed to submit item: ${result.error}`);
+            try {
+                const result = table.submitToItemAnte(bot.id, selectedItem);
+                if (result.success) {
+                    console.log(`[BotManager] ${bot.name} submitted item successfully`);
+                } else {
+                    console.error(`[BotManager] ${bot.name} failed to submit item: ${result.error}`);
+                }
+            } catch (error) {
+                console.error(`[BotManager] ${bot.name} exception submitting item:`, error);
             }
         }
     }
@@ -357,7 +368,11 @@ class BotManager {
             if ((needsFirstItem || !hasSubmitted) && !bot.itemAnteHandled) {
                 bot.itemAnteHandled = true; // Prevent duplicate handling
                 console.log(`[BotManager] checkBotsItemAnte: Triggering item ante submission for ${bot.name}`);
-                this._handleBotItemAnte(tableId, seatIndex, bot);
+                // Await the async method and handle errors
+                this._handleBotItemAnte(tableId, seatIndex, bot).catch(error => {
+                    console.error(`[BotManager] checkBotsItemAnte: Error handling item ante for ${bot.name}:`, error);
+                    bot.itemAnteHandled = false; // Reset flag on error so it can be retried
+                });
             }
         }
     }
