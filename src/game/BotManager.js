@@ -287,7 +287,7 @@ class BotManager {
         }
         
         // Get test items for the bot (bots don't have real inventories)
-        const Item = require('./Item');
+        const Item = require('../models/Item');
         const testItems = [
             new Item({ ...Item.TEMPLATES.XP_BOOST_SMALL, obtainedFrom: 'Bot Test Items' }),
             new Item({ ...Item.TEMPLATES.CARD_BACK_FLAME, obtainedFrom: 'Bot Test Items' }),
