@@ -6303,7 +6303,15 @@ class Table {
 
         // CRITICAL: Calculate and award side pots BEFORE broadcasting state
         // This ensures chips are awarded before clients see the state
+        const potBeforeAwards = this.pot;
         const potAwards = this.calculateAndAwardSidePots(activePlayers);
+        
+        // SYSTEMATIC DEBUG: Track pot value after awards vs what was displayed
+        const potAfterAwards = this.pot;
+        const totalAwardedAfter = potAwards ? potAwards.reduce((sum, award) => sum + award.amount, 0) : 0;
+        const showdownAwardsLog = `[SYSTEMATIC_DEBUG] SHOWDOWN AFTER AWARDS: PotBefore=${potBeforeAwards}, PotAfter=${potAfterAwards}, TotalAwarded=${totalAwardedAfter}, ExpectedPotAfter=${potBeforeAwards - totalAwardedAfter}\n`;
+        console.log(showdownAwardsLog.trim());
+        fs.appendFileSync(path.join(__dirname, '../../logs/pot-award-debug.log'), new Date().toISOString() + ' ' + showdownAwardsLog);
         
         // CRITICAL: If pot awards failed, log error and try to recover
         if (!potAwards || potAwards.length === 0) {
