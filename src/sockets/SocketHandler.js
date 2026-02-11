@@ -1252,11 +1252,16 @@ class SocketHandler {
                 
                 const respond = (response) => {
                     console.log(`[SocketHandler] invite_socket_bot respond: success=${response.success}, botName=${response.botName}, error=${response.error}`);
+                    console.log(`[SocketHandler] invite_socket_bot respond: Emitting invite_socket_bot_response to socket ${socket.id}`);
                     // Always emit response event (Unity listens for this)
                     socket.emit('invite_socket_bot_response', response);
+                    console.log(`[SocketHandler] invite_socket_bot respond: Response event emitted`);
                     // Also call callback if provided
                     if (callback && typeof callback === 'function') {
+                        console.log(`[SocketHandler] invite_socket_bot respond: Calling callback`);
                         callback(response);
+                    } else {
+                        console.log(`[SocketHandler] invite_socket_bot respond: No callback provided`);
                     }
                 };
                 
