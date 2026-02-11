@@ -398,6 +398,24 @@ Keep narrowing down until the problem disappears - the last chunk you commented 
 
 **Verification:** Closing the inventory panel no longer covers other UI elements.
 
+### ✅ Fixed: Item Ante Items Not Awarded After Game Ends
+**Status:** FIXED  
+**Date:** February 12, 2026  
+**Severity:** HIGH  
+
+**Problem:** When a game ended with item ante enabled, the items were being "awarded" (status changed to AWARDED) but were not actually transferred to the winner's inventory in the database. The `ItemAnte.award()` method was only returning the items but not calling `userRepo.addItem()` to persist them.
+
+**Solution:**
+- After calling `itemAnte.award()`, loop through the returned items and call `userRepo.addItem()` for each item
+- Added comprehensive logging for item transfers (success and failure cases)
+- Broadcast table state after items are transferred so the client sees the updated item ante status
+- Added error handling with try/catch to log any database errors
+
+**Files Changed:**
+- `src/game/Table.js` (server)
+
+**Verification:** Items are now properly transferred to the winner's inventory after a game ends. Check server logs for `[ITEM_ANTE] TRANSFER_COMPLETE` messages.
+
 ### ✅ Fixed: Unity InventoryPanel Item Visibility (Complete Fix)
 **Status:** FIXED  
 **Date:** February 11, 2026  
