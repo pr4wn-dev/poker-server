@@ -416,6 +416,27 @@ Keep narrowing down until the problem disappears - the last chunk you commented 
 
 **Verification:** Items are now properly transferred to the winner's inventory after a game ends. Check server logs for `[ITEM_ANTE] TRANSFER_COMPLETE` messages.
 
+### ✅ Fixed: Unity Action Bar Not Visible During Gameplay
+**Status:** FIXED  
+**Date:** February 12, 2026  
+**Severity:** CRITICAL  
+
+**Problem:** After the game started and players began playing, the action bar (betting controls) was not visible. The action bar was being hidden for spectators, but the visibility logic was also incorrectly hiding it for players who were actually in seats.
+
+**Solution:**
+- Added `isInSeat` check to verify player is actually in a seat (not just spectating)
+- Modified action bar visibility condition to require: `_isMyTurn && isGamePhase && !isEliminated && isInSeat`
+- Increased Canvas sorting order to 350 (above ItemAntePanel's 300) to ensure action bar renders on top
+- Added Image component check and creation if missing
+- Set panel as last sibling to bring to front
+- Added comprehensive visibility diagnostics and logging
+- Fixed panel width by explicitly setting anchorMin/anchorMax and forcing layout rebuild
+
+**Files Changed:**
+- `Assets/Scripts/UI/Scenes/TableScene.cs` (Unity client)
+
+**Verification:** Action bar now appears correctly when it's the player's turn during gameplay.
+
 ### ✅ Fixed: Unity InventoryPanel Item Visibility (Complete Fix)
 **Status:** FIXED  
 **Date:** February 11, 2026  
