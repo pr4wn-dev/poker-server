@@ -9519,7 +9519,8 @@ class Table {
                     playerId: seat.playerId,
                     name: seat.name,
                     chips: seat.chips,
-                    currentBet: seat.currentBet,
+                    currentBet: seat.currentBet, // Bet in current round (resets each phase)
+                    totalBet: seat.totalBet || 0, // Total bet in entire hand (across all rounds) - CRITICAL for pot calculation display
                     isFolded: seat.isFolded,
                     isAllIn: seat.isAllIn,
                     isConnected: seat.isConnected,
