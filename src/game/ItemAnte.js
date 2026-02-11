@@ -511,21 +511,32 @@ class ItemAnte {
             status: this.status,
             creatorId: this.creatorId,
             // Unity expects creatorItem (not firstItem) for backward compatibility
+            // CRITICAL: Include ALL fields Unity needs for sprite/asset loading
             creatorItem: this.firstItem ? {
                 id: this.firstItem.id,
+                templateId: this.firstItem.templateId,
                 name: this.firstItem.name,
+                description: this.firstItem.description,
                 rarity: this.firstItem.rarity,
                 type: this.firstItem.type,
                 icon: this.firstItem.icon,
-                baseValue: this.firstItem.baseValue
+                baseValue: this.firstItem.baseValue,
+                isGambleable: this.firstItem.isGambleable,
+                isTradeable: this.firstItem.isTradeable,
+                obtainedFrom: this.firstItem.obtainedFrom
             } : null,
             firstItem: this.firstItem ? {
                 id: this.firstItem.id,
+                templateId: this.firstItem.templateId,
                 name: this.firstItem.name,
+                description: this.firstItem.description,
                 rarity: this.firstItem.rarity,
                 type: this.firstItem.type,
                 icon: this.firstItem.icon,
-                baseValue: this.firstItem.baseValue
+                baseValue: this.firstItem.baseValue,
+                isGambleable: this.firstItem.isGambleable,
+                isTradeable: this.firstItem.isTradeable,
+                obtainedFrom: this.firstItem.obtainedFrom
             } : null,
             minimumValue: this.minimumValue,
             collectionEndTime: this.collectionEndTime,
@@ -535,16 +546,22 @@ class ItemAnte {
         
         // Show approved items list
         // Unity expects oderId (not userId) for backward compatibility
+        // CRITICAL: Include ALL fields Unity needs for sprite/asset loading (templateId, description, etc.)
         state.approvedItems = this.approvedItems.map(entry => ({
             userId: entry.userId,
             oderId: entry.userId,  // Unity compatibility
             item: {
                 id: entry.item.id,
+                templateId: entry.item.templateId,  // CRITICAL: Unity needs this to load sprites/assets
                 name: entry.item.name,
+                description: entry.item.description || '',  // Include description
                 rarity: entry.item.rarity,
                 type: entry.item.type,
                 icon: entry.item.icon,
-                baseValue: entry.item.baseValue  // Include baseValue for display
+                baseValue: entry.item.baseValue,
+                isGambleable: entry.item.isGambleable,
+                isTradeable: entry.item.isTradeable,
+                obtainedFrom: entry.item.obtainedFrom || ''
             }
         }));
         
@@ -572,8 +589,15 @@ class ItemAnte {
                 status: mySub.status,
                 item: mySub.item ? {
                     id: mySub.item.id,
+                    templateId: mySub.item.templateId,  // Include templateId for Unity
                     name: mySub.item.name,
-                    baseValue: mySub.item.baseValue
+                    description: mySub.item.description || '',
+                    rarity: mySub.item.rarity,
+                    type: mySub.item.type,
+                    icon: mySub.item.icon,
+                    baseValue: mySub.item.baseValue,
+                    isGambleable: mySub.item.isGambleable,
+                    isTradeable: mySub.item.isTradeable
                 } : null
             } : null;
         }
