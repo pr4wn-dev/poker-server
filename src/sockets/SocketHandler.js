@@ -32,6 +32,8 @@ class SocketHandler {
 
     initialize() {
         this.io.on('connection', (socket) => {
+            console.log(`[SocketHandler] New socket connection: ${socket.id}`);
+            
             // ============ Authentication ============
             
             socket.on('register', async (data, callback) => {
@@ -1134,6 +1136,10 @@ class SocketHandler {
             
             // Invite a bot to the table (table creator only, requires player approval)
             socket.on('invite_bot', (data, callback) => {
+                console.log(`[SocketHandler] invite_bot received: socketId=${socket.id}, tableId=${data?.tableId}, hasCallback=${!!callback}`);
+                gameLogger.info('SYSTEM', '[BOT_INVITE] RECEIVED', { socketId: socket.id, tableId: data?.tableId, hasCallback: !!callback });
+                console.log(`[SocketHandler] invite_bot received: socketId=${socket.id}, tableId=${data?.tableId}, hasCallback=${!!callback}`);
+                gameLogger.info('SYSTEM', '[BOT_INVITE] RECEIVED', { socketId: socket.id, tableId: data?.tableId, hasCallback: !!callback });
                 const respond = (response) => {
                     if (callback) callback(response);
                     socket.emit('invite_bot_response', response);
@@ -1237,6 +1243,8 @@ class SocketHandler {
             
             // Invite a socket bot to a practice table (for testing)
             socket.on('invite_socket_bot', async (data, callback) => {
+                console.log(`[SocketHandler] invite_socket_bot received: socketId=${socket.id}, tableId=${data?.tableId}, hasCallback=${!!callback}, data=${JSON.stringify(data)}`);
+                gameLogger.info('SYSTEM', '[SOCKET_BOT_INVITE] RECEIVED', { socketId: socket.id, tableId: data?.tableId, hasCallback: !!callback });
                 console.log(`[SocketHandler] invite_socket_bot received: tableId=${data?.tableId}, hasCallback=${!!callback}`);
                 
                 const respond = (response) => {
