@@ -198,6 +198,22 @@ class SocketHandler {
                         });
                     }
                     
+                    // SYSTEMATIC DEBUG: Log what we're sending to Unity
+                    const itemsWithTemplateId = (inventory || []).filter(item => item.templateId);
+                    const itemsWithoutTemplateId = (inventory || []).filter(item => !item.templateId);
+                    gameLogger.gameEvent('SYSTEM', `[INVENTORY] GET_INVENTORY_RESPONSE`, {
+                        userId: user.userId,
+                        totalItems: inventory?.length || 0,
+                        itemsWithTemplateId: itemsWithTemplateId.length,
+                        itemsWithoutTemplateId: itemsWithoutTemplateId.length,
+                        sampleItem: inventory && inventory.length > 0 ? {
+                            id: inventory[0].id,
+                            templateId: inventory[0].templateId,
+                            icon: inventory[0].icon,
+                            fields: Object.keys(inventory[0])
+                        } : null
+                    });
+                    
                     const response = { success: true, inventory };
                     if (callback && typeof callback === 'function') {
                         callback(response);
@@ -1765,10 +1781,34 @@ class SocketHandler {
                 // console.log(`[SocketHandler] [ITEM_ANTE] START_RESULT | userId: ${user.userId} | tableId: ${player.currentTableId} | success: ${result.success} | error: ${result.error || 'none'} | minimumValue: ${result.minimumValue || 'N/A'}`);
                 
                 if (result.success) {
+                    // CRITICAL: Send formatted item with ALL fields Unity needs (templateId, etc.)
+                    const itemAnteState = table.getItemAnteState();
+                    const formattedCreatorItem = itemAnteState?.creatorItem || (result.itemAnte.firstItem ? {
+                        id: result.itemAnte.firstItem.id || '',
+                        templateId: result.itemAnte.firstItem.templateId || '',
+                        name: result.itemAnte.firstItem.name || 'Unknown Item',
+                        description: result.itemAnte.firstItem.description || '',
+                        rarity: result.itemAnte.firstItem.rarity || 'common',
+                        type: result.itemAnte.firstItem.type || 'special',
+                        icon: result.itemAnte.firstItem.icon || 'default_item',
+                        baseValue: result.itemAnte.firstItem.baseValue || 0,
+                        isGambleable: result.itemAnte.firstItem.isGambleable !== false,
+                        isTradeable: result.itemAnte.firstItem.isTradeable !== false,
+                        obtainedFrom: result.itemAnte.firstItem.obtainedFrom || ''
+                    } : null);
+                    
+                    // SYSTEMATIC DEBUG: Log what we're sending to Unity
+                    gameLogger.gameEvent(player.currentTableId, `[ITEM_ANTE] SIDE_POT_STARTED_EMIT`, {
+                        creatorId: user.userId,
+                        creatorItemHasTemplateId: !!formattedCreatorItem?.templateId,
+                        creatorItemIcon: formattedCreatorItem?.icon,
+                        creatorItemFields: formattedCreatorItem ? Object.keys(formattedCreatorItem) : []
+                    });
+                    
                     // Broadcast item ante started to all players (keeping old event name for backward compatibility)
                     this.io.to(`table:${player.currentTableId}`).emit('side_pot_started', {
                         creatorId: user.userId,
-                        creatorItem: result.itemAnte.firstItem,  // Changed from creatorItem to firstItem
+                        creatorItem: formattedCreatorItem,  // FIX: Send formatted item with all fields
                         minimumValue: result.minimumValue,  // New: minimum value required
                         collectionEndTime: result.itemAnte.collectionEndTime
                     });
@@ -1820,17 +1860,33 @@ class SocketHandler {
                     // Notify table creator of new submission (keeping old event name for backward compatibility)
                     const creatorAuth = this.authenticatedUsers.get(table.creatorId);
                     if (creatorAuth) {
+                        // CRITICAL: Send formatted item with ALL fields Unity needs (templateId, etc.)
+                        const formattedItem = {
+                            id: item.id || '',
+                            templateId: item.templateId || '',  // CRITICAL: Unity needs this for sprites
+                            name: item.name || 'Unknown Item',
+                            description: item.description || '',
+                            rarity: item.rarity || 'common',
+                            type: item.type || 'special',
+                            icon: item.icon || 'default_item',
+                            baseValue: item.baseValue || 0,
+                            isGambleable: item.isGambleable !== false,
+                            isTradeable: item.isTradeable !== false,
+                            obtainedFrom: item.obtainedFrom || ''
+                        };
+                        
+                        // SYSTEMATIC DEBUG: Log what we're sending
+                        gameLogger.gameEvent(player.currentTableId, `[ITEM_ANTE] SIDE_POT_SUBMISSION_EMIT`, {
+                            userId: user.userId,
+                            itemHasTemplateId: !!formattedItem.templateId,
+                            itemIcon: formattedItem.icon,
+                            itemFields: Object.keys(formattedItem)
+                        });
+                        
                         this.io.to(creatorAuth.socketId).emit('side_pot_submission', {
                             userId: user.userId,
                             username: user.profile.username,
-                            item: {
-                                id: item.id,
-                                name: item.name,
-                                rarity: item.rarity,
-                                type: item.type,
-                                icon: item.icon,
-                                baseValue: item.baseValue
-                            }
+                            item: formattedItem  // FIX: Send formatted item with all fields
                         });
                     }
                 }
