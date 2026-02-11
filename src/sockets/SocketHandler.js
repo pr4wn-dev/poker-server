@@ -1237,46 +1237,63 @@ class SocketHandler {
             
             // Invite a socket bot to a practice table (for testing)
             socket.on('invite_socket_bot', async (data, callback) => {
+                console.log(`[SocketHandler] invite_socket_bot received: tableId=${data?.tableId}, hasCallback=${!!callback}`);
+                
                 const respond = (response) => {
-                    if (callback) callback(response);
+                    console.log(`[SocketHandler] invite_socket_bot respond: success=${response.success}, botName=${response.botName}, error=${response.error}`);
+                    if (callback) {
+                        callback(response);
+                    }
                     socket.emit('invite_socket_bot_response', response);
                 };
                 
                 const user = this.getAuthenticatedUser(socket);
                 if (!user) {
+                    console.log(`[SocketHandler] invite_socket_bot: Not authenticated`);
                     return respond({ success: false, error: 'Not authenticated' });
                 }
                 
                 const { tableId } = data;
+                if (!tableId) {
+                    console.log(`[SocketHandler] invite_socket_bot: No tableId provided`);
+                    return respond({ success: false, error: 'Table ID required' });
+                }
+                
                 const table = this.gameManager.getTable(tableId);
                 
                 if (!table) {
+                    console.log(`[SocketHandler] invite_socket_bot: Table not found: ${tableId}`);
                     return respond({ success: false, error: 'Table not found' });
                 }
                 
                 // Only allow socket bots in practice mode tables
                 if (!table.practiceMode) {
+                    console.log(`[SocketHandler] invite_socket_bot: Table is not practice mode`);
                     return respond({ success: false, error: 'Socket bots can only be added to practice tables' });
                 }
                 
                 // Only table creator can invite socket bots
                 if (table.creatorId !== user.userId) {
+                    console.log(`[SocketHandler] invite_socket_bot: User ${user.userId} is not creator ${table.creatorId}`);
                     return respond({ success: false, error: 'Only the table creator can invite socket bots' });
                 }
                 
                 // Can't add bots after game started
                 if (table.gameStarted) {
+                    console.log(`[SocketHandler] invite_socket_bot: Game already started`);
                     return respond({ success: false, error: 'Cannot add bots after game has started' });
                 }
                 
                 // Check if table is full
                 const emptySeat = table.seats.findIndex(s => s === null);
                 if (emptySeat === -1) {
+                    console.log(`[SocketHandler] invite_socket_bot: Table is full`);
                     return respond({ success: false, error: 'Table is full' });
                 }
                 
                 // Create and add socket bot
                 try {
+                    console.log(`[SocketHandler] Creating socket bot for table ${tableId}`);
                     const { SocketBot } = require('../testing/SocketBot');
                     const bot = new SocketBot({
                         serverUrl: `http://localhost:${process.env.PORT || 3000}`,
@@ -1293,8 +1310,11 @@ class SocketHandler {
                         enableChaos: false
                     });
                     
+                    console.log(`[SocketHandler] Connecting socket bot ${bot.name}...`);
                     await bot.connect();
+                    console.log(`[SocketHandler] Registering socket bot ${bot.name}...`);
                     await bot.register();
+                    console.log(`[SocketHandler] Joining socket bot ${bot.name} to table ${tableId}...`);
                     await bot.joinTable(tableId, table.buyIn);
                     
                     console.log(`[SocketHandler] Socket bot ${bot.name} joined practice table ${table.name} at seat ${bot.seatIndex}`);
@@ -1307,11 +1327,13 @@ class SocketHandler {
                         this.gameManager.botManager.checkBotsItemAnte(tableId);
                     }
                     
-                    respond({ 
+                    const response = { 
                         success: true, 
                         botName: bot.name,
                         seatIndex: bot.seatIndex 
-                    });
+                    };
+                    console.log(`[SocketHandler] Sending success response for socket bot: ${JSON.stringify(response)}`);
+                    respond(response);
                 } catch (error) {
                     console.error(`[SocketHandler] Failed to add socket bot:`, error);
                     gameLogger.error('SYSTEM', '[SOCKET_BOT_INVITE] FAILED', { tableId, userId: user.userId, error: error.message, stack: error.stack });

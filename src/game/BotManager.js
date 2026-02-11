@@ -258,9 +258,10 @@ class BotManager {
             return;
         }
         
-        // Only handle if item ante is in COLLECTING phase
-        if (table.itemAnte.status !== 'collecting') {
-            console.log(`[BotManager] _handleBotItemAnte skipped: item ante status is ${table.itemAnte.status}, not collecting`);
+        // Only handle if item ante is INACTIVE (needs first item) or COLLECTING (needs submission)
+        // Bots can start item ante if status is inactive, or submit if status is collecting
+        if (table.itemAnte.status !== 'inactive' && table.itemAnte.status !== 'collecting') {
+            console.log(`[BotManager] _handleBotItemAnte skipped: item ante status is ${table.itemAnte.status}, not inactive or collecting`);
             return;
         }
         
@@ -331,9 +332,10 @@ class BotManager {
             return;
         }
         
-        // Only check bots if item ante is in COLLECTING phase
-        if (table.itemAnte.status !== 'collecting') {
-            console.log(`[BotManager] checkBotsItemAnte skipped: item ante status is ${table.itemAnte.status}, not collecting`);
+        // Only check bots if item ante is INACTIVE (needs first item) or COLLECTING (needs submission)
+        // Bots can start item ante if status is inactive, or submit if status is collecting
+        if (table.itemAnte.status !== 'inactive' && table.itemAnte.status !== 'collecting') {
+            console.log(`[BotManager] checkBotsItemAnte skipped: item ante status is ${table.itemAnte.status}, not inactive or collecting`);
             return;
         }
         
