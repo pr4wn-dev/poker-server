@@ -2396,6 +2396,10 @@ class Table {
         // ROOT CAUSE: Trace startNewHand operation
         const startNewHandBeforeState = this._getChipState();
         
+        // SYSTEMATIC DEBUG: Commented out "fix" attempt - testing if pot gets cleared in correct places
+        // If pot > 0 here, it means calculateAndAwardSidePots or awardPot didn't clear it properly
+        // Keep this commented to see the REAL problem
+        /*
         // CRITICAL: Clear pot IMMEDIATELY at the very start, before any other logic
         // This is the final safeguard - even if pot was set after awardPot cleared it
         if (this.pot > 0) {
@@ -2421,6 +2425,16 @@ class Table {
         } else {
             // Record success - pot was already cleared
             this._recordFixAttempt('FIX_11_POT_NOT_CLEARED_AT_START_NEW_HAND_START', true, {
+                handNumber: this.handsPlayed,
+                phase: this.phase
+            });
+        }
+        */
+        
+        // SYSTEMATIC DEBUG: Log if pot is not cleared (to see the real problem)
+        if (this.pot > 0) {
+            gameLogger.error(this.name, '[SYSTEMATIC_DEBUG] Pot NOT cleared at start of startNewHand - this means calculateAndAwardSidePots or awardPot failed to clear it', {
+                pot: this.pot,
                 handNumber: this.handsPlayed,
                 phase: this.phase
             });
@@ -2728,6 +2742,8 @@ class Table {
         this.deck.shuffle();
         this.communityCards = [];
         
+        // SYSTEMATIC DEBUG: Commented out "fix" attempts - testing if pot gets cleared in correct places
+        /*
         // CRITICAL: Clear pot IMMEDIATELY before capturing potBeforeReset (final safeguard)
         // This catches any pot that was set after the initial clear at function start
         if (this.pot > 0) {
@@ -2758,6 +2774,7 @@ class Table {
         // CRITICAL: Clear pot one more time RIGHT BEFORE capturing to ensure it's 0
         // ROOT CAUSE: Trace pot clearing
         this._clearPotWithTrace('START_NEW_HAND_FINAL_CLEAR', 'Final pot clear before capture');
+        */
         const potBeforeReset = this.pot;
         const totalChipsBeforeReset = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
         const totalChipsAndPotBeforeReset = totalChipsBeforeReset + this.pot;
@@ -2780,52 +2797,22 @@ class Table {
             } : null).filter(Boolean)
         });
         
-        // CRITICAL FIX: If pot is not 0, this is a bug - log it and FORCE clear it
+        // SYSTEMATIC DEBUG: Commented out "fix" attempts - just log if pot is not cleared (to see REAL problem)
         if (potBeforeReset > 0) {
-            console.error(`[Table ${this.name}] ⚠️ CRITICAL FIX #1: Pot was ${potBeforeReset} at hand start! Pot should be 0! FORCING CLEAR. | Hand: ${this.handsPlayed}`);
-            gameLogger.error(this.name, '[FIX #1: POT] ERROR: Pot not cleared at hand start - FORCING CLEAR', {
+            console.error(`[Table ${this.name}] [SYSTEMATIC_DEBUG] Pot was ${potBeforeReset} at hand start! This means calculateAndAwardSidePots or awardPot didn't clear it!`);
+            gameLogger.error(this.name, '[SYSTEMATIC_DEBUG] Pot not cleared at hand start - this reveals the REAL problem', {
                 potBeforeReset,
                 handNumber: this.handsPlayed,
                 phase: this.phase,
                 totalChipsBeforeReset,
                 totalChipsAndPotBeforeReset,
-                totalStartingChips: this.totalStartingChips,
-                fix: 'FORCING pot = 0 to prevent cascading errors',
-                stackTrace: new Error().stack
-            });
-            
-            // CRITICAL: If pot wasn't cleared, it means chips were lost
-            // Log this as a critical error but clear the pot anyway
-            const chipsLost = potBeforeReset;
-            console.error(`[Table ${this.name}] ⚠️ CRITICAL: ${chipsLost} chips LOST because pot wasn't cleared!`);
-            gameLogger.error(this.name, '[FIX #1: POT] CRITICAL: Chips lost due to pot not cleared', {
-                chipsLost,
-                potBeforeReset,
-                handNumber: this.handsPlayed
-            });
-            
-            // Record fix attempt - this is a failure because pot should have been cleared
-            this._recordFixAttempt('FIX_1_POT_NOT_CLEARED', false, {
-                context: 'HAND_START',
-                potBeforeReset,
-                chipsLost,
-                handNumber: this.handsPlayed,
-                phase: this.phase
-            });
-        } else {
-            // Pot was correctly cleared - record success
-            this._recordFixAttempt('FIX_1_POT_NOT_CLEARED', true, {
-                context: 'HAND_START',
-                potBeforeReset: 0,
-                handNumber: this.handsPlayed,
-                phase: this.phase
+                totalStartingChips: this.totalStartingChips
             });
         }
         
-        // CRITICAL: ALWAYS clear pot, even if it should already be 0
+        // SYSTEMATIC DEBUG: Don't force clear - let the problem show itself
         const potBeforeForceClear = this.pot;
-        // ROOT CAUSE: Trace pot clearing
-        this._clearPotWithTrace('START_NEW_HAND_FORCE_CLEAR', 'Force clear pot at hand start');
+        // COMMENTED OUT: this._clearPotWithTrace('START_NEW_HAND_FORCE_CLEAR', 'Force clear pot at hand start');
         
         // ULTRA-VERBOSE: Log after pot reset
         const totalChipsAfterReset = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
