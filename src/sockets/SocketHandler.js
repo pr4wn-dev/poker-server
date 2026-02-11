@@ -1291,10 +1291,15 @@ class SocketHandler {
                     await bot.register();
                     await bot.joinTable(tableId, table.buyIn);
                     
-                    console.log(`[SocketHandler] Socket bot ${bot.name} joined practice table ${table.name}`);
+                    console.log(`[SocketHandler] Socket bot ${bot.name} joined practice table ${table.name} at seat ${bot.seatIndex}`);
                     
-                    // Broadcast state update
+                    // Broadcast state update (this will trigger checkBotsItemAnte via onStateChange)
                     this.broadcastTableState(tableId);
+                    
+                    // Also manually check bots item ante in case state change didn't trigger it
+                    if (table.practiceMode && table.itemAnteEnabled && table.itemAnte) {
+                        this.gameManager.botManager.checkBotsItemAnte(tableId);
+                    }
                     
                     respond({ 
                         success: true, 
@@ -1303,6 +1308,7 @@ class SocketHandler {
                     });
                 } catch (error) {
                     console.error(`[SocketHandler] Failed to add socket bot:`, error);
+                    gameLogger.error('SYSTEM', '[SOCKET_BOT_INVITE] FAILED', { tableId, userId: user.userId, error: error.message, stack: error.stack });
                     respond({ success: false, error: `Failed to add socket bot: ${error.message}` });
                 }
             });

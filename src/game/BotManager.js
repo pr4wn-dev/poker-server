@@ -237,7 +237,8 @@ class BotManager {
         
         // CRITICAL: In practice mode, bots should automatically submit items for item ante
         // Check if item ante is enabled and bot needs to submit
-        if (table.practiceMode && table.itemAnteEnabled && !table.gameStarted && table.itemAnte) {
+        if (table.practiceMode && table.itemAnteEnabled && table.itemAnte && 
+            table.itemAnte.status === 'collecting' && !table.gameStarted) {
             // Small delay to ensure table state is updated
             setTimeout(() => {
                 this._handleBotItemAnte(tableId, seatIndex, bot);
@@ -253,6 +254,13 @@ class BotManager {
     async _handleBotItemAnte(tableId, seatIndex, bot) {
         const table = this.gameManager.tables.get(tableId);
         if (!table || !table.itemAnteEnabled || table.gameStarted || !table.itemAnte) {
+            console.log(`[BotManager] _handleBotItemAnte skipped: table=${!!table}, itemAnteEnabled=${table?.itemAnteEnabled}, gameStarted=${table?.gameStarted}, itemAnte=${!!table?.itemAnte}`);
+            return;
+        }
+        
+        // Only handle if item ante is in COLLECTING phase
+        if (table.itemAnte.status !== 'collecting') {
+            console.log(`[BotManager] _handleBotItemAnte skipped: item ante status is ${table.itemAnte.status}, not collecting`);
             return;
         }
         
@@ -260,7 +268,10 @@ class BotManager {
         const needsFirstItem = table.itemAnte.needsFirstItem();
         const hasSubmitted = table.itemAnte.hasSubmitted(bot.id);
         
+        console.log(`[BotManager] _handleBotItemAnte: ${bot.name}, needsFirstItem=${needsFirstItem}, hasSubmitted=${hasSubmitted}`);
+        
         if (!needsFirstItem && hasSubmitted) {
+            console.log(`[BotManager] ${bot.name} already submitted item for ante`);
             return; // Bot already submitted
         }
         
@@ -316,19 +327,34 @@ class BotManager {
     checkBotsItemAnte(tableId) {
         const table = this.gameManager.tables.get(tableId);
         if (!table || !table.practiceMode || !table.itemAnteEnabled || table.gameStarted || !table.itemAnte) {
+            console.log(`[BotManager] checkBotsItemAnte skipped: table=${!!table}, practiceMode=${table?.practiceMode}, itemAnteEnabled=${table?.itemAnteEnabled}, gameStarted=${table?.gameStarted}, itemAnte=${!!table?.itemAnte}`);
+            return;
+        }
+        
+        // Only check bots if item ante is in COLLECTING phase
+        if (table.itemAnte.status !== 'collecting') {
+            console.log(`[BotManager] checkBotsItemAnte skipped: item ante status is ${table.itemAnte.status}, not collecting`);
             return;
         }
         
         const tableBots = this.activeBots.get(tableId);
-        if (!tableBots) return;
+        if (!tableBots) {
+            console.log(`[BotManager] checkBotsItemAnte: No active bots found for table ${tableId}`);
+            return;
+        }
+        
+        console.log(`[BotManager] checkBotsItemAnte: Checking ${tableBots.size} bots at table ${tableId}`);
         
         for (const [seatIndex, bot] of tableBots) {
             const needsFirstItem = table.itemAnte.needsFirstItem();
             const hasSubmitted = table.itemAnte.hasSubmitted(bot.id);
             
+            console.log(`[BotManager] checkBotsItemAnte: Bot ${bot.name} (seat ${seatIndex}), needsFirstItem=${needsFirstItem}, hasSubmitted=${hasSubmitted}, itemAnteHandled=${bot.itemAnteHandled}`);
+            
             // Only handle if bot needs to submit and hasn't already
             if ((needsFirstItem || !hasSubmitted) && !bot.itemAnteHandled) {
                 bot.itemAnteHandled = true; // Prevent duplicate handling
+                console.log(`[BotManager] checkBotsItemAnte: Triggering item ante submission for ${bot.name}`);
                 this._handleBotItemAnte(tableId, seatIndex, bot);
             }
         }
