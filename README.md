@@ -379,6 +379,24 @@ Keep narrowing down until the problem disappears - the last chunk you commented 
 - No items are clipped by Mask component
 - Grid maintains proper sizing after window resize
 
+### ✅ Fixed: Unity InventoryPanel Missing in MainMenuScene
+**Status:** FIXED  
+**Date:** February 11, 2026  
+**Severity:** MEDIUM  
+
+**Problem:** The `InventoryPanel` button in `MainMenuScene` was not functional - clicking it did nothing because `OnInventoryClick()` was just a TODO comment.
+
+**Solution:**
+- Implemented `OnInventoryClick()` in `MainMenuScene.cs` to match the working implementation in `LobbyScene.cs`
+- Added `_inventoryPanel` field to store the panel instance
+- Creates panel on first click, reuses on subsequent clicks
+- Cleans up reference when panel is closed
+
+**Files Changed:**
+- `Assets/Scripts/UI/Scenes/MainMenuScene.cs` (Unity client)
+
+**Verification:** Inventory panel now opens and displays items correctly in MainMenuScene.
+
 ## Known Issues
 
 ### Critical: Missing Chips / Money Loss
