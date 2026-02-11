@@ -8113,6 +8113,25 @@ class Table {
         }
         
         // Store awards for client display
+        // SYSTEMATIC DEBUG: Compare total awards vs initial pot
+        const totalAwardedSum = potAwards.reduce((sum, award) => sum + award.amount, 0);
+        const potDiscrepancy = initialPot - totalAwardedSum;
+        const awardsDebugLog = `[SYSTEMATIC_DEBUG] CALCULATE_AND_AWARD_SIDE_POTS COMPLETE: InitialPot=${initialPot}, TotalAwarded=${totalAwardedSum}, Discrepancy=${potDiscrepancy}, AwardsCount=${potAwards.length}\n`;
+        console.log(awardsDebugLog.trim());
+        fs.appendFileSync(path.join(__dirname, '../../logs/pot-award-debug.log'), new Date().toISOString() + ' ' + awardsDebugLog);
+        
+        if (Math.abs(potDiscrepancy) > 0.01) {
+            console.error(`[Table ${this.name}] ⚠️⚠️⚠️ [SYSTEMATIC_DEBUG] POT DISCREPANCY DETECTED! InitialPot=${initialPot}, TotalAwarded=${totalAwardedSum}, Difference=${potDiscrepancy}`);
+            gameLogger.error(this.name, '[SYSTEMATIC_DEBUG] POT DISCREPANCY: Total awards do not match initial pot', {
+                initialPot,
+                totalAwardedSum,
+                potDiscrepancy,
+                awardsCount: potAwards.length,
+                awards: potAwards.map(a => ({ player: a.name, amount: a.amount, potType: a.potType })),
+                handNumber: this.handsPlayed
+            });
+        }
+        
         this.lastPotAwards = potAwards;
         
         // CRITICAL: Final validation log
@@ -9357,6 +9376,15 @@ class Table {
     getState(forPlayerId = null) {
         const isSpectating = this.isSpectator(forPlayerId);
         const currentPlayer = this.currentPlayerIndex >= 0 ? this.seats[this.currentPlayerIndex] : null;
+        
+        // SYSTEMATIC DEBUG: Track pot value being sent to clients (especially at showdown)
+        if (this.phase === GAME_PHASES.SHOWDOWN || this.pot > 1000000) {
+            const totalChipsInState = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
+            const totalChipsAndPotInState = totalChipsInState + this.pot;
+            const stateDebugLog = `[SYSTEMATIC_DEBUG] GET_STATE: Phase=${this.phase}, Pot=${this.pot}, TotalChips=${totalChipsInState}, TotalChipsAndPot=${totalChipsAndPotInState}, ForPlayerId=${forPlayerId || 'ALL'}\n`;
+            console.log(stateDebugLog.trim());
+            fs.appendFileSync(path.join(__dirname, '../../logs/pot-award-debug.log'), new Date().toISOString() + ' ' + stateDebugLog);
+        }
         
         // State broadcast logging removed - too verbose (called on every state update)
         // Only log errors or critical state changes
