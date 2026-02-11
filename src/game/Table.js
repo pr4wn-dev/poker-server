@@ -7,6 +7,8 @@ const HandEvaluator = require('./HandEvaluator');
 const ItemAnte = require('./ItemAnte');
 const gameLogger = require('../utils/GameLogger');
 const StateSnapshot = require('../testing/StateSnapshot');
+const path = require('path');
+const fs = require('fs');
 
 const GAME_PHASES = {
     WAITING: 'waiting',
@@ -4036,8 +4038,10 @@ class Table {
             handNumber: this.handsPlayed
         });
         
-        // CRITICAL: Always log to console so we can see it even if game.log is empty
-        console.log(`[SYSTEMATIC_DEBUG] CALL AFTER SUBTRACT: Player=${player.name}, toCall=${toCall}, chipsLost=${chipsLostAfterSubtract}, expected=${toCall}`);
+        // CRITICAL: Always log to console AND file so we can see it
+        const debugLog = `[SYSTEMATIC_DEBUG] CALL AFTER SUBTRACT: Player=${player.name}, toCall=${toCall}, chipsLost=${chipsLostAfterSubtract}, expected=${toCall}\n`;
+        console.log(debugLog.trim());
+        fs.appendFileSync(path.join(__dirname, '../../logs/call-debug.log'), new Date().toISOString() + ' ' + debugLog);
         
         if (Math.abs(chipsLostAfterSubtract - toCall) > 0.01) {
             console.error(`[Table ${this.name}] ⚠️⚠️⚠️ [SYSTEMATIC_DEBUG] CALL BUG DETECTED: Chips lost after subtract! Expected ${toCall}, got ${chipsLostAfterSubtract}`);
@@ -4087,8 +4091,10 @@ class Table {
             handNumber: this.handsPlayed
         });
         
-        // CRITICAL: Always log to console so we can see it even if game.log is empty
-        console.log(`[SYSTEMATIC_DEBUG] CALL AFTER ADD TO POT: Player=${player.name}, toCall=${toCall}, chipsLost=${chipsLostAfterAdd}, expected=0`);
+        // CRITICAL: Always log to console AND file so we can see it
+        const debugLog2 = `[SYSTEMATIC_DEBUG] CALL AFTER ADD TO POT: Player=${player.name}, toCall=${toCall}, chipsLost=${chipsLostAfterAdd}, expected=0\n`;
+        console.log(debugLog2.trim());
+        fs.appendFileSync(path.join(__dirname, '../../logs/call-debug.log'), new Date().toISOString() + ' ' + debugLog2);
         
         if (Math.abs(chipsLostAfterAdd) > 0.01) {
             console.error(`[Table ${this.name}] ⚠️⚠️⚠️ [SYSTEMATIC_DEBUG] CALL BUG DETECTED: Chips lost after adding to pot! Lost: ${chipsLostAfterAdd}`);
