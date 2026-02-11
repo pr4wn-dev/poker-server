@@ -1138,15 +1138,18 @@ class SocketHandler {
             socket.on('invite_bot', (data, callback) => {
                 console.log(`[SocketHandler] invite_bot received: socketId=${socket.id}, tableId=${data?.tableId}, hasCallback=${!!callback}`);
                 gameLogger.info('SYSTEM', '[BOT_INVITE] RECEIVED', { socketId: socket.id, tableId: data?.tableId, hasCallback: !!callback });
-                console.log(`[SocketHandler] invite_bot received: socketId=${socket.id}, tableId=${data?.tableId}, hasCallback=${!!callback}`);
-                gameLogger.info('SYSTEM', '[BOT_INVITE] RECEIVED', { socketId: socket.id, tableId: data?.tableId, hasCallback: !!callback });
                 const respond = (response) => {
-                    if (callback) callback(response);
+                    // Always emit response event (Unity listens for this)
                     socket.emit('invite_bot_response', response);
+                    // Also call callback if provided
+                    if (callback && typeof callback === 'function') {
+                        callback(response);
+                    }
                 };
                 
                 const user = this.getAuthenticatedUser(socket);
                 if (!user) {
+                    console.log(`[SocketHandler] invite_bot: Not authenticated, socketId=${socket.id}`);
                     return respond({ success: false, error: 'Not authenticated' });
                 }
                 
