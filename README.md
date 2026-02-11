@@ -327,6 +327,51 @@ Keep narrowing down until the problem disappears - the last chunk you commented 
 
 **Verification:** Closing the inventory panel no longer covers other UI elements.
 
+### ✅ Fixed: Unity InventoryPanel Item Visibility (Complete Fix)
+**Status:** FIXED  
+**Date:** February 11, 2026  
+**Severity:** CRITICAL  
+
+**Problem:** Inventory items were not visible in the Unity client's `InventoryPanel` despite logs showing correct item creation, positioning, and sprite loading. Multiple issues were preventing items from rendering:
+1. Canvas sorting order was too low (0) compared to other UI elements (MyChipsPanel at 200)
+2. Panel RectTransform positioning was incorrect when activated
+3. Content width was being reset to 100px instead of matching viewport width (764.7px)
+4. Mask component was clipping items because Image components didn't have `maskable=true`
+5. GridLayoutGroup was calculating columns with wrong width, causing items to overflow horizontally
+
+**Solution:**
+1. **Canvas Sorting Order:** Set Canvas sorting order to 300 when panel opens, restore original on close
+2. **Panel Positioning:** Reset RectTransform properties (anchorMin, anchorMax, anchoredPosition, sizeDelta, pivot) AFTER activating GameObject, then force layout rebuild
+3. **Content Width Fix:** 
+   - Set Content width BEFORE GridLayoutGroup calculates positions (in `Show()` before `RefreshInventory()`)
+   - Use multiple methods to force width: `sizeDelta`, `SetSizeWithCurrentAnchors()`, `LayoutElement.preferredWidth`
+   - Verify width is applied correctly with world corners check
+4. **Mask Component:** Switched from `Mask` to `RectMask2D` (more reliable, doesn't require Image component)
+5. **Maskable Images:** Set `maskable=true` on all Image components (slot images, icon images, test rectangle)
+6. **GridLayoutGroup Optimization:** 
+   - Calculate optimal cell width to fill available space perfectly
+   - Force GridLayoutGroup recalculation by disabling/enabling and calling `SetLayoutHorizontal()`/`SetLayoutVertical()`
+   - Formula: `optimalCellWidth = (availableWidth - (columns - 1) * spacing) / columns`
+
+**Files Changed:**
+- `Assets/Scripts/UI/Components/InventoryPanel.cs` (Unity client)
+
+**Key Changes:**
+- Canvas sorting order management with restoration
+- RectTransform positioning fix with forced layout rebuilds
+- Content width pre-set in `Show()` before item creation
+- Content width verification and multiple enforcement methods
+- Switch from `Mask` to `RectMask2D` component
+- `maskable=true` on all Image components
+- GridLayoutGroup cell size optimization to fill available width
+- Comprehensive diagnostics for Content/Viewport positioning
+
+**Verification:** 
+- Items are now visible in a proper grid layout
+- Grid fills available width with optimal cell sizing
+- Items wrap correctly to next row instead of overflowing horizontally
+- No items are clipped by Mask component
+
 ## Known Issues
 
 ### Critical: Missing Chips / Money Loss
