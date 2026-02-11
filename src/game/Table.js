@@ -3987,9 +3987,9 @@ class Table {
             } : null).filter(Boolean)
         });
         
-        // SYSTEMATIC DEBUG: Commented out chip movement to test if betting logic causes chip loss
-        // If chips DON'T go missing with this commented out, then betting logic is the problem
-        // If chips STILL go missing, then problem is elsewhere (pot clearing, pot award, etc.)
+        // SYSTEMATIC DEBUG: Testing CALL method specifically - commenting out ONLY call chip movement
+        // If chips DON'T go missing, then call() is the problem
+        // If chips STILL go missing, then problem is in bet/raise/allIn
         /*
         player.chips -= toCall;
         player.currentBet += toCall;
@@ -4012,13 +4012,13 @@ class Table {
         this.pot += toCall;
         */
         
-        // SYSTEMATIC DEBUG: Log that we're skipping chip movement
-        gameLogger.gameEvent(this.name, '[SYSTEMATIC_DEBUG] CALL - CHIP MOVEMENT DISABLED', {
+        // SYSTEMATIC DEBUG: Log that we're skipping chip movement in CALL only
+        gameLogger.gameEvent(this.name, '[SYSTEMATIC_DEBUG] CALL - CHIP MOVEMENT DISABLED (testing if call() causes chip loss)', {
             player: player.name,
             toCall,
             chipsBefore: beforeChips,
             potBefore,
-            note: 'Chip movement commented out for debugging - testing if betting logic causes chip loss'
+            note: 'CALL chip movement commented out - bet/raise/allIn still active'
         });
         
         // ULTRA-VERBOSE: Log after operation with FULL STATE
@@ -4271,8 +4271,7 @@ class Table {
             } : null).filter(Boolean)
         });
         
-        // SYSTEMATIC DEBUG: Commented out chip movement to test if betting logic causes chip loss
-        /*
+        // SYSTEMATIC DEBUG: BET is ACTIVE - testing if call() is the problem
         player.chips -= amount;
         player.currentBet = amount;
         const totalBetAfter = totalBetBefore + amount;
@@ -4292,16 +4291,6 @@ class Table {
         });
         
         this.pot += amount;
-        */
-        
-        // SYSTEMATIC DEBUG: Log that we're skipping chip movement
-        gameLogger.gameEvent(this.name, '[SYSTEMATIC_DEBUG] BET - CHIP MOVEMENT DISABLED', {
-            player: player.name,
-            amount,
-            chipsBefore: beforeChips,
-            potBefore,
-            note: 'Chip movement commented out for debugging - testing if betting logic causes chip loss'
-        });
         
         // ULTRA-VERBOSE: Log after operation with FULL STATE
         const chipsAfter = player.chips;
@@ -4610,8 +4599,7 @@ class Table {
             } : null).filter(Boolean)
         });
         
-        // SYSTEMATIC DEBUG: Commented out chip movement to test if betting logic causes chip loss
-        /*
+        // SYSTEMATIC DEBUG: RAISE is ACTIVE - testing if call() is the problem
         player.chips -= additionalBet;
         player.currentBet = amount; // Set to total bet amount
         const totalBetAfter = totalBetBefore + additionalBet;
@@ -4630,17 +4618,6 @@ class Table {
             stackTrace: new Error().stack?.split('\n').slice(2, 8).join(' | ') || 'NO_STACK'
         });
         this.pot += additionalBet; // Only add the additional amount to pot
-        */
-        
-        // SYSTEMATIC DEBUG: Log that we're skipping chip movement
-        gameLogger.gameEvent(this.name, '[SYSTEMATIC_DEBUG] RAISE - CHIP MOVEMENT DISABLED', {
-            player: player.name,
-            amount,
-            additionalBet,
-            chipsBefore: beforeChips,
-            potBefore,
-            note: 'Chip movement commented out for debugging - testing if betting logic causes chip loss'
-        });
         
         // ULTRA-VERBOSE: Log after operation with FULL STATE
         const chipsAfter = player.chips;
@@ -4909,8 +4886,7 @@ class Table {
             } : null).filter(Boolean)
         });
         
-        // SYSTEMATIC DEBUG: Commented out chip movement to test if betting logic causes chip loss
-        /*
+        // SYSTEMATIC DEBUG: ALL_IN is ACTIVE - testing if call() is the problem
         player.chips = 0;
         player.currentBet = newCurrentBet;
         const totalBetAfter = totalBetBefore + amount;
@@ -4929,16 +4905,6 @@ class Table {
             stackTrace: new Error().stack?.split('\n').slice(2, 8).join(' | ') || 'NO_STACK'
         });
         this.pot += amount; // Add all chips to pot
-        */
-        
-        // SYSTEMATIC DEBUG: Log that we're skipping chip movement
-        gameLogger.gameEvent(this.name, '[SYSTEMATIC_DEBUG] ALL_IN - CHIP MOVEMENT DISABLED', {
-            player: player.name,
-            amount,
-            chipsBefore: chipsBefore,
-            potBefore,
-            note: 'Chip movement commented out for debugging - testing if betting logic causes chip loss'
-        });
         
         // ULTRA-VERBOSE: Log after operation with FULL STATE
         const chipsAfter = player.chips;
