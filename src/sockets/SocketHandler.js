@@ -1249,15 +1249,19 @@ class SocketHandler {
                 
                 const respond = (response) => {
                     console.log(`[SocketHandler] invite_socket_bot respond: success=${response.success}, botName=${response.botName}, error=${response.error}`);
-                    if (callback) {
+                    // Always emit response event (Unity listens for this)
+                    socket.emit('invite_socket_bot_response', response);
+                    // Also call callback if provided
+                    if (callback && typeof callback === 'function') {
                         callback(response);
                     }
-                    socket.emit('invite_socket_bot_response', response);
                 };
                 
                 const user = this.getAuthenticatedUser(socket);
                 if (!user) {
-                    console.log(`[SocketHandler] invite_socket_bot: Not authenticated`);
+                    console.log(`[SocketHandler] invite_socket_bot: Not authenticated, socketId=${socket.id}`);
+                    console.log(`[SocketHandler] invite_socket_bot: socketToUser map has ${this.socketToUser.size} entries`);
+                    console.log(`[SocketHandler] invite_socket_bot: authenticatedUsers map has ${this.authenticatedUsers.size} entries`);
                     return respond({ success: false, error: 'Not authenticated' });
                 }
                 
