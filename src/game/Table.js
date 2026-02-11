@@ -9455,7 +9455,8 @@ class Table {
             itemAnteEnabled: this.itemAnteEnabled,
             sidePot: this.getItemAnteState(forPlayerId),  // Keeping field name for Unity backward compatibility
             // Helper flags for Unity to know when to prompt for item
-            needsItemAnteSubmission: this.itemAnteEnabled && !this.gameStarted && this.itemAnte && 
+            // CRITICAL: Only set needsItemAnteSubmission for actual players in seats, NOT spectators
+            needsItemAnteSubmission: !this.isSpectator(forPlayerId) && this.itemAnteEnabled && !this.gameStarted && this.itemAnte && 
                 (this.itemAnte.needsFirstItem() || (forPlayerId && !this.itemAnte.hasSubmitted(forPlayerId))),
             seats: this.seats.map((seat, index) => {
                 if (!seat) return null;
@@ -9528,7 +9529,9 @@ class Table {
                     isSittingOut: seat.isSittingOut || false,
                     isReady: seat.isReady || false,
                     inItemAnte: this.itemAnte.isParticipating(seat.playerId),
-                    needsItemAnteSubmission: this.itemAnteEnabled && !this.gameStarted && this.itemAnte && 
+                    // CRITICAL: Only set needsItemAnteSubmission for actual players in seats (not spectators)
+                    // Note: seat.playerId should never be a spectator (spectators aren't in seats), but adding check for safety
+                    needsItemAnteSubmission: !this.isSpectator(seat.playerId) && this.itemAnteEnabled && !this.gameStarted && this.itemAnte && 
                         (this.itemAnte.needsFirstItem() || !this.itemAnte.hasSubmitted(seat.playerId)),
                     cards: cards
                 };
