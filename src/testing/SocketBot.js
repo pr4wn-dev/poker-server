@@ -537,11 +537,13 @@ class SocketBot {
     async register() {
         return new Promise((resolve, reject) => {
             const password = 'testpass123';
-            const email = `${this.name.toLowerCase()}@test.com`;
+            // Clean username - remove special characters that might cause issues
+            const cleanUsername = this.name.replace(/[^a-zA-Z0-9_]/g, '_');
+            const email = `${cleanUsername.toLowerCase()}@test.com`;
             
-            this.log('INFO', 'Registering account...', { username: this.name, email });
+            this.log('INFO', 'Registering account...', { username: cleanUsername, email, originalName: this.name });
             
-            this.socket.emit('register', { username: this.name, email, password }, (response) => {
+            this.socket.emit('register', { username: cleanUsername, email, password }, (response) => {
                 if (response && response.success) {
                     // Server returns userId and profile, not user object
                     this.userId = response.userId || response.profile?.id;
@@ -549,9 +551,16 @@ class SocketBot {
                     this.log('INFO', 'Registration successful', { userId: this.userId, chips: this.chips });
                     resolve(response);
                 } else {
-                    // Maybe already exists, try login
-                    this.log('WARN', 'Registration failed, trying login...', { error: response?.error });
-                    this.login().then(resolve).catch(reject);
+                    // Maybe already exists, try login with cleaned username
+                    this.log('WARN', 'Registration failed, trying login...', { error: response?.error, username: cleanUsername });
+                    // Update name to cleaned version for login
+                    const originalName = this.name;
+                    this.name = cleanUsername;
+                    this.login().then(resolve).catch((err) => {
+                        // Restore original name on error
+                        this.name = originalName;
+                        reject(err);
+                    });
                 }
             });
         });
@@ -563,10 +572,12 @@ class SocketBot {
     async login() {
         return new Promise((resolve, reject) => {
             const password = 'testpass123';
+            // Clean username for login too
+            const cleanUsername = this.name.replace(/[^a-zA-Z0-9_]/g, '_');
             
-            this.log('INFO', 'Logging in...', { username: this.name });
+            this.log('INFO', 'Logging in...', { username: cleanUsername, originalName: this.name });
             
-            this.socket.emit('login', { username: this.name, password }, (response) => {
+            this.socket.emit('login', { username: cleanUsername, password }, (response) => {
                 if (response && response.success) {
                     // Server returns userId and profile, not user object
                     this.userId = response.userId || response.profile?.id;
@@ -574,7 +585,7 @@ class SocketBot {
                     this.log('INFO', 'Login successful', { userId: this.userId, chips: this.chips });
                     resolve(response);
                 } else {
-                    this.log('ERROR', 'Login failed', { error: response?.error });
+                    this.log('ERROR', 'Login failed', { error: response?.error, username: cleanUsername });
                     reject(new Error(response?.error || 'Login failed'));
                 }
             });
