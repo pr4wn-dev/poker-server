@@ -1229,6 +1229,84 @@ class SocketHandler {
                 respond(result);
             });
             
+            // Invite a socket bot to a practice table (for testing)
+            socket.on('invite_socket_bot', async (data, callback) => {
+                const respond = (response) => {
+                    if (callback) callback(response);
+                    socket.emit('invite_socket_bot_response', response);
+                };
+                
+                const user = this.getAuthenticatedUser(socket);
+                if (!user) {
+                    return respond({ success: false, error: 'Not authenticated' });
+                }
+                
+                const { tableId } = data;
+                const table = this.gameManager.getTable(tableId);
+                
+                if (!table) {
+                    return respond({ success: false, error: 'Table not found' });
+                }
+                
+                // Only allow socket bots in practice mode tables
+                if (!table.practiceMode) {
+                    return respond({ success: false, error: 'Socket bots can only be added to practice tables' });
+                }
+                
+                // Only table creator can invite socket bots
+                if (table.creatorId !== user.userId) {
+                    return respond({ success: false, error: 'Only the table creator can invite socket bots' });
+                }
+                
+                // Can't add bots after game started
+                if (table.gameStarted) {
+                    return respond({ success: false, error: 'Cannot add bots after game has started' });
+                }
+                
+                // Check if table is full
+                const emptySeat = table.seats.findIndex(s => s === null);
+                if (emptySeat === -1) {
+                    return respond({ success: false, error: 'Table is full' });
+                }
+                
+                // Create and add socket bot
+                try {
+                    const { SocketBot } = require('../testing/SocketBot');
+                    const bot = new SocketBot({
+                        serverUrl: `http://localhost:${process.env.PORT || 3000}`,
+                        name: `NetPlayer_${Date.now()}`,
+                        minDelay: 800,
+                        maxDelay: 2500,
+                        aggressiveness: 0.6 + Math.random() * 0.3,
+                        fastMode: false,
+                        networkLatency: 80,
+                        latencyJitter: 50,
+                        disconnectChance: 0.01,
+                        reconnectMinTime: 3000,
+                        reconnectMaxTime: 15000,
+                        enableChaos: false
+                    });
+                    
+                    await bot.connect();
+                    await bot.register();
+                    await bot.joinTable(tableId, table.buyIn);
+                    
+                    console.log(`[SocketHandler] Socket bot ${bot.name} joined practice table ${table.name}`);
+                    
+                    // Broadcast state update
+                    this.broadcastTableState(tableId);
+                    
+                    respond({ 
+                        success: true, 
+                        botName: bot.name,
+                        seatIndex: bot.seatIndex 
+                    });
+                } catch (error) {
+                    console.error(`[SocketHandler] Failed to add socket bot:`, error);
+                    respond({ success: false, error: `Failed to add socket bot: ${error.message}` });
+                }
+            });
+            
             // Reject a pending bot
             socket.on('reject_bot', (data, callback) => {
                 const respond = (response) => {
@@ -2691,6 +2769,11 @@ class SocketHandler {
             
             // Check if next player is a bot
             this.gameManager.checkBotTurn(table.id);
+            
+            // CRITICAL: In practice mode, check if bots need to submit items for item ante
+            if (table.practiceMode && table.itemAnteEnabled && !table.gameStarted && table.itemAnte) {
+                this.gameManager.botManager.checkBotsItemAnte(table.id);
+            }
         };
         
         // Called when countdown starts/stops/updates

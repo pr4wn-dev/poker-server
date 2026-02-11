@@ -235,7 +235,103 @@ class BotManager {
         // Broadcast state update so UI shows the new bot
         table.onStateChange?.();
         
+        // CRITICAL: In practice mode, bots should automatically submit items for item ante
+        // Check if item ante is enabled and bot needs to submit
+        if (table.practiceMode && table.itemAnteEnabled && !table.gameStarted && table.itemAnte) {
+            // Small delay to ensure table state is updated
+            setTimeout(() => {
+                this._handleBotItemAnte(tableId, seatIndex, bot);
+            }, 1000);
+        }
+        
         return { success: true, seatIndex, bot, pendingApproval: false };
+    }
+    
+    /**
+     * Handle item ante submission for a bot (practice mode only)
+     */
+    async _handleBotItemAnte(tableId, seatIndex, bot) {
+        const table = this.gameManager.tables.get(tableId);
+        if (!table || !table.itemAnteEnabled || table.gameStarted || !table.itemAnte) {
+            return;
+        }
+        
+        // Check if bot needs to submit
+        const needsFirstItem = table.itemAnte.needsFirstItem();
+        const hasSubmitted = table.itemAnte.hasSubmitted(bot.id);
+        
+        if (!needsFirstItem && hasSubmitted) {
+            return; // Bot already submitted
+        }
+        
+        // Get test items for the bot (bots don't have real inventories)
+        const Item = require('./Item');
+        const testItems = [
+            new Item({ ...Item.TEMPLATES.XP_BOOST_SMALL, obtainedFrom: 'Bot Test Items' }),
+            new Item({ ...Item.TEMPLATES.CARD_BACK_FLAME, obtainedFrom: 'Bot Test Items' }),
+            new Item({ ...Item.TEMPLATES.AVATAR_WOLF, obtainedFrom: 'Bot Test Items' }),
+            new Item({ ...Item.TEMPLATES.TROPHY_FIRST_BOSS, obtainedFrom: 'Bot Test Items' })
+        ];
+        
+        let selectedItem = null;
+        
+        if (needsFirstItem) {
+            // First item - pick a common/uncommon item
+            selectedItem = testItems.find(item => 
+                item.rarity === 'common' || item.rarity === 'uncommon'
+            ) || testItems[0];
+            
+            console.log(`[BotManager] ${bot.name} starting item ante with: ${selectedItem.name}`);
+            const result = table.startItemAnte(bot.id, selectedItem);
+            if (result.success) {
+                console.log(`[BotManager] ${bot.name} started item ante successfully`);
+            } else {
+                console.error(`[BotManager] ${bot.name} failed to start item ante: ${result.error}`);
+            }
+        } else {
+            // Subsequent item - must meet minimum value
+            const minValue = table.itemAnte.minimumValue || 0;
+            selectedItem = testItems.find(item => (item.baseValue || 0) >= minValue);
+            
+            if (!selectedItem) {
+                // Use highest value item if none meet minimum
+                selectedItem = testItems.reduce((max, item) => 
+                    (item.baseValue || 0) > (max.baseValue || 0) ? item : max
+                );
+            }
+            
+            console.log(`[BotManager] ${bot.name} submitting item to ante: ${selectedItem.name} (value: ${selectedItem.baseValue})`);
+            const result = table.submitToItemAnte(bot.id, selectedItem);
+            if (result.success) {
+                console.log(`[BotManager] ${bot.name} submitted item successfully`);
+            } else {
+                console.error(`[BotManager] ${bot.name} failed to submit item: ${result.error}`);
+            }
+        }
+    }
+    
+    /**
+     * Check all bots at a table and make them submit items for item ante (practice mode only)
+     */
+    checkBotsItemAnte(tableId) {
+        const table = this.gameManager.tables.get(tableId);
+        if (!table || !table.practiceMode || !table.itemAnteEnabled || table.gameStarted || !table.itemAnte) {
+            return;
+        }
+        
+        const tableBots = this.activeBots.get(tableId);
+        if (!tableBots) return;
+        
+        for (const [seatIndex, bot] of tableBots) {
+            const needsFirstItem = table.itemAnte.needsFirstItem();
+            const hasSubmitted = table.itemAnte.hasSubmitted(bot.id);
+            
+            // Only handle if bot needs to submit and hasn't already
+            if ((needsFirstItem || !hasSubmitted) && !bot.itemAnteHandled) {
+                bot.itemAnteHandled = true; // Prevent duplicate handling
+                this._handleBotItemAnte(tableId, seatIndex, bot);
+            }
+        }
     }
     
     /**
