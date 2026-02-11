@@ -1210,6 +1210,12 @@ class SocketHandler {
                         // All approved - bot is now active
                         this.broadcastTableState(tableId);
                         
+                        // CRITICAL: Check if bots need to submit items for item ante
+                        const table = this.gameManager.getTable(tableId);
+                        if (table && table.practiceMode && table.itemAnteEnabled && table.itemAnte && !table.gameStarted) {
+                            this.gameManager.botManager.checkBotsItemAnte(tableId);
+                        }
+                        
                         this.io.to(`table:${tableId}`).emit('bot_joined', {
                             seatIndex: result.seatIndex,
                             botName: result.bot.name,

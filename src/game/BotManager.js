@@ -237,11 +237,11 @@ class BotManager {
         
         // CRITICAL: In practice mode, bots should automatically submit items for item ante
         // Check if item ante is enabled and bot needs to submit
-        if (table.practiceMode && table.itemAnteEnabled && table.itemAnte && 
-            table.itemAnte.status === 'collecting' && !table.gameStarted) {
-            // Small delay to ensure table state is updated
+        // Use checkBotsItemAnte to handle all bots at once (more reliable)
+        if (table.practiceMode && table.itemAnteEnabled && table.itemAnte && !table.gameStarted) {
+            // Small delay to ensure table state is updated, then check all bots
             setTimeout(() => {
-                this._handleBotItemAnte(tableId, seatIndex, bot);
+                this.checkBotsItemAnte(tableId);
             }, 1000);
         }
         
