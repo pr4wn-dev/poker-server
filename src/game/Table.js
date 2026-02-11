@@ -3987,14 +3987,67 @@ class Table {
             } : null).filter(Boolean)
         });
         
-        // SYSTEMATIC DEBUG: Testing CALL method specifically - commenting out ONLY call chip movement
-        // If chips DON'T go missing, then call() is the problem
-        // If chips STILL go missing, then problem is in bet/raise/allIn
-        /*
+        // SYSTEMATIC DEBUG: CALL() RE-ENABLED - Adding detailed logging to find the exact bug
+        // We confirmed: With call() disabled, chips DON'T go missing. So the bug is in call().
+        // Now we need to find WHERE in call() the bug is.
+        
+        // Log BEFORE chip movement
+        const chipsBeforeMove = player.chips;
+        const potBeforeMove = this.pot;
+        const totalChipsBeforeMove = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
+        const totalChipsAndPotBeforeMove = totalChipsBeforeMove + this.pot;
+        
+        gameLogger.gameEvent(this.name, '[SYSTEMATIC_DEBUG] CALL BEFORE CHIP MOVE', {
+            player: player.name,
+            seatIndex,
+            toCall,
+            chipsBefore: chipsBeforeMove,
+            potBefore: potBeforeMove,
+            totalChipsBefore: totalChipsBeforeMove,
+            totalChipsAndPotBefore: totalChipsAndPotBeforeMove,
+            currentBet: this.currentBet,
+            playerCurrentBet: player.currentBet,
+            handNumber: this.handsPlayed,
+            phase: this.phase
+        });
+        
+        // Perform chip movement
         player.chips -= toCall;
         player.currentBet += toCall;
         const totalBetAfter = (player.totalBet || 0) + toCall;
         player.totalBet = totalBetAfter;
+        
+        // Log AFTER subtracting from player but BEFORE adding to pot
+        const chipsAfterSubtract = player.chips;
+        const potAfterSubtract = this.pot; // Should still be potBeforeMove
+        const totalChipsAfterSubtract = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
+        const totalChipsAndPotAfterSubtract = totalChipsAfterSubtract + this.pot;
+        const chipsLostAfterSubtract = totalChipsAndPotBeforeMove - totalChipsAndPotAfterSubtract;
+        
+        gameLogger.gameEvent(this.name, '[SYSTEMATIC_DEBUG] CALL AFTER SUBTRACT (BEFORE ADD TO POT)', {
+            player: player.name,
+            toCall,
+            chipsAfterSubtract,
+            potAfterSubtract,
+            totalChipsAfterSubtract,
+            totalChipsAndPotAfterSubtract,
+            chipsLostAfterSubtract,
+            expectedLoss: toCall, // We expect chipsLostAfterSubtract to equal toCall (chips moved from player to... nowhere yet)
+            handNumber: this.handsPlayed
+        });
+        
+        if (Math.abs(chipsLostAfterSubtract - toCall) > 0.01) {
+            console.error(`[Table ${this.name}] ⚠️⚠️⚠️ [SYSTEMATIC_DEBUG] CALL BUG DETECTED: Chips lost after subtract! Expected ${toCall}, got ${chipsLostAfterSubtract}`);
+            gameLogger.error(this.name, '[SYSTEMATIC_DEBUG] CALL BUG: Chips lost after subtract', {
+                toCall,
+                chipsLostAfterSubtract,
+                chipsBeforeMove,
+                chipsAfterSubtract,
+                potBeforeMove,
+                potAfterSubtract,
+                handNumber: this.handsPlayed
+            });
+        }
         
         // ROOT TRACING: Track totalBet changes
         gameLogger.gameEvent(this.name, '[ROOT_TRACE] TOTAL_BET_SET', {
@@ -4009,17 +4062,42 @@ class Table {
             stackTrace: new Error().stack?.split('\n').slice(2, 8).join(' | ') || 'NO_STACK'
         });
         
+        // Add to pot
         this.pot += toCall;
-        */
         
-        // SYSTEMATIC DEBUG: Log that we're skipping chip movement in CALL only
-        gameLogger.gameEvent(this.name, '[SYSTEMATIC_DEBUG] CALL - CHIP MOVEMENT DISABLED (testing if call() causes chip loss)', {
+        // Log AFTER adding to pot
+        const chipsAfterAdd = player.chips;
+        const potAfterAdd = this.pot;
+        const totalChipsAfterAdd = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
+        const totalChipsAndPotAfterAdd = totalChipsAfterAdd + this.pot;
+        const chipsLostAfterAdd = totalChipsAndPotBeforeMove - totalChipsAndPotAfterAdd;
+        
+        gameLogger.gameEvent(this.name, '[SYSTEMATIC_DEBUG] CALL AFTER ADD TO POT', {
             player: player.name,
             toCall,
-            chipsBefore: beforeChips,
-            potBefore,
-            note: 'CALL chip movement commented out - bet/raise/allIn still active'
+            chipsAfterAdd,
+            potAfterAdd,
+            totalChipsAfterAdd,
+            totalChipsAndPotAfterAdd,
+            chipsLostAfterAdd,
+            expectedLoss: 0, // After adding to pot, total should be same (chips moved from player to pot)
+            handNumber: this.handsPlayed
         });
+        
+        if (Math.abs(chipsLostAfterAdd) > 0.01) {
+            console.error(`[Table ${this.name}] ⚠️⚠️⚠️ [SYSTEMATIC_DEBUG] CALL BUG DETECTED: Chips lost after adding to pot! Lost: ${chipsLostAfterAdd}`);
+            gameLogger.error(this.name, '[SYSTEMATIC_DEBUG] CALL BUG: Chips lost after adding to pot', {
+                toCall,
+                chipsLostAfterAdd,
+                chipsBeforeMove,
+                chipsAfterAdd,
+                potBeforeMove,
+                potAfterAdd,
+                totalChipsAndPotBeforeMove,
+                totalChipsAndPotAfterAdd,
+                handNumber: this.handsPlayed
+            });
+        }
         
         // ULTRA-VERBOSE: Log after operation with FULL STATE
         const chipsAfter = player.chips;
