@@ -6521,6 +6521,33 @@ class Table {
                         itemCount: itemAnteResult.items.length,
                         itemNames: itemAnteResult.items.map(i => i.name)
                     });
+                    
+                    // CRITICAL: Actually transfer items to winner's inventory
+                    const userRepo = require('../database/UserRepository');
+                    (async () => {
+                        try {
+                            for (const item of itemAnteResult.items) {
+                                await userRepo.addItem(itemWinner.playerId, item);
+                                console.log(`[ITEM_ANTE] TRANSFER: Added ${item.name} (${item.id}) to ${itemWinner.name}'s inventory`);
+                            }
+                            console.log(`[ITEM_ANTE] TRANSFER_COMPLETE: All ${itemAnteResult.items.length} items transferred to ${itemWinner.name}'s inventory`);
+                            gameLogger.gameEvent(this.name, `[ITEM_ANTE] TRANSFER_COMPLETE`, {
+                                winnerId: itemWinner.playerId,
+                                winnerName: itemWinner.name,
+                                itemCount: itemAnteResult.items.length
+                            });
+                            
+                            // CRITICAL: Broadcast updated state so client sees item ante is awarded
+                            this.onStateChange?.();
+                        } catch (error) {
+                            console.error(`[ITEM_ANTE] TRANSFER_FAILED: Failed to transfer items to ${itemWinner.name}:`, error);
+                            gameLogger.error(this.name, `[ITEM_ANTE] TRANSFER_FAILED`, {
+                                winnerId: itemWinner.playerId,
+                                error: error.message,
+                                stack: error.stack
+                            });
+                        }
+                    })();
                 } else {
                     console.error(`[ITEM_ANTE] AWARD_FAILED: ${itemWinner.name} (${itemWinner.playerId}) - ${itemAnteResult?.error || 'unknown error'}`);
                     gameLogger.gameEvent(this.name, `[ITEM_ANTE] AWARD_ERROR`, {
