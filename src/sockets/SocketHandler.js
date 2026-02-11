@@ -1059,9 +1059,15 @@ class SocketHandler {
             
             // Start the game (table creator only) - initiates ready-up phase
             socket.on('start_game', (data, callback) => {
+                console.log(`[SocketHandler] start_game received: socketId=${socket.id}, tableId=${data?.tableId}, hasCallback=${!!callback}`);
                 const respond = (response) => {
-                    if (callback) callback(response);
+                    console.log(`[SocketHandler] start_game respond: Emitting start_game_response to socket ${socket.id}`);
+                    // Always emit response event (Unity listens for this)
                     socket.emit('start_game_response', response);
+                    // Also call callback if provided
+                    if (callback && typeof callback === 'function') {
+                        callback(response);
+                    }
                 };
                 
                 const user = this.getAuthenticatedUser(socket);
