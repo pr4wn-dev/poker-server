@@ -1665,8 +1665,8 @@ class SocketHandler {
 
                 const result = table.startItemAnte(user.userId, item);
                 
-                // ROOT TRACING: Log item ante start result (commented out - use gameLogger for tracing)
-                // console.log(`[SocketHandler] [ITEM_ANTE] START_RESULT | userId: ${user.userId} | tableId: ${player.currentTableId} | success: ${result.success} | error: ${result.error || 'none'} | minimumValue: ${result.minimumValue || 'N/A'}`);
+                // Log item ante start result
+                console.log(`[ITEM_ANTE] START: userId=${user.userId}, tableId=${player.currentTableId}, success=${result.success}, itemName=${item.name}, itemValue=${item.baseValue}, minimumValue=${result.minimumValue || 'N/A'}, error=${result.error || 'none'}`);
                 
                 if (result.success) {
                     // CRITICAL: Send formatted item with ALL fields Unity needs (templateId, etc.)
@@ -1745,8 +1745,8 @@ class SocketHandler {
 
                 const result = table.submitToItemAnte(user.userId, item);
                 
-                // ROOT TRACING: Log item ante submission result (commented out - use gameLogger for tracing)
-                // console.log(`[SocketHandler] [ITEM_ANTE] SUBMIT_RESULT | userId: ${user.userId} | tableId: ${player.currentTableId} | success: ${result.success} | error: ${result.error || 'none'} | itemValue: ${result.itemValue || 'N/A'} | minimumValue: ${result.minimumValue || 'N/A'}`);
+                // Log item ante submission result
+                console.log(`[ITEM_ANTE] SUBMIT: userId=${user.userId}, tableId=${player.currentTableId}, success=${result.success}, itemName=${item.name}, itemValue=${item.baseValue}, minimumValue=${result.minimumValue || 'N/A'}, error=${result.error || 'none'}`);
                 
                 if (result.success) {
                     // Notify table creator of new submission (keeping old event name for backward compatibility)

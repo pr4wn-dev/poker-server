@@ -6514,14 +6514,15 @@ class Table {
                 });
                 
                 if (itemAnteResult?.success) {
-                    // console.log(`[Table ${this.name}] ${itemWinner.name} wins ${itemAnteResult.items.length} items from item ante!`);
+                    console.log(`[ITEM_ANTE] AWARD: ${itemWinner.name} (${itemWinner.playerId}) wins ${itemAnteResult.items.length} items from item ante! Items: ${itemAnteResult.items.map(i => i.name).join(', ')}`);
                     gameLogger.gameEvent(this.name, `[ITEM_ANTE] AWARD_SUCCESS`, {
                         winnerId: itemWinner.playerId,
                         winnerName: itemWinner.name,
-                        itemCount: itemAnteResult.items.length
+                        itemCount: itemAnteResult.items.length,
+                        itemNames: itemAnteResult.items.map(i => i.name)
                     });
                 } else {
-                    // console.error(`[Table ${this.name}] Failed to award item ante: ${itemAnteResult?.error}`);
+                    console.error(`[ITEM_ANTE] AWARD_FAILED: ${itemWinner.name} (${itemWinner.playerId}) - ${itemAnteResult?.error || 'unknown error'}`);
                     gameLogger.gameEvent(this.name, `[ITEM_ANTE] AWARD_ERROR`, {
                         winnerId: itemWinner.playerId,
                         error: itemAnteResult?.error
