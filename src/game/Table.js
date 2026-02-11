@@ -8909,11 +8909,17 @@ class Table {
         // Small delay to ensure state is received before hand_result
         if (this.onHandComplete) {
             setTimeout(() => {
+                // SYSTEMATIC DEBUG: Log what we're sending to client (everyone folded case)
+                const handCompleteLog = `[SYSTEMATIC_DEBUG] HAND_COMPLETE (FOLD): Winner=${winner.name}, WinnerAward=${potAmount}, TotalPot=${potAmount}, AwardsCount=1\n`;
+                console.log(handCompleteLog.trim());
+                fs.appendFileSync(path.join(__dirname, '../../logs/pot-award-debug.log'), new Date().toISOString() + ' ' + handCompleteLog);
+                
                 this.onHandComplete({
                     winnerId: winner.playerId,
                     winnerName: winner.name,
                     handName: "Everyone Folded",
-                    potAmount: potAmount,
+                    potAmount: potAmount, // Correct: In fold case, winner gets entire pot
+                    totalPot: potAmount, // Add total pot as separate field for consistency
                     potAwards: [{
                         playerId: winner.playerId,
                         name: winner.name,
