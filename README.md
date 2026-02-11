@@ -136,6 +136,43 @@ npm run dev
 npm test
 ```
 
+## Known Issues
+
+### Critical: Missing Chips / Money Loss
+**Status:** Active investigation  
+**Severity:** CRITICAL  
+**Affects:** All game modes (normal, practice, simulation)
+
+**Issues:**
+1. **Pot not cleared at hand start** (40+ instances)
+   - Pot carries over between hands
+   - Causes validation failures and chip accounting errors
+   - Chips appear "missing" when actually in leftover pot
+
+2. **Chips lost during betting** (CRITICAL)
+   - Pot < sum of all totalBets
+   - Chips subtracted from players but not added to pot
+   - Example: Missing 38,012 chips (totalStartingChips: 294,400, actual: 256,388)
+
+3. **Cumulative chip loss**
+   - Missing chips accumulate across hands (21K → 35K → 38K)
+   - Chips disappear from the system permanently
+
+**See:** `ISSUES_FOUND.md` and `SIMULATION_ANALYSIS.md` for detailed analysis
+
+### Item Ante ("For Keeps") System
+**Status:** Active development  
+**Severity:** MEDIUM  
+**Affects:** Tables with item ante enabled
+
+**Issues:**
+- Null reference errors in item ante handling
+- Item validation problems
+- Missing field errors (Unity client compatibility)
+- Item not found in inventory edge cases
+
+**See:** `src/game/ItemAnte.js` and `scripts/watch-logs-and-fix.js` for current fixes
+
 ## License
 
 MIT
