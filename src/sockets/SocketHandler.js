@@ -646,7 +646,11 @@ class SocketHandler {
                             success: true,
                             tableId: result.tableId,
                             table: publicInfo,
-                            state
+                            state,
+                            regularBots: result.regularBots || 0,
+                            socketBots: result.socketBots || 0,
+                            status: result.status || 'spawning',
+                            settings: result.settings || {}
                         };
                         
                         if (callback) {
