@@ -8412,8 +8412,8 @@ class Table {
             });
             
             // CRITICAL: Calculate total chips BEFORE clearing pot to verify chips are in system
-            const totalChipsAfterAward = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
-            const totalChipsAndPotAfterAward = totalChipsAfterAward + this.pot;
+            const totalChipsAfterAwardValidation = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);
+            const totalChipsAndPotAfterAwardValidation = totalChipsAfterAwardValidation + this.pot;
             
             // CRITICAL: Verify chips are in system after award (before clearing pot)
             // NOTE: Pot may legitimately change if side pots were awarded or pot was partially cleared
