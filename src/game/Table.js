@@ -3072,6 +3072,7 @@ class Table {
         
         // CRITICAL: Ensure hasPassedLastRaiser is reset for new hand
         this.hasPassedLastRaiser = false;
+        this.playersActedThisRound = new Set();  // FIX: Track which players have acted this round
         
         // Get all active players for logging
         const activePlayersInfo = this.seats.map((seat, idx) => ({
@@ -5552,6 +5553,13 @@ class Table {
             consecutiveCalls: this.consecutiveAdvanceGameCalls || 0
         });
         
+        // FIX: Track that current player has acted this round
+        // This prevents betting rounds from completing before all players have had a turn
+        if (!this.playersActedThisRound) this.playersActedThisRound = new Set();
+        if (this.currentPlayerIndex >= 0) {
+            this.playersActedThisRound.add(this.currentPlayerIndex);
+        }
+        
         // Check for winner (all but one folded)
         const activePlayers = this.seats.filter(s => s && !s.isFolded);
         if (activePlayers.length === 1) {
@@ -5570,6 +5578,10 @@ class Table {
 
         // Find next player who can act (not folded, not all-in)
         const nextPlayer = this.getNextActivePlayer(this.currentPlayerIndex);
+        
+        // FIX: Calculate how many active players can still act, and how many have acted
+        const playersWhoCanAct = this.seats.filter(s => s && s.isActive && !s.isFolded && !s.isAllIn);
+        const allPlayersActed = this.playersActedThisRound.size >= playersWhoCanAct.length;
         
         // Next player calculation debug logging removed - too verbose
         
@@ -5604,10 +5616,9 @@ class Table {
                     // We've wrapped around (nextPlayer is before current OR after lastRaiser means we wrapped)
                     passed = true;
                 }
-            } else if (currentIndex === lastRaiser && nextPlayer !== -1 && nextPlayer !== lastRaiser) {
-                // We're at the last raiser and moving to someone else - we've passed
-                passed = true;
-            }
+            // FIX: Removed `currentIndex === lastRaiser` case - this was incorrectly marking
+            // hasPassedLastRaiser=true at the START of new betting rounds (where lastRaiserIndex
+            // is set to firstToAct), causing rounds to complete before anyone acted.
             
             if (passed) {
                 this.hasPassedLastRaiser = true;
@@ -5713,11 +5724,8 @@ class Table {
                             // Still at BB or no next player - round not complete
                             bettingRoundComplete = false;
                         }
-                    } else if (this.currentPlayerIndex === utgIndex && nextPlayer === bbIndex) {
-                        // We're at UTG and next is BB
-                        // If all bets are equalized and no raises happened, BB has already acted (posted blind)
-                        // So the round should be complete
-                        bettingRoundComplete = true;
+                    // FIX: Removed UTG→BB shortcut - BB posting a blind is NOT an action.
+                    // BB must always get a chance to check or raise preflop.
                     } else {
                         // We're not at BB or UTG->BB transition - round cannot be complete yet
                         bettingRoundComplete = false;
@@ -5735,10 +5743,9 @@ class Table {
                         bettingRoundComplete = true;
                     }
                     
-                    // Fallback: if we're at first to act and next player is different, we've completed the round
-                    if (!bettingRoundComplete && this.currentPlayerIndex === firstToAct && nextPlayer !== firstToAct && nextPlayer !== -1) {
-                        bettingRoundComplete = true;
-                    }
+                    // FIX: Removed fallback that marked round complete when currentPlayerIndex === firstToAct.
+                    // This was ALWAYS true when the first player acts, causing the round to complete
+                    // before any other player got a turn.
                 }
                 gameLogger.bettingRoundCheck(this.name, 'BETTING_ROUND_COMPLETE (no raises)', bettingRoundComplete ? 'TRUE' : 'FALSE', {
                     phase: this.phase,
@@ -5854,7 +5861,20 @@ class Table {
         }
         
         // EXIT POINT 2: Betting round complete
-        // If betting round is complete, we MUST advance phase
+        // FIX: CRITICAL GUARD - The round can ONLY be complete if ALL active players have acted at least once.
+        // This prevents the round from completing before everyone has had a turn (the root cause of turn skipping).
+        if (bettingRoundComplete && !allPlayersActed) {
+            console.log(`[Table ${this.name}] Betting round logic says complete, but only ${this.playersActedThisRound.size}/${playersWhoCanAct.length} players have acted - NOT advancing. Acted: [${[...this.playersActedThisRound].join(',')}]`);
+            bettingRoundComplete = false;  // Override - not all players have acted
+        }
+        
+        // ALTERNATIVE: If all players have acted AND all bets equalized, round is DEFINITELY complete
+        // (even if the hasPassedLastRaiser logic didn't detect it)
+        if (!bettingRoundComplete && allPlayersActed && allBetsEqualized) {
+            console.log(`[Table ${this.name}] All ${playersWhoCanAct.length} players have acted and bets equalized - completing round`);
+            bettingRoundComplete = true;
+        }
+        
         if (bettingRoundComplete) {
             gameLogger.gameEvent(this.name, 'EXIT POINT 2: Betting round complete - advancing phase', {
                 lastRaiserIndex: this.lastRaiserIndex,
@@ -5862,9 +5882,11 @@ class Table {
                 nextPlayer,
                 hasPassedLastRaiser: this.hasPassedLastRaiser,
                 allBetsEqualized,
+                allPlayersActed,
+                playersActed: this.playersActedThisRound.size,
+                playersWhoCanAct: playersWhoCanAct.length,
                 phase: this.phase
             });
-            // console.log(`[Table ${this.name}] Betting round complete - advancing phase. Last raiser: ${this.lastRaiserIndex}, Current: ${this.currentPlayerIndex}, Next: ${nextPlayer}, HasPassed: ${this.hasPassedLastRaiser}, All equalized: ${allBetsEqualized}`);
             this.hasPassedLastRaiser = false;  // Reset for next betting round
             this.advancePhase();
             return;  // GUARANTEED EXIT - prevents loop
@@ -6124,6 +6146,7 @@ class Table {
         const oldLastRaiser = this.lastRaiserIndex;
         this.lastRaiserIndex = this.currentPlayerIndex;
         this.hasPassedLastRaiser = false;  // Reset flag for new betting round
+        this.playersActedThisRound = new Set();  // FIX: Track which players have acted this round
         
         gameLogger.phaseChange(this.name, oldPhase, this.phase, {
             firstToAct: this.seats[this.currentPlayerIndex]?.name,
