@@ -6618,15 +6618,22 @@ class Table {
             setTimeout(() => {
                 // Emit for the main pot winner (first award)
                 const mainWinner = potAwards[0];
-                // CRITICAL FIX: potAmount should be the winner's INDIVIDUAL award, not the total pot
-                // Calculate the winner's total award across all side pots
+                // CRITICAL FIX: potAmount should be only CONTESTED winnings, NOT refunded excess chips
+                // When a player goes all-in for more than opponents can match, the excess is returned (refund).
+                // Display should only show what was actually won from OTHER players, not returned chips.
+                const winnerContestedAward = potAwards
+                    .filter(a => a.playerId === mainWinner.playerId && !a.isRefund)
+                    .reduce((sum, a) => sum + a.amount, 0);
+                const winnerRefundAmount = potAwards
+                    .filter(a => a.playerId === mainWinner.playerId && a.isRefund)
+                    .reduce((sum, a) => sum + a.amount, 0);
                 const winnerTotalAward = potAwards
                     .filter(a => a.playerId === mainWinner.playerId)
                     .reduce((sum, a) => sum + a.amount, 0);
                 const totalPot = potAwards.reduce((sum, a) => sum + a.amount, 0);
                 
                 // SYSTEMATIC DEBUG: Log what we're sending to client
-                const handCompleteLog = `[SYSTEMATIC_DEBUG] HAND_COMPLETE: Winner=${mainWinner.name}, WinnerAward=${winnerTotalAward}, TotalPot=${totalPot}, AwardsCount=${potAwards.length}\n`;
+                const handCompleteLog = `[SYSTEMATIC_DEBUG] HAND_COMPLETE: Winner=${mainWinner.name}, ContestedAward=${winnerContestedAward}, RefundAmount=${winnerRefundAmount}, TotalAward=${winnerTotalAward}, TotalPot=${totalPot}, AwardsCount=${potAwards.length}\n`;
                 console.log(handCompleteLog.trim());
                 fs.appendFileSync(path.join(__dirname, '../../logs/pot-award-debug.log'), new Date().toISOString() + ' ' + handCompleteLog);
                 
@@ -6634,8 +6641,10 @@ class Table {
                     winnerId: mainWinner.playerId,
                     winnerName: mainWinner.name,
                     handName: mainWinner.handName,
-                    potAmount: winnerTotalAward, // FIX: Winner's individual award, not total pot
-                    totalPot: totalPot, // Add total pot as separate field for reference
+                    potAmount: winnerContestedAward, // FIX: Only contested winnings (excludes refunded excess)
+                    totalPot: totalPot, // Total pot including refunds for reference
+                    refundAmount: winnerRefundAmount, // How much was returned (excess all-in chips)
+                    totalAward: winnerTotalAward, // Total chips received (contested + refund)
                     potAwards: potAwards // All individual awards
                 });
             }, 100); // Small delay to ensure state broadcast happens first
@@ -7136,6 +7145,10 @@ class Table {
                     .sort((a, b) => HandEvaluator.compare(b.handResult, a.handResult));
                 
                 if (eligibleHands.length > 0 && potAmount > 0) {
+                    // POKER RULE: If only 1 player is eligible at this level, it's a REFUND
+                    // (they bet more than anyone else, so excess chips come back to them)
+                    const isRefund = eligiblePlayers.length === 1;
+                    
                     // Check for split pot (ties)
                     const winners = [eligibleHands[0]];
                     for (let i = 1; i < eligibleHands.length; i++) {
@@ -7292,7 +7305,8 @@ class Table {
                                     handName: validatedWinners[i].handResult.name,
                                     potType: previousBetLevel === 0 ? 'main' : 'side',
                                     potLevel: player.totalBet, // Track which pot level this award came from
-                                    reason: undefined
+                                    isRefund: isRefund, // True when winner was the only eligible player (excess chips returned)
+                                    reason: isRefund ? `Refund: Only eligible player at pot level ${player.totalBet}` : undefined
                                 });
                             }
                             
@@ -8989,14 +9003,17 @@ class Table {
                     winnerId: winner.playerId,
                     winnerName: winner.name,
                     handName: "Everyone Folded",
-                    potAmount: potAmount, // Correct: In fold case, winner gets entire pot
-                    totalPot: potAmount, // Add total pot as separate field for consistency
+                    potAmount: potAmount, // Correct: In fold case, winner gets entire pot (no excess/refund)
+                    totalPot: potAmount, // Total pot for reference
+                    refundAmount: 0, // No refund in fold case - pot only has actual bets
+                    totalAward: potAmount, // Same as potAmount in fold case
                     potAwards: [{
                         playerId: winner.playerId,
                         name: winner.name,
                         amount: potAmount,
                         handName: "Everyone Folded",
-                        potType: 'main'
+                        potType: 'main',
+                        isRefund: false
                     }]
                 });
             }, 100); // Small delay to ensure state broadcast happens first
