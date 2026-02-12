@@ -572,6 +572,71 @@ Keep narrowing down until the problem disappears - the last chunk you commented 
 
 **Verification:** Server console is significantly cleaner with only meaningful log entries.
 
+### ✅ Fixed: All-In Excess Chips Not Returned (Incorrect Pot Display)
+**Status:** FIXED  
+**Date:** February 12, 2026  
+**Severity:** CRITICAL  
+
+**Problem:** When a player with 100M chips went all-in against an opponent with 20K, the pot displayed 100.02M for the entire hand. In real poker, the excess 99.98M should be returned immediately since no opponent can match it. The "YOU WIN!" banner also displayed 100M instead of the actual 40K contested amount.
+
+**Root Cause:** The `allIn()` method correctly puts all chips into the pot (since at all-in time, it's unknown who will call). However, after all players acted (all all-in or folded), the excess was never returned — it sat in the pot until showdown where the side pot math handled it as a "refund award." This was:
+1. Visually misleading (pot showed 100M instead of 40K)
+2. Conceptually wrong (excess should be returned, not enter a "side pot")
+
+**Solution:**
+- Added `returnExcessBets()` method that calculates the 2nd-highest `totalBet` among non-folded players (the max matchable amount) and returns any excess above that to the player
+- Called at **EXIT POINT 1** (all players all-in/folded) so pot display updates immediately
+- Called at start of **`showdown()`** as a safety net before calculating winners
+- Broadcasts state update after returning excess so clients see correct chips/pot in real-time
+- Added `isRefund` flag to side pot awards for any remaining edge cases
+- Modified `onHandComplete` event to send only contested winnings (excluding refunds) as `potAmount`
+
+**Algorithm:**
+```
+1. Sort non-folded players by totalBet ascending
+2. maxMatchable = 2nd-highest totalBet
+3. For each player with totalBet > maxMatchable:
+   excess = totalBet - maxMatchable
+   player.chips += excess
+   player.totalBet -= excess
+   pot -= excess
+```
+
+**Example (2-player):**
+| Step | Your Chips | Pot | Opponent |
+|------|-----------|-----|----------|
+| Start | 100M | 0 | 20K |
+| You all-in | 0 | 100M | 20K |
+| Opponent calls | 0 | 100.02M | 0 |
+| returnExcessBets() | **99.98M** | **40K** | 0 |
+| You win | 100.02M | 0 | 0 |
+| Display: "Won 40K" ✅ | | | |
+
+**Files Changed:**
+- `src/game/Table.js` (`returnExcessBets()`, `advanceGame()` EXIT POINT 1, `showdown()`, `calculateAndAwardSidePots()`, `awardPot()`)
+
+**Verification:** Pot now shows the correct contested amount during gameplay. "You Won" banner shows only chips won from opponents, not returned excess.
+
+### ✅ Fixed: Double-Action Bug / Action Bar Stuck After Fold
+**Status:** FIXED  
+**Date:** February 12, 2026  
+**Severity:** HIGH  
+
+**Problem:** If a player clicked "Fold" (or any action), the action bar remained visible. Clicking any button again while it was still up caused a second action to be sent, resulting in "Already folded - cannot act" errors. The action bar then became permanently stuck and non-functional, even on new turns.
+
+**Root Cause:** Client-side race condition — after sending an action, the server response hadn't arrived yet to update state, so the action panel remained active. A boolean `_actionPending` flag was unreliable because state updates could reset it inconsistently.
+
+**Solution:**
+- Removed the `_actionPending` flag approach entirely
+- Added `DisableAllActionButtons()` method that sets `interactable = false` on all buttons and hides the action panel immediately after any action click
+- Modified all action click handlers (`OnFoldClick`, `OnCheckClick`, `OnCallClick`, `OnBetClick`, `OnRaiseClick`, `OnAllInClick`) to call `DisableAllActionButtons()` after sending the action
+- Modified `ShowActionButtons()` to explicitly set `interactable = true` on all buttons when called for a new turn
+
+**Files Changed:**
+- `Assets/Scripts/UI/Scenes/TableScene.cs` (Unity client)
+
+**Verification:** Action bar immediately disappears after clicking any action. Buttons are re-enabled when the next turn starts.
+
 ### ✅ Fixed: Unity InventoryPanel Item Visibility (Complete Fix)
 **Status:** FIXED  
 **Date:** February 11, 2026  
