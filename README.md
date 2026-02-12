@@ -1001,16 +1001,35 @@ Keep narrowing down until the problem disappears - the last chunk you commented 
 
 **Implementation Status:**
 ✅ **COMPLETED:**
+
+**Server-Side (poker-server):**
 1. Power Score calculation (`calculatePowerScore()`, `calculateDropRate()`, `calculateDemand()`)
 2. `isGambleable` flag enforcement (store items automatically set to `false`)
-3. Table creation UI (item selection with minimum ante item preview)
-4. Locked minimum display (lobby shows ⚡PowerScore+, game shows in item selection)
-5. Bot logic updated to use Power Score for item ante
-6. Database schema updated (power_score, source, drop_rate, demand columns)
-7. ItemAnte uses `minimumPowerScore` for validation
-8. Table-level minimum item (persists even if creator leaves)
-9. Unity NetworkModels updated with Power Score fields
-10. InventoryPanel filters by Power Score (not baseValue)
+3. Database schema updated (power_score, source, drop_rate, demand columns)
+4. ItemAnte uses `minimumPowerScore` for validation
+5. Table-level minimum item (persists even if creator leaves)
+6. Bot logic updated to use Power Score for item ante
+7. SocketHandler fetches minimumAnteItem from database
+8. EXIT POINT 0b (skip to showdown when only 1 player can act)
+9. Practice Mode Protection (items virtual, not transferred)
+10. Bot Protection (skip transfer for bots, no user record)
+11. `raisesThisRound` in TableState for UI validation
+12. Bot Dead Streets Intelligence (don't raise when all opponents folded/all-in)
+13. Bot Smart Fallback (call → check → fold)
+
+**Client-Side (poker-client-unity):**
+1. NetworkModels: All Power Score fields (ItemInfo, TableInfo, TableState, SidePotState, SidePotItem)
+2. GameService: `minimumAnteItem` parameter in CreateTable()
+3. TableScene: Display ⚡PowerScore in item ante prompts
+4. InventoryPanel: Filter by Power Score, display ⚡powerScore in item ante mode
+5. LobbyScene: Minimum ante item selection UI (141 lines restored)
+   - Select item button, display selected item with Power Score
+   - Show/hide logic with Item Ante and Simulation toggles
+   - Display ⚡PowerScore+ in lobby table list
+6. Action panel diagnostic logging for troubleshooting
+
+**Git Safety:**
+- AGENT_RULES.md LAW 1 updated: Check `git status` before `git pull` to prevent data loss
 
 🔄 **PENDING:**
 - Store item restrictions UI (shop interface)
@@ -1018,7 +1037,8 @@ Keep narrowing down until the problem disappears - the last chunk you commented 
 - Ads integration
 - Premium membership
 
-**Status:** Power Score system fully implemented and tested ✅
+**Status:** Power Score system 100% implemented and restored ✅
+**Note:** System was fully implemented, accidentally reverted (commit a996f8b), and fully restored (commits 3157410 + 594b741)
 
 ## License
 
