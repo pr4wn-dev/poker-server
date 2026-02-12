@@ -9631,6 +9631,7 @@ class Table {
             currentBet: this.currentBet,
             minBet: this.bigBlind,
             minRaise: this.minRaise,
+            raisesThisRound: this.raisesThisRound,  // For client to know if raise button should be enabled
             smallBlind: this.smallBlind,
             bigBlind: this.bigBlind,
             dealerIndex: this.dealerIndex,
