@@ -897,6 +897,23 @@ class SocketHandler {
                         // Update player chips in game manager from DB
                         this.gameManager.players.get(user.userId).chips = dbUser.chips;
                         
+                        // Load crew tag and active title for display at table
+                        try {
+                            const CrewManager = require('../social/CrewManager');
+                            const TitleEngine = require('../stats/TitleEngine');
+                            const seat = table.seats[result.seatIndex];
+                            if (seat) {
+                                const [crewTag, activeTitle] = await Promise.all([
+                                    CrewManager.getPlayerCrewTag(user.userId).catch(() => null),
+                                    TitleEngine.getActiveTitle(user.userId).catch(() => null)
+                                ]);
+                                seat.crewTag = crewTag;
+                                seat.activeTitle = activeTitle?.title_name || null;
+                            }
+                        } catch (e) {
+                            // Non-critical — don't block join
+                        }
+                        
                         socket.join(`table:${tableId}`);
                         
                         socket.to(`table:${tableId}`).emit('player_joined', {
@@ -2631,6 +2648,401 @@ class SocketHandler {
                 }
             });
 
+            // ============ Stats & Titles ============
+
+            socket.on('get_player_stats', async (data, callback) => {
+                const respond = this._makeResponder(socket, 'get_player_stats', callback);
+                try {
+                    const StatsEngine = require('../stats/StatsEngine');
+                    const targetId = data?.playerId || this.getAuthenticatedUser(socket)?.userId;
+                    if (!targetId) return respond({ success: false, error: 'Not authenticated' });
+                    const stats = await StatsEngine.getPlayerStats(targetId);
+                    respond({ success: true, stats });
+                } catch (error) {
+                    respond({ success: false, error: error.message });
+                }
+            });
+
+            socket.on('get_hand_type_stats', async (data, callback) => {
+                const respond = this._makeResponder(socket, 'get_hand_type_stats', callback);
+                try {
+                    const StatsEngine = require('../stats/StatsEngine');
+                    const targetId = data?.playerId || this.getAuthenticatedUser(socket)?.userId;
+                    if (!targetId) return respond({ success: false, error: 'Not authenticated' });
+                    const handTypes = await StatsEngine.getHandTypeStats(targetId);
+                    respond({ success: true, handTypes });
+                } catch (error) {
+                    respond({ success: false, error: error.message });
+                }
+            });
+
+            socket.on('get_pocket_stats', async (data, callback) => {
+                const respond = this._makeResponder(socket, 'get_pocket_stats', callback);
+                try {
+                    const StatsEngine = require('../stats/StatsEngine');
+                    const targetId = data?.playerId || this.getAuthenticatedUser(socket)?.userId;
+                    if (!targetId) return respond({ success: false, error: 'Not authenticated' });
+                    const pockets = await StatsEngine.getPocketStats(targetId);
+                    respond({ success: true, pockets });
+                } catch (error) {
+                    respond({ success: false, error: error.message });
+                }
+            });
+
+            socket.on('get_hand_history', async (data, callback) => {
+                const respond = this._makeResponder(socket, 'get_hand_history', callback);
+                try {
+                    const StatsEngine = require('../stats/StatsEngine');
+                    const user = this.getAuthenticatedUser(socket);
+                    if (!user) return respond({ success: false, error: 'Not authenticated' });
+                    const limit = data?.limit || 50;
+                    const offset = data?.offset || 0;
+                    const history = await StatsEngine.getHandHistory(user.userId, limit, offset);
+                    respond({ success: true, history });
+                } catch (error) {
+                    respond({ success: false, error: error.message });
+                }
+            });
+
+            socket.on('get_hand_replay', async (data, callback) => {
+                const respond = this._makeResponder(socket, 'get_hand_replay', callback);
+                try {
+                    const StatsEngine = require('../stats/StatsEngine');
+                    if (!data?.tableId || !data?.handNumber) return respond({ success: false, error: 'Missing tableId or handNumber' });
+                    const replay = await StatsEngine.getHandReplay(data.tableId, data.handNumber);
+                    respond({ success: true, replay });
+                } catch (error) {
+                    respond({ success: false, error: error.message });
+                }
+            });
+
+            socket.on('get_titles', async (data, callback) => {
+                const respond = this._makeResponder(socket, 'get_titles', callback);
+                try {
+                    const TitleEngine = require('../stats/TitleEngine');
+                    const targetId = data?.playerId || this.getAuthenticatedUser(socket)?.userId;
+                    if (!targetId) return respond({ success: false, error: 'Not authenticated' });
+                    const titles = await TitleEngine.getPlayerTitles(targetId);
+                    const activeTitle = await TitleEngine.getActiveTitle(targetId);
+                    respond({ success: true, titles, activeTitle });
+                } catch (error) {
+                    respond({ success: false, error: error.message });
+                }
+            });
+
+            socket.on('set_active_title', async (data, callback) => {
+                const respond = this._makeResponder(socket, 'set_active_title', callback);
+                try {
+                    const TitleEngine = require('../stats/TitleEngine');
+                    const user = this.getAuthenticatedUser(socket);
+                    if (!user) return respond({ success: false, error: 'Not authenticated' });
+                    await TitleEngine.setActiveTitle(user.userId, data?.titleId || null);
+                    respond({ success: true });
+                } catch (error) {
+                    respond({ success: false, error: error.message });
+                }
+            });
+
+            socket.on('get_player_profile', async (data, callback) => {
+                const respond = this._makeResponder(socket, 'get_player_profile', callback);
+                try {
+                    const StatsEngine = require('../stats/StatsEngine');
+                    const TitleEngine = require('../stats/TitleEngine');
+                    const database = require('../database/Database');
+                    
+                    const targetId = data?.playerId;
+                    if (!targetId) return respond({ success: false, error: 'Missing playerId' });
+
+                    const [stats, titles, activeTitle, user, crewMember] = await Promise.all([
+                        StatsEngine.getPlayerStats(targetId),
+                        TitleEngine.getPlayerTitles(targetId),
+                        TitleEngine.getActiveTitle(targetId),
+                        database.queryOne('SELECT username, xp, created_at FROM users WHERE id = ?', [targetId]),
+                        database.queryOne(`
+                            SELECT cm.role, c.name as crew_name, c.tag as crew_tag 
+                            FROM crew_members cm 
+                            JOIN crews c ON cm.crew_id = c.id 
+                            WHERE cm.player_id = ?
+                        `, [targetId]).catch(() => null)
+                    ]);
+
+                    respond({
+                        success: true,
+                        profile: {
+                            playerId: targetId,
+                            username: user?.username || 'Unknown',
+                            xp: user?.xp || 0,
+                            memberSince: user?.created_at,
+                            activeTitle: activeTitle?.title_name || null,
+                            titleCount: titles.length,
+                            crewName: crewMember?.crew_name || null,
+                            crewTag: crewMember?.crew_tag || null,
+                            crewRole: crewMember?.role || null,
+                            stats: {
+                                handsPlayed: stats.hands_played,
+                                winRate: stats.winRate,
+                                vpip: stats.vpip,
+                                aggressionFactor: stats.aggressionFactor,
+                                bluffSuccessRate: stats.bluffSuccessRate,
+                                showdownWinRate: stats.showdownWinRate,
+                                netChips: stats.netChips,
+                                longestWinStreak: stats.longest_win_streak,
+                                currentWinStreak: stats.current_win_streak
+                            }
+                        }
+                    });
+                } catch (error) {
+                    respond({ success: false, error: error.message });
+                }
+            });
+
+            // ============ Crews ============
+
+            socket.on('create_crew', async (data, callback) => {
+                const respond = this._makeResponder(socket, 'create_crew', callback);
+                try {
+                    const CrewManager = require('../social/CrewManager');
+                    const user = this.getAuthenticatedUser(socket);
+                    if (!user) return respond({ success: false, error: 'Not authenticated' });
+                    const result = await CrewManager.createCrew(user.userId, data?.name, data?.tag, data?.description, data?.emblemColor);
+                    respond(result);
+                } catch (error) {
+                    respond({ success: false, error: error.message });
+                }
+            });
+
+            socket.on('get_crew', async (data, callback) => {
+                const respond = this._makeResponder(socket, 'get_crew', callback);
+                try {
+                    const CrewManager = require('../social/CrewManager');
+                    const user = this.getAuthenticatedUser(socket);
+                    if (!user) return respond({ success: false, error: 'Not authenticated' });
+                    const crewId = data?.crewId;
+                    const result = crewId ? 
+                        await CrewManager.getCrew(crewId) :
+                        await CrewManager.getPlayerCrew(user.userId);
+                    respond(result);
+                } catch (error) {
+                    respond({ success: false, error: error.message });
+                }
+            });
+
+            socket.on('invite_to_crew', async (data, callback) => {
+                const respond = this._makeResponder(socket, 'invite_to_crew', callback);
+                try {
+                    const CrewManager = require('../social/CrewManager');
+                    const user = this.getAuthenticatedUser(socket);
+                    if (!user) return respond({ success: false, error: 'Not authenticated' });
+                    const result = await CrewManager.inviteToCrew(user.userId, data?.targetPlayerId);
+                    if (result.success) {
+                        // Notify the invited player
+                        const targetAuth = this.authenticatedUsers.get(data.targetPlayerId);
+                        if (targetAuth) {
+                            this.io.to(targetAuth.socketId).emit('crew_invite', {
+                                crewId: result.crewId,
+                                crewName: result.crewName,
+                                crewTag: result.crewTag,
+                                invitedBy: user.username
+                            });
+                        }
+                    }
+                    respond(result);
+                } catch (error) {
+                    respond({ success: false, error: error.message });
+                }
+            });
+
+            socket.on('join_crew', async (data, callback) => {
+                const respond = this._makeResponder(socket, 'join_crew', callback);
+                try {
+                    const CrewManager = require('../social/CrewManager');
+                    const user = this.getAuthenticatedUser(socket);
+                    if (!user) return respond({ success: false, error: 'Not authenticated' });
+                    const result = await CrewManager.joinCrew(user.userId, data?.crewId);
+                    respond(result);
+                } catch (error) {
+                    respond({ success: false, error: error.message });
+                }
+            });
+
+            socket.on('leave_crew', async (data, callback) => {
+                const respond = this._makeResponder(socket, 'leave_crew', callback);
+                try {
+                    const CrewManager = require('../social/CrewManager');
+                    const user = this.getAuthenticatedUser(socket);
+                    if (!user) return respond({ success: false, error: 'Not authenticated' });
+                    const result = await CrewManager.leaveCrew(user.userId);
+                    respond(result);
+                } catch (error) {
+                    respond({ success: false, error: error.message });
+                }
+            });
+
+            socket.on('crew_promote', async (data, callback) => {
+                const respond = this._makeResponder(socket, 'crew_promote', callback);
+                try {
+                    const CrewManager = require('../social/CrewManager');
+                    const user = this.getAuthenticatedUser(socket);
+                    if (!user) return respond({ success: false, error: 'Not authenticated' });
+                    const result = await CrewManager.promoteMember(user.userId, data?.targetPlayerId, data?.newRole);
+                    respond(result);
+                } catch (error) {
+                    respond({ success: false, error: error.message });
+                }
+            });
+
+            socket.on('crew_kick', async (data, callback) => {
+                const respond = this._makeResponder(socket, 'crew_kick', callback);
+                try {
+                    const CrewManager = require('../social/CrewManager');
+                    const user = this.getAuthenticatedUser(socket);
+                    if (!user) return respond({ success: false, error: 'Not authenticated' });
+                    const result = await CrewManager.kickMember(user.userId, data?.targetPlayerId);
+                    respond(result);
+                } catch (error) {
+                    respond({ success: false, error: error.message });
+                }
+            });
+
+            socket.on('get_crew_leaderboard', async (data, callback) => {
+                const respond = this._makeResponder(socket, 'get_crew_leaderboard', callback);
+                try {
+                    const CrewManager = require('../social/CrewManager');
+                    const limit = data?.limit || 20;
+                    const leaderboard = await CrewManager.getCrewLeaderboard(limit);
+                    respond({ success: true, leaderboard });
+                } catch (error) {
+                    respond({ success: false, error: error.message });
+                }
+            });
+
+            // ============ Robbery ============
+
+            socket.on('robbery_attempt', async (data, callback) => {
+                const respond = this._makeResponder(socket, 'robbery_attempt', callback);
+                try {
+                    const RobberyManager = require('../game/RobberyManager');
+                    const user = this.getAuthenticatedUser(socket);
+                    if (!user) return respond({ success: false, error: 'Not authenticated' });
+                    const result = await RobberyManager.attemptRobbery(
+                        user.userId, data?.victimId, data?.toolTemplateId, data?.targetItemId
+                    );
+                    respond(result);
+
+                    // Notify victim if robbery happened
+                    if (result.stolen || result.blocked) {
+                        const victimAuth = this.authenticatedUsers.get(data.victimId);
+                        if (victimAuth) {
+                            this.io.to(victimAuth.socketId).emit('robbery_notification', {
+                                robberId: result.stolen ? user.userId : null,
+                                robberName: result.stolen ? user.username : null,
+                                itemName: result.itemName || null,
+                                itemRarity: result.itemRarity || null,
+                                stolen: result.stolen || false,
+                                blocked: result.blocked || false,
+                                message: result.stolen ? 
+                                    `You were robbed! ${user.username} stole your ${result.itemName}!` :
+                                    'Someone tried to rob you but your bodyguard blocked it!'
+                            });
+                        }
+                    }
+                } catch (error) {
+                    respond({ success: false, error: error.message });
+                }
+            });
+
+            socket.on('robbery_recovery', async (data, callback) => {
+                const respond = this._makeResponder(socket, 'robbery_recovery', callback);
+                try {
+                    const RobberyManager = require('../game/RobberyManager');
+                    const user = this.getAuthenticatedUser(socket);
+                    if (!user) return respond({ success: false, error: 'Not authenticated' });
+                    const result = await RobberyManager.recoverItem(user.userId, data?.robberyLogId);
+                    respond(result);
+                } catch (error) {
+                    respond({ success: false, error: error.message });
+                }
+            });
+
+            socket.on('get_recoverable_robberies', async (data, callback) => {
+                const respond = this._makeResponder(socket, 'get_recoverable_robberies', callback);
+                try {
+                    const RobberyManager = require('../game/RobberyManager');
+                    const user = this.getAuthenticatedUser(socket);
+                    if (!user) return respond({ success: false, error: 'Not authenticated' });
+                    const robberies = await RobberyManager.getRecoverableRobberies(user.userId);
+                    respond({ success: true, robberies });
+                } catch (error) {
+                    respond({ success: false, error: error.message });
+                }
+            });
+
+            // ============ Events ============
+
+            socket.on('get_active_events', async (data, callback) => {
+                const respond = this._makeResponder(socket, 'get_active_events', callback);
+                try {
+                    const eventManager = require('../events/EventManager');
+                    const events = eventManager.getActiveEvents();
+                    respond({ success: true, events });
+                } catch (error) {
+                    respond({ success: false, error: error.message });
+                }
+            });
+
+            // ============ Equipment ============
+
+            socket.on('equip_item', async (data, callback) => {
+                const respond = this._makeResponder(socket, 'equip_item', callback);
+                try {
+                    const database = require('../database/Database');
+                    const user = this.getAuthenticatedUser(socket);
+                    if (!user) return respond({ success: false, error: 'Not authenticated' });
+                    
+                    const itemId = data?.itemId;
+                    if (!itemId) return respond({ success: false, error: 'Missing itemId' });
+
+                    // Verify item belongs to user
+                    const item = await database.queryOne(
+                        'SELECT * FROM inventory WHERE id = ? AND user_id = ?', [itemId, user.userId]
+                    );
+                    if (!item) return respond({ success: false, error: 'Item not found' });
+
+                    // Unequip any item in same slot type first
+                    await database.query(
+                        'UPDATE inventory SET is_equipped = FALSE WHERE user_id = ? AND item_type = ? AND is_equipped = TRUE',
+                        [user.userId, item.item_type]
+                    );
+
+                    // Equip the item
+                    await database.query(
+                        'UPDATE inventory SET is_equipped = TRUE WHERE id = ?', [itemId]
+                    );
+
+                    respond({ success: true, itemId, equipped: true });
+                } catch (error) {
+                    respond({ success: false, error: error.message });
+                }
+            });
+
+            socket.on('unequip_item', async (data, callback) => {
+                const respond = this._makeResponder(socket, 'unequip_item', callback);
+                try {
+                    const database = require('../database/Database');
+                    const user = this.getAuthenticatedUser(socket);
+                    if (!user) return respond({ success: false, error: 'Not authenticated' });
+
+                    await database.query(
+                        'UPDATE inventory SET is_equipped = FALSE WHERE id = ? AND user_id = ?',
+                        [data?.itemId, user.userId]
+                    );
+
+                    respond({ success: true, equipped: false });
+                } catch (error) {
+                    respond({ success: false, error: error.message });
+                }
+            });
+
             // ============ Disconnect ============
             
             socket.on('disconnect', async () => {
@@ -2997,6 +3409,23 @@ class SocketHandler {
                 potAmount: result.potAmount,
                 potAwards: result.potAwards || []
             });
+        };
+
+        // Called when a player's fire status changes (NBA Jam style)
+        table.onFireStatusChange = (playerId, playerName, status) => {
+            if (status.fireLevel >= 1) {
+                const levelNames = ['', 'WARM', 'HOT', 'ON FIRE'];
+                this.io.to(`table:${table.id}`).emit('fire_status_change', {
+                    tableId: table.id,
+                    playerId,
+                    playerName,
+                    fireLevel: status.fireLevel,
+                    coldLevel: status.coldLevel,
+                    fireScore: status.fireScore,
+                    levelName: levelNames[status.fireLevel] || '',
+                    message: `${playerName} ${status.fireLevel === 3 ? 'IS ON FIRE! 🔥🔥🔥' : status.fireLevel === 2 ? 'is on a hot streak! 🔥' : 'is heating up! 🌡️'}`
+                });
+            }
         };
         
         // Called when a player auto-folds due to timeout

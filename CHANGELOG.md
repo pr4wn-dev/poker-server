@@ -4,6 +4,103 @@ This file tracks all issues encountered and their solutions. **Search this file 
 
 ---
 
+## Massive Feature Build (Feb 12, 2026)
+
+### New Server Modules Built
+All new systems implemented on the server side in a single session:
+
+1. **Database Foundation** — 16 new tables added to `Database.js` migrations:
+   - `hand_history` (full hand data per player — replaces old minimal schema)
+   - `player_stats` (aggregated lifetime stats — 40+ tracked metrics)
+   - `player_hand_type_stats` (per hand type: high card through royal flush)
+   - `player_pocket_stats` (per starting hand combo: AA, AKs, 72o, etc.)
+   - `player_sessions` (session tracking)
+   - `fire_events` (fire streak log)
+   - `player_titles` (earned dynamic titles)
+   - `achievements` (progress tracking)
+   - `crews`, `crew_members`, `crew_stats` (crew/gang system)
+   - `robbery_log` (PvP robbery system)
+   - `events` (seasonal/weekly events)
+   - `daily_rewards` (server-side reward timer)
+   - `spectator_bets` (side betting for spectators)
+   - `saved_hands` (hand replay bookmarks)
+   - `collusion_flags` (anti-cheat flagging)
+
+2. **StatsEngine.js** (`src/stats/StatsEngine.js`) — Processes every completed hand:
+   - Writes full hand_history record per player
+   - Updates aggregated player_stats via UPSERT
+   - Tracks hand type stats and pocket stats
+   - Categorizes starting hands (AA, AKs, AKo format)
+   - Hooked into Table.js `showdown()` and `awardPot()` via `_collectAndSendStatsData()`
+
+3. **FireTracker.js** (`src/game/FireTracker.js`) — NBA Jam "On Fire" system:
+   - Rolling window of last 12 hands per player per table
+   - Weighted scoring (recent hands count more)
+   - 4 fire levels: None → Warm → Hot → On Fire
+   - 4 cold levels: None → Chilly → Cold → Frozen
+   - Fold decay (consecutive folds cool you down)
+   - Fire status included in table state broadcasts (fireLevel, coldLevel per seat)
+   - Fire status change events broadcast to table
+
+4. **TitleEngine.js** (`src/stats/TitleEngine.js`) — Dynamic player titles:
+   - 25+ titles across 7 categories (luck, skill, style, hands, achievement, crew, rare)
+   - Evaluated every 5 hands automatically
+   - Non-achievement titles can be revoked when stats drop
+   - Players choose which title to display
+   - Title displayed at table, profile, leaderboard
+
+5. **CrewManager.js** (`src/social/CrewManager.js`) — Crew/gang system:
+   - Create/join/leave/disband crews
+   - Roles: Leader, Officer (max 3), Member (max 20)
+   - Crew stats, crew XP, crew levels (1-25+)
+   - 6 crew perks unlocked by level
+   - Crew tag displayed at tables `[TAG] PlayerName`
+   - Crew leaderboard
+
+6. **RobberyManager.js** (`src/game/RobberyManager.js`) — PvP item theft:
+   - 6 tool types with different success rates
+   - 4 defense item types (kevlar, alarm, bodyguard, safe)
+   - Cooldowns (4h robber, 8h victim protection)
+   - Chip penalty on failure
+   - 24h recovery window for victims
+   - Event multipliers applied (robbery spree event)
+
+7. **EventManager.js** (`src/events/EventManager.js`) — Seasonal events:
+   - 9 built-in event types
+   - Multiplier stacking for XP, drops, chips, robbery
+   - Loaded on server start
+   - Active events API for client display
+
+8. **CollusionDetector.js** (`src/security/CollusionDetector.js`) — Anti-cheat:
+   - Soft play detection (fold rate analysis)
+   - Win trading detection (alternating pattern)
+   - Chip dumping detection (consistent large losses to specific player)
+   - Flagged with severity levels for review
+
+### Socket API Endpoints Added
+All new events in `SocketHandler.js`:
+- Stats: `get_player_stats`, `get_hand_type_stats`, `get_pocket_stats`, `get_hand_history`, `get_hand_replay`
+- Titles: `get_titles`, `set_active_title`
+- Profile: `get_player_profile` (full player card with stats + title + crew)
+- Crews: `create_crew`, `get_crew`, `invite_to_crew`, `join_crew`, `leave_crew`, `crew_promote`, `crew_kick`, `get_crew_leaderboard`
+- Robbery: `robbery_attempt`, `robbery_recovery`, `get_recoverable_robberies`
+- Events: `get_active_events`
+- Equipment: `equip_item`, `unequip_item`
+- Fire: `fire_status_change` event broadcast to table
+
+### Table.js Changes
+- Added `handActions` and `handChipsBefore` tracking per hand
+- Actions recorded in central success path of `handleAction()`
+- `_collectAndSendStatsData()` method collects full hand data for StatsEngine
+- Called from both `showdown()` and `awardPot()` (fold-win path)
+- State broadcasts now include `fireLevel`, `coldLevel`, `activeTitle`, `crewTag` per seat
+- Crew tag and active title loaded when player joins table
+
+### IMPORTANT: Old hand_history table is auto-dropped
+The migration checks if the old minimal `hand_history` table exists (no `table_id` column) and drops it, replacing with the full schema. Existing hand history data from the old schema will be lost (it was minimal and mostly empty anyway).
+
+---
+
 ## GUI Overhaul Started (Feb 12, 2026)
 
 ### Full App Redesign - Theme, Layout, Animations

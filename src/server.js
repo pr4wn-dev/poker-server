@@ -336,6 +336,15 @@ async function start() {
         console.log('');
     } else {
         console.log('[Server] Database connected and tables ready');
+        
+        // Initialize event manager (loads active events)
+        try {
+            const eventManager = require('./events/EventManager');
+            await eventManager.loadActiveEvents();
+            console.log('[Server] Event manager initialized');
+        } catch (err) {
+            console.error('[Server] Event manager init failed (non-critical):', err.message);
+        }
     }
 
     // Initialize socket handler with database access

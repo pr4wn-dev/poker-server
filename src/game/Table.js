@@ -91,6 +91,10 @@ class Table {
         this.gameStarted = false;
         this.handsPlayed = 0;
         
+        // Stats tracking: actions per player per hand (reset each hand)
+        this.handActions = {}; // playerId -> [{phase, action, amount}]
+        this.handChipsBefore = {}; // playerId -> chips at start of hand
+        
         // CRITICAL: Track starting chips for money validation
         // Sum of all players' starting chips should equal winner's final chips
         this.totalStartingChips = 0;  // Sum of all buy-ins when game starts
@@ -3066,6 +3070,16 @@ class Table {
             }
         }
 
+        // Initialize stats tracking for this hand
+        this.handActions = {};
+        this.handChipsBefore = {};
+        for (const seat of this.seats) {
+            if (seat?.isActive && seat.playerId) {
+                this.handActions[seat.playerId] = [];
+                this.handChipsBefore[seat.playerId] = seat.chips || 0;
+            }
+        }
+
         // Set first player (after big blind)
         this.currentPlayerIndex = this.getNextActivePlayer(bbIndex);
         this.lastRaiserIndex = bbIndex;
@@ -3818,6 +3832,15 @@ class Table {
                 
                 // Notify about the action (for all players including bots)
                 this.onPlayerAction?.(playerId, result.action, result.amount || 0);
+                
+                // Record action for stats tracking
+                if (this.handActions[playerId]) {
+                    this.handActions[playerId].push({
+                        phase: this.phase,
+                        action: result.action,
+                        amount: result.amount || 0
+                    });
+                }
                 
                 // CRITICAL FIX: Clear action lock BEFORE advancing game (advanceGame may trigger async operations)
                 this._processingAction = false;
@@ -6269,6 +6292,142 @@ class Table {
         }
     }
 
+    /**
+     * Collect hand data and send to StatsEngine for processing
+     * Called after showdown or when everyone folds
+     */
+    _collectAndSendStatsData(potAwards, wentToShowdown) {
+        try {
+            const StatsEngine = require('../stats/StatsEngine');
+            const fireTracker = require('./FireTracker');
+            const TitleEngine = require('../stats/TitleEngine');
+
+            const players = [];
+            
+            for (const seat of this.seats) {
+                if (!seat || !seat.playerId) continue;
+                // Skip players not tracked this hand (joined mid-hand)
+                if (this.handChipsBefore[seat.playerId] === undefined) continue;
+                
+                const chipsBefore = this.handChipsBefore[seat.playerId] || 0;
+                const chipsAfter = seat.chips || 0;
+                const chipsWonLost = chipsAfter - chipsBefore;
+                const actions = this.handActions[seat.playerId] || [];
+                const folded = actions.some(a => a.action === 'fold');
+                const isVoluntary = actions.some(a => 
+                    a.phase === 'preflop' && ['call', 'raise', 'bet', 'allin'].includes(a.action)
+                );
+                const didRaisePF = actions.some(a => 
+                    a.phase === 'preflop' && ['raise', 'allin'].includes(a.action)
+                );
+
+                // Determine if this player was a winner
+                const wasWinner = potAwards ? 
+                    potAwards.some(a => a.playerId === seat.playerId && !a.isRefund) :
+                    chipsWonLost > 0;
+
+                // Build player stats record
+                players.push({
+                    playerId: seat.playerId,
+                    playerName: seat.name || seat.playerName,
+                    seatIndex: this.seats.indexOf(seat),
+                    holeCards: seat.cards || [],
+                    finalHandRank: seat.handResult?.rank || 0,
+                    finalHandName: seat.handResult?.name || (folded ? 'Folded' : 'Unknown'),
+                    chipsWonLost,
+                    wasWinner,
+                    actions,
+                    isVoluntary,
+                    didRaisePF,
+                    didCBet: false, // TODO: detect c-bet pattern
+                    cbetSuccess: false,
+                    wasStealAttempt: false, // TODO: detect steal attempts
+                    stealSuccess: false,
+                    wasBluff: false, // TODO: detect bluffs  
+                    bluffSuccess: false,
+                    opponentWasBluffing: false,
+                    calledBluffCorrectly: false,
+                    hadDrawOnFlop: false, // TODO: detect draws
+                    drawCompleted: false,
+                    wasBehindOnFlop: false,
+                    wonFromBehind: false,
+                    chipsBefore,
+                    chipsAfter
+                });
+
+                // Record hand for fire tracker
+                fireTracker.recordHand(this.id, seat.playerId, {
+                    won: wasWinner,
+                    handRank: seat.handResult?.rank || 0,
+                    potSize: this.pot || 0,
+                    bigBlind: this.bigBlind,
+                    folded,
+                    drawCompleted: false,
+                    suckout: false,
+                    chipsWonLost
+                });
+            }
+
+            // Determine phase reached
+            let phaseReached = 'preflop';
+            if (this.communityCards.length >= 5 || wentToShowdown) phaseReached = 'showdown';
+            else if (this.communityCards.length >= 4) phaseReached = 'river';
+            else if (this.communityCards.length >= 3) phaseReached = 'turn';
+            else if (this.communityCards.length >= 1) phaseReached = 'flop';
+
+            const handData = {
+                tableId: this.id,
+                tableName: this.name,
+                handNumber: this.handsPlayed,
+                communityCards: this.communityCards || [],
+                potSize: potAwards ? potAwards.reduce((sum, a) => sum + a.amount, 0) : (this.pot || 0),
+                phaseReached,
+                wentToShowdown,
+                players
+            };
+
+            // Process stats asynchronously (don't block game flow)
+            StatsEngine.processHand(handData).catch(err => {
+                gameLogger.error(this.name, 'StatsEngine.processHand failed', { error: err.message });
+            });
+
+            // Evaluate titles for each player asynchronously (every 5 hands to reduce DB load)
+            if (this.handsPlayed % 5 === 0) {
+                for (const player of players) {
+                    if (player.playerId && !this.seats.find(s => s?.playerId === player.playerId)?.isBot) {
+                        TitleEngine.evaluateTitles(player.playerId).catch(err => {
+                            gameLogger.error(this.name, 'TitleEngine.evaluateTitles failed', { error: err.message });
+                        });
+                    }
+                }
+            }
+
+            // Check fire transitions and announce
+            for (const player of players) {
+                const status = fireTracker.getFireStatus(this.id, player.playerId);
+                // Store fire status on the seat for state broadcasts
+                const seat = this.seats.find(s => s?.playerId === player.playerId);
+                if (seat) {
+                    const prevFireLevel = seat.fireLevel || 0;
+                    seat.fireLevel = status.fireLevel;
+                    seat.coldLevel = status.coldLevel;
+                    seat.fireScore = status.fireScore;
+
+                    // Announce fire status changes
+                    if (status.fireLevel !== prevFireLevel && this.onFireStatusChange) {
+                        this.onFireStatusChange(player.playerId, player.playerName, status);
+                    }
+                }
+            }
+
+        } catch (err) {
+            gameLogger.error(this.name, '_collectAndSendStatsData failed', {
+                error: err.message,
+                stack: err.stack
+            });
+        }
+    }
+
     showdown() {
         // POKER RULE: Return any excess all-in bets before calculating winners
         // This ensures the pot only contains chips that were actually contested
@@ -6741,6 +6900,9 @@ class Table {
                 handName: a.handName
             })) || []
         });
+
+        // Send hand data to stats engine (showdown path)
+        this._collectAndSendStatsData(potAwards, true);
         
         // Notify about each pot winner (for hand_result event)
         // CRITICAL: Emit hand_result AFTER state has been broadcast so cards are visible
@@ -9066,6 +9228,14 @@ class Table {
         // ROOT CAUSE: Trace end of awardPot
         const afterState = this._getChipState();
         this._traceOperation('AWARD_POT_COMPLETE', beforeState, afterState);
+
+        // Send hand data to stats engine (fold-win path — everyone folded)
+        this._collectAndSendStatsData([{
+            playerId: winner.playerId,
+            name: winner.name,
+            amount: potAmount,
+            handName: 'Fold Win'
+        }], false);
         
         // CRITICAL: NOW that pot is awarded, we can safely remove eliminated players
         // CRITICAL FIX: DO NOT subtract buy-in from totalStartingChips when players are eliminated!
@@ -9803,7 +9973,14 @@ class Table {
                     // Note: seat.playerId should never be a spectator (spectators aren't in seats), but adding check for safety
                     needsItemAnteSubmission: !this.isSpectator(seat.playerId) && this.itemAnteEnabled && !this.gameStarted && this.itemAnte && 
                         (this.itemAnte.needsFirstItem() || !this.itemAnte.hasSubmitted(seat.playerId)),
-                    cards: cards
+                    cards: cards,
+                    // Fire/cold status (NBA Jam style)
+                    fireLevel: seat.fireLevel || 0,
+                    coldLevel: seat.coldLevel || 0,
+                    // Active title (displayed under name)
+                    activeTitle: seat.activeTitle || null,
+                    // Crew tag
+                    crewTag: seat.crewTag || null
                 };
             })
         };

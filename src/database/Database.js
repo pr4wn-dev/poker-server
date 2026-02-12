@@ -260,18 +260,373 @@ class Database {
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         `);
 
-        // Hand history (optional, for replay/analytics)
+        // Hand history — full hand data for stats, replays, analytics
+        // DROP the old minimal hand_history if it exists and recreate with full schema
+        // Check if old schema exists (has session_id but not table_id)
+        try {
+            const [columns] = await this.pool.query(`SHOW COLUMNS FROM hand_history LIKE 'table_id'`);
+            if (columns.length === 0) {
+                // Old schema — drop and recreate
+                await this.query('DROP TABLE IF EXISTS hand_history');
+                gameLogger.gameEvent('DATABASE', '[MIGRATIONS] Dropped old hand_history table for schema upgrade', {});
+            }
+        } catch (e) {
+            // Table doesn't exist yet, that's fine
+        }
+
         await this.query(`
             CREATE TABLE IF NOT EXISTS hand_history (
                 id INT AUTO_INCREMENT PRIMARY KEY,
-                session_id VARCHAR(36),
-                hand_number INT,
-                winner_id VARCHAR(36),
-                pot_amount INT,
-                winning_hand VARCHAR(50),
+                table_id VARCHAR(36) NOT NULL,
+                table_name VARCHAR(100),
+                hand_number INT NOT NULL,
+                player_id VARCHAR(36) NOT NULL,
+                player_name VARCHAR(50),
+                seat_index INT,
+                hole_cards JSON,
+                community_cards JSON,
+                actions_taken JSON,
+                final_hand_rank INT DEFAULT 0,
+                final_hand_name VARCHAR(50),
+                pot_size BIGINT DEFAULT 0,
+                chips_won_lost BIGINT DEFAULT 0,
+                was_winner BOOLEAN DEFAULT FALSE,
+                went_to_showdown BOOLEAN DEFAULT FALSE,
+                phase_reached VARCHAR(20) DEFAULT 'preflop',
+                starting_hand_category VARCHAR(20),
+                is_voluntary BOOLEAN DEFAULT FALSE,
+                did_raise_preflop BOOLEAN DEFAULT FALSE,
+                did_cbet BOOLEAN DEFAULT FALSE,
+                cbet_success BOOLEAN DEFAULT FALSE,
+                was_steal_attempt BOOLEAN DEFAULT FALSE,
+                steal_success BOOLEAN DEFAULT FALSE,
+                was_bluff BOOLEAN DEFAULT FALSE,
+                bluff_success BOOLEAN DEFAULT FALSE,
+                opponent_was_bluffing BOOLEAN DEFAULT FALSE,
+                called_bluff_correctly BOOLEAN DEFAULT FALSE,
+                had_draw_on_flop BOOLEAN DEFAULT FALSE,
+                draw_completed BOOLEAN DEFAULT FALSE,
+                was_behind_on_flop BOOLEAN DEFAULT FALSE,
+                won_from_behind BOOLEAN DEFAULT FALSE,
                 played_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (session_id) REFERENCES game_sessions(id) ON DELETE SET NULL,
+                INDEX idx_player (player_id),
+                INDEX idx_table (table_id),
+                INDEX idx_played_at (played_at),
+                INDEX idx_player_hand (player_id, final_hand_rank),
+                INDEX idx_player_pocket (player_id, starting_hand_category)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        `);
+
+        // Player stats — aggregated lifetime stats (cached, recomputable from hand_history)
+        await this.query(`
+            CREATE TABLE IF NOT EXISTS player_stats (
+                player_id VARCHAR(36) PRIMARY KEY,
+                hands_played INT DEFAULT 0,
+                hands_won INT DEFAULT 0,
+                total_chips_won BIGINT DEFAULT 0,
+                total_chips_lost BIGINT DEFAULT 0,
+                biggest_pot_won BIGINT DEFAULT 0,
+                biggest_pot_lost BIGINT DEFAULT 0,
+                best_session_profit BIGINT DEFAULT 0,
+                worst_session_loss BIGINT DEFAULT 0,
+                current_win_streak INT DEFAULT 0,
+                current_lose_streak INT DEFAULT 0,
+                longest_win_streak INT DEFAULT 0,
+                longest_lose_streak INT DEFAULT 0,
+                sessions_played INT DEFAULT 0,
+                total_play_time_seconds INT DEFAULT 0,
+                vpip_hands INT DEFAULT 0,
+                pfr_hands INT DEFAULT 0,
+                total_bets INT DEFAULT 0,
+                total_raises INT DEFAULT 0,
+                total_calls INT DEFAULT 0,
+                total_folds INT DEFAULT 0,
+                showdown_hands INT DEFAULT 0,
+                showdown_wins INT DEFAULT 0,
+                cbet_attempts INT DEFAULT 0,
+                cbet_successes INT DEFAULT 0,
+                steal_attempts INT DEFAULT 0,
+                steal_successes INT DEFAULT 0,
+                bluff_attempts INT DEFAULT 0,
+                bluff_successes INT DEFAULT 0,
+                bluff_detection_opportunities INT DEFAULT 0,
+                bluff_detections INT DEFAULT 0,
+                fold_to_bet_count INT DEFAULT 0,
+                fold_to_bet_opportunities INT DEFAULT 0,
+                river_draw_attempts INT DEFAULT 0,
+                river_draw_hits INT DEFAULT 0,
+                turn_draw_attempts INT DEFAULT 0,
+                turn_draw_hits INT DEFAULT 0,
+                flop_connect_hands INT DEFAULT 0,
+                flop_total_hands INT DEFAULT 0,
+                suckout_opportunities INT DEFAULT 0,
+                suckout_wins INT DEFAULT 0,
+                bad_beat_opportunities INT DEFAULT 0,
+                bad_beat_losses INT DEFAULT 0,
+                premium_hands_dealt INT DEFAULT 0,
+                total_hands_dealt INT DEFAULT 0,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                FOREIGN KEY (player_id) REFERENCES users(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        `);
+
+        // Player hand type stats — per player per hand type (high_card through royal_flush)
+        await this.query(`
+            CREATE TABLE IF NOT EXISTS player_hand_type_stats (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                player_id VARCHAR(36) NOT NULL,
+                hand_type INT NOT NULL,
+                hand_type_name VARCHAR(30) NOT NULL,
+                times_made INT DEFAULT 0,
+                times_won INT DEFAULT 0,
+                times_lost INT DEFAULT 0,
+                total_chips_won BIGINT DEFAULT 0,
+                total_chips_lost BIGINT DEFAULT 0,
+                last_hit_at TIMESTAMP NULL,
+                UNIQUE KEY unique_player_hand_type (player_id, hand_type),
+                FOREIGN KEY (player_id) REFERENCES users(id) ON DELETE CASCADE,
+                INDEX idx_player_type (player_id, hand_type)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        `);
+
+        // Player pocket stats — per player per starting hand combo
+        await this.query(`
+            CREATE TABLE IF NOT EXISTS player_pocket_stats (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                player_id VARCHAR(36) NOT NULL,
+                pocket_category VARCHAR(20) NOT NULL,
+                times_dealt INT DEFAULT 0,
+                times_played INT DEFAULT 0,
+                times_won INT DEFAULT 0,
+                times_folded INT DEFAULT 0,
+                total_chips_won BIGINT DEFAULT 0,
+                total_chips_lost BIGINT DEFAULT 0,
+                UNIQUE KEY unique_player_pocket (player_id, pocket_category),
+                FOREIGN KEY (player_id) REFERENCES users(id) ON DELETE CASCADE,
+                INDEX idx_player_pocket (player_id, pocket_category)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        `);
+
+        // Player sessions — track each play session
+        await this.query(`
+            CREATE TABLE IF NOT EXISTS player_sessions (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                session_id VARCHAR(36) NOT NULL,
+                player_id VARCHAR(36) NOT NULL,
+                table_id VARCHAR(36),
+                start_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                end_time TIMESTAMP NULL,
+                hands_played INT DEFAULT 0,
+                chips_start BIGINT DEFAULT 0,
+                chips_end BIGINT DEFAULT 0,
+                profit_loss BIGINT DEFAULT 0,
+                FOREIGN KEY (player_id) REFERENCES users(id) ON DELETE CASCADE,
+                INDEX idx_player_sessions (player_id),
                 INDEX idx_session (session_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        `);
+
+        // Fire events — log when players go on fire
+        await this.query(`
+            CREATE TABLE IF NOT EXISTS fire_events (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                player_id VARCHAR(36) NOT NULL,
+                table_id VARCHAR(36) NOT NULL,
+                fire_level INT NOT NULL DEFAULT 1,
+                hands_in_streak INT DEFAULT 0,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (player_id) REFERENCES users(id) ON DELETE CASCADE,
+                INDEX idx_player_fire (player_id),
+                INDEX idx_table_fire (table_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        `);
+
+        // Player titles — earned dynamic titles
+        await this.query(`
+            CREATE TABLE IF NOT EXISTS player_titles (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                player_id VARCHAR(36) NOT NULL,
+                title_id VARCHAR(50) NOT NULL,
+                title_name VARCHAR(100) NOT NULL,
+                title_category VARCHAR(30) NOT NULL,
+                earned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                is_active BOOLEAN DEFAULT FALSE,
+                UNIQUE KEY unique_player_title (player_id, title_id),
+                FOREIGN KEY (player_id) REFERENCES users(id) ON DELETE CASCADE,
+                INDEX idx_player_titles (player_id),
+                INDEX idx_active_title (player_id, is_active)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        `);
+
+        // Achievements
+        await this.query(`
+            CREATE TABLE IF NOT EXISTS achievements (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                player_id VARCHAR(36) NOT NULL,
+                achievement_id VARCHAR(50) NOT NULL,
+                achievement_name VARCHAR(100) NOT NULL,
+                progress INT DEFAULT 0,
+                target INT DEFAULT 1,
+                completed_at TIMESTAMP NULL,
+                reward_claimed BOOLEAN DEFAULT FALSE,
+                UNIQUE KEY unique_player_achievement (player_id, achievement_id),
+                FOREIGN KEY (player_id) REFERENCES users(id) ON DELETE CASCADE,
+                INDEX idx_player_achievements (player_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        `);
+
+        // Crews
+        await this.query(`
+            CREATE TABLE IF NOT EXISTS crews (
+                id VARCHAR(36) PRIMARY KEY,
+                name VARCHAR(50) UNIQUE NOT NULL,
+                tag VARCHAR(5) UNIQUE NOT NULL,
+                description TEXT,
+                emblem_color VARCHAR(7) DEFAULT '#00ffff',
+                created_by VARCHAR(36) NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                crew_level INT DEFAULT 1,
+                crew_xp INT DEFAULT 0,
+                max_members INT DEFAULT 20,
+                FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE,
+                INDEX idx_crew_name (name),
+                INDEX idx_crew_tag (tag)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        `);
+
+        // Crew members
+        await this.query(`
+            CREATE TABLE IF NOT EXISTS crew_members (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                crew_id VARCHAR(36) NOT NULL,
+                player_id VARCHAR(36) NOT NULL,
+                role ENUM('leader', 'officer', 'member') DEFAULT 'member',
+                joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY unique_crew_member (crew_id, player_id),
+                UNIQUE KEY unique_player_crew (player_id),
+                FOREIGN KEY (crew_id) REFERENCES crews(id) ON DELETE CASCADE,
+                FOREIGN KEY (player_id) REFERENCES users(id) ON DELETE CASCADE,
+                INDEX idx_crew (crew_id),
+                INDEX idx_player (player_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        `);
+
+        // Crew stats
+        await this.query(`
+            CREATE TABLE IF NOT EXISTS crew_stats (
+                crew_id VARCHAR(36) PRIMARY KEY,
+                total_hands_played INT DEFAULT 0,
+                total_hands_won INT DEFAULT 0,
+                total_chips_won BIGINT DEFAULT 0,
+                tournaments_won INT DEFAULT 0,
+                robberies_successful INT DEFAULT 0,
+                crew_wars_won INT DEFAULT 0,
+                crew_wars_lost INT DEFAULT 0,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                FOREIGN KEY (crew_id) REFERENCES crews(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        `);
+
+        // Robbery log
+        await this.query(`
+            CREATE TABLE IF NOT EXISTS robbery_log (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                robber_id VARCHAR(36) NOT NULL,
+                victim_id VARCHAR(36) NOT NULL,
+                item_id VARCHAR(36),
+                item_name VARCHAR(100),
+                tool_used VARCHAR(50),
+                success BOOLEAN DEFAULT FALSE,
+                chip_penalty BIGINT DEFAULT 0,
+                recovered BOOLEAN DEFAULT FALSE,
+                recovered_at TIMESTAMP NULL,
+                cooldown_until TIMESTAMP NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (robber_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (victim_id) REFERENCES users(id) ON DELETE CASCADE,
+                INDEX idx_robber (robber_id),
+                INDEX idx_victim (victim_id),
+                INDEX idx_created (created_at)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        `);
+
+        // Events — seasonal/weekly game events
+        await this.query(`
+            CREATE TABLE IF NOT EXISTS events (
+                id VARCHAR(36) PRIMARY KEY,
+                name VARCHAR(100) NOT NULL,
+                description TEXT,
+                event_type VARCHAR(30) NOT NULL,
+                multipliers JSON,
+                rewards JSON,
+                start_date TIMESTAMP NOT NULL,
+                end_date TIMESTAMP NOT NULL,
+                is_active BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_active (is_active, start_date, end_date)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        `);
+
+        // Daily rewards
+        await this.query(`
+            CREATE TABLE IF NOT EXISTS daily_rewards (
+                player_id VARCHAR(36) PRIMARY KEY,
+                last_claim_date DATE NULL,
+                current_streak INT DEFAULT 0,
+                total_claims INT DEFAULT 0,
+                FOREIGN KEY (player_id) REFERENCES users(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        `);
+
+        // Spectator bets
+        await this.query(`
+            CREATE TABLE IF NOT EXISTS spectator_bets (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                spectator_id VARCHAR(36) NOT NULL,
+                table_id VARCHAR(36) NOT NULL,
+                hand_number INT NOT NULL,
+                bet_on_player_id VARCHAR(36) NOT NULL,
+                amount BIGINT DEFAULT 0,
+                result ENUM('pending', 'won', 'lost') DEFAULT 'pending',
+                payout BIGINT DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (spectator_id) REFERENCES users(id) ON DELETE CASCADE,
+                INDEX idx_spectator (spectator_id),
+                INDEX idx_table_hand (table_id, hand_number)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        `);
+
+        // Saved hands — for replay system
+        await this.query(`
+            CREATE TABLE IF NOT EXISTS saved_hands (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                player_id VARCHAR(36) NOT NULL,
+                hand_history_id INT NOT NULL,
+                is_highlight BOOLEAN DEFAULT FALSE,
+                label VARCHAR(100),
+                saved_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY unique_player_hand (player_id, hand_history_id),
+                FOREIGN KEY (player_id) REFERENCES users(id) ON DELETE CASCADE,
+                INDEX idx_player_saved (player_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        `);
+
+        // Collusion flags — anti-cheat tracking
+        await this.query(`
+            CREATE TABLE IF NOT EXISTS collusion_flags (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                player1_id VARCHAR(36) NOT NULL,
+                player2_id VARCHAR(36) NOT NULL,
+                flag_type VARCHAR(30) NOT NULL,
+                evidence JSON,
+                severity ENUM('low', 'medium', 'high', 'critical') DEFAULT 'low',
+                reviewed BOOLEAN DEFAULT FALSE,
+                action_taken VARCHAR(50),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (player1_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (player2_id) REFERENCES users(id) ON DELETE CASCADE,
+                INDEX idx_players (player1_id, player2_id),
+                INDEX idx_unreviewed (reviewed, severity)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         `);
 
