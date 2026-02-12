@@ -22,6 +22,132 @@ Real-time multiplayer Texas Hold'em poker server built with Node.js and Socket.I
 - 📊 Simulation mode for spectating bot-only games
 - ⏱️ Configurable blind increase timers
 
+## Item Economy System
+
+### Overview
+The game features a dual-economy system designed to be **legal, sustainable, and engaging** while supporting thousands of users. Revenue is generated through **ads, traffic, optional cosmetics, and chip sales** - NOT through gambling real money.
+
+### Two Item Types
+
+#### **Gambleable Items** (Earned Through Gameplay)
+- Dropped from bosses, tournaments, and challenges
+- Can be used in **Item Ante poker games** (risk vs. reward)
+- Can be **traded** with other players (item-for-item swaps)
+- Have **NO real-money value** (cannot be cashed out)
+- Rarity tiers: Common → Uncommon → Rare → Epic → Legendary
+- Purpose: **Prestige, collection, bragging rights**
+- Marked with `isGambleable: true`
+
+#### **Store Items** (Cosmetic/Premium Only)
+- Purchased with **real money** (microtransactions)
+- **CANNOT be gambled** in Item Ante (legal compliance)
+- **CANNOT be traded** (account-bound)
+- Examples: Custom avatars, card backs, emotes, table themes
+- **Visual-only** - no gameplay advantage
+- Marked with `isGambleable: false`
+
+**Legal Compliance:** By separating gambleable items (zero cash value) from store items (cannot be gambled), Item Ante is **not classified as real-money gambling**.
+
+### Chip Economy
+
+#### Earning Chips (Free)
+- Win poker hands
+- Daily login bonuses
+- Complete challenges
+- Level up rewards
+- Tournament prizes
+
+#### Buying Chips (Optional)
+- Small Pack: $5 → 10,000 chips
+- Medium Pack: $20 → 50,000 chips
+- Large Pack: $50 → 150,000 chips
+- **One-way only** - chips cannot be sold back for real money (legal compliance)
+
+#### Using Chips
+- Table buy-ins
+- Tournament entries
+- Practice mode (free, unlimited)
+
+**Legal Compliance:** Chips can be earned for free (skill-based) and cannot be cashed out (one-way = not gambling).
+
+### Item Power Score System
+
+Instead of dollar values, items use a **Power Score** based on rarity and scarcity:
+
+```
+Power = (Rarity × Drop Rate × Demand)
+
+Examples:
+┌────────────┬───────────┬───────────┬────────┬───────┐
+│ Item       │ Rarity    │ Drop Rate │ Demand │ Power │
+├────────────┼───────────┼───────────┼────────┼───────┤
+│ Flaming Ace│ Legendary │ 0.1%      │ High   │ 9,500 │
+│ Gold Chip  │ Epic      │ 2%        │ Medium │ 3,200 │
+│ Silver Card│ Rare      │ 8%        │ Low    │   850 │
+│ Wood Token │ Common    │ 40%       │ Low    │   120 │
+└────────────┴───────────┴───────────┴────────┴───────┘
+```
+
+### Item Ante Flow
+
+#### Table Creation (Creator's Side)
+1. Creator enables Item Ante checkbox
+2. Creator clicks **[SELECT ANTE ITEM]** button
+3. Inventory panel opens (shows only `isGambleable: true` items)
+4. Creator picks item → shows in preview square with Power Score
+5. That item's **Power Score becomes the locked minimum** for the entire table session
+6. Item is stored in table settings (NOT removed from inventory yet)
+
+#### Lobby View (Other Players)
+- Table list shows: `"Item Ante: 9,500 Power minimum (Legendary)"`
+- Optional: Preview of creator's selected item
+- Players know the stakes before joining
+
+#### Before Each Hand
+1. All players see: **"⚠️ MINIMUM REQUIRED: 9,500 Power (Legendary: Flaming Ace)"**
+2. Players select item(s) from inventory:
+   - Only `isGambleable: true` items are selectable
+   - Store items are grayed out with tooltip: *"Store items cannot be gambled"*
+   - Items below minimum show **red ✗**
+   - Items at/above minimum show **green ✓**
+3. Players can combine multiple items to reach minimum (e.g., 3× Rare = 1× Legendary)
+4. Winner takes all items from the pot
+
+#### Practice Mode vs. Real Mode
+- **Practice**: Items are "virtually" bet, no actual transfer (risk-free learning)
+- **Real**: Items are permanently transferred to winner's inventory
+
+#### If Creator Leaves/Eliminated
+- **Minimum stays locked** at the original Power Score
+- Table continues with same rules
+- No interruption to gameplay
+
+### Revenue Model
+
+#### Primary Revenue (Main Focus)
+1. **Ads** - Interstitial, rewarded video (watch ad → bonus chips), banners
+2. **Traffic** - Affiliate partnerships, sponsored tournaments, influencer collabs
+3. **Premium Membership** - $4.99/month (ad-free, exclusive cosmetics, 2× daily chips, priority matchmaking)
+
+#### Secondary Revenue (Optional Microtransactions)
+4. **Cosmetic Store** - Avatars ($1.99-$4.99), card backs ($0.99-$2.99), emotes ($0.99), table themes ($1.99), profile frames ($1.99)
+5. **Chip Packs** - Optional boost to skip grinding (still earnable free)
+
+**No real-money gambling** - all revenue is from ads, cosmetics, and optional chip purchases (one-way).
+
+### Implementation Status
+- ✅ Basic Item Ante system (gamble items, winner takes all)
+- ✅ Item rarity system (Common → Legendary)
+- ✅ Practice mode (virtual betting, no transfer)
+- ⏳ **TODO**: Power Score calculation
+- ⏳ **TODO**: `isGambleable` flag enforcement
+- ⏳ **TODO**: Table creation item selection UI
+- ⏳ **TODO**: Locked minimum display in lobby/game
+- ⏳ **TODO**: Store item restrictions (cannot gamble)
+- ⏳ **TODO**: Chip purchasing system
+- ⏳ **TODO**: Ads integration (AdMob, Unity Ads)
+- ⏳ **TODO**: Premium membership system
+
 ## Quick Start
 
 ### Prerequisites
@@ -685,6 +811,61 @@ Keep narrowing down until the problem disappears - the last chunk you commented 
 - Item not found in inventory (if item was traded/consumed between selection and submission)
 
 **See:** `src/game/ItemAnte.js` and `src/game/BotManager.js`
+
+## Upcoming Changes (Planned)
+
+### Item Economy Overhaul (In Planning - Feb 12, 2026)
+
+**Goal:** Implement a complete legal, sustainable, and scalable item economy system to support thousands of users while generating revenue through ads and optional microtransactions.
+
+**Key Changes:**
+1. **Power Score System**
+   - Replace dollar values with prestige-based "Power Score"
+   - Formula: `Power = (Rarity × Drop Rate × Demand)`
+   - Items valued by rarity/scarcity instead of real money
+
+2. **Dual Item System**
+   - **Gambleable Items** (earned only): Can be used in Item Ante, tradeable, no cash value
+   - **Store Items** (purchased): Cannot be gambled, account-bound, cosmetic only
+   - Add `isGambleable` flag to Item model
+
+3. **Table Creator Sets Minimum**
+   - Creator selects ante item at table creation
+   - Item's Power Score becomes locked minimum for entire table session
+   - Minimum persists even if creator leaves/eliminated
+   - UI shows minimum in lobby and during game
+
+4. **Chip Purchase System (One-Way)**
+   - Players can buy chips with real money
+   - Chips CANNOT be sold back (legal compliance)
+   - Chips can be earned free through gameplay
+
+5. **Store Items Cannot Be Gambled**
+   - Enforce `isGambleable: false` for purchased items
+   - Gray out store items in Item Ante selection
+   - Clear messaging: "Store items cannot be gambled"
+
+6. **Revenue Streams**
+   - Primary: Ads (interstitial, rewarded video, banners)
+   - Secondary: Premium membership ($4.99/mo)
+   - Tertiary: Cosmetic store, optional chip packs
+
+**Legal Compliance:**
+- No real-money gambling (gambleable items have zero cash value)
+- Store items cannot be gambled (separation of concerns)
+- Chips one-way only (can buy, cannot sell = not gambling)
+
+**Implementation Priority:**
+1. Power Score calculation and display
+2. `isGambleable` flag enforcement
+3. Table creation UI (item selection with preview)
+4. Locked minimum display (lobby, game)
+5. Store item restrictions
+6. Chip purchasing system
+7. Ads integration
+8. Premium membership
+
+**Status:** Design complete, implementation pending
 
 ## License
 
