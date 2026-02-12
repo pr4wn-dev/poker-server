@@ -184,6 +184,57 @@ Keep narrowing down until the problem disappears - the last chunk you commented 
 
 ## Recent Fixes (February 2026)
 
+### ✅ Fixed: Double-Action Race Condition (Action Panel Re-showing)
+**Status:** FIXED  
+**Date:** February 12, 2026  
+**Severity:** HIGH  
+
+**Problem:** After clicking Fold (or any action), queued state updates that arrived before the server processed the action would re-show the action panel via `ShowActionButtons()`, re-enabling all buttons. Clicking again sent a second action, causing "Already folded - cannot act" errors. The panel then became permanently stuck.
+
+**Root Cause:** Socket.IO state broadcasts could arrive in the Unity main thread dispatcher between the action being sent and the server processing it. These stale updates still showed `currentPlayerId == myId`, causing `shouldShowActionPanel = true` → `ShowActionButtons()` → buttons re-enabled.
+
+**Solution:**
+- Added `_actionPanelLocked` flag in `TableScene.cs`
+- Set to `true` in `DisableAllActionButtons()` (called immediately on any action click)
+- Only cleared when `currentPlayerId` definitively changes to another player or the phase becomes non-game
+- `shouldShowActionPanel` now requires `!_actionPanelLocked` to be true
+
+**Files Changed:**
+- `Assets/Scripts/UI/Scenes/TableScene.cs` (Unity client)
+
+### ✅ Fixed: Item Ante Transfer Fails for Bots (FK Constraint Error)
+**Status:** FIXED  
+**Date:** February 12, 2026  
+**Severity:** MEDIUM  
+
+**Problem:** When a bot won the item ante, the server tried to insert items into the `inventory` table using the bot's ID (e.g., `bot_tex_1770868684318`). Since bots aren't in the `users` table, the foreign key constraint (`inventory.user_id → users.id`) caused `ER_NO_REFERENCED_ROW_2`.
+
+**Solution:**
+- Before transferring items, check if the winner is a bot (`isBot` flag, or ID starts with `bot_`, or name starts with `NetPlayer_`/`SimBot_`)
+- If bot: log the award but skip DB transfer (bots don't have real inventories)
+- If real player: transfer items as before
+
+**Files Changed:**
+- `src/game/Table.js` (showdown item ante award logic)
+
+### ✅ Fixed: Bot Betting into Dead Streets After Opponent All-In
+**Status:** FIXED  
+**Date:** February 12, 2026  
+**Severity:** MEDIUM  
+
+**Problem:** When a player went all-in and the bot was the only one who could act, the bot continued betting/raising through flop, turn, and river phases. Each phase advanced via LOOP PREVENTION, but the bot still wasted time and inflated the pot (excess was eventually returned by `returnExcessBets`).
+
+**Root Cause:** EXIT POINT 0b in `advanceGame()` only advanced ONE phase at a time, letting the bot act in each new phase. Also, the bot's AI didn't check if all opponents were inactive.
+
+**Solution (3 parts):**
+1. **EXIT POINT 0b**: Now skips ALL remaining phases directly to showdown — deals remaining community cards, returns excess bets, broadcasts state, then goes to showdown after a 1.5s delay
+2. **Bot AI**: Before deciding, checks if all opponents are all-in/folded. If so, just calls or checks instead of raising
+3. **Bot Fallback**: Changed order from `fold > check` to `call > check > fold` to prevent unnecessary folds when max raises are reached
+
+**Files Changed:**
+- `src/game/Table.js` (EXIT POINT 0b in `advanceGame()`)
+- `src/game/BotManager.js` (`executeBotTurn()` decision logic and fallback)
+
 ### ✅ Fixed: Pot Amount Display Bug
 **Status:** FIXED  
 **Date:** February 11, 2026  
