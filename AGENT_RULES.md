@@ -2,17 +2,41 @@
 
 **THESE ARE NON-NEGOTIABLE. VIOLATION = THEFT OF USER'S TIME AND MONEY.**
 
-## LAW 1: PULL BOTH REPOS FIRST
-```powershell
-# Server repo (Node.js backend)
-cd c:\Users\Becca\source\repos\poker-server; git pull
+## LAW 1: CHECK FOR UNCOMMITTED WORK, THEN PULL BOTH REPOS
 
-# Client repo (Unity frontend)  
-cd C:\Projects\poker-client-unity; git pull
+### ⚠️ **CRITICAL: CHECK BEFORE PULLING** ⚠️
+**NEVER run `git pull` if there are uncommitted changes! You will LOSE WORK!**
+
+```powershell
+# 1. CHECK FOR UNCOMMITTED CHANGES FIRST (Server)
+cd c:\Users\Becca\source\repos\poker-server; git status
+
+# 2. If "nothing to commit, working tree clean" → SAFE TO PULL
+# 3. If "Changes not staged" or "Changes to be committed" → DO NOT PULL!
+#    Instead: Commit and push first, or ask user what to do
+
+# Same for client
+cd C:\Projects\poker-client-unity; git status
 ```
+
+### **Safe Pull Workflow:**
+```powershell
+# Server repo
+cd c:\Users\Becca\source\repos\poker-server
+git status  # Check first!
+# If clean: git pull
+# If dirty: git add -A; git commit -m "WIP: save before pull"; git push; git pull
+
+# Client repo  
+cd C:\Projects\poker-client-unity
+git status  # Check first!
+# If clean: git pull
+# If dirty: git add -A; git commit -m "WIP: save before pull"; git push; git pull
+```
+
 **This happens BEFORE you respond to the user. BEFORE you do anything else. FIRST.**
 
-If user says "get files" or "update" or starts a new session → PULL BOTH REPOS.
+If user says "get files" or "update" or starts a new session → CHECK STATUS THEN PULL BOTH REPOS.
 
 Not one. BOTH. Every time. No exceptions.
 
