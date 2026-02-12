@@ -9591,6 +9591,7 @@ class Table {
             itemAnteEnabled: this.itemAnteEnabled,
             hasItemAnte: this.itemAnte?.status !== ItemAnte.STATUS.INACTIVE,
             itemAnteCount: this.itemAnte?.approvedItems?.length || 0,
+            minimumAntePowerScore: this.minimumAntePowerScore || 0, // NEW: Locked minimum Power Score
             createdAt: this.createdAt
         };
         } catch (error) {
