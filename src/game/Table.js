@@ -5856,6 +5856,11 @@ class Table {
                 activePlayers: activePlayers.length
             });
             console.log(`[Table ${this.name}] No active players (all all-in or folded) - advancing phase. All bets equalized: ${allBetsEqualized}`);
+            
+            // POKER RULE: Return excess all-in bets now that no more betting is possible
+            // This ensures the pot display is correct during the skip-to-showdown animation
+            this.returnExcessBets();
+            
             this.hasPassedLastRaiser = false;
             this.advancePhase();
             return;  // GUARANTEED EXIT - prevents loop
@@ -6167,7 +6172,75 @@ class Table {
         this.onStateChange?.();
     }
 
+    /**
+     * POKER RULE: Return excess all-in bets that no opponent can match.
+     * 
+     * Called when no more betting is possible (all non-folded players are all-in, or at showdown).
+     * 
+     * Example: Player A (100M) all-in vs Player B (20K) all-in
+     * - Main pot should be 40K (20K from each)
+     * - A's excess 99.98M is returned immediately (never belonged in the pot)
+     * 
+     * In multi-player: A(200), B(50 all-in), C(100 all-in)
+     * - Max matchable = 100 (2nd highest among non-folded)
+     * - A gets 100 back, pot reduced by 100
+     * - Side pot calc handles the 50/100 split between B and C levels
+     */
+    returnExcessBets() {
+        const nonFolded = this.seats
+            .filter(s => s && !s.isFolded && s.isActive !== false)
+            .sort((a, b) => (a.totalBet || 0) - (b.totalBet || 0));
+        
+        if (nonFolded.length < 2) return;
+        
+        // The maximum matchable bet is the 2nd-highest totalBet among non-folded players
+        const secondHighestBet = nonFolded[nonFolded.length - 2].totalBet || 0;
+        
+        let totalReturned = 0;
+        
+        for (const player of nonFolded) {
+            const playerTotalBet = player.totalBet || 0;
+            if (playerTotalBet > secondHighestBet) {
+                const excess = playerTotalBet - secondHighestBet;
+                
+                // Return excess chips to player
+                player.chips += excess;
+                player.totalBet -= excess;
+                this.pot -= excess;
+                totalReturned += excess;
+                
+                console.log(`[Table ${this.name}] EXCESS RETURNED: ${player.name} gets ${excess} back (bet ${playerTotalBet}, max matchable ${secondHighestBet}, pot now ${this.pot})`);
+                gameLogger.gameEvent(this.name, '[POT] Excess all-in chips returned', {
+                    player: player.name,
+                    excessReturned: excess,
+                    originalTotalBet: playerTotalBet,
+                    newTotalBet: player.totalBet,
+                    maxMatchableBet: secondHighestBet,
+                    newChips: player.chips,
+                    newPot: this.pot,
+                    handNumber: this.handsPlayed
+                });
+            }
+        }
+        
+        if (totalReturned > 0) {
+            gameLogger.gameEvent(this.name, '[POT] Total excess returned to players', {
+                totalReturned,
+                newPot: this.pot,
+                handNumber: this.handsPlayed,
+                phase: this.phase
+            });
+            
+            // Broadcast updated state so clients see correct pot and chip amounts
+            this.onStateChange?.();
+        }
+    }
+
     showdown() {
+        // POKER RULE: Return any excess all-in bets before calculating winners
+        // This ensures the pot only contains chips that were actually contested
+        this.returnExcessBets();
+        
         // ROOT CAUSE: Trace showdown operation
         const beforeState = this._getChipState();
         
