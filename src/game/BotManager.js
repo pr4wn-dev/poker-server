@@ -306,23 +306,36 @@ class BotManager {
                 console.error(`[BotManager] ${bot.name} failed to start item ante: ${result.error}`);
             }
         } else {
-            // Subsequent item - must meet minimum value
-            const minValue = table.itemAnte.minimumValue || 0;
-            selectedItem = testItems.find(item => (item.baseValue || 0) >= minValue);
+            // Subsequent item - must meet minimum Power Score
+            const minPowerScore = table.itemAnte.minimumPowerScore || 0;
+            selectedItem = testItems.find(item => (item.powerScore || 0) >= minPowerScore);
             
             if (!selectedItem) {
                 // No test item meets minimum - create a custom item that matches the requirement
-                console.log(`[BotManager] ${bot.name}: No test item meets minimum value ${minValue}, creating custom item`);
+                console.log(`[BotManager] ${bot.name}: No test item meets minimum Power Score ${minPowerScore}, creating custom item`);
+                
+                // Determine rarity based on Power Score ranges
+                // Common: ~2-20, Uncommon: ~10-50, Rare: ~30-150, Epic: ~100-500, Legendary: ~750-1500
+                let rarity;
+                if (minPowerScore >= 750) rarity = 'legendary';
+                else if (minPowerScore >= 100) rarity = 'epic';
+                else if (minPowerScore >= 30) rarity = 'rare';
+                else if (minPowerScore >= 10) rarity = 'uncommon';
+                else rarity = 'common';
+                
                 selectedItem = new Item({
                     templateId: 'bot_custom_ante',
                     name: `${bot.name}'s Prize`,
                     description: `A valuable item from ${bot.name}`,
-                    type: 'consumable',
-                    rarity: minValue >= 50000 ? 'legendary' : minValue >= 10000 ? 'epic' : minValue >= 2000 ? 'rare' : 'uncommon',
+                    type: 'special',
+                    rarity: rarity,
                     icon: 'default_item',
-                    baseValue: minValue, // Exactly meets minimum
+                    source: 'boss_drop', // Ensure it's gambleable
                     obtainedFrom: 'Bot Test Items'
                 });
+                
+                // Verify the created item meets the minimum (it should via rarity-based power score)
+                console.log(`[BotManager] ${bot.name} created ${rarity} item with Power Score: ${selectedItem.powerScore} (min: ${minPowerScore})`);
             }
             
             try {
