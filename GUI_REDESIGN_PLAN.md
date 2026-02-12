@@ -57,22 +57,23 @@ The UI frame (panels, buttons, nav) stays consistent. Only accent colors and bac
 
 ---
 
-## Typography
+## Typography (1920x1080 canvas pixels)
 
-Consistent text hierarchy everywhere:
+All sizes are in pixels on the 1920x1080 reference canvas. NOT dp.
 
 | Level | Size | Weight | Use |
 |-------|------|--------|-----|
-| Display | 36-42f | Bold | Scene titles, big numbers |
-| Heading | 24-28f | Bold | Section headers, player names |
-| Subheading | 18-20f | SemiBold | Panel titles, phase text |
-| Body | 16f | Normal | General content, descriptions |
-| Caption | 12-14f | Normal | Labels, timestamps, secondary info |
-| Tiny | 10f | Normal | Badges, counts, fine print |
+| Display | 72f | Bold | Scene titles, big numbers |
+| Heading | 48f | Bold | Section headers, player names |
+| Subheading | 36f | SemiBold | Panel titles, phase text |
+| Body | 28f | Normal | General content, button labels |
+| Caption | 22f | Normal | Labels, timestamps, secondary info |
+| Tiny | 18f | Normal | Badges, counts, fine print |
 
 - Primary text: White
 - Secondary text: Gray (0.7, 0.7, 0.7)
 - Muted text: Dark gray (0.5, 0.5, 0.5)
+- Gold text: theme.textGold for titles, chips, accent values
 - All text uses TextMeshPro
 - No thick outlines on text (subtle shadow only where needed for readability over images)
 
@@ -101,30 +102,37 @@ Consistent text hierarchy everywhere:
 - **Center**: Content - table, cards, lists, maps
 - **Top corners**: Nothing critical (hardest to reach)
 
-### Touch Target Sizes
+### Touch Target Sizes (1920x1080 px)
 
-| Element | Minimum | Target | Notes |
-|---------|---------|--------|-------|
-| Action buttons (Fold, Call, etc.) | 48dp | 50-70dp tall | Current sizes are good - KEEP |
-| Menu/nav buttons | 48dp | 48-56dp | |
-| List items (lobby rows) | 48dp | 64-72dp tall | Easy to tap specific table |
-| Input fields | 48dp | 56dp tall | Large text inside |
-| Sliders | 48dp handle | 32dp+ handle | Generous track area |
-| Card taps | - | 80x112+ | Easily tappable |
-| Spacing between tappables | 8dp min | 12-16dp | Prevents mis-taps |
+| Element | Size (px) | Notes |
+|---------|-----------|-------|
+| CTA buttons (Login, Create) | 110px tall, full width | Big gold, fontHeading text |
+| Action buttons (Fold, Call, etc.) | 70px tall, 100px min-w | In-game actions |
+| Nav buttons (Back, tabs, bottom bar) | 80px tall, 160px min-w | Secondary navigation |
+| List items (lobby table rows) | 120px tall | Full-width cards with status bar |
+| Input fields | 100px tall, full width | 28f body text inside |
+| Steppers (replace sliders) | 90px tall [ - VALUE + ] | Big +/- buttons, gold value center |
+| Toggles | 90x90px | Chunky toggle buttons |
+| Small/icon buttons | 64x64px | Settings gear, close X |
+| Card taps | 80x112+ | Easily tappable |
 
-### Spacing System (8dp grid)
+### Spacing System (1920x1080 px)
 
-| Token | Value | Use |
-|-------|-------|-----|
-| xs | 4dp | Icon-to-text gaps |
-| sm | 8dp | Tight spacing within groups |
-| md | 16dp | Standard panel padding |
-| lg | 24dp | Between sections |
-| xl | 32dp | Major section separation |
-| screenPadding | 16dp | Safe area inset from edges |
+| Token | Value (px) | Use |
+|-------|------------|-----|
+| xs | 8 | Icon-to-text gaps |
+| sm | 16 | Tight spacing within groups |
+| md | 28 | Standard panel padding |
+| lg | 44 | Between sections |
+| xl | 64 | Major section separation |
+| screenPadding | 32 | Safe area inset from edges |
 
-**Content fills the screen.** No tiny centered cards in emptiness. Panels use available width/height. Lists scroll if needed.
+### Layout Rules
+- **Content fills the screen.** No tiny centered cards in emptiness.
+- **All panels use ScrollView** so content never goes off-screen on resize.
+- **Inputs and buttons stretch** to fill available width (flexibleWidth = 1).
+- **Steppers replace sliders** — big [ - ] VALUE [ + ] controls for number selection.
+- **Two-column layouts** for settings (steppers side by side) with fallback scroll.
 
 ---
 
