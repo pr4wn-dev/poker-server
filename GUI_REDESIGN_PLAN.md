@@ -229,46 +229,46 @@ Animation Timing (new addition)
 ### Phase 1: Theme System Foundation
 **Goal:** Lock in GameTheme.cs as the single source of truth.
 
-- [ ] Expand GameTheme.cs with full palette, sizing, spacing, animation timing
-- [ ] Add area accent system (AreaTheme struct or separate ScriptableObject)
-- [ ] Create ThemeHelper utility class for common patterns (CreateThemedButton, CreateThemedPanel, etc.)
-- [ ] Verify theme loads correctly in Unity
+- [x] Expand GameTheme.cs with full palette, sizing, spacing, animation timing
+- [x] Add area accent system (fields on GameTheme with presets like ApplyDirtyLew)
+- [x] UIFactory handles themed creation patterns (CreateStyledButton, CreateInputField, CreateStepper, etc.)
+- [x] Verify theme loads correctly in Unity
 
 ### Phase 2: Login / Register (MainMenuScene auth panels)
 **Goal:** First thing users see. Set the visual tone.
 
-- [ ] Redesign login panel - dark card, centered, clean spacing
-- [ ] Redesign register panel - matching style
-- [ ] Properly sized input fields (56dp+) with show/hide password toggle
-- [ ] Better error display (inline with icon, not just red text)
-- [ ] Remove all hardcoded colors, use theme
-- [ ] Add field validation before submit (register)
-- [ ] Smooth panel transitions (fade/scale)
+- [x] Redesign login panel - full-screen ScrollView, responsive layout
+- [x] Redesign register panel - matching style
+- [x] Properly sized input fields (100px) with show/hide password toggle
+- [x] Better error display (inline with ⚠ icon prefix)
+- [x] Remove all hardcoded colors, use theme
+- [x] Add field validation before submit (register: username 3+, password 4+, confirm match)
+- [x] Smooth panel transitions (FadeIn + BounceIn)
 
 ### Phase 3: Main Menu (MainMenuScene main panel)
 **Goal:** Hub of the app. Visual hierarchy. Sets the tone.
 
-- [ ] Redesign with visual hierarchy:
+- [x] Redesign with visual hierarchy:
   - Hero section: ADVENTURE and MULTIPLAYER as large cards (side by side)
   - Bottom bar: SHOP, INVENTORY, FRIENDS, SETTINGS as icon buttons
-- [ ] Player info bar: polished XP bar, level badge, formatted chip count (e.g. "20M")
-- [ ] Thumb-friendly bottom navigation
-- [ ] Friends button: show "Coming Soon" toast (currently TODO)
-- [ ] Fix Settings logout to call GameService.Logout() (currently broken)
-- [ ] Remove all hardcoded colors, use theme
-- [ ] Scene transition animations
+- [x] Player info bar: polished XP bar, level badge, formatted chip count (e.g. "20M")
+- [x] Thumb-friendly bottom navigation
+- [x] Friends button: shows "Coming Soon" toast
+- [x] Fix Settings logout to call GameService.Logout()
+- [x] Remove all hardcoded colors, use theme
+- [x] Scene transition animations (SceneTransition.LoadScene with fade)
 
 ### Phase 4: Lobby (LobbyScene)
 **Goal:** Browse/create/join tables. Fix bugs. Thumb-friendly.
 
-- [ ] Redesign table list: card-style rows (64-72dp), status indicators (open/in-progress/full)
-- [ ] Add search/filter bar
-- [ ] Fix: implement password input dialog for private tables (currently TODO)
-- [ ] Fix: oderId typo to userId in OnInviteUser
-- [ ] Fix: StartSimulation parameter mismatch (7 vs 6 params, itemAnteEnabled)
-- [ ] Redesign create table form: grouped sections, better sliders, visual toggles
-- [ ] Auto-refresh table list on timer
-- [ ] Remove all hardcoded colors, use theme
+- [x] Redesign table list: card-style rows, status indicators
+- [x] Add search/filter bar (real-time filtering)
+- [x] Password input dialog for private tables
+- [x] Fix: oderId references use correct field
+- [x] Fix: StartSimulation/CreateTable parameter mismatch
+- [x] Redesign create table form: steppers replace sliders, item ante toggle, blind timer, two-column layout
+- [x] Auto-refresh table list on timer (15s interval)
+- [x] Remove all hardcoded colors, use theme
 
 ### Phase 5: Table Scene (TableScene)
 **Goal:** The big one. Polish the gameplay experience.
@@ -280,37 +280,37 @@ Animation Timing (new addition)
 - Action bar positioning (bottom of screen, horizontal layout)
 
 **Improve:**
-- [ ] Rip out ALL hardcoded new Color(...), wire to theme
-- [ ] Cleaner seat layout with better player cards (avatar, name, chips, status)
-- [ ] Community cards: centered, larger, deal animations
-- [ ] Pot display: prominent, centered above community cards
-- [ ] Action panel: use theme colors consistently
-- [ ] Bet slider: improve thumb handle, add chip denomination markers
-- [ ] Side menu: gray out unimplemented features (Invite, Chat) with "Coming Soon"
-- [ ] Game over popup: proper results with chip delta
-- [ ] Verify simulation counter works
-- [ ] Verify money tracking (no vanishing chips)
-- [ ] Card deal/flip animations
-- [ ] Chip movement animations (bet to pot, pot to winner)
+- [x] Rip out ALL hardcoded new Color(...), wire to theme
+- [x] Cleaner seat layout with player cards (avatar, name, chips, status)
+- [x] Community cards: centered, deal animations (AnimateCardReveal)
+- [x] Pot display: prominent, centered above community cards
+- [x] Action panel: use theme colors consistently
+- [x] Bet slider: improved thumb handle (40x40 gold), denomination tick marks (25/50/75%)
+- [x] Side menu: Invite/Chat grayed out with "Coming Soon", disabled interactable
+- [x] Game over popup: proper results with chip delta (+/- display, animations)
+- [x] Card deal/flip animations (AnimateCardReveal with slide + flip)
+- [x] Chip movement animations (bet-to-pot and pot-to-winner with staggered chips)
+- [ ] Verify simulation counter works (manual testing needed)
+- [ ] Verify money tracking / no vanishing chips (manual testing needed)
 
 ### Phase 6: Connection Flow (MainMenuScene connection panel)
 **Goal:** Polish the connection experience.
 
-- [ ] Progress indicator with clear status text
-- [ ] Visible "Manual Connect" button (not buried in settings)
-- [ ] Timeout with friendly message and retry option
-- [ ] Smooth transition from connected to login panel
+- [x] Progress indicator with clear status text + pulsing dots
+- [x] Visible "Server Settings" button on connection panel
+- [x] Timeout (10s) with retry button + friendly message
+- [x] Smooth transition from connected to login panel (FadeIn)
 
 ### Phase 7: Cross-Cutting Cleanup
 **Goal:** Remove dead code, enforce consistency.
 
-- [ ] Audit every scene file for remaining hardcoded colors
-- [ ] Remove or mark legacy code: PokerTableScene.cs, GameController.cs (if unused)
-- [ ] Fix AdventureMapScene.cs bug: lockIcon assigns Image to Text object
-- [ ] Fix server.js: gameLogger used before required (line ~57)
-- [ ] Fix Events.js: documentation says playerName but actual is username
+- [x] Audit every scene file for remaining hardcoded colors (cleaned in TableScene + all scenes)
+- [x] Remove legacy code: PokerTableScene.cs, GameController.cs, TableController.cs, MainMenuUI.cs (all deleted)
+- [x] Fix AdventureMapScene.cs bug: lockIcon now uses GameObject instead of Image
+- [x] Verify server.js: gameLogger is required before first use (already correct)
+- [x] Verify Events.js: no playerName references remain (already cleaned)
 - [ ] Mark placeholder scenes clearly (Leaderboard, Tournament use mock data)
-- [ ] Consistent scene transition animations everywhere
+- [x] Consistent scene transition animations everywhere (SceneTransition.LoadScene with fade)
 
 ---
 
@@ -318,32 +318,35 @@ Animation Timing (new addition)
 
 | Scene | Status | Priority |
 |-------|--------|----------|
-| MainMenuScene (connection) | Needs polish | Phase 6 |
-| MainMenuScene (login/register) | Needs redesign | Phase 2 |
-| MainMenuScene (main menu) | Needs redesign | Phase 3 |
-| LobbyScene | Needs redesign + bug fixes | Phase 4 |
-| TableScene | Keep layout, polish visuals | Phase 5 |
-| AdventureScene | Functional, polish later | Future |
-| AdventureBattleScene | Functional, polish later | Future |
-| AdventureMapScene | Has bugs, uses mock data | Future |
-| SettingsScene | Functional, needs theme pass | Future |
-| ShopScene | Placeholder (TODO purchases) | Future |
-| LeaderboardScene | Uses mock data | Future |
-| StatisticsScene | Placeholder stats | Future |
-| TournamentScene | Uses mock data | Future |
-| PokerTableScene | Legacy/alternate, evaluate for removal | Phase 7 |
+| MainMenuScene (connection) | ✅ Done — retry button, settings link, timeout | Phase 6 |
+| MainMenuScene (login/register) | ✅ Done — full-screen ScrollView, show/hide pw, validation | Phase 2 |
+| MainMenuScene (main menu) | ✅ Done — hero cards, bottom nav, friends toast | Phase 3 |
+| LobbyScene | ✅ Done — steppers, search bar, password dialog, auto-refresh | Phase 4 |
+| TableScene | ✅ Done — theme colors, bet slider, chip animations, game over delta | Phase 5 |
+| AdventureScene | ✅ Themed — font/spacing/padding pass complete | Done |
+| AdventureBattleScene | ✅ Themed — font/spacing/padding pass complete | Done |
+| AdventureMapScene | ✅ Themed + lockIcon bug fixed | Done |
+| SettingsScene | ✅ Themed + Logout wired to GameService | Done |
+| ShopScene | ✅ Themed — styled buttons, theme fonts | Done |
+| LeaderboardScene | ✅ Themed — uses mock data (placeholder) | Done |
+| StatisticsScene | ✅ Themed — uses mock data (placeholder) | Done |
+| TournamentScene | ✅ Themed — uses mock data (placeholder) | Done |
+| PokerTableScene | 🗑️ DELETED — legacy, replaced by TableScene | Phase 7 |
+| GameController | 🗑️ DELETED — dead code | Phase 7 |
+| TableController | 🗑️ DELETED — dead code | Phase 7 |
+| MainMenuUI | 🗑️ DELETED — dead code | Phase 7 |
 
 ---
 
 ## Server-Side Issues to Fix During This Pass
 
-| Issue | Location | Phase |
-|-------|----------|-------|
-| gameLogger used before require | server.js ~line 57 | Phase 7 |
-| Events.js docs say playerName, actual is username | src/sockets/Events.js | Phase 7 |
-| Money validation / chip tracking bugs | src/game/Table.js | Phase 5 (verify) |
-| Bot entry/exit lifecycle | src/testing/SimulationManager.js | Phase 5 (verify) |
-| Simulation not completing target games | SimulationManager.js | Phase 5 (verify) |
+| Issue | Location | Phase | Status |
+|-------|----------|-------|--------|
+| gameLogger used before require | server.js ~line 57 | Phase 7 | ✅ Already correct — require is at line 18 |
+| Events.js docs say playerName, actual is username | src/sockets/Events.js | Phase 7 | ✅ No playerName references remain |
+| Money validation / chip tracking bugs | src/game/Table.js | Phase 5 (verify) | ⏳ Needs manual play-testing |
+| Bot entry/exit lifecycle | src/testing/SimulationManager.js | Phase 5 (verify) | ⏳ Needs manual play-testing |
+| Simulation not completing target games | SimulationManager.js | Phase 5 (verify) | ⏳ Needs manual play-testing |
 
 ---
 
