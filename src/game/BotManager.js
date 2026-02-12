@@ -282,20 +282,23 @@ class BotManager {
         }
         
         // Get test items for the bot (bots don't have real inventories)
+        // Include items across ALL rarity tiers so bots can match any minimum value
         const Item = require('../models/Item');
         const testItems = [
-            new Item({ ...Item.TEMPLATES.XP_BOOST_SMALL, obtainedFrom: 'Bot Test Items' }),
-            new Item({ ...Item.TEMPLATES.CARD_BACK_FLAME, obtainedFrom: 'Bot Test Items' }),
-            new Item({ ...Item.TEMPLATES.AVATAR_WOLF, obtainedFrom: 'Bot Test Items' }),
-            new Item({ ...Item.TEMPLATES.TROPHY_FIRST_BOSS, obtainedFrom: 'Bot Test Items' })
+            new Item({ ...Item.TEMPLATES.TROPHY_FIRST_BOSS, obtainedFrom: 'Bot Test Items' }),       // Common: 100
+            new Item({ ...Item.TEMPLATES.CARD_BACK_FLAME, obtainedFrom: 'Bot Test Items' }),          // Uncommon: 500
+            new Item({ ...Item.TEMPLATES.AVATAR_SHARK, obtainedFrom: 'Bot Test Items' }),             // Rare: 2000
+            new Item({ ...Item.TEMPLATES.UNDERGROUND_PASS, obtainedFrom: 'Bot Test Items' }),         // Epic: 10000
+            new Item({ ...Item.TEMPLATES.CARD_BACK_GOLDEN, obtainedFrom: 'Bot Test Items' }),         // Legendary: 50000
+            new Item({ ...Item.TEMPLATES.YACHT_INVITATION, obtainedFrom: 'Bot Test Items' }),         // Legendary: 50000
         ];
         
         let selectedItem = null;
         
         if (needsFirstItem) {
-            // First item - pick a common/uncommon item
+            // First item - pick a mid-tier item (rare or uncommon)
             selectedItem = testItems.find(item => 
-                item.rarity === 'common' || item.rarity === 'uncommon'
+                item.rarity === 'rare' || item.rarity === 'uncommon'
             ) || testItems[0];
             
             const result = table.startItemAnte(bot.id, selectedItem);
@@ -308,15 +311,18 @@ class BotManager {
             selectedItem = testItems.find(item => (item.baseValue || 0) >= minValue);
             
             if (!selectedItem) {
-                // Use highest value item if none meet minimum
-                selectedItem = testItems.reduce((max, item) => 
-                    (item.baseValue || 0) > (max.baseValue || 0) ? item : max
-                );
-            }
-            
-            if (!selectedItem) {
-                console.error(`[BotManager] ${bot.name} failed to find any item to submit`);
-                return;
+                // No test item meets minimum - create a custom item that matches the requirement
+                console.log(`[BotManager] ${bot.name}: No test item meets minimum value ${minValue}, creating custom item`);
+                selectedItem = new Item({
+                    templateId: 'bot_custom_ante',
+                    name: `${bot.name}'s Prize`,
+                    description: `A valuable item from ${bot.name}`,
+                    type: 'consumable',
+                    rarity: minValue >= 50000 ? 'legendary' : minValue >= 10000 ? 'epic' : minValue >= 2000 ? 'rare' : 'uncommon',
+                    icon: 'default_item',
+                    baseValue: minValue, // Exactly meets minimum
+                    obtainedFrom: 'Bot Test Items'
+                });
             }
             
             try {
@@ -448,15 +454,14 @@ class BotManager {
         }
         
         if (!table.gameStarted) {
-            console.log(`[BotManager] [FIX #5] checkBotTurn: Game not started for table ${tableId}`);
+            // Don't spam this log - it's called frequently during pre-game
             return;
         }
         
         // CRITICAL FIX #5: Don't trigger bot turns during non-betting phases
         const validPhases = ['preflop', 'flop', 'turn', 'river'];
         if (!validPhases.includes(table.phase)) {
-            // Showdown, waiting, ready_up, countdown - bots don't act
-            console.log(`[BotManager] [FIX #5] checkBotTurn: Invalid phase ${table.phase} for bot action`);
+            // Showdown, waiting, ready_up, countdown - bots don't act (no log needed)
             return;
         }
         
