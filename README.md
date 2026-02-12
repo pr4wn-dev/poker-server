@@ -416,6 +416,24 @@ Keep narrowing down until the problem disappears - the last chunk you commented 
 
 **Verification:** Items are now properly transferred to the winner's inventory after a game ends. Check server logs for `[ITEM_ANTE] TRANSFER_COMPLETE` messages.
 
+### ✅ Fixed: Item Ante Award Duplicate ID Error
+**Status:** FIXED  
+**Date:** February 12, 2026  
+**Severity:** HIGH  
+
+**Problem:** When items were awarded after winning item ante, the transfer failed with a duplicate key error: `Duplicate entry 'b7e3df66-78ec-4b5f-a425-546444948642' for key 'PRIMARY'`. This happened because items submitted for item ante were removed from inventory, but when awarded, we tried to add them back with the same IDs.
+
+**Solution:**
+- Create new `Item` instances with new IDs when awarding items (using `new Item({...})`)
+- Preserve all item properties (name, rarity, value, icon, etc.) except the ID
+- Set `obtainedFrom` to indicate the item came from an item ante win
+- This ensures each awarded item has a unique database ID
+
+**Files Changed:**
+- `src/game/Table.js` (server)
+
+**Verification:** Items are now successfully transferred to the winner's inventory without duplicate ID errors. Check server logs for `[ITEM_ANTE] TRANSFER_COMPLETE` messages.
+
 ### ✅ Fixed: Unity Action Bar Not Visible During Gameplay
 **Status:** FIXED  
 **Date:** February 12, 2026  
