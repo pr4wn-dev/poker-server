@@ -17,6 +17,10 @@ Real-time multiplayer Texas Hold'em poker server built with Node.js and Socket.I
 - 👥 Multi-table support
 - 🎮 Designed for Unity client integration
 - 🔒 Per-player card visibility (no cheating!)
+- 🤖 Bot system (regular AI bots + socket bots for testing)
+- 🎰 Item Ante ("For Keeps") mode - gamble inventory items
+- 📊 Simulation mode for spectating bot-only games
+- ⏱️ Configurable blind increase timers
 
 ## Quick Start
 
@@ -48,16 +52,24 @@ npm start
 ```
 poker-server/
 ├── src/
-│   ├── server.js           # Entry point
+│   ├── server.js            # Entry point
 │   ├── game/
-│   │   ├── GameManager.js  # Manages tables & players
-│   │   ├── Table.js        # Table & game state
-│   │   ├── Deck.js         # Card deck
-│   │   └── HandEvaluator.js# Hand ranking
+│   │   ├── GameManager.js   # Manages tables & players
+│   │   ├── Table.js         # Table & game state
+│   │   ├── BotManager.js    # Bot AI & item ante handling
+│   │   ├── ItemAnte.js      # Item ante ("For Keeps") logic
+│   │   ├── Deck.js          # Card deck
+│   │   └── HandEvaluator.js # Hand ranking
+│   ├── models/
+│   │   └── Item.js          # Item model & templates
+│   ├── database/
+│   │   └── UserRepository.js# User & inventory persistence
+│   ├── testing/
+│   │   └── SocketBot.js     # Socket bot for testing
 │   └── sockets/
-│       ├── SocketHandler.js # WebSocket events
-│       └── Events.js       # Event documentation
-├── env.example             # Environment template
+│       ├── SocketHandler.js  # WebSocket events
+│       └── Events.js        # Event documentation
+├── env.example              # Environment template
 └── package.json
 ```
 
@@ -82,11 +94,22 @@ See `src/sockets/Events.js` for complete event documentation.
 - `leave_table` - Leave table
 - `action` - Game action (fold/check/call/bet/raise/allin)
 - `chat` - Send message
+- `start_side_pot` - Start item ante with selected item
+- `submit_to_side_pot` - Submit item to existing ante pot
+- `invite_bot` - Invite AI bot to table
+- `invite_socket_bot` - Invite socket bot to practice table
+- `start_simulation` - Start bot-only simulation game
+- `start_game` - Start game at table
 
 **Server → Client:**
 - `table_state` - Game state update
 - `player_action` - Action notification
 - `player_joined/left` - Player events
+- `start_side_pot_response` - Item ante start result
+- `submit_to_side_pot_response` - Item submission result
+- `invite_socket_bot_response` - Socket bot invitation result
+- `start_game_response` - Game start result
+- `game_over` - Game ended notification
 
 ## Unity Integration
 
@@ -455,6 +478,100 @@ Keep narrowing down until the problem disappears - the last chunk you commented 
 
 **Verification:** Action bar now appears correctly when it's the player's turn during gameplay.
 
+### ✅ Fixed: Turns Getting Skipped (3 Bugs in Betting Round Completion)
+**Status:** FIXED  
+**Date:** February 12, 2026  
+**Severity:** CRITICAL  
+
+**Problem:** Betting rounds were advancing instantly (flop → turn → river) without all players getting a chance to act. Server logs showed "Passed last raiser" and "Betting round complete" messages appearing prematurely, causing some players' turns to be skipped entirely.
+
+**Root Cause:** Three separate bugs in the `bettingRoundComplete` logic in `advanceGame()`:
+
+1. **Bug 1 - `currentIndex === lastRaiser` false positive:** At the start of new post-flop rounds, `lastRaiserIndex` was initialized to `currentPlayerIndex`. The check `currentIndex === lastRaiser` would immediately pass, marking `hasPassedLastRaiser = true` before anyone actually acted.
+
+2. **Bug 2 - Pre-flop UTG→BB shortcut:** A special case marked the pre-flop round complete when UTG acted and the next player was BB, assuming BB had "acted" by posting a blind. This prevented BB from ever getting to act pre-flop.
+
+3. **Bug 3 - Post-flop fallback:** A condition marked the round complete whenever `currentPlayerIndex === firstToAct` and `nextPlayer !== firstToAct`, which was always true when the first player acted, ending the round after just one player.
+
+**Solution:**
+- Removed all three faulty conditions from `advanceGame()`
+- Added `playersActedThisRound` Set (initialized in `startNewHand()` and `advancePhase()`) to accurately track which players have taken a turn
+- Added critical guard: `if (bettingRoundComplete && !allPlayersActed) { bettingRoundComplete = false; }` to prevent premature round completion
+- Added alternative condition: `if (!bettingRoundComplete && allPlayersActed && allBetsEqualized) { bettingRoundComplete = true; }` to correctly detect completion
+- Enhanced logging with `allPlayersActed`, `playersActed`, and `playersWhoCanAct` diagnostics
+
+**Files Changed:**
+- `src/game/Table.js` (`advanceGame()`, `startNewHand()`, `advancePhase()`)
+
+**Verification:** All players now get their full turn to act in every betting round. Rounds only advance after every active player has acted and all bets are equalized.
+
+### ✅ Fixed: Unity MyChipsPanel Not Visible
+**Status:** FIXED  
+**Date:** February 12, 2026  
+**Severity:** MEDIUM  
+
+**Problem:** The MyChipsPanel (gold rectangle showing player's chip count) was not visible during gameplay, hidden behind other UI elements.
+
+**Solution:**
+- Set Canvas `sortingOrder` to 400 (above other UI panels)
+- Call `SetAsLastSibling()` on each update
+- Set `worldCamera` and `renderMode = ScreenSpaceOverlay` explicitly
+
+**Files Changed:**
+- `Assets/Scripts/UI/Scenes/TableScene.cs` (Unity client)
+
+**Verification:** MyChipsPanel now renders correctly above all other UI elements.
+
+### ✅ Fixed: Blind Round Timer Not Visible
+**Status:** FIXED  
+**Date:** February 12, 2026  
+**Severity:** MEDIUM  
+
+**Problem:** The blind round timer was not showing during gameplay even though turn timers were working. The timer text was being created but was behind other UI layers.
+
+**Solution:**
+- Created `_blindTimerContainer` with its own Canvas (`sortingOrder = 450`, `renderMode = ScreenSpaceOverlay`)
+- Timer displays current blind level and countdown
+- Visibility controlled by container `SetActive()` state
+
+**Files Changed:**
+- `Assets/Scripts/UI/Scenes/TableScene.cs` (Unity client)
+
+**Verification:** Blind round timer now displays above all other UI elements during gameplay.
+
+### ✅ Fixed: Bot Item Ante Value Mismatch
+**Status:** FIXED  
+**Date:** February 12, 2026  
+**Severity:** HIGH  
+
+**Problem:** Bots could not submit items for ante when the minimum value was set higher than 500 (the max value of their test items). Error: `Item value (500) is less than minimum required (50000)`.
+
+**Solution:**
+- Expanded bot test items to include all rarity tiers: Common (100), Uncommon (500), Rare (2000), Epic (10000), Legendary (50000)
+- If no test item meets the minimum value, a custom item is dynamically created with `baseValue` matching the `minimumValue`
+
+**Files Changed:**
+- `src/game/BotManager.js`
+
+**Verification:** Bots can now submit items for any minimum value requirement.
+
+### ✅ Fixed: Bot Manager Log Spam
+**Status:** FIXED  
+**Date:** February 12, 2026  
+**Severity:** LOW (Quality of Life)  
+
+**Problem:** `[BotManager] checkBotTurn: Game not started` logged ~13 times per game start, and `Invalid phase showdown` logged ~3-4 times per hand, flooding the server console.
+
+**Solution:**
+- Removed `console.log` for "Game not started" condition (normal during setup)
+- Removed `console.log` for "Invalid phase showdown" condition (expected during showdown)
+- Kept error-level logging for actual failures
+
+**Files Changed:**
+- `src/game/BotManager.js`
+
+**Verification:** Server console is significantly cleaner with only meaningful log entries.
+
 ### ✅ Fixed: Unity InventoryPanel Item Visibility (Complete Fix)
 **Status:** FIXED  
 **Date:** February 11, 2026  
@@ -550,17 +667,24 @@ Keep narrowing down until the problem disappears - the last chunk you commented 
 **See:** `ISSUES_FOUND.md` and `SIMULATION_ANALYSIS.md` for detailed analysis
 
 ### Item Ante ("For Keeps") System
-**Status:** Active development  
-**Severity:** MEDIUM  
+**Status:** Mostly working (Feb 12, 2026)  
+**Severity:** LOW  
 **Affects:** Tables with item ante enabled
 
-**Issues:**
-- Null reference errors in item ante handling
-- Item validation problems
-- Missing field errors (Unity client compatibility)
-- Item not found in inventory edge cases
+**Resolved Issues:**
+- ✅ Spectator prompt suppression
+- ✅ Missing item fields for Unity display
+- ✅ Item filtering/highlighting by gambleable status and minimum value
+- ✅ Bot item ante submission in practice mode
+- ✅ Socket bot invitation and auto-submission
+- ✅ Item ante award transfer to winner's inventory (with unique IDs)
+- ✅ Item ante pot real-time display (including creator item)
+- ✅ Bot value mismatch (bots can meet any minimum value)
 
-**See:** `src/game/ItemAnte.js` and `scripts/watch-logs-and-fix.js` for current fixes
+**Remaining Edge Cases:**
+- Item not found in inventory (if item was traded/consumed between selection and submission)
+
+**See:** `src/game/ItemAnte.js` and `src/game/BotManager.js`
 
 ## License
 
