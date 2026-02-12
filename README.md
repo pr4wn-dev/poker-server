@@ -1,6 +1,6 @@
 # Poker Server
 
-Real-time multiplayer Texas Hold'em poker server built with Node.js and Socket.IO.
+Real-time multiplayer Texas Hold'em poker server built with Node.js and Socket.IO. Backend for an Android poker game with a **crime/cyber/poker/RPG** hybrid aesthetic.
 
 ## Documentation
 
@@ -12,17 +12,24 @@ Real-time multiplayer Texas Hold'em poker server built with Node.js and Socket.I
 - **[GUI_REDESIGN_PLAN.md](GUI_REDESIGN_PLAN.md)** - Full GUI/UX overhaul plan: theme system, layout, animations, phase-by-phase work plan
 - **[ART_ASSET_PROMPTS.md](ART_ASSET_PROMPTS.md)** - Ready-to-use AI image generation prompts for all game art (backgrounds, bosses, items, UI)
 
+**Unity Client:** See [poker-client-unity](https://github.com/pr4wn-dev/poker-client-unity) for the full client with `PROJECT_STATUS.md` covering current state, roadmap, and what's left to do.
+
 ## Features
 
-- 🎴 Full Texas Hold'em game logic
-- 🔌 Real-time WebSocket communication (Socket.IO)
-- 👥 Multi-table support
-- 🎮 Designed for Unity client integration
-- 🔒 Per-player card visibility (no cheating!)
-- 🤖 Bot system (regular AI bots + socket bots for testing)
-- 🎰 Item Ante ("For Keeps") mode - gamble inventory items (risk-free in practice mode)
-- 📊 Simulation mode for spectating bot-only games
-- ⏱️ Configurable blind increase timers
+- Full Texas Hold'em game logic with hand evaluation
+- Real-time WebSocket communication (Socket.IO)
+- Multi-table support with configurable rules
+- Unity Android client with 12 scenes (login, lobby, poker, adventure, inventory, etc.)
+- Per-player card visibility (no cheating)
+- Bot system (regular AI bots + socket bots for testing)
+- Item Ante ("For Keeps") mode — gamble inventory items (risk-free in practice mode)
+- Adventure mode — world map, areas, boss battles (poker vs AI)
+- Tournament system — brackets, registration, elimination
+- Item economy — rarity tiers, Power Score system, dual economy (gambleable vs store items)
+- Character archetype system — Hustler, Hacker, Shark, Hybrid
+- Friends, chat, spectating, achievements
+- Simulation mode for spectating bot-only games
+- Configurable blind increase timers
 
 ## Item Economy System
 
@@ -138,17 +145,18 @@ Examples:
 **No real-money gambling** - all revenue is from ads, cosmetics, and optional chip purchases (one-way).
 
 ### Implementation Status
-- ✅ Basic Item Ante system (gamble items, winner takes all)
-- ✅ Item rarity system (Common → Legendary)
+- ✅ Item Ante system (gamble items, winner takes all, practice mode risk-free)
+- ✅ Item rarity system (Common/Uncommon/Rare/Epic/Legendary)
+- ✅ Power Score calculation (rarity x drop rate x demand)
+- ✅ `isGambleable` flag enforcement (store items cannot be gambled)
+- ✅ Table creation item selection UI (select ante item, Power Score display)
+- ✅ Locked minimum display in lobby/game
 - ✅ Practice mode (virtual betting, no transfer)
-- ⏳ **TODO**: Power Score calculation
-- ⏳ **TODO**: `isGambleable` flag enforcement
-- ⏳ **TODO**: Table creation item selection UI
-- ⏳ **TODO**: Locked minimum display in lobby/game
-- ⏳ **TODO**: Store item restrictions (cannot gamble)
-- ⏳ **TODO**: Chip purchasing system
+- ✅ Bot item ante submission (auto-submit, value matching)
+- ⏳ **TODO**: Store item restrictions UI (shop interface with clear messaging)
+- ⏳ **TODO**: Chip purchasing system (one-way buy with real money)
 - ⏳ **TODO**: Ads integration (AdMob, Unity Ads)
-- ⏳ **TODO**: Premium membership system
+- ⏳ **TODO**: Premium membership system ($4.99/mo)
 
 ## Quick Start
 
@@ -180,25 +188,47 @@ npm start
 ```
 poker-server/
 ├── src/
-│   ├── server.js            # Entry point
+│   ├── server.js              # Entry point (Express + Socket.IO)
+│   ├── setup.js               # Database schema setup
 │   ├── game/
-│   │   ├── GameManager.js   # Manages tables & players
-│   │   ├── Table.js         # Table & game state
-│   │   ├── BotManager.js    # Bot AI & item ante handling
-│   │   ├── ItemAnte.js      # Item ante ("For Keeps") logic
-│   │   ├── Deck.js          # Card deck
-│   │   └── HandEvaluator.js # Hand ranking
+│   │   ├── GameManager.js     # Manages tables & players
+│   │   ├── Table.js           # Table logic, betting, showdown (~9000 lines)
+│   │   ├── BotManager.js      # Bot AI, item ante handling, smart decisions
+│   │   ├── BotPlayer.js       # Bot personality & behavior
+│   │   ├── ItemAnte.js        # Item ante ("For Keeps") logic
+│   │   ├── Deck.js            # Card deck
+│   │   ├── HandEvaluator.js   # Hand ranking
+│   │   ├── Tournament.js      # Tournament logic
+│   │   └── TournamentManager.js # Tournament lifecycle
+│   ├── adventure/
+│   │   ├── AdventureManager.js # Adventure mode coordination
+│   │   ├── AdventurePokerGame.js # Poker vs AI boss
+│   │   ├── Boss.js            # Boss definitions
+│   │   ├── BossAI.js          # Boss poker AI
+│   │   └── WorldMap.js        # Area/world map data
 │   ├── models/
-│   │   └── Item.js          # Item model & templates
+│   │   ├── Item.js            # Item model, templates, Power Score
+│   │   ├── User.js            # User model
+│   │   └── HouseRules.js      # Table rule presets
 │   ├── database/
-│   │   └── UserRepository.js# User & inventory persistence
+│   │   ├── Database.js        # MySQL connection pool
+│   │   └── UserRepository.js  # User, inventory, friends persistence
+│   ├── social/
+│   │   └── FriendsManager.js  # Friends system
 │   ├── testing/
-│   │   └── SocketBot.js     # Socket bot for testing
-│   └── sockets/
-│       ├── SocketHandler.js  # WebSocket events
-│       └── Events.js        # Event documentation
-├── env.example              # Environment template
-└── package.json
+│   │   ├── SimulationManager.js # Bot simulation mode
+│   │   ├── SocketBot.js       # Socket bot for testing
+│   │   ├── StateAnalyzer.js   # Game state analysis
+│   │   ├── StateComparator.js # State diff comparison
+│   │   └── StateSnapshot.js   # State capture
+│   ├── sockets/
+│   │   ├── SocketHandler.js   # All WebSocket event handlers
+│   │   └── Events.js          # Event documentation
+│   └── utils/
+│       └── GameLogger.js      # Structured logging
+├── env.example                # Environment template
+├── package.json
+└── *.md                       # 15+ documentation files
 ```
 
 ## API Endpoints
