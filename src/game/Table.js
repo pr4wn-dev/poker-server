@@ -923,6 +923,8 @@ class Table {
         
         // Item ante - "For Keeps" system where players put items in and winner takes all
         this.itemAnteEnabled = options.itemAnteEnabled || false;  // Enable item ante in table creation
+        this.minimumAnteItem = options.minimumAnteItem || null;  // NEW: Table creator's item that sets minimum Power Score
+        this.minimumAntePowerScore = this.minimumAnteItem?.powerScore || this.minimumAnteItem?.calculatePowerScore?.() || 0;  // NEW: Locked minimum for entire table session
         this.itemAnte = new ItemAnte(this.id, this.creatorId);
         this.itemAnteCollectionTime = options.itemAnteCollectionTime || 60000; // 60 seconds default
 
@@ -9671,6 +9673,15 @@ class Table {
             practiceMode: this.practiceMode,
             houseRules: this.houseRules?.toJSON?.() || null,
             itemAnteEnabled: this.itemAnteEnabled,
+            minimumAntePowerScore: this.minimumAntePowerScore,  // NEW: Locked minimum Power Score for entire table session
+            minimumAnteItem: this.minimumAnteItem ? {            // NEW: Table creator's item that sets minimum
+                id: this.minimumAnteItem.id,
+                name: this.minimumAnteItem.name,
+                rarity: this.minimumAnteItem.rarity,
+                powerScore: this.minimumAnteItem.powerScore,
+                icon: this.minimumAnteItem.icon,
+                templateId: this.minimumAnteItem.templateId
+            } : null,
             sidePot: this.getItemAnteState(forPlayerId),  // Keeping field name for Unity backward compatibility
             // Helper flags for Unity to know when to prompt for item
             // CRITICAL: Only set needsItemAnteSubmission for actual players in seats, NOT spectators
