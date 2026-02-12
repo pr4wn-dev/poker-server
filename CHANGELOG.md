@@ -4,6 +4,27 @@ This file tracks all issues encountered and their solutions. **Search this file 
 
 ---
 
+## GUI Overhaul Started (Feb 12, 2026)
+
+### Full App Redesign - Theme, Layout, Animations
+**Scope:** Every screen from connection to table play.
+
+**Direction decided:** Stylized Urban / Dark Street aesthetic (GTA meets poker). Dark backgrounds, gold accents, area-specific color shifts for world progression. NOT clean casino, NOT cartoon.
+
+**Key decisions:**
+- All hardcoded `new Color(...)` calls across all scenes will be replaced with `Theme.Current.xxx`
+- Android landscape thumb-zone layout enforced on all screens
+- Minimum 48dp touch targets, 64-72dp for list items
+- Animations are core (card deals, chip movements, pulses, transitions)
+- Table scene action bar and label sizes are GOOD - keep as-is, only restyle colors
+- 8dp spacing grid system throughout
+
+**Plan:** See [GUI_REDESIGN_PLAN.md](GUI_REDESIGN_PLAN.md) for full phase-by-phase breakdown.
+
+**Phases:** Theme System -> Login/Register -> Main Menu -> Lobby -> Table Scene -> Connection Flow -> Cleanup
+
+---
+
 ## CRITICAL LESSON: Never Mix Files from Different Commits (Feb 3, 2026)
 
 ### Issue: File Mismatches After Pulling Boss House Changes

@@ -9,6 +9,8 @@ Real-time multiplayer Texas Hold'em poker server built with Node.js and Socket.I
 - **[CHANGELOG.md](CHANGELOG.md)** - Issues encountered and solutions (search this first!)
 - **[TESTING.md](TESTING.md)** - Testing guide: unit tests, simulation comparison, state snapshots
 - **[UI_BEST_PRACTICES.md](UI_BEST_PRACTICES.md)** - UI component best practices: position locking, animations, layout handling
+- **[GUI_REDESIGN_PLAN.md](GUI_REDESIGN_PLAN.md)** - Full GUI/UX overhaul plan: theme system, layout, animations, phase-by-phase work plan
+- **[ART_ASSET_PROMPTS.md](ART_ASSET_PROMPTS.md)** - Ready-to-use AI image generation prompts for all game art (backgrounds, bosses, items, UI)
 
 ## Features
 
