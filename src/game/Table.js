@@ -6523,12 +6523,31 @@ class Table {
                     });
                     
                     // CRITICAL: Actually transfer items to winner's inventory
+                    // IMPORTANT: Create new Item instances with new IDs to avoid duplicate key errors
+                    // The original items were removed from inventory when submitted, so we need fresh copies
                     const userRepo = require('../database/UserRepository');
+                    const Item = require('../models/Item');
                     (async () => {
                         try {
-                            for (const item of itemAnteResult.items) {
-                                await userRepo.addItem(itemWinner.playerId, item);
-                                console.log(`[ITEM_ANTE] TRANSFER: Added ${item.name} (${item.id}) to ${itemWinner.name}'s inventory`);
+                            for (const originalItem of itemAnteResult.items) {
+                                // Create a new item with a new ID, preserving all other properties
+                                const newItem = new Item({
+                                    templateId: originalItem.templateId,
+                                    name: originalItem.name,
+                                    description: originalItem.description,
+                                    type: originalItem.type,
+                                    rarity: originalItem.rarity,
+                                    icon: originalItem.icon,
+                                    uses: originalItem.uses,
+                                    maxUses: originalItem.maxUses,
+                                    baseValue: originalItem.baseValue,
+                                    obtainedFrom: `Item Ante Win from ${this.name}`,
+                                    isTradeable: originalItem.isTradeable,
+                                    isGambleable: originalItem.isGambleable
+                                });
+                                
+                                await userRepo.addItem(itemWinner.playerId, newItem);
+                                console.log(`[ITEM_ANTE] TRANSFER: Added ${newItem.name} (${newItem.id}) to ${itemWinner.name}'s inventory (original ID: ${originalItem.id})`);
                             }
                             console.log(`[ITEM_ANTE] TRANSFER_COMPLETE: All ${itemAnteResult.items.length} items transferred to ${itemWinner.name}'s inventory`);
                             gameLogger.gameEvent(this.name, `[ITEM_ANTE] TRANSFER_COMPLETE`, {
