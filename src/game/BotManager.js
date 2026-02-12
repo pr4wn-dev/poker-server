@@ -617,17 +617,44 @@ class BotManager {
             
             console.log(`[BotManager] ${bot.name} deciding... phase=${table.phase}, currentBet=${table.currentBet}, botBet=${seat.currentBet}, pot=${table.pot}, isSimulation=${gameState.isSimulation}`);
             
-            // Make decision
-            const decision = bot.decide(gameState);
-            console.log(`[BotManager] ${bot.name} decides: ${decision.action}${decision.amount ? ` $${decision.amount}` : ''}`);
+            // FIX: Check if all opponents are all-in or folded
+            // If so, there's no point in raising — just call or check to avoid dead-street betting
+            const allOpponentsInactive = table.seats.every(s => {
+                if (!s || !s.isActive) return true; // Empty/inactive seats
+                if (s === seat) return true; // This is the bot's own seat
+                return s.isFolded || s.isAllIn; // Opponent is folded or all-in
+            });
+            
+            let decision;
+            if (allOpponentsInactive) {
+                // No one can respond to bets — just call or check
+                const toCall = table.currentBet - seat.currentBet;
+                if (toCall > 0) {
+                    decision = { action: 'call' };
+                    console.log(`[BotManager] ${bot.name} decides: call (all opponents inactive — no point raising)`);
+                } else {
+                    decision = { action: 'check' };
+                    console.log(`[BotManager] ${bot.name} decides: check (all opponents inactive — no point betting)`);
+                }
+            } else {
+                // Normal decision
+                decision = bot.decide(gameState);
+                console.log(`[BotManager] ${bot.name} decides: ${decision.action}${decision.amount ? ` $${decision.amount}` : ''}`);
+            }
             
             // Execute action through game manager
             const result = this.gameManager.handleAction(tableId, bot.id, decision.action, decision.amount);
             
             if (!result.success) {
                 console.error(`[BotManager] ${bot.name} action failed: ${result.error}`);
-                // Fallback to check or fold if action failed
-                const fallbackResult = this.gameManager.handleAction(tableId, bot.id, table.currentBet > 0 ? 'fold' : 'check');
+                // FIX: Fallback order: call → check → fold (don't fold when you could call!)
+                let fallbackResult = this.gameManager.handleAction(tableId, bot.id, 'call');
+                if (!fallbackResult.success) {
+                    fallbackResult = this.gameManager.handleAction(tableId, bot.id, 'check');
+                }
+                if (!fallbackResult.success) {
+                    fallbackResult = this.gameManager.handleAction(tableId, bot.id, 'fold');
+                }
                 console.log(`[BotManager] ${bot.name} fallback action: ${fallbackResult.success ? 'success' : fallbackResult.error}`);
             }
         } catch (error) {

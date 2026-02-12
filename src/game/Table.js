@@ -5830,8 +5830,9 @@ class Table {
             }
             
             // Multiple players still in hand, but only 1 can act (others all-in)
-            // Advance phase but don't end the game
-            gameLogger.gameEvent(this.name, 'EXIT POINT 0b: Only one player can act, others all-in - advancing phase', {
+            // FIX: Skip ALL remaining phases directly to showdown - betting into dead streets
+            // is pointless since no one can match the bets. Return excess chips and run the board.
+            gameLogger.gameEvent(this.name, 'EXIT POINT 0b: Only one player can act, others all-in - skipping to showdown', {
                 currentPlayerIndex: this.currentPlayerIndex,
                 nextPlayer,
                 playerName: this.seats[this.currentPlayerIndex]?.name,
@@ -5839,10 +5840,40 @@ class Table {
                 allBetsEqualized,
                 phase: this.phase
             });
-            console.log(`[Table ${this.name}] LOOP PREVENTION: Only one player (${this.seats[this.currentPlayerIndex]?.name}) can act, ${playersStillInHand.length} still in hand - advancing phase`);
+            console.log(`[Table ${this.name}] SKIP TO SHOWDOWN: Only ${this.seats[this.currentPlayerIndex]?.name} can act, ${playersStillInHand.length} still in hand - no point betting into dead streets`);
             this.hasPassedLastRaiser = false;
-            this.advancePhase();
-            return;  // GUARANTEED EXIT - prevents infinite loop
+            this.clearTurnTimer();
+            this.currentPlayerIndex = -1; // No one is acting
+            this.returnExcessBets(); // Return any unmatched chips immediately
+            
+            // Run out the remaining community cards
+            const phasesToRun = [];
+            if (this.phase === GAME_PHASES.PRE_FLOP || this.phase === GAME_PHASES.FLOP || 
+                this.phase === GAME_PHASES.TURN) {
+                // Need to deal remaining cards
+                if (this.communityCards.length < 3) {
+                    this.communityCards = [this.deck.draw(), this.deck.draw(), this.deck.draw()];
+                    phasesToRun.push('flop');
+                }
+                if (this.communityCards.length < 4) {
+                    this.communityCards.push(this.deck.draw());
+                    phasesToRun.push('turn');
+                }
+                if (this.communityCards.length < 5) {
+                    this.communityCards.push(this.deck.draw());
+                    phasesToRun.push('river');
+                }
+                console.log(`[Table ${this.name}] Dealt remaining cards: ${phasesToRun.join(', ')} (total community: ${this.communityCards.length})`);
+            }
+            
+            // Broadcast state with revealed board before showdown
+            this.onStateChange?.();
+            
+            // Go directly to showdown after a brief delay for visual effect
+            setTimeout(() => {
+                this.showdown();
+            }, 1500);
+            return;  // GUARANTEED EXIT - skips all remaining phases
         }
         
         // EXIT POINT 1: No one can act (all all-in or folded)
@@ -6619,51 +6650,65 @@ class Table {
                         itemNames: itemAnteResult.items.map(i => i.name)
                     });
                     
-                    // CRITICAL: Actually transfer items to winner's inventory
-                    // IMPORTANT: Create new Item instances with new IDs to avoid duplicate key errors
-                    // The original items were removed from inventory when submitted, so we need fresh copies
-                    const userRepo = require('../database/UserRepository');
-                    const Item = require('../models/Item');
-                    (async () => {
-                        try {
-                            for (const originalItem of itemAnteResult.items) {
-                                // Create a new item with a new ID, preserving all other properties
-                                const newItem = new Item({
-                                    templateId: originalItem.templateId,
-                                    name: originalItem.name,
-                                    description: originalItem.description,
-                                    type: originalItem.type,
-                                    rarity: originalItem.rarity,
-                                    icon: originalItem.icon,
-                                    uses: originalItem.uses,
-                                    maxUses: originalItem.maxUses,
-                                    baseValue: originalItem.baseValue,
-                                    obtainedFrom: `Item Ante Win from ${this.name}`,
-                                    isTradeable: originalItem.isTradeable,
-                                    isGambleable: originalItem.isGambleable
+                    // FIX: Check if winner is a bot — bots don't have real user records in the DB,
+                    // so trying to addItem for them causes a FK constraint error (ER_NO_REFERENCED_ROW_2).
+                    // In practice mode, items aren't real anyway. For bots, just log the award without transferring.
+                    const winnerSeat = this.seats.find(s => s && s.playerId === itemWinner.playerId);
+                    const isWinnerBot = winnerSeat?.isBot || itemWinner.playerId?.startsWith('bot_') || 
+                                        itemWinner.name?.startsWith('NetPlayer_') || itemWinner.name?.startsWith('SimBot_');
+                    
+                    if (isWinnerBot) {
+                        console.log(`[ITEM_ANTE] SKIP_TRANSFER: Winner ${itemWinner.name} is a bot — items not transferred to DB (practice mode or bot has no user record)`);
+                        gameLogger.gameEvent(this.name, `[ITEM_ANTE] SKIP_TRANSFER_BOT`, {
+                            winnerId: itemWinner.playerId,
+                            winnerName: itemWinner.name,
+                            itemCount: itemAnteResult.items.length,
+                            reason: 'Winner is a bot'
+                        });
+                        this.onStateChange?.();
+                    } else {
+                        // CRITICAL: Actually transfer items to winner's inventory (real player)
+                        // IMPORTANT: Create new Item instances with new IDs to avoid duplicate key errors
+                        const userRepo = require('../database/UserRepository');
+                        const Item = require('../models/Item');
+                        (async () => {
+                            try {
+                                for (const originalItem of itemAnteResult.items) {
+                                    const newItem = new Item({
+                                        templateId: originalItem.templateId,
+                                        name: originalItem.name,
+                                        description: originalItem.description,
+                                        type: originalItem.type,
+                                        rarity: originalItem.rarity,
+                                        icon: originalItem.icon,
+                                        uses: originalItem.uses,
+                                        maxUses: originalItem.maxUses,
+                                        baseValue: originalItem.baseValue,
+                                        obtainedFrom: `Item Ante Win from ${this.name}`,
+                                        isTradeable: originalItem.isTradeable,
+                                        isGambleable: originalItem.isGambleable
+                                    });
+                                    
+                                    await userRepo.addItem(itemWinner.playerId, newItem);
+                                    console.log(`[ITEM_ANTE] TRANSFER: Added ${newItem.name} (${newItem.id}) to ${itemWinner.name}'s inventory`);
+                                }
+                                console.log(`[ITEM_ANTE] TRANSFER_COMPLETE: All ${itemAnteResult.items.length} items transferred to ${itemWinner.name}'s inventory`);
+                                gameLogger.gameEvent(this.name, `[ITEM_ANTE] TRANSFER_COMPLETE`, {
+                                    winnerId: itemWinner.playerId,
+                                    winnerName: itemWinner.name,
+                                    itemCount: itemAnteResult.items.length
                                 });
-                                
-                                await userRepo.addItem(itemWinner.playerId, newItem);
-                                console.log(`[ITEM_ANTE] TRANSFER: Added ${newItem.name} (${newItem.id}) to ${itemWinner.name}'s inventory (original ID: ${originalItem.id})`);
+                                this.onStateChange?.();
+                            } catch (error) {
+                                console.error(`[ITEM_ANTE] TRANSFER_FAILED: Failed to transfer items to ${itemWinner.name}:`, error);
+                                gameLogger.error(this.name, `[ITEM_ANTE] TRANSFER_FAILED`, {
+                                    winnerId: itemWinner.playerId,
+                                    error: error.message,
+                                    stack: error.stack
+                                });
                             }
-                            console.log(`[ITEM_ANTE] TRANSFER_COMPLETE: All ${itemAnteResult.items.length} items transferred to ${itemWinner.name}'s inventory`);
-                            gameLogger.gameEvent(this.name, `[ITEM_ANTE] TRANSFER_COMPLETE`, {
-                                winnerId: itemWinner.playerId,
-                                winnerName: itemWinner.name,
-                                itemCount: itemAnteResult.items.length
-                            });
-                            
-                            // CRITICAL: Broadcast updated state so client sees item ante is awarded
-                            this.onStateChange?.();
-                        } catch (error) {
-                            console.error(`[ITEM_ANTE] TRANSFER_FAILED: Failed to transfer items to ${itemWinner.name}:`, error);
-                            gameLogger.error(this.name, `[ITEM_ANTE] TRANSFER_FAILED`, {
-                                winnerId: itemWinner.playerId,
-                                error: error.message,
-                                stack: error.stack
-                            });
-                        }
-                    })();
+                        })();
+                    }
                 } else {
                     console.error(`[ITEM_ANTE] AWARD_FAILED: ${itemWinner.name} (${itemWinner.playerId}) - ${itemAnteResult?.error || 'unknown error'}`);
                     gameLogger.gameEvent(this.name, `[ITEM_ANTE] AWARD_ERROR`, {
