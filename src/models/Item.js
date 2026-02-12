@@ -450,4 +450,3 @@ Item.TYPE = ITEM_TYPE;
 Item.SOURCE = ITEM_SOURCE;
 
 module.exports = Item;
-
