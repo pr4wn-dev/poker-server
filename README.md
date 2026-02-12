@@ -18,7 +18,7 @@ Real-time multiplayer Texas Hold'em poker server built with Node.js and Socket.I
 - 🎮 Designed for Unity client integration
 - 🔒 Per-player card visibility (no cheating!)
 - 🤖 Bot system (regular AI bots + socket bots for testing)
-- 🎰 Item Ante ("For Keeps") mode - gamble inventory items
+- 🎰 Item Ante ("For Keeps") mode - gamble inventory items (risk-free in practice mode)
 - 📊 Simulation mode for spectating bot-only games
 - ⏱️ Configurable blind increase timers
 
@@ -216,6 +216,34 @@ Keep narrowing down until the problem disappears - the last chunk you commented 
 
 **Files Changed:**
 - `src/game/Table.js` (showdown item ante award logic)
+
+### ✅ Fixed: Practice Mode Item Ante Now Risk-Free (Virtual Items Only)
+**Status:** FIXED  
+**Date:** February 12, 2026  
+**Severity:** FEATURE ENHANCEMENT
+
+**Problem:** In practice mode, item ante was transferring real items from players' inventories to winners, even though practice mode is meant to be risk-free for testing and learning.
+
+**Expected Behavior:**
+- **Practice Mode**: Items are shown visually in the pot and winner displays, but NO actual inventory transfers occur
+- **Real Games**: Items are transferred as before (winner receives copies, losers keep original items)
+
+**Solution:**
+- Added check for `this.practiceMode` before transferring items to winner's inventory in `showdown()`
+- If practice mode: Log `PRACTICE_MODE_SKIP` and broadcast state, but skip all `addItem()` calls
+- Items remain visible in UI but are purely virtual in practice games
+
+**How It Works:**
+1. **Item Selection**: Players select items from inventory (same in both modes)
+2. **Visual Display**: Items show in pot and winner displays (same in both modes)  
+3. **Database Transfer**: 
+   - **Practice**: Skipped - no inventory changes
+   - **Real Game**: Winner receives item copies via `addItem()`
+
+**Files Changed:**
+- `src/game/Table.js` (lines 6656-6714: added practice mode check before item transfer)
+
+**Verification:** Practice games now have zero risk - all players keep their items regardless of win/loss.
 
 ### ✅ Fixed: Bot Betting into Dead Streets After Opponent All-In
 **Status:** FIXED  
