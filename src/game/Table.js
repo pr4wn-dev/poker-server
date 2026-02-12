@@ -6650,64 +6650,75 @@ class Table {
                         itemNames: itemAnteResult.items.map(i => i.name)
                     });
                     
-                    // FIX: Check if winner is a bot — bots don't have real user records in the DB,
-                    // so trying to addItem for them causes a FK constraint error (ER_NO_REFERENCED_ROW_2).
-                    // In practice mode, items aren't real anyway. For bots, just log the award without transferring.
-                    const winnerSeat = this.seats.find(s => s && s.playerId === itemWinner.playerId);
-                    const isWinnerBot = winnerSeat?.isBot || itemWinner.playerId?.startsWith('bot_') || 
-                                        itemWinner.name?.startsWith('NetPlayer_') || itemWinner.name?.startsWith('SimBot_');
-                    
-                    if (isWinnerBot) {
-                        console.log(`[ITEM_ANTE] SKIP_TRANSFER: Winner ${itemWinner.name} is a bot — items not transferred to DB (practice mode or bot has no user record)`);
-                        gameLogger.gameEvent(this.name, `[ITEM_ANTE] SKIP_TRANSFER_BOT`, {
+                    // CRITICAL: In PRACTICE MODE, items are virtual - don't transfer to inventory
+                    // Players see items in the pot and winner, but nothing actually changes in DB
+                    if (this.practiceMode) {
+                        console.log(`[ITEM_ANTE] PRACTICE_MODE_SKIP: Winner ${itemWinner.name} — items are virtual (not transferred to inventory)`);
+                        gameLogger.gameEvent(this.name, `[ITEM_ANTE] PRACTICE_MODE_SKIP`, {
                             winnerId: itemWinner.playerId,
                             winnerName: itemWinner.name,
                             itemCount: itemAnteResult.items.length,
-                            reason: 'Winner is a bot'
+                            reason: 'Practice mode - items are virtual'
                         });
                         this.onStateChange?.();
                     } else {
-                        // CRITICAL: Actually transfer items to winner's inventory (real player)
-                        // IMPORTANT: Create new Item instances with new IDs to avoid duplicate key errors
-                        const userRepo = require('../database/UserRepository');
-                        const Item = require('../models/Item');
-                        (async () => {
-                            try {
-                                for (const originalItem of itemAnteResult.items) {
-                                    const newItem = new Item({
-                                        templateId: originalItem.templateId,
-                                        name: originalItem.name,
-                                        description: originalItem.description,
-                                        type: originalItem.type,
-                                        rarity: originalItem.rarity,
-                                        icon: originalItem.icon,
-                                        uses: originalItem.uses,
-                                        maxUses: originalItem.maxUses,
-                                        baseValue: originalItem.baseValue,
-                                        obtainedFrom: `Item Ante Win from ${this.name}`,
-                                        isTradeable: originalItem.isTradeable,
-                                        isGambleable: originalItem.isGambleable
+                        // FIX: Check if winner is a bot — bots don't have real user records in the DB
+                        const winnerSeat = this.seats.find(s => s && s.playerId === itemWinner.playerId);
+                        const isWinnerBot = winnerSeat?.isBot || itemWinner.playerId?.startsWith('bot_') || 
+                                            itemWinner.name?.startsWith('NetPlayer_') || itemWinner.name?.startsWith('SimBot_');
+                        
+                        if (isWinnerBot) {
+                            console.log(`[ITEM_ANTE] SKIP_TRANSFER: Winner ${itemWinner.name} is a bot — items not transferred to DB (bot has no user record)`);
+                            gameLogger.gameEvent(this.name, `[ITEM_ANTE] SKIP_TRANSFER_BOT`, {
+                                winnerId: itemWinner.playerId,
+                                winnerName: itemWinner.name,
+                                itemCount: itemAnteResult.items.length,
+                                reason: 'Winner is a bot'
+                            });
+                            this.onStateChange?.();
+                        } else {
+                            // CRITICAL: Actually transfer items to winner's inventory (real player in real game)
+                            // IMPORTANT: Create new Item instances with new IDs to avoid duplicate key errors
+                            const userRepo = require('../database/UserRepository');
+                            const Item = require('../models/Item');
+                            (async () => {
+                                try {
+                                    for (const originalItem of itemAnteResult.items) {
+                                        const newItem = new Item({
+                                            templateId: originalItem.templateId,
+                                            name: originalItem.name,
+                                            description: originalItem.description,
+                                            type: originalItem.type,
+                                            rarity: originalItem.rarity,
+                                            icon: originalItem.icon,
+                                            uses: originalItem.uses,
+                                            maxUses: originalItem.maxUses,
+                                            baseValue: originalItem.baseValue,
+                                            obtainedFrom: `Item Ante Win from ${this.name}`,
+                                            isTradeable: originalItem.isTradeable,
+                                            isGambleable: originalItem.isGambleable
+                                        });
+                                        
+                                        await userRepo.addItem(itemWinner.playerId, newItem);
+                                        console.log(`[ITEM_ANTE] TRANSFER: Added ${newItem.name} (${newItem.id}) to ${itemWinner.name}'s inventory`);
+                                    }
+                                    console.log(`[ITEM_ANTE] TRANSFER_COMPLETE: All ${itemAnteResult.items.length} items transferred to ${itemWinner.name}'s inventory`);
+                                    gameLogger.gameEvent(this.name, `[ITEM_ANTE] TRANSFER_COMPLETE`, {
+                                        winnerId: itemWinner.playerId,
+                                        winnerName: itemWinner.name,
+                                        itemCount: itemAnteResult.items.length
                                     });
-                                    
-                                    await userRepo.addItem(itemWinner.playerId, newItem);
-                                    console.log(`[ITEM_ANTE] TRANSFER: Added ${newItem.name} (${newItem.id}) to ${itemWinner.name}'s inventory`);
+                                    this.onStateChange?.();
+                                } catch (error) {
+                                    console.error(`[ITEM_ANTE] TRANSFER_FAILED: Failed to transfer items to ${itemWinner.name}:`, error);
+                                    gameLogger.error(this.name, `[ITEM_ANTE] TRANSFER_FAILED`, {
+                                        winnerId: itemWinner.playerId,
+                                        error: error.message,
+                                        stack: error.stack
+                                    });
                                 }
-                                console.log(`[ITEM_ANTE] TRANSFER_COMPLETE: All ${itemAnteResult.items.length} items transferred to ${itemWinner.name}'s inventory`);
-                                gameLogger.gameEvent(this.name, `[ITEM_ANTE] TRANSFER_COMPLETE`, {
-                                    winnerId: itemWinner.playerId,
-                                    winnerName: itemWinner.name,
-                                    itemCount: itemAnteResult.items.length
-                                });
-                                this.onStateChange?.();
-                            } catch (error) {
-                                console.error(`[ITEM_ANTE] TRANSFER_FAILED: Failed to transfer items to ${itemWinner.name}:`, error);
-                                gameLogger.error(this.name, `[ITEM_ANTE] TRANSFER_FAILED`, {
-                                    winnerId: itemWinner.playerId,
-                                    error: error.message,
-                                    stack: error.stack
-                                });
-                            }
-                        })();
+                            })();
+                        }
                     }
                 } else {
                     console.error(`[ITEM_ANTE] AWARD_FAILED: ${itemWinner.name} (${itemWinner.playerId}) - ${itemAnteResult?.error || 'unknown error'}`);
