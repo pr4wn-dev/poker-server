@@ -999,17 +999,26 @@ Keep narrowing down until the problem disappears - the last chunk you commented 
 - Store items cannot be gambled (separation of concerns)
 - Chips one-way only (can buy, cannot sell = not gambling)
 
-**Implementation Priority:**
-1. Power Score calculation and display
-2. `isGambleable` flag enforcement
-3. Table creation UI (item selection with preview)
-4. Locked minimum display (lobby, game)
-5. Store item restrictions
-6. Chip purchasing system
-7. Ads integration
-8. Premium membership
+**Implementation Status:**
+✅ **COMPLETED:**
+1. Power Score calculation (`calculatePowerScore()`, `calculateDropRate()`, `calculateDemand()`)
+2. `isGambleable` flag enforcement (store items automatically set to `false`)
+3. Table creation UI (item selection with minimum ante item preview)
+4. Locked minimum display (lobby shows ⚡PowerScore+, game shows in item selection)
+5. Bot logic updated to use Power Score for item ante
+6. Database schema updated (power_score, source, drop_rate, demand columns)
+7. ItemAnte uses `minimumPowerScore` for validation
+8. Table-level minimum item (persists even if creator leaves)
+9. Unity NetworkModels updated with Power Score fields
+10. InventoryPanel filters by Power Score (not baseValue)
 
-**Status:** Design complete, implementation pending
+🔄 **PENDING:**
+- Store item restrictions UI (shop interface)
+- Chip purchasing system
+- Ads integration
+- Premium membership
+
+**Status:** Power Score system fully implemented and tested ✅
 
 ## License
 
