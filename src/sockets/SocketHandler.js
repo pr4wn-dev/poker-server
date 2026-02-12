@@ -489,9 +489,54 @@ class SocketHandler {
                         player.chips = dbUser.chips;
                     }
 
+                    // Fetch minimum ante item if provided
+                    let minimumAnteItem = null;
+                    if (data.minimumAnteItemId && data.itemAnteEnabled) {
+                        try {
+                            const inventoryRepo = require('../repositories/InventoryRepository');
+                            const itemData = await inventoryRepo.getById(data.minimumAnteItemId);
+                            if (itemData && itemData.user_id === user.userId && itemData.is_gambleable) {
+                                const Item = require('../models/Item');
+                                minimumAnteItem = new Item({
+                                    id: itemData.id,
+                                    templateId: itemData.template_id,
+                                    name: itemData.name,
+                                    description: itemData.description,
+                                    type: itemData.item_type,
+                                    rarity: itemData.rarity,
+                                    icon: itemData.icon,
+                                    uses: itemData.uses_remaining,
+                                    maxUses: itemData.max_uses,
+                                    baseValue: itemData.base_value,
+                                    powerScore: itemData.power_score,
+                                    source: itemData.source,
+                                    dropRate: itemData.drop_rate,
+                                    demand: itemData.demand,
+                                    obtainedAt: itemData.obtained_at,
+                                    obtainedFrom: itemData.obtained_from,
+                                    isTradeable: itemData.is_tradeable,
+                                    isGambleable: itemData.is_gambleable
+                                });
+                                gameLogger.info(user.userId, '[TABLE] MINIMUM_ANTE_ITEM_SELECTED', {
+                                    itemId: minimumAnteItem.id,
+                                    itemName: minimumAnteItem.name,
+                                    powerScore: minimumAnteItem.powerScore
+                                });
+                            } else {
+                                gameLogger.warn(user.userId, '[TABLE] INVALID_MINIMUM_ANTE_ITEM', {
+                                    itemId: data.minimumAnteItemId,
+                                    reason: !itemData ? 'not found' : itemData.user_id !== user.userId ? 'not owned' : 'not gambleable'
+                                });
+                            }
+                        } catch (err) {
+                            gameLogger.error(user.userId, '[TABLE] FETCH_MINIMUM_ANTE_ITEM_ERROR', { error: err.message });
+                        }
+                    }
+
                     const table = this.gameManager.createTable({
                         ...data,
-                        creatorId: user.userId
+                        creatorId: user.userId,
+                        minimumAnteItem: minimumAnteItem // Pass the full Item object
                     });
                     
                     // Set up table callbacks for state broadcasting
