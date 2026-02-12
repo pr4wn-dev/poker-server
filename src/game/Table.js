@@ -5616,6 +5616,7 @@ class Table {
                     // We've wrapped around (nextPlayer is before current OR after lastRaiser means we wrapped)
                     passed = true;
                 }
+            }
             // FIX: Removed `currentIndex === lastRaiser` case - this was incorrectly marking
             // hasPassedLastRaiser=true at the START of new betting rounds (where lastRaiserIndex
             // is set to firstToAct), causing rounds to complete before anyone acted.
@@ -5724,10 +5725,10 @@ class Table {
                             // Still at BB or no next player - round not complete
                             bettingRoundComplete = false;
                         }
-                    // FIX: Removed UTG→BB shortcut - BB posting a blind is NOT an action.
-                    // BB must always get a chance to check or raise preflop.
                     } else {
-                        // We're not at BB or UTG->BB transition - round cannot be complete yet
+                        // FIX: Removed UTG→BB shortcut - BB posting a blind is NOT an action.
+                        // BB must always get a chance to check or raise preflop.
+                        // We're not at BB - round cannot be complete yet (BB hasn't acted)
                         bettingRoundComplete = false;
                     }
                 } else {
