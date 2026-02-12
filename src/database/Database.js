@@ -177,6 +177,37 @@ class Database {
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         `);
 
+        // Add new columns for Power Score system (if they don't exist)
+        try {
+            await this.query(`
+                ALTER TABLE inventory 
+                ADD COLUMN IF NOT EXISTS power_score INT DEFAULT 0,
+                ADD COLUMN IF NOT EXISTS source VARCHAR(50) DEFAULT 'unknown',
+                ADD COLUMN IF NOT EXISTS drop_rate DECIMAL(5,4) DEFAULT 0.5000,
+                ADD COLUMN IF NOT EXISTS demand DECIMAL(5,2) DEFAULT 1.00
+            `);
+        } catch (err) {
+            // MySQL doesn't support IF NOT EXISTS in ALTER TABLE
+            // Try adding columns one by one
+            const columns = [
+                { name: 'power_score', def: 'INT DEFAULT 0' },
+                { name: 'source', def: 'VARCHAR(50) DEFAULT \'unknown\'' },
+                { name: 'drop_rate', def: 'DECIMAL(5,4) DEFAULT 0.5000' },
+                { name: 'demand', def: 'DECIMAL(5,2) DEFAULT 1.00' }
+            ];
+            
+            for (const col of columns) {
+                try {
+                    await this.query(`ALTER TABLE inventory ADD COLUMN ${col.name} ${col.def}`);
+                } catch (e) {
+                    // Column already exists, skip
+                    if (!e.message.includes('Duplicate column name')) {
+                        console.error(`Error adding column ${col.name}:`, e.message);
+                    }
+                }
+            }
+        }
+
         // Friends table
         await this.query(`
             CREATE TABLE IF NOT EXISTS friends (

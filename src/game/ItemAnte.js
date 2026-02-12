@@ -37,9 +37,10 @@ class ItemAnte {
         this.creatorId = creatorId;
         this.status = ITEM_ANTE_STATUS.INACTIVE;
         
-        // First item sets the minimum value threshold
+        // First item sets the minimum Power Score threshold
         this.firstItem = null;
-        this.minimumValue = null;  // Minimum baseValue required for subsequent items
+        this.minimumValue = null;       // Legacy: Minimum baseValue (kept for backward compat)
+        this.minimumPowerScore = null;  // NEW: Minimum Power Score required
         
         // All players' items: userId -> { userId, item, status, submittedAt }
         this.submissions = new Map();
@@ -70,9 +71,10 @@ class ItemAnte {
             return { success: false, error: 'Item cannot be gambled' };
         }
         
-        // Set first item and minimum value threshold
+        // Set first item and minimum Power Score threshold
         this.firstItem = firstItem;
-        this.minimumValue = firstItem.baseValue || firstItem.calculateBaseValue?.() || 100;
+        this.minimumValue = firstItem.baseValue || firstItem.calculateBaseValue?.() || 100;  // Legacy
+        this.minimumPowerScore = firstItem.powerScore || firstItem.calculatePowerScore?.() || 10;  // NEW
         this.status = ITEM_ANTE_STATUS.COLLECTING;
         this.collectionEndTime = Date.now() + collectionDurationMs;
         
@@ -99,8 +101,10 @@ class ItemAnte {
             itemName: firstItem.name,
             itemTemplateId: firstItem.templateId,
             itemRarity: firstItem.rarity,
-            minimumValue: this.minimumValue,
-            baseValue: firstItem.baseValue,
+            minimumValue: this.minimumValue,           // Legacy
+            minimumPowerScore: this.minimumPowerScore,  // NEW
+            baseValue: firstItem.baseValue,             // Legacy
+            powerScore: firstItem.powerScore,           // NEW
             collectionEndTime: this.collectionEndTime,
             status: this.status,
             stackTrace: new Error().stack?.split('\n').slice(2, 10).join(' | ') || 'NO_STACK'
@@ -123,7 +127,7 @@ class ItemAnte {
         }
         
         // Check if first item hasn't been set yet
-        if (!this.firstItem || this.minimumValue === null) {
+        if (!this.firstItem || this.minimumPowerScore === null) {
             return { success: false, error: 'First item must be submitted before others' };
         }
         
@@ -140,9 +144,10 @@ class ItemAnte {
             }
         }
         
-        // Validate item value - must be equal or greater than minimum
-        const itemValue = item.baseValue || item.calculateBaseValue?.() || 100;
-        if (itemValue < this.minimumValue) {
+        // Validate item Power Score - must be equal or greater than minimum
+        const itemValue = item.baseValue || item.calculateBaseValue?.() || 100;      // Legacy
+        const itemPowerScore = item.powerScore || item.calculatePowerScore?.() || 10; // NEW
+        if (itemPowerScore < this.minimumPowerScore) {
             this.submissions.set(userId, {
                 userId: userId,
                 item: item,
@@ -157,10 +162,12 @@ class ItemAnte {
                 userId,
                 itemId: item.id,
                 itemName: item.name,
-                itemValue,
-                minimumValue: this.minimumValue,
-                difference: itemValue - this.minimumValue,
-                reason: 'VALUE_TOO_LOW',
+                itemValue,                                  // Legacy
+                itemPowerScore,                             // NEW
+                minimumValue: this.minimumValue,           // Legacy
+                minimumPowerScore: this.minimumPowerScore, // NEW
+                difference: itemPowerScore - this.minimumPowerScore, // NEW
+                reason: 'POWER_SCORE_TOO_LOW',
                 status: this.status,
                 approvedCount: this.approvedItems.length,
                 stackTrace: new Error().stack?.split('\n').slice(2, 10).join(' | ') || 'NO_STACK'
@@ -168,7 +175,7 @@ class ItemAnte {
             
             return { 
                 success: false, 
-                error: `Item value (${itemValue}) is less than minimum required (${this.minimumValue})`
+                error: `Item Power Score (${itemPowerScore}) is less than minimum required (${this.minimumPowerScore})`
             };
         }
         
@@ -195,8 +202,10 @@ class ItemAnte {
             itemName: item.name,
             itemTemplateId: item.templateId,
             itemRarity: item.rarity,
-            itemValue,
-            minimumValue: this.minimumValue,
+            itemValue,                                  // Legacy
+            itemPowerScore,                             // NEW
+            minimumValue: this.minimumValue,           // Legacy
+            minimumPowerScore: this.minimumPowerScore, // NEW
             approvedCount: this.approvedItems.length,
             totalSubmissions: this.submissions.size,
             status: this.status,
@@ -303,9 +312,9 @@ class ItemAnte {
         // Clear any pending submissions (shouldn't happen with auto-validation, but just in case)
         for (const [userId, submission] of this.submissions) {
             if (submission.status === SUBMISSION_STATUS.PENDING) {
-                // Try to auto-validate one last time
-                const itemValue = submission.item?.baseValue || submission.item?.calculateBaseValue?.() || 100;
-                if (itemValue >= this.minimumValue) {
+                // Try to auto-validate one last time using Power Score
+                const itemPowerScore = submission.item?.powerScore || submission.item?.calculatePowerScore?.() || 10;
+                if (itemPowerScore >= this.minimumPowerScore) {
                     submission.status = SUBMISSION_STATUS.APPROVED;
                     if (!this.approvedItems.some(e => e.userId === userId)) {
                         this.approvedItems.push({
@@ -521,7 +530,9 @@ class ItemAnte {
                 rarity: this.firstItem.rarity || 'common',
                 type: this.firstItem.type || 'special',
                 icon: this.firstItem.icon || 'default_item',
-                baseValue: this.firstItem.baseValue || 0,
+                baseValue: this.firstItem.baseValue || 0,                    // Legacy
+                powerScore: this.firstItem.powerScore || 0,                  // NEW
+                source: this.firstItem.source || 'unknown',                  // NEW
                 isGambleable: this.firstItem.isGambleable !== false,
                 isTradeable: this.firstItem.isTradeable !== false,
                 obtainedFrom: this.firstItem.obtainedFrom || ''
@@ -534,15 +545,19 @@ class ItemAnte {
                 rarity: this.firstItem.rarity || 'common',
                 type: this.firstItem.type || 'special',
                 icon: this.firstItem.icon || 'default_item',
-                baseValue: this.firstItem.baseValue || 0,
+                baseValue: this.firstItem.baseValue || 0,                    // Legacy
+                powerScore: this.firstItem.powerScore || 0,                  // NEW
+                source: this.firstItem.source || 'unknown',                  // NEW
                 isGambleable: this.firstItem.isGambleable !== false,
                 isTradeable: this.firstItem.isTradeable !== false,
                 obtainedFrom: this.firstItem.obtainedFrom || ''
             } : null,
-            minimumValue: this.minimumValue,
+            minimumValue: this.minimumValue,                  // Legacy
+            minimumPowerScore: this.minimumPowerScore,        // NEW
             collectionEndTime: this.collectionEndTime,
             approvedCount: this.approvedItems.length,
-            totalValue: this.approvedItems.reduce((sum, e) => sum + (e.item?.baseValue || 0), 0)
+            totalValue: this.approvedItems.reduce((sum, e) => sum + (e.item?.baseValue || 0), 0),           // Legacy
+            totalPowerScore: this.approvedItems.reduce((sum, e) => sum + (e.item?.powerScore || 0), 0)     // NEW
         };
         
         // Show approved items list
@@ -562,7 +577,9 @@ class ItemAnte {
                     rarity: entry.item.rarity || 'common',
                     type: entry.item.type || 'special',
                     icon: entry.item.icon || 'default_item',
-                    baseValue: entry.item.baseValue || 0,
+                    baseValue: entry.item.baseValue || 0,                    // Legacy
+                    powerScore: entry.item.powerScore || 0,                  // NEW
+                    source: entry.item.source || 'unknown',                  // NEW
                     isGambleable: entry.item.isGambleable !== false,
                     isTradeable: entry.item.isTradeable !== false,
                     obtainedFrom: entry.item.obtainedFrom || ''

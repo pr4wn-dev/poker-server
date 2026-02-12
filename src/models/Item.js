@@ -31,6 +31,26 @@ const RARITY_WEIGHTS = {
     [RARITY.LEGENDARY]: 1
 };
 
+// Rarity multipliers for Power Score calculation
+const RARITY_MULTIPLIERS = {
+    [RARITY.COMMON]: 1,
+    [RARITY.UNCOMMON]: 5,
+    [RARITY.RARE]: 20,
+    [RARITY.EPIC]: 100,
+    [RARITY.LEGENDARY]: 500
+};
+
+// Item source (where it came from)
+const ITEM_SOURCE = {
+    BOSS_DROP: 'boss_drop',
+    TOURNAMENT: 'tournament',
+    REWARD: 'reward',
+    CHALLENGE: 'challenge',
+    STORE: 'store',           // Purchased with real money
+    TRADE: 'trade',
+    UNKNOWN: 'unknown'
+};
+
 // Item Types
 const ITEM_TYPE = {
     CARD_BACK: 'card_back',          // Custom card back design
@@ -60,16 +80,32 @@ class Item {
         this.uses = data.uses || 1;
         this.maxUses = data.maxUses || 1;
         
-        // Value for gambling/trading
+        // Value for gambling/trading (legacy - for backward compatibility)
         this.baseValue = data.baseValue || this.calculateBaseValue();
+        
+        // Item source (boss drop, store purchase, etc.)
+        this.source = data.source || ITEM_SOURCE.UNKNOWN;
+        
+        // Drop rate (0.0 to 1.0, where 0.01 = 1%)
+        // Calculated from rarity if not provided
+        this.dropRate = data.dropRate || this.calculateDropRate();
+        
+        // Demand factor (1.0 = normal, 2.0 = high demand, 0.5 = low demand)
+        // Default based on rarity and type, can be adjusted dynamically
+        this.demand = data.demand || this.calculateDemand();
+        
+        // Power Score for Item Ante matching (replaces dollar values)
+        // Formula: Rarity Multiplier × (1 / Drop Rate) × Demand
+        this.powerScore = data.powerScore || this.calculatePowerScore();
         
         // When it was obtained
         this.obtainedAt = data.obtainedAt || Date.now();
         this.obtainedFrom = data.obtainedFrom || 'unknown';  // Boss name, event, etc.
         
-        // Tradeable?
+        // Permissions
         this.isTradeable = data.isTradeable !== false;
-        this.isGambleable = data.isGambleable !== false;
+        // CRITICAL: Store items cannot be gambled (legal compliance)
+        this.isGambleable = this.source === ITEM_SOURCE.STORE ? false : (data.isGambleable !== false);
     }
     
     calculateBaseValue() {
@@ -81,6 +117,56 @@ class Item {
             [RARITY.LEGENDARY]: 50000
         };
         return rarityValues[this.rarity] || 100;
+    }
+    
+    calculateDropRate() {
+        // Convert rarity weights to drop rates (0.0 to 1.0)
+        // Total weight = 100 (50+30+15+4+1)
+        const dropRates = {
+            [RARITY.COMMON]: 0.50,      // 50%
+            [RARITY.UNCOMMON]: 0.30,    // 30%
+            [RARITY.RARE]: 0.15,        // 15%
+            [RARITY.EPIC]: 0.04,        // 4%
+            [RARITY.LEGENDARY]: 0.01    // 1%
+        };
+        return dropRates[this.rarity] || 0.50;
+    }
+    
+    calculateDemand() {
+        // Demand based on item type and rarity
+        // Higher for useful/cosmetic items, lower for trophies
+        const typeMultipliers = {
+            [ITEM_TYPE.AVATAR]: 1.5,         // High demand - everyone wants avatars
+            [ITEM_TYPE.CARD_BACK]: 1.3,      // High demand - visible to everyone
+            [ITEM_TYPE.TABLE_SKIN]: 1.2,
+            [ITEM_TYPE.CHIP_STYLE]: 1.2,
+            [ITEM_TYPE.VEHICLE]: 2.0,        // Very high demand - status symbols
+            [ITEM_TYPE.LOCATION_KEY]: 3.0,   // Extremely high demand - utility
+            [ITEM_TYPE.XP_BOOST]: 1.0,       // Normal - consumable
+            [ITEM_TYPE.TROPHY]: 0.8,         // Lower - prestige only
+            [ITEM_TYPE.EMOTE]: 1.0,
+            [ITEM_TYPE.CONSUMABLE]: 1.0,
+            [ITEM_TYPE.SPECIAL]: 1.0
+        };
+        
+        // Legendary items get a demand boost
+        const rarityBoost = this.rarity === RARITY.LEGENDARY ? 1.5 : 1.0;
+        
+        const baseDemand = typeMultipliers[this.type] || 1.0;
+        return baseDemand * rarityBoost;
+    }
+    
+    calculatePowerScore() {
+        // Power Score = Rarity Multiplier × (1 / Drop Rate) × Demand
+        // This creates a prestige-based value system
+        const rarityMult = RARITY_MULTIPLIERS[this.rarity] || 1;
+        const scarcity = 1 / this.dropRate; // Lower drop rate = higher scarcity
+        const demand = this.demand || 1.0;
+        
+        // Formula with balance adjustment (divide by 10 to keep numbers reasonable)
+        const power = Math.floor((rarityMult * scarcity * demand) / 10);
+        
+        return power;
     }
     
     getColor() {
@@ -109,11 +195,15 @@ class Item {
             icon: this.icon,
             uses: this.uses,
             maxUses: this.maxUses,
-            baseValue: this.baseValue,
+            baseValue: this.baseValue,         // Legacy - kept for backward compatibility
+            powerScore: this.powerScore,       // NEW: Power Score for Item Ante
+            source: this.source,               // NEW: Where item came from
+            dropRate: this.dropRate,           // NEW: Drop rate (for display/info)
+            demand: this.demand,               // NEW: Demand factor
             obtainedAt: this.obtainedAt,
             obtainedFrom: this.obtainedFrom,
             isTradeable: this.isTradeable,
-            isGambleable: this.isGambleable,
+            isGambleable: this.isGambleable,   // Store items will be false
             color: this.getColor()
         };
     }
@@ -355,7 +445,9 @@ Item.TEMPLATES = {
 Item.RARITY = RARITY;
 Item.RARITY_COLORS = RARITY_COLORS;
 Item.RARITY_WEIGHTS = RARITY_WEIGHTS;
+Item.RARITY_MULTIPLIERS = RARITY_MULTIPLIERS;
 Item.TYPE = ITEM_TYPE;
+Item.SOURCE = ITEM_SOURCE;
 
 module.exports = Item;
 
