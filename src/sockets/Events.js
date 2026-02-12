@@ -10,7 +10,7 @@
  * =======================
  * 
  * 'register' - Register a new player
- *   Send: { playerName: string }
+ *   Send: { username: string, password: string, email?: string }
  *   Response: { success: boolean, playerId?: string, error?: string }
  * 
  * 'get_tables' - Get list of available tables

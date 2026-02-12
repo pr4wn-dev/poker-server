@@ -15,6 +15,7 @@ const cors = require('cors');
 const db = require('./database/Database');
 const GameManager = require('./game/GameManager');
 const SocketHandler = require('./sockets/SocketHandler');
+const gameLogger = require('./utils/GameLogger');
 const path = require('path');
 const logMaintenance = require(path.join(__dirname, '..', 'scripts', 'log-maintenance'));
 
@@ -449,7 +450,6 @@ process.on('SIGINT', async () => {
 });
 
 // Handle uncaught errors
-const gameLogger = require('./utils/GameLogger');
 
 process.on('uncaughtException', (err) => {
     const gameLogger = require('./utils/GameLogger');
