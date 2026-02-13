@@ -319,22 +319,79 @@ All UI is built **programmatically** via `SceneBootstrap.cs` — no drag-and-dro
 
 ---
 
-## 📊 Current Status (Feb 13, 2026)
+## Current Status (Feb 13, 2026)
 
 **All gameplay systems are implemented end-to-end (server + client + wired).**
 
-### ✅ What's Done
-- 23+ server modules, 15 Unity scenes, 20+ UI components
-- 100+ socket events, 20+ database tables
-- Stats, fire/cold, titles, characters, crews, robbery, karma, events, spectator odds, hand replay, achievements, daily rewards, inventory, friends, tournaments, adventure mode
-- Dark cyberpunk theme applied across all scenes
-- Item economy with Power Score system
+### What's Done
 
-### ⏳ What's Left
-- **Assets**: AI-generated audio (character sounds) and images (character sprites, boss art, item icons)
-- **Monetization**: Ad integration (AdMob/Unity Ads), chip purchasing, premium membership, store UI
-- **Polish**: Animations, transitions, sound effects, particle effects
+**Server:** 23+ modules totaling ~22,000 lines of JavaScript
+- Core poker engine (Table.js - 10K lines): full Texas Hold'em, side pots, hand evaluation, item ante
+- SocketHandler.js (4.3K lines): 100+ socket event handlers, auth, reconnection, stale session cleanup
+- Database.js + UserRepository.js: 20+ auto-migrating MySQL tables, 1,700 lines
+- StatsEngine (637) + StatsCalculator (416): 40+ metrics per player
+- TitleEngine (311): 25+ dynamic titles across 7 categories
+- FireTracker (290): NBA Jam-style fire/cold detection
+- CharacterSystem (493): 25+ collectible characters with rarity, drops, sounds
+- RobberyManager (498): PvP robbery with karma-based targeting, tools, defense
+- CrewManager (413): Crews with roles, perks, chat, XP, leaderboard
+- TournamentManager (435): Brackets, registration, elimination
+- AdventureManager (492): World map, areas, boss battles
+- SpectatorOdds (185): Monte Carlo win probability
+- EventManager (175): Seasonal/weekly events with multipliers
+- CollusionDetector (215): Anti-cheat analysis
 
+**Client:** 15 Unity scenes + 11 UI components totaling ~25,000 lines of C#
+- TableScene (3.5K) + PokerTableView (1.3K): Full poker gameplay with character rendering, karma hearts, fire glow
+- MainMenuScene (2.4K): Login/register, quick play, event banner, daily rewards popup
+- LobbyScene (1.3K): Browse/create/join tables
+- StatisticsScene (969): 40+ stats in tabs with karma tier display
+- CrewScene (815), RobberyScene (674), InventoryScene (689): Full feature UIs
+- AdventureMapScene (674) + AdventureBattleScene (838): Boss challenge flow
+- HandReplayScene (501), TournamentScene (515), CharacterSelectScene (488)
+- SettingsScene (589): With progress reset confirmation
+- PlayerProfilePopup (414): Tap-to-view at table seats
+- FriendsPanel (428), DailyRewardsPopup (342), AchievementsPanel (289), SpectatorPanel (340)
+- SocketManager: Auto-reconnect with exponential backoff, stale socket disposal
+- GameService: 80+ API methods wrapping all socket events
+- Dark cyberpunk theme applied consistently via Theme.Current across all scenes
+
+**Infrastructure:**
+- 20+ database tables with automatic migrations
+- 100+ socket events documented in Events.js
+- Item economy with dual-track system (gambleable vs store items) and Power Score
+- Connection resilience: auto-reconnect, stale session cleanup, race condition guards
+
+### What's Left
+
+**Art Assets (AI-generated - next priority):**
+- Character sprites (25+ characters x portrait/seat/idle)
+- Boss art, item icons (24+), UI frames, backgrounds, card backs, game logo
+- Fire/ice particle sprites, crew emblems, rarity glow variants
+
+**Audio Assets (AI-generated):**
+- Character sounds (win/lose/fold/all-in/taunt per character) - CharacterSoundManager already wired
+- Per-scene music, SFX (card flip, chip clink, fire whoosh, etc.)
+
+**Monetization (not started):**
+- Ad integration (AdMob/Unity Ads - interstitial, rewarded video, banners)
+- Chip purchasing (IAP), premium membership, shop catalog + purchase flow
+
+**Minor code gaps:**
+- Leaderboard scene - scaffold exists, needs server ranking data wired
+- Shop scene - scaffold exists, needs catalog + purchase flow
+- Tutorial overlay - scaffold exists, needs first-time player content
+- Emote panel - scaffold exists, needs emote selection + display at table
+- Adventure area rename (old casino names to crime theme names)
+
+**Polish and animations:**
+- Card flip, screen shake, fire/ice particles, robbery reveal, victory celebration
+- Boss entrance, chip counting, XP popup, title earned, scene transitions
+
+**Platform and release:**
+- Android build optimization (texture compression, 60fps profiling)
+- Touch input testing, splash screen, app icon, Play Store listing
+- Push notifications (Firebase)
 ---
 
 ## 🛠️ Development
