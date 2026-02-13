@@ -43,7 +43,7 @@ Go through each phase in order. For each item:
 
 ---
 
-## Phase 3: Main Menu — MOSTLY DONE
+## Phase 3: Main Menu — NEARLY DONE
 
 | # | Feature | Status | Notes |
 |---|---------|--------|-------|
@@ -54,9 +54,9 @@ Go through each phase in order. For each item:
 | 3.5 | Daily rewards popup | DONE | 7-day streak system |
 | 3.6 | Event banner | DONE | Shows active server events |
 | 3.7 | Friends button | **PARTIAL** | Shows "coming soon" toast. Need FriendsScene. |
-| 3.8 | Robbery navigation | **MISSING** | No button to reach RobberyScene from main menu |
-| 3.9 | Statistics navigation | **MISSING** | No button to reach StatisticsScene from main menu |
-| 3.10 | Leaderboard navigation | **MISSING** | No button to reach LeaderboardScene from main menu |
+| 3.8 | Robbery navigation | DONE | Bottom nav bar, top row |
+| 3.9 | Statistics navigation | DONE | Bottom nav bar, top row |
+| 3.10 | Leaderboard navigation | DONE | Bottom nav bar, top row |
 
 ---
 
@@ -172,7 +172,7 @@ Go through each phase in order. For each item:
 
 ---
 
-## Phase 11: Robbery & Karma — DONE (needs nav)
+## Phase 11: Robbery & Karma — ALL DONE
 
 | # | Feature | Status | Notes |
 |---|---------|--------|-------|
@@ -181,7 +181,7 @@ Go through each phase in order. For each item:
 | 11.3 | Attempt robbery (tool selection) | DONE | |
 | 11.4 | Recovery system (24h window) | DONE | |
 | 11.5 | Robbery history | DONE | |
-| 11.6 | Navigation to RobberyScene | **MISSING** | No button from main menu or adventure |
+| 11.6 | Navigation to RobberyScene | DONE | Button on main menu bottom nav |
 
 ---
 
@@ -263,7 +263,7 @@ Go through each phase in order. For each item:
 ## Work Order (Recommended Sequence)
 
 ### Round 1: Fix Remaining Code Gaps
-1. Add navigation buttons on main menu for Statistics, Leaderboard, Robbery
+1. ~~Add navigation buttons on main menu for Statistics, Leaderboard, Robbery~~ ✅ DONE
 2. Build FriendsScene.cs wired to GameService
 3. Build TournamentScene.cs (reuse table with tournament context)
 4. Test the complete multiplayer flow end-to-end
@@ -300,7 +300,7 @@ Go through each phase in order. For each item:
 |----------|------|---------|---------|------------|
 | Auth & Connection | 6/6 | 0 | 0 | 0 |
 | Character Select | 6/7 | 0 | 0 | 1 |
-| Main Menu | 6/10 | 1 | 3 | 0 |
+| Main Menu | 9/10 | 1 | 0 | 0 |
 | Lobby | 6/6 | 0 | 0 | 0 |
 | Core Poker | 20/24 | 2 | 0 | 3 |
 | Adventure | 5/7 | 0 | 0 | 2 |
@@ -308,12 +308,12 @@ Go through each phase in order. For each item:
 | Characters | 3/6 | 0 | 0 | 2 |
 | Statistics | 8/8 | 0 | 0 | 0 |
 | Crews | 6/6 | 0 | 0 | 0 |
-| Robbery | 5/6 | 0 | 1 | 0 |
+| Robbery | 6/6 | 0 | 0 | 0 |
 | Shop | 3/3 | 0 | 0 | 0 |
 | Settings | 5/5 | 0 | 0 | 0 |
 | Tournaments | 3/5 | 1 | 0 | 0 |
 | Social | 5/6 | 1 | 0 | 0 |
 | Art & Audio | 3/12 | 0 | 2 | 9 |
-| **TOTAL** | **95** | **5** | **6** | **18** |
+| **TOTAL** | **99** | **5** | **2** | **18** |
 
-**The game is ~77% complete.** Core poker, adventure, stats, crews, robbery, shop, settings, and inventory are all functional. The remaining work is: 3 missing nav buttons, 2 missing scenes (Friends + Tournament), 2 missing audio files, polish animations, and 9 art asset batches.
+**The game is ~80% complete.** Core poker, adventure, stats, crews, robbery, shop, settings, and inventory are all functional. The remaining work is: 2 missing scenes (Friends + Tournament), 2 missing audio files, polish animations, and 9 art asset batches.

@@ -1,3 +1,19 @@
+## [Feb 13, 2026] - Feature: Main Menu Navigation Buttons (Stats, Leaderboard, Robbery)
+
+**What**: Added 3 missing navigation buttons to MainMenuScene bottom nav bar.
+
+**Changes**:
+- Expanded bottom nav bar from 1 row (4 buttons) to 2 rows (7 buttons)
+- Top row: STATS, LEADERBOARD, ROBBERY (new)
+- Bottom row: SHOP, INVENTORY, FRIENDS, SETTINGS (existing)
+- Added `OnStatisticsClick`, `OnLeaderboardClick`, `OnRobberyClick` handlers
+- Bumped center content area up slightly (`anchorMin.y` 0.18→0.24) to accommodate taller nav bar
+- All 3 target scenes already existed (`StatisticsScene`, `LeaderboardScene`, `RobberyScene`)
+
+**Plan items resolved**: 3.8, 3.9, 3.10, 11.6
+
+---
+
 ## [Feb 13, 2026] - Fix: Server Crash on Client Connect (Missing _makeResponder)
 
 **Issue**: Server crashed immediately when any client connected and triggered events like
