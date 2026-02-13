@@ -4,6 +4,16 @@ This file tracks all issues encountered and their solutions. **Search this file 
 
 ---
 
+## Settings & Account Management (Feb 13, 2026)
+
+### Reset Progress Confirmation Dialog
+- **Server**: Added `resetProgress(userId)` to `UserRepository.js` — wipes chips/XP/stats/inventory/adventure/achievements/crew/titles/hand history/daily rewards/spectator bets/saved hands. Keeps account credentials and friends list.
+- **Server**: Added `reset_progress` socket handler in `SocketHandler.js` with auth check and full logging
+- **Client**: Added `ResetProgressResponse` model, `ResetProgress` method in `GameService.cs`, `ResetProgress` event in `PokerEvents.cs`
+- **Client**: `SettingsScene.cs` uses `ConfirmDialog.ShowDanger` with detailed warning listing all data that will be erased, followed by `GameService.ResetProgress` call with toast notifications for success/failure
+
+---
+
 ## Character System (Feb 12, 2026)
 
 ### Server
@@ -96,6 +106,52 @@ Fire tracker now receives real draw/suckout data instead of `false` placeholders
 - Session created when player joins a table (`player_sessions` table)
 - Session ended when player leaves — records end time, chips, profit/loss
 - Updates `sessions_played` and `total_play_time_seconds` in `player_stats`
+
+---
+
+## Project Completion Status (Feb 13, 2026)
+
+### ✅ All Systems Implemented
+
+| System | Server | Client | Wired |
+|--------|--------|--------|-------|
+| Core Poker (Table, Hands, Betting) | ✅ | ✅ | ✅ |
+| Bot System (AI + Socket Bots) | ✅ | ✅ | ✅ |
+| Item Ante / Power Score | ✅ | ✅ | ✅ |
+| Adventure Mode (Map, Bosses, Battle) | ✅ | ✅ | ✅ |
+| Tournament System | ✅ | ✅ | ✅ |
+| Character System (25+ chars, drops) | ✅ | ✅ | ✅ |
+| Character Sounds + Sprites at Table | ✅ | ✅ | ✅ |
+| Stats Engine (40+ lifetime metrics) | ✅ | ✅ | ✅ |
+| Stats Calculator (VPIP, PFR, luck) | ✅ | ✅ | ✅ |
+| Fire/Cold System (NBA Jam style) | ✅ | ✅ | ✅ |
+| Title Engine (25+ dynamic titles) | ✅ | ✅ | ✅ |
+| Crew System (create, roles, perks, XP) | ✅ | ✅ | ✅ |
+| Robbery System (tools, defense, cooldowns) | ✅ | ✅ | ✅ |
+| Friends System (add, accept, decline, remove) | ✅ | ✅ | ✅ |
+| Event System (seasonal/weekly, multipliers) | ✅ | ✅ | ✅ |
+| Daily Rewards (7-day streak) | ✅ | ✅ | ✅ |
+| Spectator Odds (Monte Carlo sim) | ✅ | ✅ | ✅ |
+| Spectator Side Betting | ✅ | ✅ | ✅ |
+| Hand Replay / Saved Hands | ✅ | ✅ | ✅ |
+| Collusion Detection (auto-trigger) | ✅ | — | ✅ |
+| Achievements (auto-unlock) | ✅ | ✅ | ✅ |
+| Inventory (equip/unequip/use) | ✅ | ✅ | ✅ |
+| Leaderboards (chips, wins, level, pots) | ✅ | ✅ | ✅ |
+| Settings + Reset Progress | ✅ | ✅ | ✅ |
+| Player Profile Popup (tap seat) | — | ✅ | ✅ |
+| Chat + Invite Popups | ✅ | ✅ | ✅ |
+
+### Unity Client Scenes (All Built)
+`MainMenuScene` · `LobbyScene` · `TableScene` · `StatisticsScene` · `CharacterSelectScene` · `TournamentScene` · `AdventureMapScene` · `AdventureBattleScene` · `InventoryScene` · `CrewScene` · `RobberyScene` · `HandReplayScene` · `LeaderboardScene` · `ShopScene` · `SettingsScene`
+
+### Server Modules (All Built)
+`Table.js` · `GameManager.js` · `BotManager.js` · `HandEvaluator.js` · `ItemAnte.js` · `Tournament.js` · `TournamentManager.js` · `AdventureManager.js` · `AdventurePokerGame.js` · `Boss.js` · `BossAI.js` · `WorldMap.js` · `StatsEngine.js` · `StatsCalculator.js` · `FireTracker.js` · `TitleEngine.js` · `CharacterSystem.js` · `CrewManager.js` · `FriendsManager.js` · `RobberyManager.js` · `EventManager.js` · `CollusionDetector.js` · `SpectatorOdds.js`
+
+### 🔮 Deferred (Not Blocking)
+- Audio assets (AI-generated character sounds)
+- Image assets (AI-generated sprites, boss art, item icons)
+- Store UI / chip purchasing / ads / premium membership
 
 ---
 

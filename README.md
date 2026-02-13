@@ -16,20 +16,46 @@ Real-time multiplayer Texas Hold'em poker server built with Node.js and Socket.I
 
 ## Features
 
-- Full Texas Hold'em game logic with hand evaluation
+### Core Gameplay
+- Full Texas Hold'em with hand evaluation and side pot logic
 - Real-time WebSocket communication (Socket.IO)
-- Multi-table support with configurable rules
-- Unity Android client with 12 scenes (login, lobby, poker, adventure, inventory, etc.)
+- Multi-table support with configurable house rules
 - Per-player card visibility (no cheating)
-- Bot system (regular AI bots + socket bots for testing)
-- Item Ante ("For Keeps") mode — gamble inventory items (risk-free in practice mode)
-- Adventure mode — world map, areas, boss battles (poker vs AI)
-- Tournament system — brackets, registration, elimination
-- Item economy — rarity tiers, Power Score system, dual economy (gambleable vs store items)
-- Character archetype system — Hustler, Hacker, Shark, Hybrid
-- Friends, chat, spectating, achievements
+- Bot system (AI bots + socket bots for testing)
 - Simulation mode for spectating bot-only games
-- Configurable blind increase timers
+- Configurable blind increase timers and turn timers
+
+### Game Systems
+- **Item Ante ("For Keeps")** — Gamble inventory items, Power Score system, practice mode risk-free
+- **Adventure Mode** — World map with areas, boss battles (poker vs AI), item/XP drops
+- **Tournament System** — Brackets, registration, elimination, side pots
+- **Character System** — 25+ collectible characters with rarity tiers (Common→Mythic), sound sets, sprite sets, drop logic
+- **Crew/Gang System** — Create crews, roles (Leader/Officer/Member), perks, crew XP/levels, leaderboard
+- **Robbery System** — PvP item theft with 6 tool types, 4 defense items, cooldowns, chip penalties
+
+### Player Progression
+- **Stats Engine** — 40+ lifetime metrics (VPIP, PFR, bluff %, luck index, etc.)
+- **Fire/Cold System** — NBA Jam–style streaks with 4 fire and 4 cold levels
+- **Title Engine** — 25+ dynamic titles across 7 categories, auto-evaluated, revocable
+- **Achievements** — Auto-unlock system with progress tracking
+- **Daily Rewards** — 7-day streak with escalating chips/XP/gems
+
+### Social
+- Friends system (add, accept, decline, remove, invite to table)
+- Chat and emotes at table
+- Spectator system with live Monte Carlo win odds and side betting
+- Collusion detection (auto-trigger every 50 hands)
+- Event system (seasonal/weekly events with multipliers)
+
+### Economy
+- Item rarity tiers (Common → Legendary) with Power Score
+- Dual economy: gambleable items vs store items (legal compliance)
+- Inventory with equip/unequip
+- Hand replay and saved hands (bookmarks + Hand of the Day)
+- Leaderboards (chips, wins, level, biggest pot)
+
+### Unity Client (15 scenes)
+- MainMenu, Lobby, Table, Statistics, CharacterSelect, Tournament, AdventureMap, AdventureBattle, Inventory, Crew, Robbery, HandReplay, Leaderboard, Shop, Settings
 
 ## Item Economy System
 
@@ -192,29 +218,42 @@ poker-server/
 │   ├── setup.js               # Database schema setup
 │   ├── game/
 │   │   ├── GameManager.js     # Manages tables & players
-│   │   ├── Table.js           # Table logic, betting, showdown (~9000 lines)
-│   │   ├── BotManager.js      # Bot AI, item ante handling, smart decisions
+│   │   ├── Table.js           # Table logic, betting, showdown
+│   │   ├── BotManager.js      # Bot AI, item ante handling
 │   │   ├── BotPlayer.js       # Bot personality & behavior
 │   │   ├── ItemAnte.js        # Item ante ("For Keeps") logic
 │   │   ├── Deck.js            # Card deck
-│   │   ├── HandEvaluator.js   # Hand ranking
+│   │   ├── HandEvaluator.js   # Hand ranking (7-card eval)
 │   │   ├── Tournament.js      # Tournament logic
-│   │   └── TournamentManager.js # Tournament lifecycle
+│   │   ├── TournamentManager.js # Tournament lifecycle
+│   │   ├── CharacterSystem.js # 25+ collectible characters, drops, sounds
+│   │   ├── FireTracker.js     # NBA Jam fire/cold streak system
+│   │   ├── RobberyManager.js  # PvP item theft, tools, defense
+│   │   └── SpectatorOdds.js   # Monte Carlo win probability
 │   ├── adventure/
 │   │   ├── AdventureManager.js # Adventure mode coordination
 │   │   ├── AdventurePokerGame.js # Poker vs AI boss
 │   │   ├── Boss.js            # Boss definitions
 │   │   ├── BossAI.js          # Boss poker AI
 │   │   └── WorldMap.js        # Area/world map data
+│   ├── stats/
+│   │   ├── StatsEngine.js     # Per-hand stats processing (40+ metrics)
+│   │   ├── StatsCalculator.js # Derived stats (VPIP, PFR, luck, etc.)
+│   │   └── TitleEngine.js     # 25+ dynamic player titles
+│   ├── social/
+│   │   ├── FriendsManager.js  # Friends system
+│   │   └── CrewManager.js     # Crew/gang system (roles, perks, XP)
+│   ├── events/
+│   │   └── EventManager.js    # Seasonal/weekly events & multipliers
+│   ├── security/
+│   │   └── CollusionDetector.js # Anti-cheat (soft play, win trading, chip dumping)
 │   ├── models/
 │   │   ├── Item.js            # Item model, templates, Power Score
 │   │   ├── User.js            # User model
 │   │   └── HouseRules.js      # Table rule presets
 │   ├── database/
-│   │   ├── Database.js        # MySQL connection pool
-│   │   └── UserRepository.js  # User, inventory, friends persistence
-│   ├── social/
-│   │   └── FriendsManager.js  # Friends system
+│   │   ├── Database.js        # MySQL connection pool + 20+ table migrations
+│   │   └── UserRepository.js  # User, inventory, friends, stats persistence
 │   ├── testing/
 │   │   ├── SimulationManager.js # Bot simulation mode
 │   │   ├── SocketBot.js       # Socket bot for testing
@@ -222,13 +261,13 @@ poker-server/
 │   │   ├── StateComparator.js # State diff comparison
 │   │   └── StateSnapshot.js   # State capture
 │   ├── sockets/
-│   │   ├── SocketHandler.js   # All WebSocket event handlers
+│   │   ├── SocketHandler.js   # All WebSocket event handlers (100+ events)
 │   │   └── Events.js          # Event documentation
 │   └── utils/
 │       └── GameLogger.js      # Structured logging
 ├── env.example                # Environment template
 ├── package.json
-└── *.md                       # 15+ documentation files
+└── *.md                       # Documentation files
 ```
 
 ## API Endpoints
@@ -244,30 +283,34 @@ See `src/sockets/Events.js` for complete event documentation.
 
 ### Quick Reference
 
-**Client → Server:**
-- `register` - Register player
-- `get_tables` - List tables
-- `create_table` - Create table
-- `join_table` - Join table
-- `leave_table` - Leave table
+**Client → Server (Core):**
+- `register` / `login` / `logout` / `reset_progress` - Auth & account
+- `get_tables` / `create_table` / `join_table` / `leave_table` - Lobby
 - `action` - Game action (fold/check/call/bet/raise/allin)
+- `start_game` / `player_ready` / `rebuy` / `add_chips` - Table management
 - `chat` - Send message
-- `start_side_pot` - Start item ante with selected item
-- `submit_to_side_pot` - Submit item to existing ante pot
-- `invite_bot` - Invite AI bot to table
-- `invite_socket_bot` - Invite socket bot to practice table
-- `start_simulation` - Start bot-only simulation game
-- `start_game` - Start game at table
+- `start_side_pot` / `submit_to_side_pot` - Item ante
+- `invite_bot` / `invite_socket_bot` / `start_simulation` - Bots
+
+**Client → Server (Features):**
+- `get_player_stats` / `get_hand_type_stats` / `get_pocket_stats` / `get_hand_history` - Stats
+- `get_titles` / `set_active_title` - Titles
+- `get_characters` / `get_player_characters` / `set_active_character` / `get_character_sounds` - Characters
+- `create_crew` / `get_crew` / `invite_to_crew` / `join_crew` / `leave_crew` / `crew_promote` / `crew_kick` / `get_crew_leaderboard` - Crews
+- `robbery_attempt` / `robbery_recovery` / `get_recoverable_robberies` - Robbery
+- `get_spectator_odds` / `spectator_bet` / `spectator_reaction` - Spectator
+- `save_hand` / `get_saved_hands` / `get_hand_of_the_day` / `get_hand_replay` - Replays
+- `get_active_events` / `get_daily_reward_status` / `claim_daily_reward` - Events & rewards
+- `equip_item` / `unequip_item` - Equipment
+- `get_friends` / `send_friend_request` / `accept_friend_request` / `decline_friend_request` - Friends
+- `get_player_profile` - Full player card
 
 **Server → Client:**
-- `table_state` - Game state update
-- `player_action` - Action notification
-- `player_joined/left` - Player events
-- `start_side_pot_response` - Item ante start result
-- `submit_to_side_pot_response` - Item submission result
-- `invite_socket_bot_response` - Socket bot invitation result
-- `start_game_response` - Game start result
-- `game_over` - Game ended notification
+- `table_state` - Game state update (includes fire/cold, titles, crew tags, character data)
+- `player_action` / `player_joined` / `player_left` - Player events
+- `hand_result` / `game_over` - Hand/game completion
+- `fire_status_change` - Fire/cold level change broadcast
+- `character_drop` - Character unlocked notification
 
 ## Unity Integration
 
@@ -1063,14 +1106,26 @@ Keep narrowing down until the problem disappears - the last chunk you commented 
 **Git Safety:**
 - AGENT_RULES.md LAW 1 updated: Check `git status` before `git pull` to prevent data loss
 
-🔄 **PENDING:**
+🔄 **PENDING (Monetization — Deferred):**
 - Store item restrictions UI (shop interface)
-- Chip purchasing system
-- Ads integration
-- Premium membership
+- Chip purchasing system (one-way real money → chips)
+- Ads integration (AdMob, Unity Ads)
+- Premium membership ($4.99/mo)
 
 **Status:** Power Score system 100% implemented and restored ✅
-**Note:** System was fully implemented, accidentally reverted (commit a996f8b), and fully restored (commits 3157410 + 594b741)
+
+## Current Project Status (Feb 13, 2026)
+
+**All gameplay systems are implemented end-to-end (server + client + wired).** See `CHANGELOG.md` "Project Completion Status" section for the full checklist.
+
+### What's Done
+- 23 server modules, 15 Unity scenes, 20+ UI components
+- 100+ socket events, 20+ database tables
+- Stats, fire/cold, titles, characters, crews, robbery, events, spectator odds, hand replay, achievements, daily rewards, inventory, friends, tournaments, adventure mode
+
+### What's Left
+- **Assets**: AI-generated audio (character sounds) and images (character sprites, boss art, item icons)
+- **Monetization**: Ad integration, chip purchasing, premium membership, store UI
 
 ## License
 
