@@ -590,8 +590,8 @@ class Database {
                 event_type VARCHAR(30) NOT NULL,
                 multipliers JSON,
                 rewards JSON,
-                start_date TIMESTAMP NOT NULL,
-                end_date TIMESTAMP NOT NULL,
+                start_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                end_date TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 is_active BOOLEAN DEFAULT TRUE,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 INDEX idx_active (is_active, start_date, end_date)
