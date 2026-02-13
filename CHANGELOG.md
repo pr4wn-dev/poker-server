@@ -1,4 +1,25 @@
-﻿## [Feb 13, 2026] - Session Fixes: Theme Restoration, DB Migration, Compile Errors
+## [Feb 13, 2026] - Fix: Connection Issues After Improper Unity Close
+
+**Issue**: When Unity was closed improperly (kill/crash/debugger stop), the client couldn't
+reconnect to the server afterwards. Connection timeouts or stale state prevented re-login.
+
+**Root Causes (Client)**: Disconnect() never awaited/disposed old socket. Connect() created
+new SocketIOUnity without cleaning up the old one (zombie socket). No auto-reconnect logic.
+
+**Root Causes (Server)**: authenticateSocket() didn't check for stale sessions on different
+sockets. Disconnect handler had race condition with re-login. deauthenticateSocket() didn't
+clean up GameManager.socketToPlayer. UnityLogHandler require pointed to deleted monitoring/.
+
+**Fixes (Client)**: Added DisposeOldSocket() with proper cleanup. Auto-reconnect with
+exponential backoff (2s to 30s, 5 attempts). OnApplicationQuit/Pause lifecycle handlers.
+Named event handlers for clean unsubscribe.
+
+**Fixes (Server)**: Stale session detection and force-disconnect in authenticateSocket().
+Race guard in disconnect handler. Conditional auth removal in deauthenticateSocket().
+Stubbed out UnityLogHandler.
+
+---
+## [Feb 13, 2026] - Session Fixes: Theme Restoration, DB Migration, Compile Errors
 
 ### Dark Theme Restoration (FINAL - commit 028b9a3)
 **Issue**: Commit 524cd54 ("Massive Unity UI") overwrote the GUI overhaul (Phases 1-7) by
