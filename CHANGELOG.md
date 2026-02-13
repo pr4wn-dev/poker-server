@@ -4,6 +4,27 @@ This file tracks all issues encountered and their solutions. **Search this file 
 
 ---
 
+## Character System (Feb 12, 2026)
+
+### Server
+- **CharacterSystem.js**: 25+ character definitions with rarity tiers (Common → Mythic), sound sets, sprite sets, personality types
+- **Database**: `characters` + `player_characters` tables with migrations, `active_character` column on `users`
+- **Socket Endpoints**: `get_characters`, `get_player_characters`, `set_active_character`, `get_character_sounds`
+- **Drop Logic**: Characters drop from adventure victories, boss defeats, tournaments; integrated into `adventure_action` and `SocketHandler`
+- **Table Integration**: Active character sent with seat state via `Table.getState()`
+
+### Unity Client
+- **NetworkModels**: `CharacterInfo`, `OwnedCharacterInfo`, `CharacterSoundSet`, `CharacterDropData`, etc.
+- **GameService**: `GetCharacters`, `GetPlayerCharacters`, `SetActiveCharacter`, `GetCharacterSounds`, `OnCharacterDrop` event
+- **CharacterSelectScene**: Full overhaul — server-driven character gallery with rarity-colored cards, owned/locked states, set-active button
+- **SpriteManager**: `GetCharacterSprite()` with Resources loading + procedural placeholder generation
+- **PlayerSeatView**: Character avatar rendered at table seats (small portrait), prefers character sprite over default avatar
+- **PlayerSeat.cs**: Updated to show character sprites when available
+- **CharacterSoundManager**: Singleton that caches sound sets per character, plays character-specific audio on fold/all-in/win/lose, falls back to default AudioManager sounds
+- **TableScene**: Preloads character sound sets when players join, plays character sounds during gameplay events
+
+---
+
 ## Unity UI Feature Build (Feb 12, 2026)
 
 ### Player Seat Enhancements
