@@ -781,6 +781,104 @@ class UserRepository {
         );
         return results.map(r => r.achievement_id);
     }
+
+    /**
+     * Reset all progress for a user (chips, xp, stats, inventory, adventure, achievements, etc.)
+     * Keeps: account credentials, friends, blocked users
+     */
+    async resetProgress(userId) {
+        const gameLogger = require('../utils/GameLogger');
+        gameLogger.gameEvent('USER', '[RESET_PROGRESS] STARTING', { userId });
+
+        // Reset user core fields
+        await db.query(
+            "UPDATE users SET chips = 20000000, adventure_coins = 0, xp = 0, active_character = 'shadow_hacker' WHERE id = ?",
+            [userId]
+        );
+
+        // Reset user_stats
+        await db.query(
+            `UPDATE user_stats SET hands_played = 0, hands_won = 0, biggest_pot = 0, 
+             royal_flushes = 0, tournaments_won = 0, total_winnings = 0, total_losses = 0 
+             WHERE user_id = ?`,
+            [userId]
+        );
+
+        // Reset player_stats (detailed stats)
+        await db.query('DELETE FROM player_stats WHERE player_id = ?', [userId]);
+
+        // Reset hand type stats
+        await db.query('DELETE FROM player_hand_type_stats WHERE player_id = ?', [userId]);
+
+        // Reset pocket stats
+        await db.query('DELETE FROM player_pocket_stats WHERE player_id = ?', [userId]);
+
+        // Reset player sessions
+        await db.query('DELETE FROM player_sessions WHERE player_id = ?', [userId]);
+
+        // Reset fire events
+        await db.query('DELETE FROM fire_events WHERE player_id = ?', [userId]);
+
+        // Reset player titles
+        await db.query('DELETE FROM player_titles WHERE player_id = ?', [userId]);
+
+        // Reset achievements
+        await db.query('DELETE FROM achievements WHERE player_id = ?', [userId]);
+        try {
+            await db.query('DELETE FROM user_achievements WHERE user_id = ?', [userId]);
+        } catch (e) { /* table may not exist */ }
+
+        // Clear inventory
+        await db.query('DELETE FROM inventory WHERE user_id = ?', [userId]);
+
+        // Reset adventure progress
+        await db.query(
+            "UPDATE adventure_progress SET current_area = 'area_tutorial', total_wins = 0, total_losses = 0 WHERE user_id = ?",
+            [userId]
+        );
+
+        // Reset boss defeat counts
+        await db.query('DELETE FROM boss_defeat_counts WHERE user_id = ?', [userId]);
+
+        // Reset bosses defeated
+        await db.query('DELETE FROM bosses_defeated WHERE user_id = ?', [userId]);
+
+        // Reset daily rewards
+        await db.query('DELETE FROM daily_rewards WHERE player_id = ?', [userId]);
+
+        // Reset spectator bets
+        await db.query('DELETE FROM spectator_bets WHERE spectator_id = ?', [userId]);
+
+        // Reset saved hands
+        await db.query('DELETE FROM saved_hands WHERE player_id = ?', [userId]);
+
+        // Remove from any crew
+        try {
+            // If user is a crew leader, delete the whole crew
+            const leaderCrews = await db.query(
+                'SELECT id FROM crews WHERE created_by = ?', [userId]
+            );
+            for (const crew of leaderCrews) {
+                await db.query('DELETE FROM crew_stats WHERE crew_id = ?', [crew.id]);
+                await db.query('DELETE FROM crew_members WHERE crew_id = ?', [crew.id]);
+                await db.query('DELETE FROM crews WHERE id = ?', [crew.id]);
+            }
+            // Remove membership from other crews
+            await db.query('DELETE FROM crew_members WHERE player_id = ?', [userId]);
+        } catch (e) { /* crew tables may not exist */ }
+
+        // Clear hand history (player's entries only)
+        await db.query('DELETE FROM hand_history WHERE player_id = ?', [userId]);
+
+        // Clear robbery log
+        try {
+            await db.query('DELETE FROM robbery_log WHERE robber_id = ? OR victim_id = ?', [userId, userId]);
+        } catch (e) { /* table may not exist */ }
+
+        gameLogger.gameEvent('USER', '[RESET_PROGRESS] COMPLETE', { userId });
+
+        return { success: true };
+    }
 }
 
 module.exports = new UserRepository();

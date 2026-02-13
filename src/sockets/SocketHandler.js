@@ -119,6 +119,24 @@ class SocketHandler {
                 callback?.({ success: true });
             });
 
+            socket.on('reset_progress', async (data, callback) => {
+                const user = this.getAuthenticatedUser(socket);
+                if (!user) {
+                    return callback?.({ success: false, error: 'Not authenticated' });
+                }
+
+                try {
+                    await userRepo.resetProgress(user.userId);
+                    // Refresh the user's profile after reset
+                    const profile = await userRepo.getFullProfile(user.userId);
+                    callback?.({ success: true, profile });
+                    gameLogger.gameEvent('USER', '[RESET_PROGRESS] SUCCESS', { userId: user.userId, username: user.username });
+                } catch (error) {
+                    gameLogger.error('USER', '[RESET_PROGRESS] FAILED', { userId: user.userId, error: error.message });
+                    callback?.({ success: false, error: 'Failed to reset progress' });
+                }
+            });
+
             socket.on('get_profile', async (callback) => {
                 const user = this.getAuthenticatedUser(socket);
                 if (!user) {
