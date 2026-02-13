@@ -102,6 +102,19 @@ class Database {
         } catch (e) {
             // Column already exists, ignore
         }
+        
+        // Add daily reward columns
+        try {
+            await this.query("ALTER TABLE users ADD COLUMN daily_streak INT DEFAULT 0");
+        } catch (e) {}
+        try {
+            await this.query("ALTER TABLE users ADD COLUMN last_daily_reward TIMESTAMP NULL");
+        } catch (e) {}
+        
+        // Add gems column
+        try {
+            await this.query("ALTER TABLE users ADD COLUMN gems INT DEFAULT 0");
+        } catch (e) {}
 
         // Migration: Upgrade chips column to BIGINT and set minimum chips to 20 million
         try {
@@ -130,6 +143,14 @@ class Database {
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         `);
 
+        // Add level/xp columns to user_stats (used by leaderboards)
+        try {
+            await this.query("ALTER TABLE user_stats ADD COLUMN level INT DEFAULT 1");
+        } catch (e) {}
+        try {
+            await this.query("ALTER TABLE user_stats ADD COLUMN xp INT DEFAULT 0");
+        } catch (e) {}
+
         // Adventure progress table
         await this.query(`
             CREATE TABLE IF NOT EXISTS adventure_progress (
@@ -141,6 +162,11 @@ class Database {
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         `);
         
+        // Add highest_level to adventure_progress
+        try {
+            await this.query("ALTER TABLE adventure_progress ADD COLUMN highest_level INT DEFAULT 1");
+        } catch (e) {}
+
         // Boss defeat counts (for rare drop tracking)
         await this.query(`
             CREATE TABLE IF NOT EXISTS boss_defeat_counts (
@@ -486,6 +512,19 @@ class Database {
                 UNIQUE KEY unique_player_achievement (player_id, achievement_id),
                 FOREIGN KEY (player_id) REFERENCES users(id) ON DELETE CASCADE,
                 INDEX idx_player_achievements (player_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        `);
+
+        // User achievements (unlocked achievements per player)
+        await this.query(`
+            CREATE TABLE IF NOT EXISTS user_achievements (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id VARCHAR(36) NOT NULL,
+                achievement_id VARCHAR(50) NOT NULL,
+                unlocked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY unique_user_achievement (user_id, achievement_id),
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                INDEX idx_user_achievements (user_id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         `);
 

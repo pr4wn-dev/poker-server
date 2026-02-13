@@ -147,6 +147,35 @@ class UserRepository {
     }
     
     /**
+     * Get user by ID with daily reward and achievement data
+     */
+    async findByUserId(userId) {
+        const user = await db.queryOne(
+            'SELECT id, username, chips, adventure_coins, daily_streak, last_daily_reward, created_at, last_login FROM users WHERE id = ?',
+            [userId]
+        );
+        if (!user) return null;
+        
+        // Map to camelCase for callers
+        user.lastDailyReward = user.last_daily_reward;
+        user.dailyStreak = user.daily_streak || 0;
+        
+        // Get unlocked achievement IDs
+        try {
+            const achievements = await db.query(
+                'SELECT achievement_id FROM user_achievements WHERE user_id = ?',
+                [userId]
+            );
+            user.achievements = achievements.map(a => a.achievement_id);
+        } catch (e) {
+            // Table may not exist yet
+            user.achievements = [];
+        }
+        
+        return user;
+    }
+    
+    /**
      * Get full user profile with stats and progress
      */
     async getFullProfile(userId) {
@@ -691,18 +720,18 @@ class UserRepository {
     
     async getPendingFriendRequests(userId) {
         const requests = await db.query(
-            `SELECT fr.from_user_id, fr.created_at, u.username 
+            `SELECT fr.from_user_id, fr.sent_at, u.username 
              FROM friend_requests fr
              JOIN users u ON fr.from_user_id = u.id
              WHERE fr.to_user_id = ?
-             ORDER BY fr.created_at DESC`,
+             ORDER BY fr.sent_at DESC`,
             [userId]
         );
         
         return requests.map(r => ({
             fromUserId: r.from_user_id,
             fromUsername: r.username,
-            createdAt: r.created_at
+            sentAt: r.sent_at
         }));
     }
     

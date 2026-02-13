@@ -2381,6 +2381,18 @@ class Table {
         // Broadcast state change
         this.onStateChange?.();
 
+        // CRITICAL: If player was in an active game, their chips went to the pot
+        // Return 0 so the caller doesn't also credit them back to the account (duplication bug)
+        if (wasInGame && this.gameStarted) {
+            gameLogger.gameEvent(this.name, 'Player left mid-game - returning 0 chips (chips are in pot)', {
+                player: player.name,
+                originalChips: chips,
+                wasInGame,
+                gameStarted: this.gameStarted
+            });
+            return 0;
+        }
+        
         return chips;
     }
 
@@ -2818,9 +2830,15 @@ class Table {
             });
         }
         
-        // SYSTEMATIC DEBUG: Don't force clear - let the problem show itself
+        // CRITICAL: Force clear pot at hand start to prevent chip leaks
         const potBeforeForceClear = this.pot;
-        // COMMENTED OUT: this._clearPotWithTrace('START_NEW_HAND_FORCE_CLEAR', 'Force clear pot at hand start');
+        if (this.pot > 0) {
+            gameLogger.error(this.name, '[MONEY] Pot was not zero at hand start - force clearing', {
+                potBeforeForceClear,
+                handNumber: this.handsPlayed
+            });
+            this._clearPotWithTrace('START_NEW_HAND_FORCE_CLEAR', 'Force clear pot at hand start');
+        }
         
         // ULTRA-VERBOSE: Log after pot reset
         const totalChipsAfterReset = this.seats.filter(s => s !== null && s.isActive !== false).reduce((sum, s) => sum + (s.chips || 0), 0);

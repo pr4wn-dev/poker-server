@@ -2388,7 +2388,7 @@ class SocketHandler {
                     // Notify all users in tournament lobby
                     const tournament = this.tournamentManager.getTournament(tournamentId);
                     this.io.to(`tournament:${tournamentId}`).emit('tournament_player_joined', {
-                        oderId: user.userId,
+                        userId: user.userId,
                         username: user.profile.username,
                         totalRegistered: result.totalRegistered
                     });
@@ -2414,7 +2414,7 @@ class SocketHandler {
                 if (result.success) {
                     socket.leave(`tournament:${tournament.id}`);
                     this.io.to(`tournament:${tournament.id}`).emit('tournament_player_left', {
-                        oderId: user.userId
+                        userId: user.userId
                     });
                 }
                 
@@ -2520,14 +2520,14 @@ class SocketHandler {
                         category,
                         entries: entries.map((e, i) => ({
                             rank: i + 1,
-                            oderId: e.id,
+                            userId: e.id,
                             username: e.username,
                             level: e.level || 1,
                             value: e.value || e.chips || 0
                         }))
                     });
                 } catch (error) {
-                    gameLogger.error('SYSTEM', '[LEADERBOARD] ERROR', { userId: user.userId, error: error.message, stack: error.stack });
+                    gameLogger.error('SYSTEM', '[LEADERBOARD] ERROR', { error: error.message, stack: error.stack });
                     respond({ success: false, error: 'Failed to load leaderboard' });
                 }
             });
