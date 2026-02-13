@@ -184,7 +184,7 @@ Every player starts with a **Pure White Heart** (karma = 100). Committing crimes
 ## Character System (Feb 12, 2026)
 
 ### Server
-- **CharacterSystem.js**: 25+ character definitions with rarity tiers (Common â†’ Mythic), sound sets, sprite sets, personality types
+- **CharacterSystem.js**: 10 playable character definitions with rarity tiers (Common â†’ Mythic), sound sets, sprite sets, personality types
 - **Database**: `characters` + `player_characters` tables with migrations, `active_character` column on `users`
 - **Socket Endpoints**: `get_characters`, `get_player_characters`, `set_active_character`, `get_character_sounds`
 - **Drop Logic**: Characters drop from adventure victories, boss defeats, tournaments; integrated into `adventure_action` and `SocketHandler`
@@ -287,7 +287,7 @@ Fire tracker now receives real draw/suckout data instead of `false` placeholders
 | Item Ante / Power Score | âœ… | âœ… | âœ… |
 | Adventure Mode (Map, Bosses, Battle) | âœ… | âœ… | âœ… |
 | Tournament System | âœ… | âœ… | âœ… |
-| Character System (25+ chars, drops) | âœ… | âœ… | âœ… |
+| Character System (10 playable + 13 bosses) | âœ… | âœ… | âœ… |
 | Character Sounds + Sprites at Table | âœ… | âœ… | âœ… |
 | Stats Engine (40+ lifetime metrics) | âœ… | âœ… | âœ… |
 | Stats Calculator (VPIP, PFR, luck) | âœ… | âœ… | âœ… |

@@ -22,6 +22,7 @@ Built with **Unity** (client) and **Node.js + Socket.IO** (server), using **MySQ
 | [UI_BEST_PRACTICES.md](UI_BEST_PRACTICES.md) | UI component best practices: position locking, animations, layout |
 | [ART_ASSET_PROMPTS.md](ART_ASSET_PROMPTS.md) | AI image generation prompts for all game art |
 | [ITEM_ECONOMY_DESIGN.md](ITEM_ECONOMY_DESIGN.md) | Full item economy design (Power Score, rarity, legal compliance) |
+| [FEATURE_INVENTORY.md](FEATURE_INVENTORY.md) | Complete inventory of every character, boss, item, area, title, stat |
 
 **Unity Client:** See [poker-client-unity](https://github.com/pr4wn-dev/poker-client-unity) for the full client with `PROJECT_STATUS.md` covering current state, roadmap, and what's left.
 
@@ -62,7 +63,7 @@ World map with 4+ areas, each with bosses. Fight bosses in poker-vs-AI matches. 
 Brackets, registration, elimination, side pots. Multiple tournament types with configurable buy-ins.
 
 ### Character System
-25+ collectible characters with rarity tiers (Common → Mythic). Each has a sprite set, sound set (win/lose/fold/all-in/taunt), and drop logic. Characters render at table seats.
+10 playable characters with rarity tiers (Common → Mythic). Each has a sprite set, sound set (win/lose/fold/all-in/taunt), and drop logic. Characters render at table seats. Combined with 13 adventure bosses = 23 total named characters. See [FEATURE_INVENTORY.md](FEATURE_INVENTORY.md) for full list.
 
 ### Crew/Gang System
 Create crews with roles (Leader/Officer/Member). Crew XP, levels, perks, and leaderboard. Invite players, promote, kick, crew chat.
@@ -191,7 +192,7 @@ poker-server/
 │   │   ├── HandEvaluator.js   # Hand ranking (7-card eval)
 │   │   ├── Tournament.js      # Tournament logic
 │   │   ├── TournamentManager.js # Tournament lifecycle
-│   │   ├── CharacterSystem.js # 25+ collectible characters, drops, sounds
+│   │   ├── CharacterSystem.js # 10 playable characters, drops, sounds
 │   │   ├── FireTracker.js     # NBA Jam fire/cold streak system
 │   │   ├── RobberyManager.js  # PvP item theft, tools, defense, karma
 │   │   └── SpectatorOdds.js   # Monte Carlo win probability
@@ -332,7 +333,7 @@ All UI is built **programmatically** via `SceneBootstrap.cs` — no drag-and-dro
 - StatsEngine (637) + StatsCalculator (416): 40+ metrics per player
 - TitleEngine (311): 25+ dynamic titles across 7 categories
 - FireTracker (290): NBA Jam-style fire/cold detection
-- CharacterSystem (493): 25+ collectible characters with rarity, drops, sounds
+- CharacterSystem (493): 10 playable characters (Common→Mythic) + 13 bosses = 23 named characters total
 - RobberyManager (498): PvP robbery with karma-based targeting, tools, defense
 - CrewManager (413): Crews with roles, perks, chat, XP, leaderboard
 - TournamentManager (435): Brackets, registration, elimination
@@ -365,7 +366,7 @@ All UI is built **programmatically** via `SceneBootstrap.cs` — no drag-and-dro
 ### What's Left
 
 **Art Assets (AI-generated - next priority):**
-- Character sprites (25+ characters x portrait/seat/idle)
+- Character sprites (10 playable characters x portrait/seat/idle)
 - Boss art, item icons (24+), UI frames, backgrounds, card backs, game logo
 - Fire/ice particle sprites, crew emblems, rarity glow variants
 
