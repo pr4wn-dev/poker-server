@@ -922,6 +922,24 @@ class SocketHandler {
                             seatIndex: result.seatIndex
                         });
 
+                        // Start a player session
+                        try {
+                            const { v4: uuidv4 } = require('uuid');
+                            const database = require('../database/Database');
+                            if (database.isConnected) {
+                                const sessionId = uuidv4();
+                                await database.query(`
+                                    INSERT INTO player_sessions (session_id, player_id, table_id, chips_start)
+                                    VALUES (?, ?, ?, ?)
+                                `, [sessionId, user.userId, tableId, dbUser.chips]);
+                                // Store session ID on the player object for later use
+                                const playerObj = this.gameManager.players.get(user.userId);
+                                if (playerObj) playerObj.currentSessionId = sessionId;
+                            }
+                        } catch (sessionErr) {
+                            // Non-critical — don't block join
+                        }
+
                         const state = this.gameManager.getTableState(tableId, user.userId);
                         const response = { success: true, seatIndex: result.seatIndex, isSpectating: false, state };
                         if (callback) callback(response);
@@ -989,12 +1007,44 @@ class SocketHandler {
                 
                 // Check if user is in a seat (regular player)
                 if (tableId && table) {
+                    // Capture chips before leaving for session tracking
+                    const chipsAtLeave = player?.chips || 0;
+
                     const result = this.gameManager.leaveTable(user.userId);
                     
                     if (result.success) {
                         // Save chips back to database
                         if (player) {
                             await userRepo.setChips(user.userId, player.chips);
+                        }
+                        
+                        // End player session
+                        try {
+                            const database = require('../database/Database');
+                            if (database.isConnected && player?.currentSessionId) {
+                                await database.query(`
+                                    UPDATE player_sessions 
+                                    SET end_time = CURRENT_TIMESTAMP,
+                                        chips_end = ?,
+                                        profit_loss = ? - chips_start
+                                    WHERE session_id = ? AND player_id = ?
+                                `, [chipsAtLeave, chipsAtLeave, player.currentSessionId, user.userId]);
+
+                                // Also update player_stats sessions_played count
+                                await database.query(`
+                                    UPDATE player_stats SET sessions_played = sessions_played + 1,
+                                        total_play_time_seconds = total_play_time_seconds + 
+                                            TIMESTAMPDIFF(SECOND, 
+                                                (SELECT start_time FROM player_sessions WHERE session_id = ?),
+                                                CURRENT_TIMESTAMP
+                                            )
+                                    WHERE player_id = ?
+                                `, [player.currentSessionId, user.userId]).catch(() => {});
+
+                                player.currentSessionId = null;
+                            }
+                        } catch (sessionErr) {
+                            // Non-critical
                         }
                         
                         socket.leave(`table:${tableId}`);
@@ -2916,6 +2966,72 @@ class SocketHandler {
                 }
             });
 
+            // ============ Hand Replay / Saved Hands ============
+
+            socket.on('save_hand', async (data, callback) => {
+                const respond = this._makeResponder(socket, 'save_hand', callback);
+                try {
+                    const database = require('../database/Database');
+                    const user = this.getAuthenticatedUser(socket);
+                    if (!user) return respond({ success: false, error: 'Not authenticated' });
+
+                    const { handHistoryId, label } = data || {};
+                    if (!handHistoryId) return respond({ success: false, error: 'Missing handHistoryId' });
+
+                    await database.query(`
+                        INSERT IGNORE INTO saved_hands (player_id, hand_history_id, is_highlight, label)
+                        VALUES (?, ?, FALSE, ?)
+                    `, [user.userId, handHistoryId, label || null]);
+
+                    respond({ success: true });
+                } catch (error) {
+                    respond({ success: false, error: error.message });
+                }
+            });
+
+            socket.on('get_saved_hands', async (data, callback) => {
+                const respond = this._makeResponder(socket, 'get_saved_hands', callback);
+                try {
+                    const database = require('../database/Database');
+                    const user = this.getAuthenticatedUser(socket);
+                    if (!user) return respond({ success: false, error: 'Not authenticated' });
+
+                    const limit = data?.limit || 50;
+                    const savedHands = await database.query(`
+                        SELECT sh.*, hh.table_name, hh.hand_number, hh.final_hand_name, 
+                               hh.pot_size, hh.chips_won_lost, hh.was_winner, hh.played_at
+                        FROM saved_hands sh
+                        JOIN hand_history hh ON sh.hand_history_id = hh.id
+                        WHERE sh.player_id = ?
+                        ORDER BY sh.saved_at DESC LIMIT ?
+                    `, [user.userId, limit]);
+
+                    respond({ success: true, savedHands });
+                } catch (error) {
+                    respond({ success: false, error: error.message });
+                }
+            });
+
+            socket.on('get_hand_of_the_day', async (data, callback) => {
+                const respond = this._makeResponder(socket, 'get_hand_of_the_day', callback);
+                try {
+                    const database = require('../database/Database');
+                    // Find the biggest pot hand in the last 24 hours
+                    const handOfDay = await database.queryOne(`
+                        SELECT hh.*, u.username as player_name
+                        FROM hand_history hh
+                        LEFT JOIN users u ON hh.player_id = u.id
+                        WHERE hh.was_winner = TRUE AND hh.played_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
+                        ORDER BY hh.pot_size DESC
+                        LIMIT 1
+                    `);
+
+                    respond({ success: true, handOfDay: handOfDay || null });
+                } catch (error) {
+                    respond({ success: false, error: error.message });
+                }
+            });
+
             // ============ Robbery ============
 
             socket.on('robbery_attempt', async (data, callback) => {
@@ -2988,6 +3104,79 @@ class SocketHandler {
                 } catch (error) {
                     respond({ success: false, error: error.message });
                 }
+            });
+
+            // ============ Spectator Odds & Side Bets ============
+
+            socket.on('get_spectator_odds', async (data, callback) => {
+                const respond = this._makeResponder(socket, 'get_spectator_odds', callback);
+                try {
+                    const SpectatorOdds = require('../game/SpectatorOdds');
+                    const tableId = data?.tableId;
+                    if (!tableId) return respond({ success: false, error: 'Missing tableId' });
+
+                    const table = this.gameManager.getTable(tableId);
+                    if (!table) return respond({ success: false, error: 'Table not found' });
+
+                    const odds = SpectatorOdds.getSpectatorOddsForTable(table);
+                    respond({ success: true, odds });
+                } catch (error) {
+                    respond({ success: false, error: error.message });
+                }
+            });
+
+            socket.on('spectator_bet', async (data, callback) => {
+                const respond = this._makeResponder(socket, 'spectator_bet', callback);
+                try {
+                    const database = require('../database/Database');
+                    const user = this.getAuthenticatedUser(socket);
+                    if (!user) return respond({ success: false, error: 'Not authenticated' });
+
+                    const { tableId, betOnPlayerId, amount } = data || {};
+                    if (!tableId || !betOnPlayerId || !amount || amount <= 0) {
+                        return respond({ success: false, error: 'Missing or invalid bet data' });
+                    }
+
+                    // Verify user has enough chips
+                    const dbUser = await database.queryOne('SELECT chips FROM users WHERE id = ?', [user.userId]);
+                    if (!dbUser || dbUser.chips < amount) {
+                        return respond({ success: false, error: 'Not enough chips' });
+                    }
+
+                    const table = this.gameManager.getTable(tableId);
+                    if (!table) return respond({ success: false, error: 'Table not found' });
+
+                    // Deduct chips
+                    await database.query('UPDATE users SET chips = chips - ? WHERE id = ?', [amount, user.userId]);
+
+                    // Record bet
+                    await database.query(`
+                        INSERT INTO spectator_bets (spectator_id, table_id, hand_number, bet_on_player_id, amount)
+                        VALUES (?, ?, ?, ?, ?)
+                    `, [user.userId, tableId, table.handsPlayed, betOnPlayerId, amount]);
+
+                    respond({ success: true, amount, betOnPlayerId });
+
+                    // Broadcast that a spectator bet was placed
+                    this.io.to(`table:${tableId}`).emit('spectator_bet_placed', {
+                        spectatorName: user.username,
+                        betOnPlayerId,
+                        amount
+                    });
+                } catch (error) {
+                    respond({ success: false, error: error.message });
+                }
+            });
+
+            socket.on('spectator_reaction', (data) => {
+                const user = this.getAuthenticatedUser(socket);
+                if (!user || !data?.tableId || !data?.reaction) return;
+
+                // Broadcast reaction to table
+                this.io.to(`table:${data.tableId}`).emit('spectator_reaction', {
+                    spectatorName: user.username,
+                    reaction: data.reaction // 👏 😱 🔥 😂
+                });
             });
 
             // ============ Equipment ============

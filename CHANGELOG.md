@@ -4,6 +4,51 @@ This file tracks all issues encountered and their solutions. **Search this file 
 
 ---
 
+## Feature Completion Pass (Feb 12, 2026)
+
+### Advanced Hand Detection in Table.js
+All 6 TODO placeholders in `_collectAndSendStatsData()` are now real detection algorithms:
+
+1. **C-bet Detection** — Detects when preflop raiser bets the flop. Tracks success (won pot or everyone folded).
+2. **Steal Attempt Detection** — Detects late position (button/cutoff/SB) raises when no one raised before. Tracks success.
+3. **Bluff Detection** — Detects aggressive action with weak hands (pair or worse). Tracks bluff success + opponent bluff detection + correct bluff calls.
+4. **Draw Detection** — Checks for flush draws (4 same suit on flop) and straight draws (4-card sequences, including wheel). Tracks draw completion.
+5. **Behind-on-Flop / Suckout Detection** — Evaluates each player's hand at the flop, compares vs opponents. Tracks if player was behind and won from behind.
+
+Fire tracker now receives real draw/suckout data instead of `false` placeholders.
+
+### SpectatorOdds.js — Monte Carlo Win Probability
+- New module (`src/game/SpectatorOdds.js`)
+- 500 Monte Carlo simulations per request (fast enough for real-time)
+- Calculates win % for each active player based on hole cards + community cards
+- Handles all game phases (preflop through river)
+- Socket endpoints: `get_spectator_odds`, `spectator_bet`, `spectator_reaction`
+
+### Spectator Bet Resolution
+- When a hand completes, all pending spectator bets are automatically resolved
+- Winners get 2x payout, losers get nothing
+- Chips credited directly to spectator's account
+
+### Saved Hands / Hand Replay Endpoints
+- `save_hand` — Save a hand from history as a bookmark
+- `get_saved_hands` — Retrieve saved hands with full hand_history join
+- `get_hand_of_the_day` — Biggest pot winner in last 24 hours
+
+### Crew Stats Integration
+- After each hand, `CrewManager.updateCrewStats()` is called for every non-bot player
+- Tracks hands played, hands won, chips won per crew
+
+### Collusion Detector Auto-Trigger
+- Every 50 hands, all human player pairs at the table are analyzed automatically
+- Runs asynchronously, doesn't block game flow
+
+### Player Session Tracking
+- Session created when player joins a table (`player_sessions` table)
+- Session ended when player leaves — records end time, chips, profit/loss
+- Updates `sessions_played` and `total_play_time_seconds` in `player_stats`
+
+---
+
 ## Massive Feature Build (Feb 12, 2026)
 
 ### New Server Modules Built

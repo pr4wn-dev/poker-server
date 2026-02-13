@@ -6293,6 +6293,238 @@ class Table {
     }
 
     /**
+     * Analyze advanced hand patterns for a player.
+     * Detects c-bet, steal attempt, bluff, draws, suckout, etc.
+     * 
+     * @param {Object} seat - Player seat object
+     * @param {Array} actions - Player's actions this hand [{phase, action, amount}]
+     * @param {boolean} wasWinner - Did this player win the hand?
+     * @param {boolean} wentToShowdown - Did the hand go to showdown?
+     * @param {Array} potAwards - Pot award results
+     * @returns {Object} Pattern flags
+     */
+    _analyzeHandPatterns(seat, actions, wasWinner, wentToShowdown, potAwards) {
+        const patterns = {
+            didCBet: false,
+            cbetSuccess: false,
+            wasStealAttempt: false,
+            stealSuccess: false,
+            wasBluff: false,
+            bluffSuccess: false,
+            opponentWasBluffing: false,
+            calledBluffCorrectly: false,
+            hadDrawOnFlop: false,
+            drawCompleted: false,
+            wasBehindOnFlop: false,
+            wonFromBehind: false
+        };
+
+        try {
+            const playerId = seat.playerId;
+            const holeCards = seat.cards || [];
+            const folded = actions.some(a => a.action === 'fold');
+
+            // --- C-BET DETECTION ---
+            // C-bet = preflop raiser bets on the flop
+            const wasPreFlopRaiser = actions.some(a =>
+                a.phase === 'preflop' && ['raise', 'allin'].includes(a.action)
+            );
+            const betOnFlop = actions.some(a =>
+                a.phase === 'flop' && ['bet', 'raise', 'allin'].includes(a.action)
+            );
+            if (wasPreFlopRaiser && betOnFlop) {
+                patterns.didCBet = true;
+                // C-bet success = everyone folded after flop bet (no turn actions from this player)
+                // or this player won the hand
+                const reachedTurn = actions.some(a => a.phase === 'turn');
+                patterns.cbetSuccess = wasWinner || (!reachedTurn && !wentToShowdown);
+            }
+
+            // --- STEAL ATTEMPT DETECTION ---
+            // Steal = raise from late position (cutoff/button/small blind) when no one has raised before
+            const activeSeats = this.seats.filter(s => s && s.isActive).length;
+            if (activeSeats >= 3) {
+                const seatIndex = this.seats.indexOf(seat);
+                // Determine if seat is in late position (button, cutoff, or 1 before cutoff)
+                const dealerIdx = this.dealerIndex;
+                const isButton = seatIndex === dealerIdx;
+                // cutoff = one seat before button
+                let cutoffIdx = -1;
+                let checkIdx = dealerIdx;
+                for (let i = 0; i < this.seats.length; i++) {
+                    checkIdx = (checkIdx - 1 + this.seats.length) % this.seats.length;
+                    if (this.seats[checkIdx] && this.seats[checkIdx].isActive) {
+                        cutoffIdx = checkIdx;
+                        break;
+                    }
+                }
+                const isCutoff = seatIndex === cutoffIdx;
+                // SB is next after dealer
+                const sbIdx = this.getNextActivePlayer(dealerIdx);
+                const isSB = seatIndex === sbIdx;
+
+                const isLatePosition = isButton || isCutoff || isSB;
+                const didRaisePF = actions.some(a =>
+                    a.phase === 'preflop' && ['raise', 'allin'].includes(a.action)
+                );
+                // Check if nobody raised before this player preflop
+                // (we can check if the only preflop raiser's actions are from this player)
+                const allPfRaisers = [];
+                for (const [pid, pActions] of Object.entries(this.handActions)) {
+                    if (pid === playerId) continue;
+                    if (pActions.some(a => a.phase === 'preflop' && ['raise', 'bet', 'allin'].includes(a.action))) {
+                        allPfRaisers.push(pid);
+                    }
+                }
+                if (isLatePosition && didRaisePF && allPfRaisers.length === 0) {
+                    patterns.wasStealAttempt = true;
+                    patterns.stealSuccess = wasWinner;
+                }
+            }
+
+            // --- BLUFF DETECTION ---
+            // Bluff = bet/raise on river (or earlier) with a weak hand and won without showdown,
+            //         or showed weak hand at showdown
+            if (!folded) {
+                const madeAggressive = actions.some(a =>
+                    ['bet', 'raise', 'allin'].includes(a.action) &&
+                    ['flop', 'turn', 'river'].includes(a.phase)
+                );
+                const handRank = seat.handResult?.rank || 0;
+                const isWeakHand = handRank <= 2; // High card or pair only
+
+                if (madeAggressive && isWeakHand) {
+                    if (wasWinner && !wentToShowdown) {
+                        // Won by making everyone fold with a weak hand = successful bluff
+                        patterns.wasBluff = true;
+                        patterns.bluffSuccess = true;
+                    } else if (wentToShowdown) {
+                        // Showed a weak hand at showdown but was aggressive = caught bluffing
+                        patterns.wasBluff = true;
+                        patterns.bluffSuccess = wasWinner; // Could still win with weak hand
+                    }
+                }
+
+                // Check if opponent was bluffing (this player called, opponent showed weak hand)
+                if (wentToShowdown && !folded) {
+                    for (const otherSeat of this.seats) {
+                        if (!otherSeat || otherSeat.playerId === playerId || otherSeat.isFolded) continue;
+                        const otherActions = this.handActions[otherSeat.playerId] || [];
+                        const otherAggressive = otherActions.some(a =>
+                            ['bet', 'raise', 'allin'].includes(a.action) &&
+                            ['flop', 'turn', 'river'].includes(a.phase)
+                        );
+                        const otherHandRank = otherSeat.handResult?.rank || 0;
+                        if (otherAggressive && otherHandRank <= 2) {
+                            // Opponent was bluffing at showdown
+                            patterns.opponentWasBluffing = true;
+                            // Did this player call the bluff correctly?
+                            const thisPlayerCalled = actions.some(a =>
+                                a.action === 'call' && ['flop', 'turn', 'river'].includes(a.phase)
+                            );
+                            if (thisPlayerCalled && wasWinner) {
+                                patterns.calledBluffCorrectly = true;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // --- DRAW DETECTION ---
+            // Check if player had a flush or straight draw on the flop
+            if (holeCards.length === 2 && this.communityCards.length >= 3 && !folded) {
+                const flopCards = this.communityCards.slice(0, 3);
+                const flopHand = [...holeCards, ...flopCards];
+
+                // Flush draw: 4 cards of same suit
+                const suitCounts = {};
+                for (const card of flopHand) {
+                    if (card && card.suit) {
+                        suitCounts[card.suit] = (suitCounts[card.suit] || 0) + 1;
+                    }
+                }
+                const hasFlushDraw = Object.values(suitCounts).some(count => count === 4);
+
+                // Straight draw: 4 cards in sequence (open-ended or gutshot)
+                const RANK_VALUES_MAP = { '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, '10': 10, 'J': 11, 'Q': 12, 'K': 13, 'A': 14 };
+                const cardValues = flopHand
+                    .filter(c => c && c.rank)
+                    .map(c => RANK_VALUES_MAP[c.rank])
+                    .filter(v => v !== undefined);
+                const uniqueValues = [...new Set(cardValues)].sort((a, b) => a - b);
+
+                let hasStraightDraw = false;
+                // Check all windows of 5 for having 4 unique values
+                for (let startVal = 2; startVal <= 10; startVal++) {
+                    const windowValues = uniqueValues.filter(v => v >= startVal && v <= startVal + 4);
+                    if (windowValues.length === 4) {
+                        hasStraightDraw = true;
+                        break;
+                    }
+                }
+                // Check A-2-3-4-5 (wheel draw)
+                if (!hasStraightDraw) {
+                    const wheelValues = uniqueValues.filter(v => [14, 2, 3, 4, 5].includes(v));
+                    if (wheelValues.length === 4) hasStraightDraw = true;
+                }
+
+                if (hasFlushDraw || hasStraightDraw) {
+                    patterns.hadDrawOnFlop = true;
+
+                    // Check if the draw completed
+                    const finalHandRank = seat.handResult?.rank || 0;
+                    if (hasFlushDraw && finalHandRank >= 6) { // Flush (6) or better
+                        patterns.drawCompleted = true;
+                    }
+                    if (hasStraightDraw && finalHandRank >= 5) { // Straight (5) or better
+                        patterns.drawCompleted = true;
+                    }
+                }
+            }
+
+            // --- BEHIND ON FLOP / SUCKOUT ---
+            // Check if this player had the worst hand on the flop but ended up winning
+            if (wentToShowdown && holeCards.length === 2 && this.communityCards.length >= 3 && !folded) {
+                const flopCards = this.communityCards.slice(0, 3);
+                const playerFlopCards = [...holeCards, ...flopCards];
+
+                try {
+                    const playerFlopResult = HandEvaluator.evaluate(playerFlopCards);
+
+                    // Compare against all other players who made it to showdown
+                    let wasBehind = false;
+                    for (const otherSeat of this.seats) {
+                        if (!otherSeat || otherSeat.playerId === playerId) continue;
+                        if (otherSeat.isFolded || !otherSeat.cards || otherSeat.cards.length < 2) continue;
+
+                        const otherFlopCards = [...otherSeat.cards, ...flopCards];
+                        const otherFlopResult = HandEvaluator.evaluate(otherFlopCards);
+
+                        if (HandEvaluator.compare(otherFlopResult, playerFlopResult) > 0) {
+                            wasBehind = true;
+                            break;
+                        }
+                    }
+
+                    if (wasBehind) {
+                        patterns.wasBehindOnFlop = true;
+                        patterns.wonFromBehind = wasWinner;
+                    }
+                } catch (err) {
+                    // Silently fail — don't break stats for hand evaluation errors
+                }
+            }
+
+        } catch (err) {
+            // Don't let pattern analysis crash the stats collection
+            const gameLogger = require('../utils/GameLogger');
+            gameLogger.error(this.name || 'TABLE', '_analyzeHandPatterns error', { error: err.message });
+        }
+
+        return patterns;
+    }
+
+    /**
      * Collect hand data and send to StatsEngine for processing
      * Called after showdown or when everyone folds
      */
@@ -6326,6 +6558,9 @@ class Table {
                     potAwards.some(a => a.playerId === seat.playerId && !a.isRefund) :
                     chipsWonLost > 0;
 
+                // Analyze advanced patterns (c-bet, steal, bluff, draw, suckout)
+                const patterns = this._analyzeHandPatterns(seat, actions, wasWinner, wentToShowdown, potAwards);
+
                 // Build player stats record
                 players.push({
                     playerId: seat.playerId,
@@ -6339,31 +6574,31 @@ class Table {
                     actions,
                     isVoluntary,
                     didRaisePF,
-                    didCBet: false, // TODO: detect c-bet pattern
-                    cbetSuccess: false,
-                    wasStealAttempt: false, // TODO: detect steal attempts
-                    stealSuccess: false,
-                    wasBluff: false, // TODO: detect bluffs  
-                    bluffSuccess: false,
-                    opponentWasBluffing: false,
-                    calledBluffCorrectly: false,
-                    hadDrawOnFlop: false, // TODO: detect draws
-                    drawCompleted: false,
-                    wasBehindOnFlop: false,
-                    wonFromBehind: false,
+                    didCBet: patterns.didCBet,
+                    cbetSuccess: patterns.cbetSuccess,
+                    wasStealAttempt: patterns.wasStealAttempt,
+                    stealSuccess: patterns.stealSuccess,
+                    wasBluff: patterns.wasBluff,
+                    bluffSuccess: patterns.bluffSuccess,
+                    opponentWasBluffing: patterns.opponentWasBluffing,
+                    calledBluffCorrectly: patterns.calledBluffCorrectly,
+                    hadDrawOnFlop: patterns.hadDrawOnFlop,
+                    drawCompleted: patterns.drawCompleted,
+                    wasBehindOnFlop: patterns.wasBehindOnFlop,
+                    wonFromBehind: patterns.wonFromBehind,
                     chipsBefore,
                     chipsAfter
                 });
 
-                // Record hand for fire tracker
+                // Record hand for fire tracker (with real pattern data)
                 fireTracker.recordHand(this.id, seat.playerId, {
                     won: wasWinner,
                     handRank: seat.handResult?.rank || 0,
                     potSize: this.pot || 0,
                     bigBlind: this.bigBlind,
                     folded,
-                    drawCompleted: false,
-                    suckout: false,
+                    drawCompleted: patterns.drawCompleted,
+                    suckout: patterns.wonFromBehind,
                     chipsWonLost
                 });
             }
@@ -6417,6 +6652,72 @@ class Table {
                     if (status.fireLevel !== prevFireLevel && this.onFireStatusChange) {
                         this.onFireStatusChange(player.playerId, player.playerName, status);
                     }
+                }
+            }
+
+            // Update crew stats for each non-bot player
+            try {
+                const CrewManager = require('../social/CrewManager');
+                for (const player of players) {
+                    if (player.playerId && !this.seats.find(s => s?.playerId === player.playerId)?.isBot) {
+                        CrewManager.updateCrewStats(
+                            player.playerId,
+                            1, // 1 hand played
+                            player.wasWinner ? 1 : 0,
+                            player.chipsWonLost > 0 ? player.chipsWonLost : 0
+                        ).catch(() => {}); // Non-critical, ignore errors
+                    }
+                }
+            } catch (crewErr) {
+                // Non-critical — don't log noise
+            }
+
+            // Resolve spectator bets for this hand (async, fire-and-forget)
+            (async () => {
+                try {
+                    const database = require('../database/Database');
+                    if (!database.isConnected) return;
+                    const winnerIds = players.filter(p => p.wasWinner).map(p => p.playerId);
+                    const pendingBets = await database.query(
+                        'SELECT * FROM spectator_bets WHERE table_id = ? AND hand_number = ? AND result = ?',
+                        [this.id, this.handsPlayed, 'pending']
+                    );
+                    for (const bet of pendingBets) {
+                        const won = winnerIds.includes(bet.bet_on_player_id);
+                        const result = won ? 'won' : 'lost';
+                        const payout = won ? bet.amount * 2 : 0;
+                        await database.query(
+                            'UPDATE spectator_bets SET result = ?, payout = ? WHERE id = ?',
+                            [result, payout, bet.id]
+                        );
+                        if (won && payout > 0) {
+                            await database.query(
+                                'UPDATE users SET chips = chips + ? WHERE id = ?',
+                                [payout, bet.spectator_id]
+                            );
+                        }
+                    }
+                } catch (specErr) {
+                    gameLogger.error(this.name, 'Spectator bet resolution failed', { error: specErr.message });
+                }
+            })();
+
+            // Collusion detection — run periodically (every 50 hands)
+            if (this.handsPlayed % 50 === 0 && wentToShowdown) {
+                try {
+                    const CollusionDetector = require('../security/CollusionDetector');
+                    const humanPlayers = players
+                        .filter(p => p.playerId && !this.seats.find(s => s?.playerId === p.playerId)?.isBot)
+                        .map(p => p.playerId);
+
+                    // Analyze all unique pairs
+                    for (let i = 0; i < humanPlayers.length; i++) {
+                        for (let j = i + 1; j < humanPlayers.length; j++) {
+                            CollusionDetector.analyzePlayerPair(humanPlayers[i], humanPlayers[j]).catch(() => {});
+                        }
+                    }
+                } catch (colErr) {
+                    // Non-critical
                 }
             }
 
