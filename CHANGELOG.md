@@ -4,6 +4,35 @@ This file tracks all issues encountered and their solutions. **Search this file 
 
 ---
 
+## Unity UI Feature Build (Feb 12, 2026)
+
+### Player Seat Enhancements
+- **Fire/Cold Visuals**: PlayerSeatView shows color-coded glow (cyan warm → magenta hot → purple on-fire, dull red cold/frozen) with pulse/wobble animations
+- **Title Display**: Active title shown below player name at table (e.g., "🏅 Bluff Master")
+- **Tap-to-Profile**: Tapping any occupied seat opens PlayerProfilePopup with stats, title, crew, fire status
+
+### Statistics Scene Overhaul
+- 7-tab system: Overview, Skill, Luck, Pockets, Hand Types, Trends, Rare Hands, Titles
+- **Titles Tab**: View earned titles, set active title with server callback
+
+### New Scenes Created
+- **CrewScene**: Full crew management — create crew (name/tag/desc), member list, invite players, crew chat, crew leaderboard
+- **RobberyScene**: Target selection, 5 tool types (lockpick, RFID cloner, hotwire kit, burner phone, fake ID), result popup, robbery history log
+- **HandReplayScene**: Saved hands browser, Hand of the Day showcase, replay viewer with player cards + action timeline
+
+### Main Menu
+- **Event Banner**: Shows active server events with name, description, and multiplier badges (XP/Chips/Drops), loads on menu show
+
+### Table Scene
+- **SpectatorPanel**: Auto-shows for spectators — live win probability bars (refreshing every 5s), side bet placement, bet feed
+- **Profile popup** wired through seat taps
+
+### Networking
+- Added `GetHandReplay(tableId, handNumber)` to GameService
+- All models in NetworkModels.cs verified and complete
+
+---
+
 ## Feature Completion Pass (Feb 12, 2026)
 
 ### Advanced Hand Detection in Table.js
