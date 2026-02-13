@@ -1,3 +1,21 @@
+## [Feb 13, 2026] - Feature: FriendsScene + Friends Navigation
+
+**What**: Built full FriendsScene.cs and wired it to the main menu Friends button.
+
+**Changes**:
+- Created `FriendsScene.cs` — full-screen scene with 3 tabs:
+  - **Friends tab**: Shows all friends with online status, level, current table, invite/remove buttons
+  - **Requests tab**: Pending friend requests with accept/decline
+  - **Search tab**: Search players by name, send friend requests
+- All actions wired to `GameService` methods (GetFriends, GetFriendRequests, SearchUsers, SendFriendRequest, AcceptFriendRequest, DeclineFriendRequest, RemoveFriend, InviteToTable)
+- Real-time event listeners for friend_online, friend_offline, friend_request_received
+- Updated MainMenuScene `OnFriendsClick` to navigate to FriendsScene (was "coming soon" toast)
+- Follows same scene pattern as ShopScene/StatisticsScene (Canvas, ScaleWithScreenSize, BuildHeader/BuildTabs)
+
+**Plan items resolved**: 3.7, 15.5
+
+---
+
 ## [Feb 13, 2026] - Feature: Main Menu Navigation Buttons (Stats, Leaderboard, Robbery)
 
 **What**: Added 3 missing navigation buttons to MainMenuScene bottom nav bar.

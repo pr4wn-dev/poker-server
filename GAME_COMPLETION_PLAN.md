@@ -43,7 +43,7 @@ Go through each phase in order. For each item:
 
 ---
 
-## Phase 3: Main Menu — NEARLY DONE
+## Phase 3: Main Menu — ALL DONE
 
 | # | Feature | Status | Notes |
 |---|---------|--------|-------|
@@ -53,7 +53,7 @@ Go through each phase in order. For each item:
 | 3.4 | Bottom nav (Shop, Inventory, Friends, Settings) | DONE | |
 | 3.5 | Daily rewards popup | DONE | 7-day streak system |
 | 3.6 | Event banner | DONE | Shows active server events |
-| 3.7 | Friends button | **PARTIAL** | Shows "coming soon" toast. Need FriendsScene. |
+| 3.7 | Friends button | DONE | Navigates to FriendsScene |
 | 3.8 | Robbery navigation | DONE | Bottom nav bar, top row |
 | 3.9 | Statistics navigation | DONE | Bottom nav bar, top row |
 | 3.10 | Leaderboard navigation | DONE | Bottom nav bar, top row |
@@ -219,7 +219,7 @@ Go through each phase in order. For each item:
 
 ---
 
-## Phase 15: Social / Friends — PARTIAL
+## Phase 15: Social / Friends — ALL DONE
 
 | # | Feature | Status | Notes |
 |---|---------|--------|-------|
@@ -227,7 +227,7 @@ Go through each phase in order. For each item:
 | 15.2 | Friend requests (server) | DONE | |
 | 15.3 | Search users (server) | DONE | |
 | 15.4 | Invite to table (server + client) | DONE | |
-| 15.5 | Friends scene (client) | **PARTIAL** | FriendsUI.cs exists but uses old API. Needs FriendsScene.cs wired to GameService |
+| 15.5 | Friends scene (client) | DONE | FriendsScene.cs — 3 tabs (Friends, Requests, Search), wired to GameService |
 | 15.6 | Leaderboard scene | DONE | LeaderboardScene with 5 categories |
 
 ---
@@ -264,7 +264,7 @@ Go through each phase in order. For each item:
 
 ### Round 1: Fix Remaining Code Gaps
 1. ~~Add navigation buttons on main menu for Statistics, Leaderboard, Robbery~~ ✅ DONE
-2. Build FriendsScene.cs wired to GameService
+2. ~~Build FriendsScene.cs wired to GameService~~ ✅ DONE
 3. Build TournamentScene.cs (reuse table with tournament context)
 4. Test the complete multiplayer flow end-to-end
 
@@ -300,7 +300,7 @@ Go through each phase in order. For each item:
 |----------|------|---------|---------|------------|
 | Auth & Connection | 6/6 | 0 | 0 | 0 |
 | Character Select | 6/7 | 0 | 0 | 1 |
-| Main Menu | 9/10 | 1 | 0 | 0 |
+| Main Menu | 10/10 | 0 | 0 | 0 |
 | Lobby | 6/6 | 0 | 0 | 0 |
 | Core Poker | 20/24 | 2 | 0 | 3 |
 | Adventure | 5/7 | 0 | 0 | 2 |
@@ -312,8 +312,8 @@ Go through each phase in order. For each item:
 | Shop | 3/3 | 0 | 0 | 0 |
 | Settings | 5/5 | 0 | 0 | 0 |
 | Tournaments | 3/5 | 1 | 0 | 0 |
-| Social | 5/6 | 1 | 0 | 0 |
+| Social | 6/6 | 0 | 0 | 0 |
 | Art & Audio | 3/12 | 0 | 2 | 9 |
-| **TOTAL** | **99** | **5** | **2** | **18** |
+| **TOTAL** | **101** | **3** | **2** | **18** |
 
-**The game is ~80% complete.** Core poker, adventure, stats, crews, robbery, shop, settings, and inventory are all functional. The remaining work is: 2 missing scenes (Friends + Tournament), 2 missing audio files, polish animations, and 9 art asset batches.
+**The game is ~82% complete.** Core poker, adventure, stats, crews, robbery, shop, settings, inventory, friends, and leaderboards are all functional. The remaining work is: 1 missing scene (Tournament play), 2 missing audio files, polish animations, and 9 art asset batches.
