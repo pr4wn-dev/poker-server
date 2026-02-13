@@ -8,48 +8,38 @@
 2. Estimate tokens wasted because of the violation
 3. Report this to user IMMEDIATELY - no hiding, no excuses
 
-Example: "I violated LAW 10 by disabling chaos mode instead of fixing the root cause. Estimated tokens stolen: ~2,000 tokens (server restarts, unnecessary code changes, user frustration handling)."
+Example: "I violated LAW 9 by disabling chaos mode instead of fixing the root cause. Estimated tokens stolen: ~2,000 tokens (server restarts, unnecessary code changes, user frustration handling)."
 
 ---
 
-## LAW 1: PULL ALL REPOS FIRST
-```powershell
-# Pull EVERY repo in the project before doing anything
-git pull
-```
-This happens BEFORE you respond. BEFORE anything else. FIRST.
-If multiple repos exist, pull ALL of them. Every time. No exceptions.
-
----
-
-## LAW 2: CHECK PAST PROBLEMS FIRST
+## LAW 1: CHECK PAST PROBLEMS FIRST
 Before solving ANY problem, search the project log/docs for matching issues.
 The solution probably already exists. Don't reinvent. CHECK FIRST.
 
 ---
 
-## LAW 3: DOCUMENT FIXES IMMEDIATELY
+## LAW 2: DOCUMENT FIXES IMMEDIATELY
 When you fix ANY bug → document it BEFORE moving on. Not later. NOW.
 
 ---
 
-## LAW 4: COMMIT AUTOMATICALLY
+## LAW 3: COMMIT AUTOMATICALLY
 After code changes: `git add -A; git commit -m "message"; git push`
 Don't wait to be asked.
 
 ---
 
-## LAW 5: NO BANDAIDS
+## LAW 4: NO BANDAIDS
 Fix root causes. Install real dependencies. No mock mode. No workarounds.
 
 ---
 
-## LAW 6: ONE LOG FILE
+## LAW 5: ONE LOG FILE
 All notes go in one central log file. Not scattered across multiple files.
 
 ---
 
-## LAW 7: WHEN STUCK, RESET
+## LAW 6: WHEN STUCK, RESET
 If patching errors for >15 minutes, STOP.
 Find last working commit: `git log --oneline`
 Reset to it: `git reset --hard <commit>`
@@ -57,7 +47,7 @@ Don't waste hours on what takes 30 seconds.
 
 ---
 
-## LAW 8: GREP BOTH SIDES TO FIND MISMATCHES
+## LAW 7: GREP BOTH SIDES TO FIND MISMATCHES
 When client/server or multi-component systems don't connect:
 ```powershell
 # What does one side send?
@@ -70,13 +60,13 @@ Pattern: When one side works but the other is stuck → MISMATCH. Grep both side
 
 ---
 
-## LAW 9: SIMULATION/LOGS SAY IT ALL - NEVER ASK USER TO DESCRIBE
+## LAW 8: SIMULATION/LOGS SAY IT ALL - NEVER ASK USER TO DESCRIBE
 
 If you have to ask "what happened?" → YOU HAVE FAILED.
 
 ---
 
-## LAW 10: NEVER DELETE FEATURES TO "FIX" PROBLEMS
+## LAW 9: NEVER DELETE FEATURES TO "FIX" PROBLEMS
 
 **Disabling or removing existing functionality is NOT a fix. It's theft.**
 
