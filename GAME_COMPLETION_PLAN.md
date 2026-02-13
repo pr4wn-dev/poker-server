@@ -96,7 +96,7 @@ Go through each phase in order. For each item:
 | 5.17 | Leave table | DONE | |
 | 5.18 | Reconnection mid-hand | DONE | Auto-restore seat |
 | 5.19 | Dealing animation (cards fly from deck) | **PARTIAL** | Cards appear in place, no arc animation |
-| 5.20 | Chip-to-pot animation | **PARTIAL** | Values update numerically, no flying chips |
+| 5.20 | Chip-to-pot animation | **PARTIAL** | Gold circles fly seat→pot and pot→winner — needs chip sprite art (see 16.8) |
 | 5.21 | Table felt texture | **ART** | Green rectangle — needs textured felt image |
 | 5.22 | Chip sprites | **ART** | Colored circles — needs chip images |
 | 5.23 | Default card back image | **ART** | No card_back.png in Cards folder |
