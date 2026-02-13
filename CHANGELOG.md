@@ -546,6 +546,117 @@ socket.emit('event_name_response', response);
 
 ---
 
+## Detailed Bug Fixes (February 2026)
+
+These fixes were documented during development and moved here from README during cleanup.
+
+### ✅ Double-Action Race Condition (Feb 12)
+**Severity:** HIGH — After clicking Fold (or any action), queued state updates re-showed action panel via `ShowActionButtons()`, re-enabling buttons. Second click caused "Already folded" errors. Panel stuck permanently.
+**Root Cause:** Socket.IO state broadcasts arrived in Unity main thread between action sent and server processing. Stale updates showed `currentPlayerId == myId`.
+**Fix:** Added `_actionPanelLocked` flag, set true on any action click, cleared only when `currentPlayerId` changes. `shouldShowActionPanel` requires `!_actionPanelLocked`. Files: `TableScene.cs`
+
+### ✅ Item Ante FK Error for Bots (Feb 12)
+**Severity:** MEDIUM — Bots winning item ante caused `ER_NO_REFERENCED_ROW_2` (bot IDs not in users table).
+**Fix:** Check if winner is bot before DB transfer. Bots: log award, skip DB. Files: `Table.js`
+
+### ✅ Practice Mode Item Ante Risk-Free (Feb 12)
+**Severity:** FEATURE — Practice mode was transferring real items. Added `practiceMode` check to skip `addItem()` calls. Files: `Table.js`
+
+### ✅ Bot Betting Dead Streets After All-In (Feb 12)
+**Severity:** MEDIUM — Bot kept betting through flop/turn/river after opponent all-in.
+**Fix:** EXIT POINT 0b skips all phases to showdown. Bot AI checks if all opponents all-in/folded. Bot fallback: call → check → fold. Files: `Table.js`, `BotManager.js`
+
+### ✅ Pot Amount Display Bug (Feb 11)
+**Severity:** CRITICAL — `hand_result` sent total pot instead of individual award. Split pots showed wrong amounts.
+**Fix:** Calculate winner's individual award across all side pots. Added `totalPot` as separate field. Files: `Table.js`
+
+### ✅ Missing totalBet in State (Feb 11)
+**Severity:** MEDIUM — Only `currentBet` (resets each round) was sent. Added `totalBet` (cumulative across hand) to seat data. Files: `Table.js`
+
+### ✅ Spectator Item Ante Prompt (Feb 12)
+**Severity:** MEDIUM — Spectators prompted to submit items. Added `!isSpectator(forPlayerId)` check. Files: `Table.js`
+
+### ✅ Item Ante Missing Fields for Unity (Feb 12)
+**Severity:** HIGH — Unity couldn't display item sprites because `templateId`, `description`, `isGambleable` etc. were missing from state.
+**Fix:** Added all fields to `ItemAnte.getState()`, `side_pot_started`, `side_pot_submission` events. Files: `ItemAnte.js`, `SocketHandler.js`
+
+### ✅ Unity Item Ante Filtering (Feb 12)
+**Severity:** MEDIUM — InventoryPanel showed all items instead of filtering `isGambleable: true`. Added filtering, dim/disable for low-value items, red/green value text. Files: `InventoryPanel.cs`, `TableScene.cs`
+
+### ✅ Bot Item Ante Submission (Feb 12)
+**Severity:** HIGH — Bots not submitting items. `Cannot find module './Item'` — wrong require path.
+**Fix:** Changed `'./Item'` to `'../models/Item'`. Added `itemAnteHandled` flag. Files: `BotManager.js`
+
+### ✅ Practice Mode Bot Auto-Approval (Feb 12)
+**Severity:** HIGH — Socket bots blocked regular bot approval in practice mode.
+**Fix:** Auto-approve all bots in practice mode (only creator can invite). Files: `BotManager.js`
+
+### ✅ Socket Bot Invitation & Item Ante (Feb 12)
+**Severity:** MEDIUM — Socket bot username truncation, missing item ante submission.
+**Fix:** Username 20-char limit, explicit `checkBotsItemAnte` after join, always emit response events. Files: `SocketHandler.js`, `SocketBot.js`
+
+### ✅ InventoryPanel Off-Screen (Feb 12)
+**Severity:** HIGH — Panel detected as off-screen. RectTransform not properly positioned on activation.
+**Fix:** Reset anchors/position/sizeDelta after activation, `LayoutRebuilder.ForceRebuildLayoutImmediate()`, fixed ScreenSpaceOverlay visibility check. Files: `InventoryPanel.cs`
+
+### ✅ Canvas Sorting Order Restoration (Feb 12)
+**Severity:** MEDIUM — InventoryPanel sorting order (300) not restored on close, covering other elements.
+**Fix:** Save/restore `_originalCanvasSortingOrder`. Files: `InventoryPanel.cs`
+
+### ✅ Items Not Awarded After Game (Feb 12)
+**Severity:** HIGH — `ItemAnte.award()` returned items but didn't call `userRepo.addItem()`.
+**Fix:** Loop through awarded items and call `addItem()` with error handling. Files: `Table.js`
+
+### ✅ Item Ante Award Duplicate ID (Feb 12)
+**Severity:** HIGH — Duplicate key error when re-adding items with same IDs.
+**Fix:** Create new `Item` instances with fresh IDs on award. Files: `Table.js`
+
+### ✅ Action Bar Not Visible (Feb 12)
+**Severity:** CRITICAL — Betting controls hidden. Spectator logic also hid seated players.
+**Fix:** Added `isInSeat` check, Canvas sorting order 350, forced layout rebuild. Files: `TableScene.cs`
+
+### ✅ Turns Getting Skipped — 3 Bugs (Feb 12)
+**Severity:** CRITICAL — Betting rounds advanced instantly (flop → turn → river) skipping players.
+**Bug 1:** `lastRaiserIndex` initialized to `currentPlayerIndex` caused immediate false positive.
+**Bug 2:** Pre-flop UTG→BB shortcut prevented BB from acting.
+**Bug 3:** Post-flop fallback ended round after one player.
+**Fix:** Added `playersActedThisRound` Set, guard against premature completion, alternative completion condition. Files: `Table.js`
+
+### ✅ MyChipsPanel Not Visible (Feb 12)
+**Severity:** MEDIUM — Hidden behind other elements. Set Canvas sortingOrder 400, `SetAsLastSibling()`. Files: `TableScene.cs`
+
+### ✅ Blind Round Timer Not Visible (Feb 12)
+**Severity:** MEDIUM — Behind other layers. Created `_blindTimerContainer` with own Canvas (sortingOrder 450). Files: `TableScene.cs`
+
+### ✅ Bot Item Ante Value Mismatch (Feb 12)
+**Severity:** HIGH — Bots couldn't submit items when minimum > 500. Expanded test items to all rarity tiers, dynamic item creation for any minimum. Files: `BotManager.js`
+
+### ✅ All-In Excess Chips Not Returned (Feb 12)
+**Severity:** CRITICAL — 100M all-in vs 20K opponent showed pot as 100M. Excess 99.98M should be returned immediately.
+**Fix:** Added `returnExcessBets()` method (calculates max matchable, returns excess), called at EXIT POINT 1 and start of showdown. Files: `Table.js`
+
+### ✅ InventoryPanel Item Visibility — Complete Fix (Feb 11)
+**Severity:** CRITICAL — 5 combined issues: low Canvas sorting, bad RectTransform positioning, Content width reset, Mask clipping, GridLayoutGroup overflow.
+**Fix:** Canvas sorting 300, RectTransform reset after activation, Content width pre-set before items, `Mask` → `RectMask2D`, `maskable=true`, GridLayoutGroup optimization, window resize handler. Files: `InventoryPanel.cs`
+
+### ✅ InventoryPanel Missing in MainMenuScene (Feb 11)
+**Severity:** MEDIUM — `OnInventoryClick()` was a TODO. Implemented panel creation/reuse. Files: `MainMenuScene.cs`
+
+---
+
+### Known Issues (as of Feb 12, 2026)
+
+#### Missing Chips / Money Loss
+**Status:** Under investigation
+- Pot not cleared at hand start (40+ instances) — chips carry over
+- Chips lost during betting (pot < sum of totalBets) — chips subtracted but not added to pot
+- Cumulative chip loss across hands (21K → 35K → 38K)
+
+#### Item Ante Edge Cases
+- Item not found in inventory (if traded/consumed between selection and submission)
+
+---
+
 **Note:** For full details on any issue, search this file for the issue number or symptom.
 
 
