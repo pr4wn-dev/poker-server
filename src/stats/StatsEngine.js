@@ -121,6 +121,19 @@ class StatsEngine {
                 if (pocketCategory) {
                     await StatsEngine.updatePocketStats(player, pocketCategory);
                 }
+
+                // Award XP bonuses for rare hands
+                if (player.finalHandRank >= 8) {
+                    await StatsEngine.awardRareHandXP(player, potSize);
+                }
+
+                // Auto-save highlight hands (rare hands, huge pots, suckouts)
+                await StatsEngine.checkAndSaveHighlight(
+                    player, tableId, handNumber, potSize, wentToShowdown
+                );
+
+                // Auto-unlock achievements
+                await StatsEngine.checkAchievements(player, wentToShowdown, potSize);
             }
 
             gameLogger.gameEvent('STATS', 'Hand processed', {
@@ -451,6 +464,152 @@ class StatsEngine {
             'SELECT * FROM hand_history WHERE table_id = ? AND hand_number = ? ORDER BY seat_index ASC',
             [tableId, handNumber]
         );
+    }
+
+    /**
+     * Award XP bonuses for rare hand types
+     */
+    static async awardRareHandXP(player, potSize) {
+        if (!player.playerId || !player.finalHandRank) return;
+
+        const XP_BONUSES = {
+            8: 500,     // Four of a Kind
+            9: 2000,    // Straight Flush
+            10: 10000   // Royal Flush
+        };
+
+        const xpBonus = XP_BONUSES[player.finalHandRank];
+        if (!xpBonus) return;
+
+        try {
+            await database.query(
+                'UPDATE users SET xp = xp + ? WHERE id = ?',
+                [xpBonus, player.playerId]
+            );
+            gameLogger.gameEvent('STATS', `Rare hand XP bonus awarded`, {
+                playerId: player.playerId,
+                handRank: player.finalHandRank,
+                handName: HAND_RANK_NAMES[player.finalHandRank],
+                xpBonus
+            });
+        } catch (err) {
+            // Non-critical
+        }
+    }
+
+    /**
+     * Auto-save highlight hands (rare hands, huge pots, suckouts, bad beats)
+     */
+    static async checkAndSaveHighlight(player, tableId, handNumber, potSize, wentToShowdown) {
+        if (!player.playerId) return;
+
+        let label = null;
+
+        // Royal Flush
+        if (player.finalHandRank === 10) label = 'Royal Flush!';
+        // Straight Flush
+        else if (player.finalHandRank === 9) label = 'Straight Flush';
+        // Four of a Kind
+        else if (player.finalHandRank === 8) label = 'Four of a Kind';
+        // Suckout (came from behind to win)
+        else if (player.wonFromBehind && player.wasWinner) label = 'Suckout Win';
+        // Bad beat (strong hand lost)
+        else if (!player.wasWinner && player.finalHandRank >= 7 && wentToShowdown) label = 'Bad Beat';
+        // Huge pot (>20x big blind — rough heuristic, assume 100 BB = large)
+        else if (player.wasWinner && potSize >= 2000) label = 'Big Pot Win';
+
+        if (!label) return;
+
+        try {
+            // Find the hand_history record we just inserted
+            const handRecord = await database.queryOne(
+                'SELECT id FROM hand_history WHERE table_id = ? AND hand_number = ? AND player_id = ? ORDER BY id DESC LIMIT 1',
+                [tableId, handNumber, player.playerId]
+            );
+
+            if (handRecord) {
+                await database.query(`
+                    INSERT IGNORE INTO saved_hands (player_id, hand_history_id, is_highlight, label)
+                    VALUES (?, ?, TRUE, ?)
+                `, [player.playerId, handRecord.id, label]);
+            }
+        } catch (err) {
+            // Non-critical
+        }
+    }
+
+    /**
+     * Auto-unlock achievements based on game events
+     */
+    static async checkAchievements(player, wentToShowdown, potSize) {
+        if (!player.playerId) return;
+
+        try {
+            // Get current stats for threshold checks
+            const stats = await database.queryOne(
+                'SELECT hands_played, hands_won, total_chips_won, longest_win_streak FROM player_stats WHERE player_id = ?',
+                [player.playerId]
+            );
+            if (!stats) return;
+
+            const achievementsToCheck = [];
+
+            // First win
+            if (player.wasWinner && stats.hands_won <= 1) {
+                achievementsToCheck.push('first_win');
+            }
+
+            // Play 10 hands
+            if (stats.hands_played >= 10) {
+                achievementsToCheck.push('play_10');
+            }
+
+            // Win 50 hands
+            if (stats.hands_won >= 50) {
+                achievementsToCheck.push('win_50');
+            }
+
+            // Royal flush
+            if (player.finalHandRank === 10) {
+                achievementsToCheck.push('royal_flush');
+            }
+
+            // Chip milestones (check current chips)
+            const userChips = await database.queryOne('SELECT chips FROM users WHERE id = ?', [player.playerId]);
+            if (userChips) {
+                if (userChips.chips >= 10000) achievementsToCheck.push('chips_10k');
+                if (userChips.chips >= 100000) achievementsToCheck.push('chips_100k');
+                if (userChips.chips >= 1000000) achievementsToCheck.push('chips_1m');
+            }
+
+            // Win streak
+            if (stats.longest_win_streak >= 10) {
+                achievementsToCheck.push('untouchable');
+            }
+
+            // Unlock any that aren't already unlocked
+            if (achievementsToCheck.length > 0) {
+                const existing = await database.query(
+                    'SELECT achievement_id FROM achievements WHERE player_id = ?',
+                    [player.playerId]
+                );
+                const existingIds = new Set(existing.map(e => e.achievement_id));
+
+                for (const achievementId of achievementsToCheck) {
+                    if (!existingIds.has(achievementId)) {
+                        await database.query(`
+                            INSERT IGNORE INTO achievements (player_id, achievement_id, progress, completed_at, reward_claimed)
+                            VALUES (?, ?, 100, CURRENT_TIMESTAMP, FALSE)
+                        `, [player.playerId, achievementId]);
+                        gameLogger.gameEvent('STATS', `Achievement unlocked`, {
+                            playerId: player.playerId, achievementId
+                        });
+                    }
+                }
+            }
+        } catch (err) {
+            // Non-critical
+        }
     }
 
     /**

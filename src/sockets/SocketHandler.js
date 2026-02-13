@@ -3232,6 +3232,331 @@ class SocketHandler {
                 }
             });
 
+            // ============ Shop ============
+
+            socket.on('get_shop_catalog', async (data, callback) => {
+                const respond = this._makeResponder(socket, 'get_shop_catalog', callback);
+                try {
+                    const Item = require('../models/Item');
+                    const database = require('../database/Database');
+                    const user = this.getAuthenticatedUser(socket);
+                    if (!user) return respond({ success: false, error: 'Not authenticated' });
+
+                    // Build shop catalog from item templates + pricing
+                    const shopItems = [
+                        // Card Backs
+                        { templateId: 'CARD_BACK_FLAME', price: 5000, currency: 'chips', category: 'card_backs' },
+                        { templateId: 'CARD_BACK_DIAMOND', price: 50000, currency: 'chips', category: 'card_backs' },
+                        { templateId: 'CARD_BACK_HOLOGRAM', price: 250000, currency: 'chips', category: 'card_backs' },
+                        // Table Skins
+                        { templateId: 'TABLE_SKIN_VELVET', price: 10000, currency: 'chips', category: 'table_skins' },
+                        { templateId: 'TABLE_SKIN_GOLD', price: 500000, currency: 'chips', category: 'table_skins' },
+                        // Chip Styles
+                        { templateId: 'CHIP_STYLE_CASINO', price: 25000, currency: 'chips', category: 'chip_styles' },
+                        { templateId: 'CHIP_STYLE_PLATINUM', price: 300000, currency: 'chips', category: 'chip_styles' },
+                        // Avatars
+                        { templateId: 'AVATAR_WOLF', price: 8000, currency: 'chips', category: 'avatars' },
+                        { templateId: 'AVATAR_SHARK', price: 30000, currency: 'chips', category: 'avatars' },
+                        { templateId: 'AVATAR_DRAGON', price: 100000, currency: 'chips', category: 'avatars' },
+                        // XP Boosts
+                        { templateId: 'XP_BOOST_SMALL', price: 1000, currency: 'chips', category: 'consumables' },
+                        { templateId: 'XP_BOOST_MEDIUM', price: 4000, currency: 'chips', category: 'consumables' },
+                        { templateId: 'XP_BOOST_LARGE', price: 15000, currency: 'chips', category: 'consumables' },
+                        { templateId: 'XP_BOOST_MEGA', price: 75000, currency: 'chips', category: 'consumables' },
+                        // Gem-purchasable items
+                        { templateId: 'CARD_BACK_GOLDEN', price: 50, currency: 'gems', category: 'premium' },
+                        { templateId: 'AVATAR_LEGEND', price: 100, currency: 'gems', category: 'premium' },
+                        { templateId: 'VEHICLE_YACHT_GOLD', price: 200, currency: 'gems', category: 'premium' },
+                        { templateId: 'VEHICLE_JET', price: 150, currency: 'gems', category: 'premium' },
+                    ];
+
+                    // Get user's existing inventory to mark owned items
+                    let ownedTemplateIds = [];
+                    if (database.isConnected) {
+                        const owned = await database.query(
+                            'SELECT item_template_id FROM inventory WHERE user_id = ?', [user.userId]
+                        );
+                        ownedTemplateIds = owned.map(r => r.item_template_id);
+                    }
+
+                    const catalog = shopItems.map(shopItem => {
+                        const template = Item.TEMPLATES[shopItem.templateId];
+                        if (!template) return null;
+                        const item = new Item(template);
+                        return {
+                            templateId: shopItem.templateId,
+                            name: item.name,
+                            description: item.description,
+                            type: item.type,
+                            rarity: item.rarity,
+                            icon: item.icon,
+                            powerScore: item.powerScore,
+                            price: shopItem.price,
+                            currency: shopItem.currency,
+                            category: shopItem.category,
+                            owned: ownedTemplateIds.includes(shopItem.templateId)
+                        };
+                    }).filter(Boolean);
+
+                    respond({ success: true, catalog });
+                } catch (error) {
+                    respond({ success: false, error: error.message });
+                }
+            });
+
+            socket.on('buy_item', async (data, callback) => {
+                const respond = this._makeResponder(socket, 'buy_item', callback);
+                try {
+                    const Item = require('../models/Item');
+                    const database = require('../database/Database');
+                    const user = this.getAuthenticatedUser(socket);
+                    if (!user) return respond({ success: false, error: 'Not authenticated' });
+
+                    const { templateId } = data || {};
+                    if (!templateId) return respond({ success: false, error: 'Missing templateId' });
+
+                    // Find in shop catalog (pricing)
+                    const shopPricing = {
+                        'CARD_BACK_FLAME': { price: 5000, currency: 'chips' },
+                        'CARD_BACK_DIAMOND': { price: 50000, currency: 'chips' },
+                        'CARD_BACK_HOLOGRAM': { price: 250000, currency: 'chips' },
+                        'TABLE_SKIN_VELVET': { price: 10000, currency: 'chips' },
+                        'TABLE_SKIN_GOLD': { price: 500000, currency: 'chips' },
+                        'CHIP_STYLE_CASINO': { price: 25000, currency: 'chips' },
+                        'CHIP_STYLE_PLATINUM': { price: 300000, currency: 'chips' },
+                        'AVATAR_WOLF': { price: 8000, currency: 'chips' },
+                        'AVATAR_SHARK': { price: 30000, currency: 'chips' },
+                        'AVATAR_DRAGON': { price: 100000, currency: 'chips' },
+                        'XP_BOOST_SMALL': { price: 1000, currency: 'chips' },
+                        'XP_BOOST_MEDIUM': { price: 4000, currency: 'chips' },
+                        'XP_BOOST_LARGE': { price: 15000, currency: 'chips' },
+                        'XP_BOOST_MEGA': { price: 75000, currency: 'chips' },
+                        'CARD_BACK_GOLDEN': { price: 50, currency: 'gems' },
+                        'AVATAR_LEGEND': { price: 100, currency: 'gems' },
+                        'VEHICLE_YACHT_GOLD': { price: 200, currency: 'gems' },
+                        'VEHICLE_JET': { price: 150, currency: 'gems' }
+                    };
+
+                    const pricing = shopPricing[templateId];
+                    if (!pricing) return respond({ success: false, error: 'Item not available in shop' });
+
+                    const template = Item.TEMPLATES[templateId];
+                    if (!template) return respond({ success: false, error: 'Item template not found' });
+
+                    // Check if already owned (non-consumable)
+                    if (template.type !== 'consumable' && template.type !== 'xp_boost') {
+                        const existing = await database.queryOne(
+                            'SELECT id FROM inventory WHERE user_id = ? AND item_template_id = ?',
+                            [user.userId, templateId]
+                        );
+                        if (existing) return respond({ success: false, error: 'Already owned' });
+                    }
+
+                    // Check balance
+                    const dbUser = await database.queryOne('SELECT chips, gems FROM users WHERE id = ?', [user.userId]);
+                    if (!dbUser) return respond({ success: false, error: 'User not found' });
+
+                    if (pricing.currency === 'chips') {
+                        if (dbUser.chips < pricing.price) return respond({ success: false, error: 'Not enough chips' });
+                        await database.query('UPDATE users SET chips = chips - ? WHERE id = ?', [pricing.price, user.userId]);
+                    } else if (pricing.currency === 'gems') {
+                        if ((dbUser.gems || 0) < pricing.price) return respond({ success: false, error: 'Not enough gems' });
+                        await database.query('UPDATE users SET gems = gems - ? WHERE id = ?', [pricing.price, user.userId]);
+                    }
+
+                    // Create item in inventory
+                    const item = new Item({ ...template, source: 'store' });
+                    await database.query(`
+                        INSERT INTO inventory (user_id, item_template_id, item_name, item_type, item_rarity, 
+                                              item_icon, power_score, source, is_gambleable)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, 'store', FALSE)
+                    `, [user.userId, templateId, item.name, item.type, item.rarity, item.icon, item.powerScore]);
+
+                    respond({
+                        success: true,
+                        item: { templateId, name: item.name, type: item.type, rarity: item.rarity },
+                        newBalance: pricing.currency === 'chips' ? dbUser.chips - pricing.price : undefined,
+                        newGems: pricing.currency === 'gems' ? (dbUser.gems || 0) - pricing.price : undefined
+                    });
+                } catch (error) {
+                    respond({ success: false, error: error.message });
+                }
+            });
+
+            // ============ Spectator Leaderboard ============
+
+            socket.on('get_spectator_leaderboard', async (data, callback) => {
+                const respond = this._makeResponder(socket, 'get_spectator_leaderboard', callback);
+                try {
+                    const StatsCalculator = require('../stats/StatsCalculator');
+                    const leaderboard = await StatsCalculator.getSpectatorLeaderboard(data?.limit || 20);
+                    respond({ success: true, leaderboard });
+                } catch (error) {
+                    respond({ success: false, error: error.message });
+                }
+            });
+
+            // ============ Advanced Stats (StatsCalculator) ============
+
+            socket.on('get_stats_comparison', async (data, callback) => {
+                const respond = this._makeResponder(socket, 'get_stats_comparison', callback);
+                try {
+                    const StatsCalculator = require('../stats/StatsCalculator');
+                    const user = this.getAuthenticatedUser(socket);
+                    if (!user) return respond({ success: false, error: 'Not authenticated' });
+
+                    const targetId = data?.playerId || user.userId;
+                    const result = await StatsCalculator.getStatsWithComparison(targetId);
+                    respond({ success: true, ...result });
+                } catch (error) {
+                    respond({ success: false, error: error.message });
+                }
+            });
+
+            socket.on('get_hand_type_comparison', async (data, callback) => {
+                const respond = this._makeResponder(socket, 'get_hand_type_comparison', callback);
+                try {
+                    const StatsCalculator = require('../stats/StatsCalculator');
+                    const user = this.getAuthenticatedUser(socket);
+                    if (!user) return respond({ success: false, error: 'Not authenticated' });
+
+                    const targetId = data?.playerId || user.userId;
+                    const result = await StatsCalculator.getHandTypeComparison(targetId);
+                    respond({ success: true, handTypes: result });
+                } catch (error) {
+                    respond({ success: false, error: error.message });
+                }
+            });
+
+            socket.on('get_pocket_breakdown', async (data, callback) => {
+                const respond = this._makeResponder(socket, 'get_pocket_breakdown', callback);
+                try {
+                    const StatsCalculator = require('../stats/StatsCalculator');
+                    const user = this.getAuthenticatedUser(socket);
+                    if (!user) return respond({ success: false, error: 'Not authenticated' });
+
+                    const targetId = data?.playerId || user.userId;
+                    const result = await StatsCalculator.getPocketBreakdown(targetId);
+                    respond({ success: true, ...result });
+                } catch (error) {
+                    respond({ success: false, error: error.message });
+                }
+            });
+
+            socket.on('get_trends', async (data, callback) => {
+                const respond = this._makeResponder(socket, 'get_trends', callback);
+                try {
+                    const StatsCalculator = require('../stats/StatsCalculator');
+                    const user = this.getAuthenticatedUser(socket);
+                    if (!user) return respond({ success: false, error: 'Not authenticated' });
+
+                    const result = await StatsCalculator.getTrends(user.userId, data?.sessionCount || 20);
+                    respond({ success: true, ...result });
+                } catch (error) {
+                    respond({ success: false, error: error.message });
+                }
+            });
+
+            socket.on('get_rare_hands', async (data, callback) => {
+                const respond = this._makeResponder(socket, 'get_rare_hands', callback);
+                try {
+                    const StatsCalculator = require('../stats/StatsCalculator');
+                    const user = this.getAuthenticatedUser(socket);
+                    if (!user) return respond({ success: false, error: 'Not authenticated' });
+
+                    const targetId = data?.playerId || user.userId;
+                    const hands = await StatsCalculator.getRareHands(targetId);
+                    respond({ success: true, rareHands: hands });
+                } catch (error) {
+                    respond({ success: false, error: error.message });
+                }
+            });
+
+            socket.on('get_player_profile', async (data, callback) => {
+                const respond = this._makeResponder(socket, 'get_player_profile', callback);
+                try {
+                    const StatsCalculator = require('../stats/StatsCalculator');
+                    const user = this.getAuthenticatedUser(socket);
+                    if (!user) return respond({ success: false, error: 'Not authenticated' });
+
+                    const targetId = data?.playerId || user.userId;
+                    const profile = await StatsCalculator.getPlayerProfile(targetId);
+                    respond({ success: true, profile });
+                } catch (error) {
+                    respond({ success: false, error: error.message });
+                }
+            });
+
+            // ============ Crew Chat ============
+
+            socket.on('crew_chat', async (data, callback) => {
+                const respond = this._makeResponder(socket, 'crew_chat', callback);
+                try {
+                    const CrewManager = require('../social/CrewManager');
+                    const user = this.getAuthenticatedUser(socket);
+                    if (!user) return respond({ success: false, error: 'Not authenticated' });
+
+                    const { message } = data || {};
+                    if (!message || typeof message !== 'string' || message.trim().length === 0) {
+                        return respond({ success: false, error: 'Empty message' });
+                    }
+
+                    // Get player's crew
+                    const membership = await CrewManager.getPlayerCrew(user.userId);
+                    if (!membership) return respond({ success: false, error: 'Not in a crew' });
+
+                    const crewRoomId = `crew:${membership.crew_id}`;
+                    const chatMsg = {
+                        senderId: user.userId,
+                        senderName: user.profile?.username || 'Unknown',
+                        message: message.trim().substring(0, 500), // Max 500 chars
+                        timestamp: Date.now(),
+                        crewId: membership.crew_id
+                    };
+
+                    // Broadcast to all online crew members in the crew room
+                    this.io.to(crewRoomId).emit('crew_chat_message', chatMsg);
+                    respond({ success: true });
+                } catch (error) {
+                    respond({ success: false, error: error.message });
+                }
+            });
+
+            socket.on('join_crew_chat', async (callback) => {
+                const respond = (response) => {
+                    if (callback) callback(response);
+                };
+                try {
+                    const CrewManager = require('../social/CrewManager');
+                    const user = this.getAuthenticatedUser(socket);
+                    if (!user) return respond({ success: false, error: 'Not authenticated' });
+
+                    const membership = await CrewManager.getPlayerCrew(user.userId);
+                    if (!membership) return respond({ success: false, error: 'Not in a crew' });
+
+                    const crewRoomId = `crew:${membership.crew_id}`;
+                    socket.join(crewRoomId);
+                    respond({ success: true, crewId: membership.crew_id, crewName: membership.crew_name });
+                } catch (error) {
+                    respond({ success: false, error: error.message });
+                }
+            });
+
+            socket.on('leave_crew_chat', async () => {
+                try {
+                    const CrewManager = require('../social/CrewManager');
+                    const user = this.getAuthenticatedUser(socket);
+                    if (!user) return;
+
+                    const membership = await CrewManager.getPlayerCrew(user.userId);
+                    if (membership) {
+                        socket.leave(`crew:${membership.crew_id}`);
+                    }
+                } catch (e) {
+                    // Ignore
+                }
+            });
+
             // ============ Disconnect ============
             
             socket.on('disconnect', async () => {
