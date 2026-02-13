@@ -1,32 +1,47 @@
-﻿
-## [Feb 12, 2026] - Dark Theme Restoration
+﻿## [Feb 13, 2026] - Session Fixes: Theme Restoration, DB Migration, Compile Errors
 
-### Issue
-Commit 524cd54 ("Massive Unity UI") overwrote the GUI overhaul (Phases 1-7) by regenerating
-MainMenuScene.cs from an old pre-theme base. This reverted the dark urban theme back to the
-cartoon purple styling.
+### Dark Theme Restoration (FINAL - commit 028b9a3)
+**Issue**: Commit 524cd54 ("Massive Unity UI") overwrote the GUI overhaul (Phases 1-7) by
+regenerating MainMenuScene.cs from an old pre-theme base. Multiple restoration attempts
+failed because the editor's stale buffer kept overwriting the git-restored file before commits.
 
-### Root Cause
-Agent regenerated entire MainMenuScene.cs using old version as base instead of building on
-top of the themed version from commits 8531548-ef4a5e1.
+**Root Causes**:
+1. Agent regenerated MainMenuScene.cs using old version as base
+2. Editor tool (search_replace) had stale buffer that overwrote git checkout before commit
+3. PowerShell injection script matched `_itemAnteEnabled.*command-line` in TWO places
+   (field declaration AND a variable assignment inside a method), causing duplicate
+   `private` field declarations inside a method body → CS0106 errors
+4. String interpolation `$"...{expr ?? \"default\"}"` used `\"` escapes inside interpolation
+   holes which is invalid C# syntax
 
-### Fix (commit d6d8f4e)
-- Restored MainMenuScene.cs from git history (524cd54^), merged 4 new features on top
-  (BuildEventBanner, LoadActiveEvents, CheckDailyRewards, ShowDailyRewardsPopup)
-- Restored 22 hardcoded-to-theme replacements in TableScene.cs
-- Restored theme refs in CharacterSelectScene.cs
-- Wired remaining hardcoded colors to theme in: SpectatorPanel, RobberyScene,
-  PlayerProfilePopup, PokerTableView, ToastNotification, LoadingOverlay
-- Fixed PlayerCharacter.HasSelectedCharacter -> ActiveCharacterId
+**Fix** (multiple commits: 260f72b → 9e115c2 → 028b9a3):
+- Restored MainMenuScene.cs from git history (524cd54^) using ONLY PowerShell terminal commands
+  (no editor tools) to avoid stale buffer overwrites
+- Merged 4 new features: BuildEventBanner, LoadActiveEvents, CheckDailyRewards, ShowDailyRewardsPopup
+- Removed duplicate field declarations (lines 330-338) injected inside method body
+- Replaced `\"` in string interpolation with concatenation: `"EVENT: " + (expr ?? "EVENT")`
+- Fixed `using System.Collections.Generic;` missing
+- Fixed `PlayerCharacter.HasSelectedCharacter` → `string.IsNullOrEmpty(PlayerCharacter.ActiveCharacterId)`
+- Restored theme refs in TableScene (22), CharacterSelectScene (3), SpectatorPanel (4),
+  RobberyScene (6), PlayerProfilePopup (1), PokerTableView (3), ToastNotification (5),
+  LoadingOverlay (1)
 
-### Files Changed (12 .cs files)
-MainMenuScene.cs, TableScene.cs, CharacterSelectScene.cs, SpectatorPanel.cs,
-RobberyScene.cs, PlayerProfilePopup.cs, PokerTableView.cs, ToastNotification.cs,
-LoadingOverlay.cs
+### Database Migration Fix (commit 90ff09a)
+**Issue**: Server started but login returned "Database offline". Server logs showed
+"Connecting to database..." with no "Connected" confirmation.
 
-### Lesson
-NEVER regenerate an entire large file - always build incremental changes on top of the
-existing version. Use git show/diff to verify the base before editing.
+**Root Cause**: `events` table migration had `end_date TIMESTAMP NOT NULL` without a default
+value. MySQL strict mode rejects this, causing `db.initialize()` to silently return `false`.
+All subsequent `db.isConnected` checks failed, blocking login/register.
+
+**Fix**: Added `DEFAULT CURRENT_TIMESTAMP` to both `start_date` and `end_date` columns in
+the events table CREATE statement.
+
+### Lessons Learned
+1. NEVER use editor tools (search_replace) on files restored via git checkout — use terminal only
+2. PowerShell regex matches in injection scripts can match in unexpected places — use exact line matching
+3. `\"` escape sequences are NOT valid inside C# string interpolation `{...}` holes — use concatenation
+4. When `db.initialize()` fails, the error is caught silently — always check for "Database connected" in logs
 # Changelog - Issues & Solutions
 
 This file tracks all issues encountered and their solutions. **Search this file first** before debugging.
