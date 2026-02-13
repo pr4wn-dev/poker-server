@@ -62,7 +62,7 @@ class TournamentManager {
         }
         
         // Get player profile and inventory
-        const profile = await this.userRepo.getProfile(userId);
+        const profile = await this.userRepo.getById(userId);
         const xpInfo = await this.userRepo.getXPInfo(userId);
         const inventory = await this.userRepo.getInventory(userId);
         

@@ -609,11 +609,15 @@ class UserRepository {
             uses: item.uses_remaining,
             maxUses: item.max_uses,
             baseValue: item.base_value,
+            powerScore: item.power_score || 0,
+            source: item.source || 'unknown',
+            dropRate: item.drop_rate || 0.5,
+            demand: item.demand || 1.0,
             obtainedAt: item.obtained_at,
             obtainedFrom: item.obtained_from,
             isTradeable: item.is_tradeable,
             isGambleable: item.is_gambleable,
-            isEquipped: item.is_equipped
+            isEquipped: item.is_equipped || false
         }));
     }
     

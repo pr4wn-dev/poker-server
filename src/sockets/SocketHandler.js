@@ -2344,7 +2344,7 @@ class SocketHandler {
                 const tournaments = this.tournamentManager.getTournamentsByArea(areaId);
                 
                 // Get user info to check eligibility
-                const profile = await userRepo.getProfile(user.userId);
+                const profile = await userRepo.getById(user.userId);
                 const xpInfo = await userRepo.getXPInfo(user.userId);
                 const inventory = await userRepo.getInventory(user.userId);
                 
@@ -3334,6 +3334,35 @@ class SocketHandler {
                     );
 
                     respond({ success: true, equipped: false });
+                } catch (error) {
+                    respond({ success: false, error: error.message });
+                }
+            });
+
+            socket.on('get_equipped_items', async (data, callback) => {
+                const respond = this._makeResponder(socket, 'get_equipped_items', callback);
+                try {
+                    const database = require('../database/Database');
+                    const user = this.getAuthenticatedUser(socket);
+                    if (!user) return respond({ success: false, error: 'Not authenticated' });
+
+                    const items = await database.query(
+                        'SELECT * FROM inventory WHERE user_id = ? AND is_equipped = TRUE',
+                        [user.userId]
+                    );
+
+                    respond({
+                        success: true,
+                        items: items.map(i => ({
+                            id: i.id,
+                            templateId: i.template_id,
+                            name: i.name,
+                            type: i.item_type,
+                            rarity: i.rarity,
+                            icon: i.icon,
+                            powerScore: i.power_score || 0
+                        }))
+                    });
                 } catch (error) {
                     respond({ success: false, error: error.message });
                 }
