@@ -151,7 +151,7 @@ class UserRepository {
      */
     async getFullProfile(userId) {
         const user = await db.queryOne(
-            'SELECT id, username, email, chips, adventure_coins, created_at, last_login FROM users WHERE id = ?',
+            'SELECT id, username, email, chips, adventure_coins, karma, created_at, last_login FROM users WHERE id = ?',
             [userId]
         );
         
@@ -176,12 +176,17 @@ class UserRepository {
         const friends = await this.getFriendIds(userId);
         const friendRequests = await this.getFriendRequests(userId);
         
+        const karma = user.karma ?? 100;
+        
         return {
             id: user.id,
             username: user.username,
             email: user.email,
             chips: user.chips,
             adventureCoins: user.adventure_coins,
+            karma: karma,
+            heartColor: UserRepository.getHeartColor(karma),
+            heartTier: UserRepository.getHeartTier(karma),
             createdAt: user.created_at,
             lastLogin: user.last_login,
             stats: stats ? {
@@ -209,7 +214,7 @@ class UserRepository {
      */
     async getPublicProfile(userId) {
         const user = await db.queryOne(
-            'SELECT id, username, chips, created_at FROM users WHERE id = ?',
+            'SELECT id, username, chips, karma, created_at FROM users WHERE id = ?',
             [userId]
         );
         
@@ -225,10 +230,15 @@ class UserRepository {
             [userId]
         );
         
+        const karma = user.karma ?? 100;
+        
         return {
             id: user.id,
             username: user.username,
             chips: user.chips,
+            karma: karma,
+            heartColor: UserRepository.getHeartColor(karma),
+            heartTier: UserRepository.getHeartTier(karma),
             stats: stats || {},
             highestLevel: progress?.highest_level || 1
         };
@@ -264,6 +274,130 @@ class UserRepository {
         );
     }
     
+    // ============ Karma / Heart System ============
+    // Karma scale: 100 = Pure White (never committed crime), 0 = Pitch Black (hardened criminal)
+    // Players at 100 karma cannot be targeted for robbery at all
+    // Players below 100 are visible to criminals; lower karma = easier to find
+    
+    /**
+     * Get a player's current karma value
+     */
+    async getKarma(userId) {
+        const row = await db.queryOne('SELECT karma FROM users WHERE id = ?', [userId]);
+        return row?.karma ?? 100;
+    }
+    
+    /**
+     * Modify karma by a delta amount with logging
+     * @param {string} userId 
+     * @param {number} delta - Negative = lose karma (commit crime), Positive = gain karma (decay back)
+     * @param {string} reason - Short reason code (e.g., 'robbery_attempt', 'robbery_success', 'daily_decay')
+     * @param {string} [details] - Optional longer description
+     * @returns {Object} { karmaBefore, karmaAfter, heartColor }
+     */
+    async modifyKarma(userId, delta, reason, details = null) {
+        const gameLogger = require('../utils/GameLogger');
+        
+        const current = await this.getKarma(userId);
+        const newKarma = Math.max(0, Math.min(100, current + delta));
+        
+        if (newKarma !== current) {
+            await db.query('UPDATE users SET karma = ? WHERE id = ?', [newKarma, userId]);
+            
+            await db.query(`
+                INSERT INTO karma_history (user_id, karma_before, karma_after, change_amount, reason, details)
+                VALUES (?, ?, ?, ?, ?, ?)
+            `, [userId, current, newKarma, delta, reason, details]);
+            
+            gameLogger.gameEvent('KARMA', `[KARMA_CHANGE] ${reason}`, {
+                userId, before: current, after: newKarma, delta, reason
+            });
+        }
+        
+        return {
+            karmaBefore: current,
+            karmaAfter: newKarma,
+            heartColor: UserRepository.getHeartColor(newKarma)
+        };
+    }
+    
+    /**
+     * Get heart color name from karma value
+     * @param {number} karma - 0-100
+     * @returns {string} Color name for the heart
+     */
+    static getHeartColor(karma) {
+        if (karma >= 95) return 'white';       // Pure — never committed crime (or nearly)
+        if (karma >= 80) return 'light_gray';  // Dabbled — a petty crime or two
+        if (karma >= 60) return 'gray';        // Criminal — regular offender
+        if (karma >= 40) return 'dark_gray';   // Hardened — serious criminal
+        if (karma >= 20) return 'charcoal';    // Menace — feared by many
+        return 'black';                         // Pitch black — the worst of the worst
+    }
+    
+    /**
+     * Get heart tier info (name + description) for display
+     */
+    static getHeartTier(karma) {
+        if (karma >= 95) return { color: 'white', name: 'Pure Heart', desc: 'Clean conscience. Protected from crime.' };
+        if (karma >= 80) return { color: 'light_gray', name: 'Fading Innocence', desc: 'You\'ve dipped your toes in the dark side.' };
+        if (karma >= 60) return { color: 'gray', name: 'Gray Heart', desc: 'A known criminal. Others can sense it.' };
+        if (karma >= 40) return { color: 'dark_gray', name: 'Dark Heart', desc: 'Hardened criminal. Easy to find.' };
+        if (karma >= 20) return { color: 'charcoal', name: 'Shadow Heart', desc: 'A menace. Everyone knows your name.' };
+        return { color: 'black', name: 'Black Heart', desc: 'Pure evil. A target for everyone.' };
+    }
+    
+    /**
+     * Get robbery visibility multiplier based on victim karma
+     * Lower karma = higher multiplier = easier to find/target
+     * @param {number} karma - Victim's karma (0-100)
+     * @returns {number} 0.0 (invisible at 100 karma) to 2.0 (fully exposed at 0 karma)
+     */
+    static getRobberyVisibility(karma) {
+        if (karma >= 95) return 0.0;  // Pure hearts are INVISIBLE to criminals
+        // Linear scale: 94 karma = 0.06, 50 karma = 1.0, 0 karma = 2.0
+        return Math.min(2.0, (100 - karma) / 50);
+    }
+    
+    /**
+     * Get karma history for a player
+     */
+    async getKarmaHistory(userId, limit = 20) {
+        return await db.query(
+            'SELECT * FROM karma_history WHERE user_id = ? ORDER BY created_at DESC LIMIT ?',
+            [userId, limit]
+        );
+    }
+    
+    /**
+     * Apply daily karma decay (slowly regenerates toward neutral)
+     * Called by server cron - moves karma 1 point toward 100 each day
+     */
+    async applyKarmaDecay(userId) {
+        const current = await this.getKarma(userId);
+        if (current >= 100) return; // Already pure
+        
+        // Decay rate: +1 karma per day (slow redemption)
+        await this.modifyKarma(userId, 1, 'daily_decay', 'Natural karma recovery (+1/day)');
+    }
+    
+    /**
+     * Bulk apply daily karma decay for all players with karma < 100
+     */
+    async applyBulkKarmaDecay() {
+        const gameLogger = require('../utils/GameLogger');
+        const users = await db.query('SELECT id FROM users WHERE karma < 100');
+        let count = 0;
+        for (const user of users) {
+            await this.modifyKarma(user.id, 1, 'daily_decay', 'Natural karma recovery (+1/day)');
+            count++;
+        }
+        if (count > 0) {
+            gameLogger.gameEvent('KARMA', '[BULK_DECAY] Applied', { usersAffected: count });
+        }
+        return count;
+    }
+
     // ============ XP System ============
     
     /**
@@ -790,11 +924,14 @@ class UserRepository {
         const gameLogger = require('../utils/GameLogger');
         gameLogger.gameEvent('USER', '[RESET_PROGRESS] STARTING', { userId });
 
-        // Reset user core fields
+        // Reset user core fields (including karma back to pure white)
         await db.query(
-            "UPDATE users SET chips = 20000000, adventure_coins = 0, xp = 0, active_character = 'shadow_hacker' WHERE id = ?",
+            "UPDATE users SET chips = 20000000, adventure_coins = 0, xp = 0, karma = 100, active_character = 'shadow_hacker' WHERE id = ?",
             [userId]
         );
+        
+        // Clear karma history
+        await db.query('DELETE FROM karma_history WHERE user_id = ?', [userId]);
 
         // Reset user_stats
         await db.query(

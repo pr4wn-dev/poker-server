@@ -8,11 +8,19 @@
 
 const database = require('../database/Database');
 const gameLogger = require('../utils/GameLogger');
+const UserRepository = require('../database/UserRepository');
 
 // Robbery cooldowns (milliseconds)
 const ROBBERY_COOLDOWN = 4 * 60 * 60 * 1000;  // 4 hours between robbery attempts
 const VICTIM_COOLDOWN = 8 * 60 * 60 * 1000;    // 8 hours before can be robbed again
 const RECOVERY_WINDOW = 24 * 60 * 60 * 1000;   // 24 hours to recover stolen items
+
+// Karma costs for criminal actions
+const KARMA_COST = {
+    robbery_attempt: -5,       // Just attempting costs karma (you chose crime)
+    robbery_success: -10,      // Additional penalty for successful theft
+    robbery_failed_caught: -3, // Even getting caught darkens your heart
+};
 
 // Tool definitions with base success rates
 const TOOLS = {
@@ -76,6 +84,18 @@ class RobberyManager {
             return { success: false, error: 'You can\'t rob yourself' };
         }
 
+        // ===== KARMA/HEART SYSTEM: Check if victim is targetable =====
+        const userRepo = new UserRepository();
+        const victimKarma = await userRepo.getKarma(victimId);
+        
+        if (victimKarma >= 95) {
+            // Pure Heart — this player is INVISIBLE to criminals
+            return { 
+                success: false, 
+                error: 'This player has a Pure Heart. They cannot be targeted for robbery because they have never committed a crime.' 
+            };
+        }
+        
         // Check cooldowns
         const robberCooldown = await RobberyManager.checkRobberCooldown(robberId);
         if (!robberCooldown.canRob) {
@@ -86,6 +106,14 @@ class RobberyManager {
         if (!victimCooldown.canBeRobbed) {
             return { success: false, error: 'This player was robbed recently and is protected' };
         }
+        
+        // ===== KARMA: Committing a crime ALWAYS darkens your heart (even if you fail) =====
+        const karmaResult = await userRepo.modifyKarma(
+            robberId, 
+            KARMA_COST.robbery_attempt, 
+            'robbery_attempt', 
+            `Attempted robbery on victim ${victimId}`
+        );
 
         // Verify robber has the tool
         const tool = await database.queryOne(
@@ -135,6 +163,12 @@ class RobberyManager {
 
         // Apply defense reductions
         successRate -= victimDefenses.totalReduction;
+        
+        // ===== KARMA: Victim's dark heart makes them easier to find =====
+        // Visibility multiplier: 0.0 (pure, 95+) to 2.0 (black heart, 0)
+        const victimVisibility = UserRepository.getRobberyVisibility(victimKarma);
+        // Boost success rate by up to +20% based on how dark the victim's heart is
+        successRate += victimVisibility * 0.10;
 
         // Apply event multipliers
         try {
@@ -180,6 +214,14 @@ class RobberyManager {
                 [robberId, targetItem.id]
             );
 
+            // ===== KARMA: Extra penalty for successful theft =====
+            const successKarma = await userRepo.modifyKarma(
+                robberId, 
+                KARMA_COST.robbery_success, 
+                'robbery_success', 
+                `Stole ${targetItem.name} from victim ${victimId}`
+            );
+
             // Log it
             await RobberyManager.logRobbery(robberId, victimId, targetItem.id, targetItem.name, toolTemplateId, true, 0);
 
@@ -188,7 +230,8 @@ class RobberyManager {
             await RobberyManager.setVictimCooldown(victimId);
 
             gameLogger.gameEvent('ROBBERY', 'Robbery succeeded', {
-                robberId, victimId, itemId: targetItem.id, itemName: targetItem.name, tool: toolTemplateId
+                robberId, victimId, itemId: targetItem.id, itemName: targetItem.name, tool: toolTemplateId,
+                karmaAfter: successKarma.karmaAfter, heartColor: successKarma.heartColor
             });
 
             return {
@@ -197,7 +240,9 @@ class RobberyManager {
                 itemId: targetItem.id,
                 itemName: targetItem.name,
                 itemRarity: targetItem.rarity,
-                message: `You stole ${targetItem.name}!`
+                message: `You stole ${targetItem.name}!`,
+                karma: successKarma.karmaAfter,
+                heartColor: successKarma.heartColor
             };
         } else {
             // Failed — robber pays chip penalty
@@ -211,7 +256,8 @@ class RobberyManager {
             await RobberyManager.setRobberCooldown(robberId);
 
             gameLogger.gameEvent('ROBBERY', 'Robbery failed', {
-                robberId, victimId, tool: toolTemplateId, penalty
+                robberId, victimId, tool: toolTemplateId, penalty,
+                karmaAfter: karmaResult.karmaAfter, heartColor: karmaResult.heartColor
             });
 
             return {
@@ -219,7 +265,9 @@ class RobberyManager {
                 stolen: false,
                 caught: true,
                 penalty,
-                message: `Caught! You lost ${penalty.toLocaleString()} chips.`
+                message: `Caught! You lost ${penalty.toLocaleString()} chips.`,
+                karma: karmaResult.karmaAfter,
+                heartColor: karmaResult.heartColor
             };
         }
     }
@@ -413,7 +461,38 @@ class RobberyManager {
     }
 }
 
+    /**
+     * Get potential robbery targets — only players whose heart is NOT pure
+     * Players with karma >= 95 (Pure Heart) are completely invisible
+     * Returns targets sorted by visibility (darkest hearts first = easiest to find)
+     */
+    static async getRobberyTargets(robberId, limit = 20) {
+        // Get all players with karma < 95 (excluding the robber themselves)
+        const targets = await database.query(`
+            SELECT u.id, u.username, u.chips, u.karma,
+                   (SELECT COUNT(*) FROM inventory WHERE user_id = u.id AND is_gambleable = TRUE) as stealable_items
+            FROM users u
+            WHERE u.id != ? AND u.karma < 95 AND u.is_banned = FALSE
+            HAVING stealable_items > 0
+            ORDER BY u.karma ASC
+            LIMIT ?
+        `, [robberId, limit]);
+        
+        return targets.map(t => ({
+            id: t.id,
+            username: t.username,
+            chips: t.chips,
+            karma: t.karma,
+            heartColor: UserRepository.getHeartColor(t.karma),
+            heartTier: UserRepository.getHeartTier(t.karma),
+            stealableItems: t.stealable_items,
+            visibility: UserRepository.getRobberyVisibility(t.karma)
+        }));
+    }
+}
+
 RobberyManager.TOOLS = TOOLS;
 RobberyManager.DEFENSE_ITEMS = DEFENSE_ITEMS;
+RobberyManager.KARMA_COST = KARMA_COST;
 
 module.exports = RobberyManager;

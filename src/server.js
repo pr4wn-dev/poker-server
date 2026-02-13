@@ -404,6 +404,21 @@ async function start() {
             databaseConnected: dbConnected,
             message: 'SERVER STARTED SUCCESSFULLY'
         });
+        
+        // Karma daily decay timer — runs once per hour, applies +1 karma to all players below 100
+        // (Effectively: every 24 ticks = 1 karma point per day, but we check hourly for responsiveness)
+        setInterval(async () => {
+            try {
+                const UserRepository = require('./database/UserRepository');
+                const userRepo = new UserRepository();
+                const count = await userRepo.applyBulkKarmaDecay();
+                if (count > 0) {
+                    gameLogger.gameEvent('KARMA', '[DAILY_DECAY] Timer fired', { usersDecayed: count });
+                }
+            } catch (e) {
+                // Non-critical — log and continue
+            }
+        }, 24 * 60 * 60 * 1000); // Once per day (24 hours)
     });
     
     // Handle server listen errors

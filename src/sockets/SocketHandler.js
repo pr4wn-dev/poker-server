@@ -915,23 +915,28 @@ class SocketHandler {
                         // Update player chips in game manager from DB
                         this.gameManager.players.get(user.userId).chips = dbUser.chips;
                         
-                        // Load crew tag, active title, and active character for display at table
+                        // Load crew tag, active title, active character, and karma for display at table
                         try {
                             const CrewManager = require('../social/CrewManager');
                             const TitleEngine = require('../stats/TitleEngine');
                             const CharacterSystem = require('../game/CharacterSystem');
+                            const UserRepository = require('../database/UserRepository');
                             const charSystem = new CharacterSystem(require('../database/Database'));
+                            const userRepo = new UserRepository();
                             const seat = table.seats[result.seatIndex];
                             if (seat) {
-                                const [crewTag, activeTitle, activeChar] = await Promise.all([
+                                const [crewTag, activeTitle, activeChar, karma] = await Promise.all([
                                     CrewManager.getPlayerCrewTag(user.userId).catch(() => null),
                                     TitleEngine.getActiveTitle(user.userId).catch(() => null),
-                                    charSystem.getActiveCharacter(user.userId).catch(() => ({ id: 'shadow_hacker', sprite_set: 'char_shadow_hacker' }))
+                                    charSystem.getActiveCharacter(user.userId).catch(() => ({ id: 'shadow_hacker', sprite_set: 'char_shadow_hacker' })),
+                                    userRepo.getKarma(user.userId).catch(() => 100)
                                 ]);
                                 seat.crewTag = crewTag;
                                 seat.activeTitle = activeTitle?.title_name || null;
                                 seat.activeCharacter = activeChar?.id || 'shadow_hacker';
                                 seat.characterSpriteSet = activeChar?.sprite_set || 'char_shadow_hacker';
+                                seat.karma = karma;
+                                seat.heartColor = UserRepository.getHeartColor(karma);
                             }
                         } catch (e) {
                             // Non-critical — don't block join
@@ -2848,7 +2853,10 @@ class SocketHandler {
                     const targetId = data?.playerId;
                     if (!targetId) return respond({ success: false, error: 'Missing playerId' });
 
-                    const [stats, titles, activeTitle, user, crewMember] = await Promise.all([
+                    const UserRepository = require('../database/UserRepository');
+                    const userRepo = new UserRepository();
+                    
+                    const [stats, titles, activeTitle, user, crewMember, karma] = await Promise.all([
                         StatsEngine.getPlayerStats(targetId),
                         TitleEngine.getPlayerTitles(targetId),
                         TitleEngine.getActiveTitle(targetId),
@@ -2858,7 +2866,8 @@ class SocketHandler {
                             FROM crew_members cm 
                             JOIN crews c ON cm.crew_id = c.id 
                             WHERE cm.player_id = ?
-                        `, [targetId]).catch(() => null)
+                        `, [targetId]).catch(() => null),
+                        userRepo.getKarma(targetId).catch(() => 100)
                     ]);
 
                     respond({
@@ -2873,6 +2882,9 @@ class SocketHandler {
                             crewName: crewMember?.crew_name || null,
                             crewTag: crewMember?.crew_tag || null,
                             crewRole: crewMember?.role || null,
+                            karma: karma,
+                            heartColor: UserRepository.getHeartColor(karma),
+                            heartTier: UserRepository.getHeartTier(karma),
                             stats: {
                                 handsPlayed: stats.hands_played,
                                 winRate: stats.winRate,
@@ -3133,6 +3145,55 @@ class SocketHandler {
                     if (!user) return respond({ success: false, error: 'Not authenticated' });
                     const robberies = await RobberyManager.getRecoverableRobberies(user.userId);
                     respond({ success: true, robberies });
+                } catch (error) {
+                    respond({ success: false, error: error.message });
+                }
+            });
+
+            // ============ Karma / Heart System ============
+
+            socket.on('get_karma', async (data, callback) => {
+                const respond = this._makeResponder(socket, 'get_karma', callback);
+                try {
+                    const UserRepository = require('../database/UserRepository');
+                    const user = this.getAuthenticatedUser(socket);
+                    if (!user) return respond({ success: false, error: 'Not authenticated' });
+                    
+                    const userRepo = new UserRepository();
+                    const karma = await userRepo.getKarma(user.userId);
+                    const heartColor = UserRepository.getHeartColor(karma);
+                    const heartTier = UserRepository.getHeartTier(karma);
+                    
+                    respond({ success: true, karma, heartColor, heartTier });
+                } catch (error) {
+                    respond({ success: false, error: error.message });
+                }
+            });
+
+            socket.on('get_karma_history', async (data, callback) => {
+                const respond = this._makeResponder(socket, 'get_karma_history', callback);
+                try {
+                    const UserRepository = require('../database/UserRepository');
+                    const user = this.getAuthenticatedUser(socket);
+                    if (!user) return respond({ success: false, error: 'Not authenticated' });
+                    
+                    const userRepo = new UserRepository();
+                    const history = await userRepo.getKarmaHistory(user.userId, data?.limit || 20);
+                    respond({ success: true, history });
+                } catch (error) {
+                    respond({ success: false, error: error.message });
+                }
+            });
+
+            socket.on('get_robbery_targets', async (data, callback) => {
+                const respond = this._makeResponder(socket, 'get_robbery_targets', callback);
+                try {
+                    const RobberyManager = require('../game/RobberyManager');
+                    const user = this.getAuthenticatedUser(socket);
+                    if (!user) return respond({ success: false, error: 'Not authenticated' });
+                    
+                    const targets = await RobberyManager.getRobberyTargets(user.userId, data?.limit || 20);
+                    respond({ success: true, targets });
                 } catch (error) {
                     respond({ success: false, error: error.message });
                 }

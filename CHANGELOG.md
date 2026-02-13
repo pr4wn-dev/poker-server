@@ -4,6 +4,40 @@ This file tracks all issues encountered and their solutions. **Search this file 
 
 ---
 
+## Karma / Heart System (Feb 13, 2026)
+
+### Core Concept
+Every player starts with a **Pure White Heart** (karma = 100). Committing crimes (robbery) darkens the heart progressively: white → light gray → gray → dark gray → charcoal → black. Players with a Pure Heart (karma ≥ 95) are **completely invisible** to criminals and cannot be targeted for robbery. The darker your heart, the easier you are to find and rob.
+
+### Server
+- **Database.js**: Added `karma INT DEFAULT 100` column to `users` table, new `karma_history` table tracking every karma change with reason/details
+- **UserRepository.js**: `getKarma()`, `modifyKarma(userId, delta, reason, details)` with logging, `getKarmaHistory()`, `applyKarmaDecay()` (daily +1 regeneration), `applyBulkKarmaDecay()` for all users
+- **UserRepository.js**: Static helpers — `getHeartColor(karma)`, `getHeartTier(karma)` (6 tiers from "Pure Heart" to "Black Heart"), `getRobberyVisibility(karma)` (0.0 at pure to 2.0 at black)
+- **RobberyManager.js**: 
+  - Karma gate: victims with karma ≥ 95 are **untargetable** (returns error "Pure Heart")
+  - Attempting robbery costs -5 karma (always, even if failed)
+  - Successful robbery costs additional -10 karma
+  - Victim's dark heart boosts attacker success rate by up to +20%
+  - New `getRobberyTargets()` — returns karma-filtered player list sorted by darkness (excludes pure hearts)
+  - All robbery results include `karma` and `heartColor` in response
+- **SocketHandler.js**: New endpoints — `get_karma`, `get_karma_history`, `get_robbery_targets`
+- **SocketHandler.js**: Karma loaded on `join_table` alongside crewTag/activeTitle/character
+- **SocketHandler.js**: Karma included in `get_player_profile` response with heartColor and heartTier
+- **Table.js getState()**: Seat data includes `karma` and `heartColor`
+- **server.js**: Daily karma decay timer (runs every 24h, applies +1 karma to all users below 100)
+- **Reset progress**: Karma reset to 100 + karma_history cleared
+
+### Unity Client
+- **NetworkModels.cs**: `HeartTier`, `KarmaResponse`, `KarmaHistoryEntry`, `KarmaHistoryResponse`, `RobberyTarget`, `RobberyTargetsResponse` models; `karma`/`heartColor` added to `SeatInfo` and `UserProfile`
+- **PokerEvents.cs**: `GetKarma`, `GetKarmaHistory`, `GetRobberyTargets` events
+- **GameService.cs**: `GetKarma()`, `GetKarmaHistory()`, `GetRobberyTargets()` methods; static helpers `GetHeartColor()`, `GetHeartUnityColor()`, `GetHeartTierName()` (color gradient from white through grays to near-black)
+- **PokerTableView/PlayerSeatView**: Heart icon (♥) rendered top-right of each seat with karma-colored tint (12-14px, larger for dark hearts)
+- **RobberyScene**: Complete overhaul — shows player's own heart status, "Available Targets" list loaded from server (karma-filtered, darkest first), each target card shows ♥ color + tier name + stealable items + SELECT button; warning about heart darkening; results update karma display
+- **PlayerProfilePopup**: Heart tier name and color displayed in profile header for ShowFromSeat, ShowCurrentUser, and Show
+- **StatisticsScene**: Heart stat card added to Overview tab, shows current tier name with colored text
+
+---
+
 ## Settings & Account Management (Feb 13, 2026)
 
 ### Reset Progress Confirmation Dialog

@@ -10284,7 +10284,10 @@ class Table {
                     crewTag: seat.crewTag || null,
                     // Active character
                     activeCharacter: seat.activeCharacter || 'shadow_hacker',
-                    characterSpriteSet: seat.characterSpriteSet || 'char_shadow_hacker'
+                    characterSpriteSet: seat.characterSpriteSet || 'char_shadow_hacker',
+                    // Karma / Heart system
+                    karma: seat.karma ?? 100,
+                    heartColor: seat.heartColor || 'white'
                 };
             })
         };

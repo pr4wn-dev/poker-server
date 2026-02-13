@@ -95,6 +95,13 @@ class Database {
         } catch (e) {
             // Column already exists, ignore
         }
+        
+        // Add karma column (Heart System: 100 = pure white, 0 = pitch black)
+        try {
+            await this.query("ALTER TABLE users ADD COLUMN karma INT DEFAULT 100");
+        } catch (e) {
+            // Column already exists, ignore
+        }
 
         // Migration: Upgrade chips column to BIGINT and set minimum chips to 20 million
         try {
@@ -553,6 +560,23 @@ class Database {
                 FOREIGN KEY (victim_id) REFERENCES users(id) ON DELETE CASCADE,
                 INDEX idx_robber (robber_id),
                 INDEX idx_victim (victim_id),
+                INDEX idx_created (created_at)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        `);
+
+        // Karma history — tracks heart color changes over time
+        await this.query(`
+            CREATE TABLE IF NOT EXISTS karma_history (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id VARCHAR(36) NOT NULL,
+                karma_before INT NOT NULL,
+                karma_after INT NOT NULL,
+                change_amount INT NOT NULL,
+                reason VARCHAR(100) NOT NULL,
+                details TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                INDEX idx_user_karma (user_id),
                 INDEX idx_created (created_at)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         `);
