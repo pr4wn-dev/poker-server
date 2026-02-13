@@ -1,3 +1,71 @@
+## [Feb 13, 2026] - Fix: Server Crash on Client Connect (Missing _makeResponder)
+
+**Issue**: Server crashed immediately when any client connected and triggered events like
+`get_active_events`, `get_daily_reward_status`, or `get_player_stats`. Error:
+`this._makeResponder is not a function`.
+
+**Root Cause**: 44 socket event handlers in SocketHandler.js called `this._makeResponder()`
+but the method was never defined. It was likely lost during a refactor.
+
+**Fix**:
+- Added `_makeResponder(socket, eventName, callback)` method to SocketHandler class
+- Returns a function that sends responses via both ack callback AND socket.emit
+- This ensures clients get responses regardless of which pattern they listen on
+
+---
+
+## [Feb 13, 2026] - Fix: 17 Socket Handlers Wrong Callback Signature
+
+**Issue**: After fixing _makeResponder, server crashed with `callback is not a function`
+on events like `get_daily_reward_status`, `claim_daily_reward`, `get_friends`, etc.
+
+**Root Cause**: 17 socket handlers used `async (callback) =>` instead of `async (data, callback) =>`.
+Socket.IO always passes data as the first argument, so `callback` was receiving the data object.
+
+**Fix**: Changed all 17 handlers from `(callback) =>` to `(data, callback) =>`.
+Affected: get_profile, leave_table, sit_out, sit_back, get_sit_out_status, get_friends,
+get_friend_requests, get_active_session, forfeit_adventure, get_all_tournaments,
+unregister_tournament, get_my_tournament, get_daily_reward_status, claim_daily_reward,
+get_achievements, join_crew_chat, check_active_session.
+
+---
+
+## [Feb 13, 2026] - Fix: Null Response Crashes in Unity Client
+
+**Issue**: NullReferenceException when socket was disconnected and callbacks returned null.
+Specifically `GetInventory` crashed on `response.success` when response was null.
+
+**Fix**:
+- Added null guards to all 44 `response.success` checks (`response != null && response.success`)
+- Added null-safe access to all 44 `response.error` references (`response?.error`)
+- Improved StartSimulation error message: "No response from server (connection issue?)"
+
+---
+
+## [Feb 13, 2026] - Fix: InventoryPanel Debug Artifacts and False Alarms
+
+**Issue**: InventoryPanel logged `CRITICAL: ItemsGrid is OFF-SCREEN` every time it opened,
+and displayed a bright red 200x200 debug TEST_RECT rectangle.
+
+**Fix**:
+- Removed two TEST_RECT debug rectangles from RefreshInventory()
+- Deferred off-screen check to next frame via coroutine (layout needs a frame to calculate)
+- If grid is genuinely off-screen after layout, forces a rebuild
+
+---
+
+## [Feb 13, 2026] - Fix: Auto-Reconnect Counter Always Showing 1/5
+
+**Issue**: When connection was lost, reconnect attempts always showed "attempt 1/5"
+instead of incrementing to 2/5, 3/5, etc.
+
+**Root Cause**: `ConnectSocketIO()` reset `_reconnectAttempts = 0` and `_reconnecting = false`
+every time it was called, including from inside the AutoReconnect loop.
+
+**Fix**: Removed counter/flag reset from ConnectSocketIO(). Counter and flag are now only
+reset on successful connection (OnSocketConnected) or after all attempts exhausted.
+
+---
 ## [Feb 13, 2026] - Fix: Connection Issues After Improper Unity Close
 
 **Issue**: When Unity was closed improperly (kill/crash/debugger stop), the client couldn't
