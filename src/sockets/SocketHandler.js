@@ -2445,10 +2445,15 @@ class SocketHandler {
                     return callback({ success: true, inTournament: false });
                 }
                 
+                // Get the player's assigned table ID
+                const tableId = tournament.playerTableAssignments?.get(user.userId) 
+                    || (tournament.tables.size === 1 ? Array.from(tournament.tables.keys())[0] : null);
+                
                 callback({ 
                     success: true, 
                     inTournament: true,
-                    tournament: tournament.getState()
+                    tournament: tournament.getState(),
+                    tableId: tableId
                 });
             });
             

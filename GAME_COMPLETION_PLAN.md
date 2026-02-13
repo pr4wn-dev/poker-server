@@ -214,7 +214,7 @@ Go through each phase in order. For each item:
 | 14.1 | Tournament list | DONE | Server handler + client method |
 | 14.2 | Register/unregister | DONE | |
 | 14.3 | Tournament bracket visualization | DONE | TournamentBracket component |
-| 14.4 | Tournament play scene | **PARTIAL** | No TournamentScene.cs — needs scene that reuses table with tournament context |
+| 14.4 | Tournament play scene | DONE | TournamentScene has lobby + active mode; events wired through GameService/SocketManager |
 | 14.5 | Tournament state/elimination events | DONE | Server handles full bracket lifecycle |
 
 ---
@@ -265,7 +265,7 @@ Go through each phase in order. For each item:
 ### Round 1: Fix Remaining Code Gaps
 1. ~~Add navigation buttons on main menu for Statistics, Leaderboard, Robbery~~ ✅ DONE
 2. ~~Build FriendsScene.cs wired to GameService~~ ✅ DONE
-3. Build TournamentScene.cs (reuse table with tournament context)
+3. ~~Build TournamentScene.cs (reuse table with tournament context)~~ ✅ DONE
 4. Test the complete multiplayer flow end-to-end
 
 ### Round 2: Polish Core Experience
@@ -311,9 +311,9 @@ Go through each phase in order. For each item:
 | Robbery | 6/6 | 0 | 0 | 0 |
 | Shop | 3/3 | 0 | 0 | 0 |
 | Settings | 5/5 | 0 | 0 | 0 |
-| Tournaments | 3/5 | 1 | 0 | 0 |
+| Tournaments | 4/5 | 0 | 0 | 0 |
 | Social | 6/6 | 0 | 0 | 0 |
 | Art & Audio | 3/12 | 0 | 2 | 9 |
 | **TOTAL** | **101** | **3** | **2** | **18** |
 
-**The game is ~82% complete.** Core poker, adventure, stats, crews, robbery, shop, settings, inventory, friends, and leaderboards are all functional. The remaining work is: 1 missing scene (Tournament play), 2 missing audio files, polish animations, and 9 art asset batches.
+**The game is ~83% complete.** Core poker, adventure, stats, crews, robbery, shop, settings, inventory, friends, leaderboards, and tournaments are all functional. The remaining work is: 2 missing audio files, polish animations, and 9 art asset batches.

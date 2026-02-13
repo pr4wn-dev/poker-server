@@ -1,3 +1,22 @@
+## [Feb 13, 2026] - Feature: Tournament Play Scene (Lobby + Active Mode)
+
+**What**: Enhanced TournamentScene.cs with dual-mode UI (lobby for browsing/registering + active tournament HUD for live play). Added tournament event pipeline through SocketManager → GameService → Scene.
+
+**Changes**:
+- **NetworkModels.cs**: Added `TournamentStateResponse`, `GetMyTournamentResponse`, `TournamentStartedEvent`, `TournamentEliminatedEvent`, `TournamentCompletedEvent`, `TournamentBlindLevelEvent` models
+- **SocketManager.cs**: Added 5 tournament event delegates + socket.On listeners (`tournament_started`, `tournament_eliminated`, `tournament_completed`, `tournament_blind_level_up`, `tournament_state`)
+- **GameService.cs**: Added `GetTournamentState`, `GetMyTournament` methods. Added tournament event handlers + `ActiveTournament`/`ActiveTournamentTableId` properties. Wired SocketManager tournament events in `InitializeSocket`
+- **TournamentScene.cs**: Rewritten with dual mode:
+  - *Lobby mode*: Same tournament list + detail panel + register/unregister (preserved)
+  - *Active mode*: Tournament HUD with blinds, player standings, prize pool, elimination announcements, "GO TO TABLE" button, bracket overlay
+  - Auto-detects if player is in active tournament on scene load via `GetMyTournament`
+  - Listens for live events (blind level up, eliminations, tournament complete)
+- **SocketHandler.js** (server): Enhanced `get_my_tournament` response to include `tableId` for the player's assigned table
+
+**Plan items resolved**: 14.4
+
+---
+
 ## [Feb 13, 2026] - Feature: FriendsScene + Friends Navigation
 
 **What**: Built full FriendsScene.cs and wired it to the main menu Friends button.
