@@ -1,3 +1,32 @@
+﻿
+## [Feb 12, 2026] - Dark Theme Restoration
+
+### Issue
+Commit 524cd54 ("Massive Unity UI") overwrote the GUI overhaul (Phases 1-7) by regenerating
+MainMenuScene.cs from an old pre-theme base. This reverted the dark urban theme back to the
+cartoon purple styling.
+
+### Root Cause
+Agent regenerated entire MainMenuScene.cs using old version as base instead of building on
+top of the themed version from commits 8531548-ef4a5e1.
+
+### Fix (commit d6d8f4e)
+- Restored MainMenuScene.cs from git history (524cd54^), merged 4 new features on top
+  (BuildEventBanner, LoadActiveEvents, CheckDailyRewards, ShowDailyRewardsPopup)
+- Restored 22 hardcoded-to-theme replacements in TableScene.cs
+- Restored theme refs in CharacterSelectScene.cs
+- Wired remaining hardcoded colors to theme in: SpectatorPanel, RobberyScene,
+  PlayerProfilePopup, PokerTableView, ToastNotification, LoadingOverlay
+- Fixed PlayerCharacter.HasSelectedCharacter -> ActiveCharacterId
+
+### Files Changed (12 .cs files)
+MainMenuScene.cs, TableScene.cs, CharacterSelectScene.cs, SpectatorPanel.cs,
+RobberyScene.cs, PlayerProfilePopup.cs, PokerTableView.cs, ToastNotification.cs,
+LoadingOverlay.cs
+
+### Lesson
+NEVER regenerate an entire large file - always build incremental changes on top of the
+existing version. Use git show/diff to verify the base before editing.
 # Changelog - Issues & Solutions
 
 This file tracks all issues encountered and their solutions. **Search this file first** before debugging.
@@ -7,20 +36,20 @@ This file tracks all issues encountered and their solutions. **Search this file 
 ## Karma / Heart System (Feb 13, 2026)
 
 ### Core Concept
-Every player starts with a **Pure White Heart** (karma = 100). Committing crimes (robbery) darkens the heart progressively: white → light gray → gray → dark gray → charcoal → black. Players with a Pure Heart (karma ≥ 95) are **completely invisible** to criminals and cannot be targeted for robbery. The darker your heart, the easier you are to find and rob.
+Every player starts with a **Pure White Heart** (karma = 100). Committing crimes (robbery) darkens the heart progressively: white â†’ light gray â†’ gray â†’ dark gray â†’ charcoal â†’ black. Players with a Pure Heart (karma â‰¥ 95) are **completely invisible** to criminals and cannot be targeted for robbery. The darker your heart, the easier you are to find and rob.
 
 ### Server
 - **Database.js**: Added `karma INT DEFAULT 100` column to `users` table, new `karma_history` table tracking every karma change with reason/details
 - **UserRepository.js**: `getKarma()`, `modifyKarma(userId, delta, reason, details)` with logging, `getKarmaHistory()`, `applyKarmaDecay()` (daily +1 regeneration), `applyBulkKarmaDecay()` for all users
-- **UserRepository.js**: Static helpers — `getHeartColor(karma)`, `getHeartTier(karma)` (6 tiers from "Pure Heart" to "Black Heart"), `getRobberyVisibility(karma)` (0.0 at pure to 2.0 at black)
+- **UserRepository.js**: Static helpers â€” `getHeartColor(karma)`, `getHeartTier(karma)` (6 tiers from "Pure Heart" to "Black Heart"), `getRobberyVisibility(karma)` (0.0 at pure to 2.0 at black)
 - **RobberyManager.js**: 
-  - Karma gate: victims with karma ≥ 95 are **untargetable** (returns error "Pure Heart")
+  - Karma gate: victims with karma â‰¥ 95 are **untargetable** (returns error "Pure Heart")
   - Attempting robbery costs -5 karma (always, even if failed)
   - Successful robbery costs additional -10 karma
   - Victim's dark heart boosts attacker success rate by up to +20%
-  - New `getRobberyTargets()` — returns karma-filtered player list sorted by darkness (excludes pure hearts)
+  - New `getRobberyTargets()` â€” returns karma-filtered player list sorted by darkness (excludes pure hearts)
   - All robbery results include `karma` and `heartColor` in response
-- **SocketHandler.js**: New endpoints — `get_karma`, `get_karma_history`, `get_robbery_targets`
+- **SocketHandler.js**: New endpoints â€” `get_karma`, `get_karma_history`, `get_robbery_targets`
 - **SocketHandler.js**: Karma loaded on `join_table` alongside crewTag/activeTitle/character
 - **SocketHandler.js**: Karma included in `get_player_profile` response with heartColor and heartTier
 - **Table.js getState()**: Seat data includes `karma` and `heartColor`
@@ -31,8 +60,8 @@ Every player starts with a **Pure White Heart** (karma = 100). Committing crimes
 - **NetworkModels.cs**: `HeartTier`, `KarmaResponse`, `KarmaHistoryEntry`, `KarmaHistoryResponse`, `RobberyTarget`, `RobberyTargetsResponse` models; `karma`/`heartColor` added to `SeatInfo` and `UserProfile`
 - **PokerEvents.cs**: `GetKarma`, `GetKarmaHistory`, `GetRobberyTargets` events
 - **GameService.cs**: `GetKarma()`, `GetKarmaHistory()`, `GetRobberyTargets()` methods; static helpers `GetHeartColor()`, `GetHeartUnityColor()`, `GetHeartTierName()` (color gradient from white through grays to near-black)
-- **PokerTableView/PlayerSeatView**: Heart icon (♥) rendered top-right of each seat with karma-colored tint (12-14px, larger for dark hearts)
-- **RobberyScene**: Complete overhaul — shows player's own heart status, "Available Targets" list loaded from server (karma-filtered, darkest first), each target card shows ♥ color + tier name + stealable items + SELECT button; warning about heart darkening; results update karma display
+- **PokerTableView/PlayerSeatView**: Heart icon (â™¥) rendered top-right of each seat with karma-colored tint (12-14px, larger for dark hearts)
+- **RobberyScene**: Complete overhaul â€” shows player's own heart status, "Available Targets" list loaded from server (karma-filtered, darkest first), each target card shows â™¥ color + tier name + stealable items + SELECT button; warning about heart darkening; results update karma display
 - **PlayerProfilePopup**: Heart tier name and color displayed in profile header for ShowFromSeat, ShowCurrentUser, and Show
 - **StatisticsScene**: Heart stat card added to Overview tab, shows current tier name with colored text
 
@@ -41,7 +70,7 @@ Every player starts with a **Pure White Heart** (karma = 100). Committing crimes
 ## Settings & Account Management (Feb 13, 2026)
 
 ### Reset Progress Confirmation Dialog
-- **Server**: Added `resetProgress(userId)` to `UserRepository.js` — wipes chips/XP/stats/inventory/adventure/achievements/crew/titles/hand history/daily rewards/spectator bets/saved hands. Keeps account credentials and friends list.
+- **Server**: Added `resetProgress(userId)` to `UserRepository.js` â€” wipes chips/XP/stats/inventory/adventure/achievements/crew/titles/hand history/daily rewards/spectator bets/saved hands. Keeps account credentials and friends list.
 - **Server**: Added `reset_progress` socket handler in `SocketHandler.js` with auth check and full logging
 - **Client**: Added `ResetProgressResponse` model, `ResetProgress` method in `GameService.cs`, `ResetProgress` event in `PokerEvents.cs`
 - **Client**: `SettingsScene.cs` uses `ConfirmDialog.ShowDanger` with detailed warning listing all data that will be erased, followed by `GameService.ResetProgress` call with toast notifications for success/failure
@@ -51,7 +80,7 @@ Every player starts with a **Pure White Heart** (karma = 100). Committing crimes
 ## Character System (Feb 12, 2026)
 
 ### Server
-- **CharacterSystem.js**: 25+ character definitions with rarity tiers (Common → Mythic), sound sets, sprite sets, personality types
+- **CharacterSystem.js**: 25+ character definitions with rarity tiers (Common â†’ Mythic), sound sets, sprite sets, personality types
 - **Database**: `characters` + `player_characters` tables with migrations, `active_character` column on `users`
 - **Socket Endpoints**: `get_characters`, `get_player_characters`, `set_active_character`, `get_character_sounds`
 - **Drop Logic**: Characters drop from adventure victories, boss defeats, tournaments; integrated into `adventure_action` and `SocketHandler`
@@ -60,7 +89,7 @@ Every player starts with a **Pure White Heart** (karma = 100). Committing crimes
 ### Unity Client
 - **NetworkModels**: `CharacterInfo`, `OwnedCharacterInfo`, `CharacterSoundSet`, `CharacterDropData`, etc.
 - **GameService**: `GetCharacters`, `GetPlayerCharacters`, `SetActiveCharacter`, `GetCharacterSounds`, `OnCharacterDrop` event
-- **CharacterSelectScene**: Full overhaul — server-driven character gallery with rarity-colored cards, owned/locked states, set-active button
+- **CharacterSelectScene**: Full overhaul â€” server-driven character gallery with rarity-colored cards, owned/locked states, set-active button
 - **SpriteManager**: `GetCharacterSprite()` with Resources loading + procedural placeholder generation
 - **PlayerSeatView**: Character avatar rendered at table seats (small portrait), prefers character sprite over default avatar
 - **PlayerSeat.cs**: Updated to show character sprites when available
@@ -72,8 +101,8 @@ Every player starts with a **Pure White Heart** (karma = 100). Committing crimes
 ## Unity UI Feature Build (Feb 12, 2026)
 
 ### Player Seat Enhancements
-- **Fire/Cold Visuals**: PlayerSeatView shows color-coded glow (cyan warm → magenta hot → purple on-fire, dull red cold/frozen) with pulse/wobble animations
-- **Title Display**: Active title shown below player name at table (e.g., "🏅 Bluff Master")
+- **Fire/Cold Visuals**: PlayerSeatView shows color-coded glow (cyan warm â†’ magenta hot â†’ purple on-fire, dull red cold/frozen) with pulse/wobble animations
+- **Title Display**: Active title shown below player name at table (e.g., "ðŸ… Bluff Master")
 - **Tap-to-Profile**: Tapping any occupied seat opens PlayerProfilePopup with stats, title, crew, fire status
 
 ### Statistics Scene Overhaul
@@ -81,7 +110,7 @@ Every player starts with a **Pure White Heart** (karma = 100). Committing crimes
 - **Titles Tab**: View earned titles, set active title with server callback
 
 ### New Scenes Created
-- **CrewScene**: Full crew management — create crew (name/tag/desc), member list, invite players, crew chat, crew leaderboard
+- **CrewScene**: Full crew management â€” create crew (name/tag/desc), member list, invite players, crew chat, crew leaderboard
 - **RobberyScene**: Target selection, 5 tool types (lockpick, RFID cloner, hotwire kit, burner phone, fake ID), result popup, robbery history log
 - **HandReplayScene**: Saved hands browser, Hand of the Day showcase, replay viewer with player cards + action timeline
 
@@ -89,7 +118,7 @@ Every player starts with a **Pure White Heart** (karma = 100). Committing crimes
 - **Event Banner**: Shows active server events with name, description, and multiplier badges (XP/Chips/Drops), loads on menu show
 
 ### Table Scene
-- **SpectatorPanel**: Auto-shows for spectators — live win probability bars (refreshing every 5s), side bet placement, bet feed
+- **SpectatorPanel**: Auto-shows for spectators â€” live win probability bars (refreshing every 5s), side bet placement, bet feed
 - **Profile popup** wired through seat taps
 
 ### Networking
@@ -103,15 +132,15 @@ Every player starts with a **Pure White Heart** (karma = 100). Committing crimes
 ### Advanced Hand Detection in Table.js
 All 6 TODO placeholders in `_collectAndSendStatsData()` are now real detection algorithms:
 
-1. **C-bet Detection** — Detects when preflop raiser bets the flop. Tracks success (won pot or everyone folded).
-2. **Steal Attempt Detection** — Detects late position (button/cutoff/SB) raises when no one raised before. Tracks success.
-3. **Bluff Detection** — Detects aggressive action with weak hands (pair or worse). Tracks bluff success + opponent bluff detection + correct bluff calls.
-4. **Draw Detection** — Checks for flush draws (4 same suit on flop) and straight draws (4-card sequences, including wheel). Tracks draw completion.
-5. **Behind-on-Flop / Suckout Detection** — Evaluates each player's hand at the flop, compares vs opponents. Tracks if player was behind and won from behind.
+1. **C-bet Detection** â€” Detects when preflop raiser bets the flop. Tracks success (won pot or everyone folded).
+2. **Steal Attempt Detection** â€” Detects late position (button/cutoff/SB) raises when no one raised before. Tracks success.
+3. **Bluff Detection** â€” Detects aggressive action with weak hands (pair or worse). Tracks bluff success + opponent bluff detection + correct bluff calls.
+4. **Draw Detection** â€” Checks for flush draws (4 same suit on flop) and straight draws (4-card sequences, including wheel). Tracks draw completion.
+5. **Behind-on-Flop / Suckout Detection** â€” Evaluates each player's hand at the flop, compares vs opponents. Tracks if player was behind and won from behind.
 
 Fire tracker now receives real draw/suckout data instead of `false` placeholders.
 
-### SpectatorOdds.js — Monte Carlo Win Probability
+### SpectatorOdds.js â€” Monte Carlo Win Probability
 - New module (`src/game/SpectatorOdds.js`)
 - 500 Monte Carlo simulations per request (fast enough for real-time)
 - Calculates win % for each active player based on hole cards + community cards
@@ -124,9 +153,9 @@ Fire tracker now receives real draw/suckout data instead of `false` placeholders
 - Chips credited directly to spectator's account
 
 ### Saved Hands / Hand Replay Endpoints
-- `save_hand` — Save a hand from history as a bookmark
-- `get_saved_hands` — Retrieve saved hands with full hand_history join
-- `get_hand_of_the_day` — Biggest pot winner in last 24 hours
+- `save_hand` â€” Save a hand from history as a bookmark
+- `get_saved_hands` â€” Retrieve saved hands with full hand_history join
+- `get_hand_of_the_day` â€” Biggest pot winner in last 24 hours
 
 ### Crew Stats Integration
 - After each hand, `CrewManager.updateCrewStats()` is called for every non-bot player
@@ -138,51 +167,51 @@ Fire tracker now receives real draw/suckout data instead of `false` placeholders
 
 ### Player Session Tracking
 - Session created when player joins a table (`player_sessions` table)
-- Session ended when player leaves — records end time, chips, profit/loss
+- Session ended when player leaves â€” records end time, chips, profit/loss
 - Updates `sessions_played` and `total_play_time_seconds` in `player_stats`
 
 ---
 
 ## Project Completion Status (Feb 13, 2026)
 
-### ✅ All Systems Implemented
+### âœ… All Systems Implemented
 
 | System | Server | Client | Wired |
 |--------|--------|--------|-------|
-| Core Poker (Table, Hands, Betting) | ✅ | ✅ | ✅ |
-| Bot System (AI + Socket Bots) | ✅ | ✅ | ✅ |
-| Item Ante / Power Score | ✅ | ✅ | ✅ |
-| Adventure Mode (Map, Bosses, Battle) | ✅ | ✅ | ✅ |
-| Tournament System | ✅ | ✅ | ✅ |
-| Character System (25+ chars, drops) | ✅ | ✅ | ✅ |
-| Character Sounds + Sprites at Table | ✅ | ✅ | ✅ |
-| Stats Engine (40+ lifetime metrics) | ✅ | ✅ | ✅ |
-| Stats Calculator (VPIP, PFR, luck) | ✅ | ✅ | ✅ |
-| Fire/Cold System (NBA Jam style) | ✅ | ✅ | ✅ |
-| Title Engine (25+ dynamic titles) | ✅ | ✅ | ✅ |
-| Crew System (create, roles, perks, XP) | ✅ | ✅ | ✅ |
-| Robbery System (tools, defense, cooldowns) | ✅ | ✅ | ✅ |
-| Friends System (add, accept, decline, remove) | ✅ | ✅ | ✅ |
-| Event System (seasonal/weekly, multipliers) | ✅ | ✅ | ✅ |
-| Daily Rewards (7-day streak) | ✅ | ✅ | ✅ |
-| Spectator Odds (Monte Carlo sim) | ✅ | ✅ | ✅ |
-| Spectator Side Betting | ✅ | ✅ | ✅ |
-| Hand Replay / Saved Hands | ✅ | ✅ | ✅ |
-| Collusion Detection (auto-trigger) | ✅ | — | ✅ |
-| Achievements (auto-unlock) | ✅ | ✅ | ✅ |
-| Inventory (equip/unequip/use) | ✅ | ✅ | ✅ |
-| Leaderboards (chips, wins, level, pots) | ✅ | ✅ | ✅ |
-| Settings + Reset Progress | ✅ | ✅ | ✅ |
-| Player Profile Popup (tap seat) | — | ✅ | ✅ |
-| Chat + Invite Popups | ✅ | ✅ | ✅ |
+| Core Poker (Table, Hands, Betting) | âœ… | âœ… | âœ… |
+| Bot System (AI + Socket Bots) | âœ… | âœ… | âœ… |
+| Item Ante / Power Score | âœ… | âœ… | âœ… |
+| Adventure Mode (Map, Bosses, Battle) | âœ… | âœ… | âœ… |
+| Tournament System | âœ… | âœ… | âœ… |
+| Character System (25+ chars, drops) | âœ… | âœ… | âœ… |
+| Character Sounds + Sprites at Table | âœ… | âœ… | âœ… |
+| Stats Engine (40+ lifetime metrics) | âœ… | âœ… | âœ… |
+| Stats Calculator (VPIP, PFR, luck) | âœ… | âœ… | âœ… |
+| Fire/Cold System (NBA Jam style) | âœ… | âœ… | âœ… |
+| Title Engine (25+ dynamic titles) | âœ… | âœ… | âœ… |
+| Crew System (create, roles, perks, XP) | âœ… | âœ… | âœ… |
+| Robbery System (tools, defense, cooldowns) | âœ… | âœ… | âœ… |
+| Friends System (add, accept, decline, remove) | âœ… | âœ… | âœ… |
+| Event System (seasonal/weekly, multipliers) | âœ… | âœ… | âœ… |
+| Daily Rewards (7-day streak) | âœ… | âœ… | âœ… |
+| Spectator Odds (Monte Carlo sim) | âœ… | âœ… | âœ… |
+| Spectator Side Betting | âœ… | âœ… | âœ… |
+| Hand Replay / Saved Hands | âœ… | âœ… | âœ… |
+| Collusion Detection (auto-trigger) | âœ… | â€” | âœ… |
+| Achievements (auto-unlock) | âœ… | âœ… | âœ… |
+| Inventory (equip/unequip/use) | âœ… | âœ… | âœ… |
+| Leaderboards (chips, wins, level, pots) | âœ… | âœ… | âœ… |
+| Settings + Reset Progress | âœ… | âœ… | âœ… |
+| Player Profile Popup (tap seat) | â€” | âœ… | âœ… |
+| Chat + Invite Popups | âœ… | âœ… | âœ… |
 
 ### Unity Client Scenes (All Built)
-`MainMenuScene` · `LobbyScene` · `TableScene` · `StatisticsScene` · `CharacterSelectScene` · `TournamentScene` · `AdventureMapScene` · `AdventureBattleScene` · `InventoryScene` · `CrewScene` · `RobberyScene` · `HandReplayScene` · `LeaderboardScene` · `ShopScene` · `SettingsScene`
+`MainMenuScene` Â· `LobbyScene` Â· `TableScene` Â· `StatisticsScene` Â· `CharacterSelectScene` Â· `TournamentScene` Â· `AdventureMapScene` Â· `AdventureBattleScene` Â· `InventoryScene` Â· `CrewScene` Â· `RobberyScene` Â· `HandReplayScene` Â· `LeaderboardScene` Â· `ShopScene` Â· `SettingsScene`
 
 ### Server Modules (All Built)
-`Table.js` · `GameManager.js` · `BotManager.js` · `HandEvaluator.js` · `ItemAnte.js` · `Tournament.js` · `TournamentManager.js` · `AdventureManager.js` · `AdventurePokerGame.js` · `Boss.js` · `BossAI.js` · `WorldMap.js` · `StatsEngine.js` · `StatsCalculator.js` · `FireTracker.js` · `TitleEngine.js` · `CharacterSystem.js` · `CrewManager.js` · `FriendsManager.js` · `RobberyManager.js` · `EventManager.js` · `CollusionDetector.js` · `SpectatorOdds.js`
+`Table.js` Â· `GameManager.js` Â· `BotManager.js` Â· `HandEvaluator.js` Â· `ItemAnte.js` Â· `Tournament.js` Â· `TournamentManager.js` Â· `AdventureManager.js` Â· `AdventurePokerGame.js` Â· `Boss.js` Â· `BossAI.js` Â· `WorldMap.js` Â· `StatsEngine.js` Â· `StatsCalculator.js` Â· `FireTracker.js` Â· `TitleEngine.js` Â· `CharacterSystem.js` Â· `CrewManager.js` Â· `FriendsManager.js` Â· `RobberyManager.js` Â· `EventManager.js` Â· `CollusionDetector.js` Â· `SpectatorOdds.js`
 
-### 🔮 Deferred (Not Blocking)
+### ðŸ”® Deferred (Not Blocking)
 - Audio assets (AI-generated character sounds)
 - Image assets (AI-generated sprites, boss art, item icons)
 - Store UI / chip purchasing / ads / premium membership
@@ -194,9 +223,9 @@ Fire tracker now receives real draw/suckout data instead of `false` placeholders
 ### New Server Modules Built
 All new systems implemented on the server side in a single session:
 
-1. **Database Foundation** — 16 new tables added to `Database.js` migrations:
-   - `hand_history` (full hand data per player — replaces old minimal schema)
-   - `player_stats` (aggregated lifetime stats — 40+ tracked metrics)
+1. **Database Foundation** â€” 16 new tables added to `Database.js` migrations:
+   - `hand_history` (full hand data per player â€” replaces old minimal schema)
+   - `player_stats` (aggregated lifetime stats â€” 40+ tracked metrics)
    - `player_hand_type_stats` (per hand type: high card through royal flush)
    - `player_pocket_stats` (per starting hand combo: AA, AKs, 72o, etc.)
    - `player_sessions` (session tracking)
@@ -211,30 +240,30 @@ All new systems implemented on the server side in a single session:
    - `saved_hands` (hand replay bookmarks)
    - `collusion_flags` (anti-cheat flagging)
 
-2. **StatsEngine.js** (`src/stats/StatsEngine.js`) — Processes every completed hand:
+2. **StatsEngine.js** (`src/stats/StatsEngine.js`) â€” Processes every completed hand:
    - Writes full hand_history record per player
    - Updates aggregated player_stats via UPSERT
    - Tracks hand type stats and pocket stats
    - Categorizes starting hands (AA, AKs, AKo format)
    - Hooked into Table.js `showdown()` and `awardPot()` via `_collectAndSendStatsData()`
 
-3. **FireTracker.js** (`src/game/FireTracker.js`) — NBA Jam "On Fire" system:
+3. **FireTracker.js** (`src/game/FireTracker.js`) â€” NBA Jam "On Fire" system:
    - Rolling window of last 12 hands per player per table
    - Weighted scoring (recent hands count more)
-   - 4 fire levels: None → Warm → Hot → On Fire
-   - 4 cold levels: None → Chilly → Cold → Frozen
+   - 4 fire levels: None â†’ Warm â†’ Hot â†’ On Fire
+   - 4 cold levels: None â†’ Chilly â†’ Cold â†’ Frozen
    - Fold decay (consecutive folds cool you down)
    - Fire status included in table state broadcasts (fireLevel, coldLevel per seat)
    - Fire status change events broadcast to table
 
-4. **TitleEngine.js** (`src/stats/TitleEngine.js`) — Dynamic player titles:
+4. **TitleEngine.js** (`src/stats/TitleEngine.js`) â€” Dynamic player titles:
    - 25+ titles across 7 categories (luck, skill, style, hands, achievement, crew, rare)
    - Evaluated every 5 hands automatically
    - Non-achievement titles can be revoked when stats drop
    - Players choose which title to display
    - Title displayed at table, profile, leaderboard
 
-5. **CrewManager.js** (`src/social/CrewManager.js`) — Crew/gang system:
+5. **CrewManager.js** (`src/social/CrewManager.js`) â€” Crew/gang system:
    - Create/join/leave/disband crews
    - Roles: Leader, Officer (max 3), Member (max 20)
    - Crew stats, crew XP, crew levels (1-25+)
@@ -242,7 +271,7 @@ All new systems implemented on the server side in a single session:
    - Crew tag displayed at tables `[TAG] PlayerName`
    - Crew leaderboard
 
-6. **RobberyManager.js** (`src/game/RobberyManager.js`) — PvP item theft:
+6. **RobberyManager.js** (`src/game/RobberyManager.js`) â€” PvP item theft:
    - 6 tool types with different success rates
    - 4 defense item types (kevlar, alarm, bodyguard, safe)
    - Cooldowns (4h robber, 8h victim protection)
@@ -250,13 +279,13 @@ All new systems implemented on the server side in a single session:
    - 24h recovery window for victims
    - Event multipliers applied (robbery spree event)
 
-7. **EventManager.js** (`src/events/EventManager.js`) — Seasonal events:
+7. **EventManager.js** (`src/events/EventManager.js`) â€” Seasonal events:
    - 9 built-in event types
    - Multiplier stacking for XP, drops, chips, robbery
    - Loaded on server start
    - Active events API for client display
 
-8. **CollusionDetector.js** (`src/security/CollusionDetector.js`) — Anti-cheat:
+8. **CollusionDetector.js** (`src/security/CollusionDetector.js`) â€” Anti-cheat:
    - Soft play detection (fold rate analysis)
    - Win trading detection (alternating pattern)
    - Chip dumping detection (consistent large losses to specific player)
@@ -337,10 +366,10 @@ git reset --hard origin/master
 ```
 
 **Wrong Approach (DON'T DO THIS):**
-- ❌ Mixing files: `git checkout backup-commit -- file1.cs; git checkout remote -- file2.cs`
-- ❌ Using local backup commits instead of actual pushed commits
-- ❌ Patching individual files to "fix" errors
-- ❌ Force pushing wrong commits to overwrite correct ones
+- âŒ Mixing files: `git checkout backup-commit -- file1.cs; git checkout remote -- file2.cs`
+- âŒ Using local backup commits instead of actual pushed commits
+- âŒ Patching individual files to "fix" errors
+- âŒ Force pushing wrong commits to overwrite correct ones
 
 **Key Principle:** One complete commit = one working state. Don't mix and match.
 
@@ -396,7 +425,7 @@ var result = JsonUtility.FromJson<T>(jsonStr);
 ### Issue #21: SOCKET_IO_AVAILABLE Only Defined for Android
 **Symptoms:** Socket code works on Android but not in Editor.
 
-**Solution:** Add `SOCKET_IO_AVAILABLE` to Standalone platform in Project Settings → Player → Scripting Define Symbols.
+**Solution:** Add `SOCKET_IO_AVAILABLE` to Standalone platform in Project Settings â†’ Player â†’ Scripting Define Symbols.
 
 ### Issue #26: Response Classes ONLY in NetworkModels.cs
 **Symptoms:** CS0101 duplicate class definitions.
@@ -503,4 +532,5 @@ socket.emit('event_name_response', response);
 ---
 
 **Note:** For full details on any issue, search this file for the issue number or symptom.
+
 
