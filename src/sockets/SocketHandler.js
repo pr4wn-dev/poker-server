@@ -897,18 +897,23 @@ class SocketHandler {
                         // Update player chips in game manager from DB
                         this.gameManager.players.get(user.userId).chips = dbUser.chips;
                         
-                        // Load crew tag and active title for display at table
+                        // Load crew tag, active title, and active character for display at table
                         try {
                             const CrewManager = require('../social/CrewManager');
                             const TitleEngine = require('../stats/TitleEngine');
+                            const CharacterSystem = require('../game/CharacterSystem');
+                            const charSystem = new CharacterSystem(require('../database/Database'));
                             const seat = table.seats[result.seatIndex];
                             if (seat) {
-                                const [crewTag, activeTitle] = await Promise.all([
+                                const [crewTag, activeTitle, activeChar] = await Promise.all([
                                     CrewManager.getPlayerCrewTag(user.userId).catch(() => null),
-                                    TitleEngine.getActiveTitle(user.userId).catch(() => null)
+                                    TitleEngine.getActiveTitle(user.userId).catch(() => null),
+                                    charSystem.getActiveCharacter(user.userId).catch(() => ({ id: 'shadow_hacker', sprite_set: 'char_shadow_hacker' }))
                                 ]);
                                 seat.crewTag = crewTag;
                                 seat.activeTitle = activeTitle?.title_name || null;
+                                seat.activeCharacter = activeChar?.id || 'shadow_hacker';
+                                seat.characterSpriteSet = activeChar?.sprite_set || 'char_shadow_hacker';
                             }
                         } catch (e) {
                             // Non-critical — don't block join
@@ -2203,6 +2208,28 @@ class SocketHandler {
                             )
                         });
                     }
+                    
+                    // Roll for character drop on boss victory (10% boss, 5% normal)
+                    try {
+                        const CharacterSystem = require('../game/CharacterSystem');
+                        const charSystem = new CharacterSystem(require('../database/Database'));
+                        const isBoss = result.encounter?.type === 'boss' || result.isBossDefeat;
+                        const charDrop = charSystem.rollCharacterDrop(isBoss ? 0.15 : 0.05);
+                        if (charDrop) {
+                            const grantResult = await charSystem.grantCharacter(user.userId, charDrop, isBoss ? 'boss_drop' : 'adventure_drop');
+                            if (grantResult.success) {
+                                socket.emit('character_drop', {
+                                    character: grantResult.character || { id: charDrop, name: charDrop },
+                                    duplicate: grantResult.duplicate || false,
+                                    compensation: grantResult.compensation || 0,
+                                    message: grantResult.message || `New character unlocked: ${grantResult.character?.name}!`
+                                });
+                            }
+                        }
+                    } catch (e) {
+                        // Non-critical — don't block victory flow
+                        console.log('[CharacterDrop] Error rolling character drop:', e.message);
+                    }
                 } else if (result.status === 'defeat') {
                     socket.emit('adventure_result', result);
                 }
@@ -3227,6 +3254,93 @@ class SocketHandler {
                     );
 
                     respond({ success: true, equipped: false });
+                } catch (error) {
+                    respond({ success: false, error: error.message });
+                }
+            });
+
+            // ============ Characters ============
+
+            socket.on('get_character_catalog', async (data, callback) => {
+                const respond = this._makeResponder(socket, 'get_character_catalog', callback);
+                try {
+                    const CharacterSystem = require('../game/CharacterSystem');
+                    const charSystem = new CharacterSystem(require('../database/Database'));
+                    const user = this.getAuthenticatedUser(socket);
+                    if (!user) return respond({ success: false, error: 'Not authenticated' });
+
+                    const allCharacters = charSystem.getAllCharacters();
+                    const owned = await charSystem.getOwnedCharacters(user.userId);
+                    const active = await charSystem.getActiveCharacter(user.userId);
+                    
+                    const ownedIds = new Set(owned.map(o => o.template_id));
+                    const catalog = allCharacters.map(c => ({
+                        ...c,
+                        owned: ownedIds.has(c.id),
+                        is_active: active.id === c.id
+                    }));
+
+                    respond({ 
+                        success: true, 
+                        characters: catalog,
+                        activeCharacter: active.id,
+                        ownedCount: owned.length,
+                        totalCount: allCharacters.length
+                    });
+                } catch (error) {
+                    respond({ success: false, error: error.message });
+                }
+            });
+
+            socket.on('get_owned_characters', async (data, callback) => {
+                const respond = this._makeResponder(socket, 'get_owned_characters', callback);
+                try {
+                    const CharacterSystem = require('../game/CharacterSystem');
+                    const charSystem = new CharacterSystem(require('../database/Database'));
+                    const user = this.getAuthenticatedUser(socket);
+                    if (!user) return respond({ success: false, error: 'Not authenticated' });
+
+                    const owned = await charSystem.getOwnedCharacters(user.userId);
+                    const active = await charSystem.getActiveCharacter(user.userId);
+
+                    respond({ 
+                        success: true, 
+                        characters: owned,
+                        activeCharacter: active.id
+                    });
+                } catch (error) {
+                    respond({ success: false, error: error.message });
+                }
+            });
+
+            socket.on('set_active_character', async (data, callback) => {
+                const respond = this._makeResponder(socket, 'set_active_character', callback);
+                try {
+                    const CharacterSystem = require('../game/CharacterSystem');
+                    const charSystem = new CharacterSystem(require('../database/Database'));
+                    const user = this.getAuthenticatedUser(socket);
+                    if (!user) return respond({ success: false, error: 'Not authenticated' });
+
+                    const result = await charSystem.setActiveCharacter(user.userId, data?.characterId);
+                    respond(result);
+                } catch (error) {
+                    respond({ success: false, error: error.message });
+                }
+            });
+
+            socket.on('get_character_sounds', async (data, callback) => {
+                const respond = this._makeResponder(socket, 'get_character_sounds', callback);
+                try {
+                    const CharacterSystem = require('../game/CharacterSystem');
+                    const charSystem = new CharacterSystem(require('../database/Database'));
+
+                    const charDef = charSystem.getCharacterDef(data?.characterId || 'shadow_hacker');
+                    respond({ 
+                        success: true, 
+                        characterId: charDef.id,
+                        sounds: charDef.sounds,
+                        personality: charDef.personality
+                    });
                 } catch (error) {
                     respond({ success: false, error: error.message });
                 }

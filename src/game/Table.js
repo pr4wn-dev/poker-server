@@ -10281,7 +10281,10 @@ class Table {
                     // Active title (displayed under name)
                     activeTitle: seat.activeTitle || null,
                     // Crew tag
-                    crewTag: seat.crewTag || null
+                    crewTag: seat.crewTag || null,
+                    // Active character
+                    activeCharacter: seat.activeCharacter || 'shadow_hacker',
+                    characterSpriteSet: seat.characterSpriteSet || 'char_shadow_hacker'
                 };
             })
         };

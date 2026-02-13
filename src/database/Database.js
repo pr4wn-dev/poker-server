@@ -89,6 +89,13 @@ class Database {
             // Column already exists, ignore
         }
         
+        // Add active_character column for collectible character system
+        try {
+            await this.query("ALTER TABLE users ADD COLUMN active_character VARCHAR(100) DEFAULT 'shadow_hacker'");
+        } catch (e) {
+            // Column already exists, ignore
+        }
+
         // Migration: Upgrade chips column to BIGINT and set minimum chips to 20 million
         try {
             await this.query('ALTER TABLE users MODIFY COLUMN chips BIGINT DEFAULT 20000000');
