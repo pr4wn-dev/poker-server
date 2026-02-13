@@ -476,6 +476,8 @@ process.on('SIGINT', async () => {
 // Handle uncaught errors
 
 process.on('uncaughtException', (err) => {
+    console.error('\n[FATAL] UNCAUGHT EXCEPTION:', err.message);
+    console.error(err.stack);
     const gameLogger = require('./utils/GameLogger');
     gameLogger.error('SERVER', '[SHUTDOWN] UNCAUGHT_EXCEPTION', { 
         message: err.message, 
@@ -486,6 +488,8 @@ process.on('uncaughtException', (err) => {
 });
 
 process.on('unhandledRejection', (reason, promise) => {
+    console.error('\n[FATAL] UNHANDLED REJECTION:', reason?.message || String(reason));
+    console.error(reason?.stack || 'No stack trace');
     const gameLogger = require('./utils/GameLogger');
     gameLogger.error('SERVER', '[SHUTDOWN] UNHANDLED_REJECTION', { 
         reason: reason?.toString() || String(reason),

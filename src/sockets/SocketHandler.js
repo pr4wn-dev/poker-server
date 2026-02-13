@@ -138,7 +138,7 @@ class SocketHandler {
                 }
             });
 
-            socket.on('get_profile', async (callback) => {
+            socket.on('get_profile', async (data, callback) => {
                 const user = this.getAuthenticatedUser(socket);
                 if (!user) {
                     return callback({ success: false, error: 'Not authenticated' });
@@ -983,7 +983,7 @@ class SocketHandler {
                 }
             });
 
-            socket.on('leave_table', async (callback) => {
+            socket.on('leave_table', async (data, callback) => {
                 const respond = (response) => {
                     if (callback) callback(response);
                     socket.emit('leave_table_response', response);
@@ -1603,7 +1603,7 @@ class SocketHandler {
 
             // ============ Sit Out / Back ============
             
-            socket.on('sit_out', async (callback) => {
+            socket.on('sit_out', async (data, callback) => {
                 const respond = (response) => {
                     if (callback) callback(response);
                     socket.emit('sit_out_response', response);
@@ -1644,7 +1644,7 @@ class SocketHandler {
                 respond({ success: true });
             });
             
-            socket.on('sit_back', async (callback) => {
+            socket.on('sit_back', async (data, callback) => {
                 const respond = (response) => {
                     if (callback) callback(response);
                     socket.emit('sit_back_response', response);
@@ -1697,7 +1697,7 @@ class SocketHandler {
                 respond({ success: true });
             });
             
-            socket.on('get_sit_out_status', async (callback) => {
+            socket.on('get_sit_out_status', async (data, callback) => {
                 const respond = (response) => {
                     if (callback) callback(response);
                     socket.emit('get_sit_out_status_response', response);
@@ -1725,7 +1725,7 @@ class SocketHandler {
 
             // ============ Friends & Social ============
             
-            socket.on('get_friends', async (callback) => {
+            socket.on('get_friends', async (data, callback) => {
                 const respond = (response) => {
                     if (callback) callback(response);
                     socket.emit('get_friends_response', response);
@@ -1834,7 +1834,7 @@ class SocketHandler {
                 respond(result);
             });
             
-            socket.on('get_friend_requests', async (callback) => {
+            socket.on('get_friend_requests', async (data, callback) => {
                 const respond = (response) => {
                     if (callback) callback(response);
                     socket.emit('get_friend_requests_response', response);
@@ -2188,7 +2188,7 @@ class SocketHandler {
                 socket.emit('start_adventure_response', response);
             });
             
-            socket.on('get_active_session', async (callback) => {
+            socket.on('get_active_session', async (data, callback) => {
                 const user = this.getAuthenticatedUser(socket);
                 if (!user) return callback({ success: false, error: 'Not authenticated' });
                 
@@ -2278,7 +2278,7 @@ class SocketHandler {
                 socket.emit('adventure_next_hand_response', response);
             });
             
-            socket.on('forfeit_adventure', async (callback) => {
+            socket.on('forfeit_adventure', async (data, callback) => {
                 const respond = (response) => {
                     if (callback) callback(response);
                     socket.emit('forfeit_adventure_response', response);
@@ -2362,7 +2362,7 @@ class SocketHandler {
                 callback({ success: true, areaId, tournaments: tournamentsWithEligibility });
             });
             
-            socket.on('get_all_tournaments', async (callback) => {
+            socket.on('get_all_tournaments', async (data, callback) => {
                 const user = this.getAuthenticatedUser(socket);
                 if (!user) return callback({ success: false, error: 'Not authenticated' });
                 
@@ -2400,7 +2400,7 @@ class SocketHandler {
                 callback(result);
             });
             
-            socket.on('unregister_tournament', async (callback) => {
+            socket.on('unregister_tournament', async (data, callback) => {
                 const user = this.getAuthenticatedUser(socket);
                 if (!user) return callback({ success: false, error: 'Not authenticated' });
                 
@@ -2435,7 +2435,7 @@ class SocketHandler {
                 callback({ success: true, tournament: tournament.getState() });
             });
             
-            socket.on('get_my_tournament', async (callback) => {
+            socket.on('get_my_tournament', async (data, callback) => {
                 const user = this.getAuthenticatedUser(socket);
                 if (!user) return callback({ success: false, error: 'Not authenticated' });
                 
@@ -2534,7 +2534,7 @@ class SocketHandler {
 
             // ============ Daily Rewards ============
             
-            socket.on('get_daily_reward_status', async (callback) => {
+            socket.on('get_daily_reward_status', async (data, callback) => {
                 const respond = (response) => {
                     if (callback) callback(response);
                     socket.emit('get_daily_reward_status_response', response);
@@ -2595,7 +2595,7 @@ class SocketHandler {
                 }
             });
             
-            socket.on('claim_daily_reward', async (callback) => {
+            socket.on('claim_daily_reward', async (data, callback) => {
                 const respond = (response) => {
                     if (callback) callback(response);
                     socket.emit('claim_daily_reward_response', response);
@@ -2667,7 +2667,7 @@ class SocketHandler {
 
             // ============ Achievements ============
             
-            socket.on('get_achievements', async (callback) => {
+            socket.on('get_achievements', async (data, callback) => {
                 const respond = (response) => {
                     if (callback) callback(response);
                     socket.emit('get_achievements_response', response);
@@ -3716,7 +3716,7 @@ class SocketHandler {
                 }
             });
 
-            socket.on('join_crew_chat', async (callback) => {
+            socket.on('join_crew_chat', async (data, callback) => {
                 const respond = (response) => {
                     if (callback) callback(response);
                 };
@@ -3758,15 +3758,20 @@ class SocketHandler {
                 gameLogger.gameEvent('SYSTEM', `[SOCKET] CLIENT_DISCONNECTED`, { socketId: socket.id, userId: userId || 'unknown' });
                 
                 if (!userId) {
-                    // Already cleaned up (user re-logged on new socket)
+                    // Already cleaned up (user re-logged on new socket, stale session was purged)
                     return;
                 }
                 
-                // RACE GUARD: If user already re-authenticated on a DIFFERENT socket,
-                // this is a stale disconnect - do NOT touch the new session
+                // RACE GUARD: Check if the user has already re-authenticated on a DIFFERENT socket.
+                // If so, this is a stale disconnect — don't touch anything.
                 const currentAuth = this.authenticatedUsers.get(userId);
                 if (currentAuth && currentAuth.socketId !== socket.id) {
-                    gameLogger.gameEvent('SYSTEM', `[SOCKET] STALE_DISCONNECT_IGNORED`, { userId, staleSocketId: socket.id, currentSocketId: currentAuth.socketId });
+                    gameLogger.gameEvent('SYSTEM', `[SOCKET] STALE_DISCONNECT_IGNORED`, { 
+                        userId, 
+                        staleSocketId: socket.id, 
+                        currentSocketId: currentAuth.socketId 
+                    });
+                    // Just clean up this socket's mapping, don't touch the player/seat
                     this.socketToUser.delete(socket.id);
                     this.gameManager.socketToPlayer.delete(socket.id);
                     return;
@@ -3776,6 +3781,9 @@ class SocketHandler {
                 
                 if (player?.currentTableId) {
                     const table = this.gameManager.getTable(player.currentTableId);
+                    
+                    // Mark player as disconnected but don't remove yet
+                    // Allow reconnection within timeout period
                     const seat = table?.seats?.find(s => s?.playerId === userId);
                     if (seat) {
                         seat.isConnected = false;
@@ -3788,12 +3796,16 @@ class SocketHandler {
                         timeoutSeconds: 60
                     });
                     
+                    // Set timeout to remove player if they don't reconnect
                     this.setReconnectTimeout(userId, player.currentTableId, 60000);
                 } else {
+                    // Not at a table, just remove
                     this.gameManager.removePlayer(userId, socket.id);
                 }
                 
                 this.deauthenticateSocket(socket);
+                
+                // Notify friends that user went offline
                 this.notifyFriendsStatus(userId, false);
             });
             
@@ -3860,7 +3872,7 @@ class SocketHandler {
                 });
             });
             
-            socket.on('check_active_session', async (callback) => {
+            socket.on('check_active_session', async (data, callback) => {
                 const respond = (response) => {
                     if (callback) callback(response);
                     socket.emit('check_active_session_response', response);
@@ -3892,6 +3904,21 @@ class SocketHandler {
         });
 
         gameLogger.gameEvent('SYSTEM', `[SOCKET_HANDLER] INITIALIZED`, {});
+    }
+
+    // ============ Response Helper ============
+    
+    /**
+     * Creates a responder function that sends via both callback (ack) and socket.emit.
+     * Ensures the client gets the response regardless of which pattern it listens on.
+     */
+    _makeResponder(socket, eventName, callback) {
+        return (data) => {
+            if (typeof callback === 'function') {
+                try { callback(data); } catch (e) { /* ignore callback errors */ }
+            }
+            try { socket.emit(eventName + '_response', data); } catch (e) { /* ignore emit errors */ }
+        };
     }
 
     // ============ Reconnection Helpers ============
@@ -3950,19 +3977,35 @@ class SocketHandler {
     
     authenticateSocket(socket, userId, profile) {
         // CRITICAL: Check if this user was already authenticated on a DIFFERENT socket
+        // This happens when Unity closes improperly and the user reconnects with a new socket
+        // while the server still thinks the old socket is valid
         const existingAuth = this.authenticatedUsers.get(userId);
         if (existingAuth && existingAuth.socketId !== socket.id) {
             const oldSocketId = existingAuth.socketId;
-            gameLogger.gameEvent('SYSTEM', `[SOCKET] STALE_SESSION_CLEANUP`, { userId, oldSocketId, newSocketId: socket.id });
+            gameLogger.gameEvent('SYSTEM', `[SOCKET] STALE_SESSION_CLEANUP`, { 
+                userId, 
+                oldSocketId, 
+                newSocketId: socket.id 
+            });
+            
+            // Clean up old socket mapping
             this.socketToUser.delete(oldSocketId);
+            
+            // Clean up old socket in GameManager
             this.gameManager.socketToPlayer.delete(oldSocketId);
+            
+            // Force-disconnect the old socket if it's still lingering
             try {
                 const oldSocket = this.io.sockets.sockets.get(oldSocketId);
                 if (oldSocket) {
                     oldSocket.disconnect(true);
                     gameLogger.gameEvent('SYSTEM', `[SOCKET] FORCE_DISCONNECTED_OLD`, { oldSocketId });
                 }
-            } catch (e) { /* Old socket may already be gone */ }
+            } catch (e) {
+                // Old socket may already be gone — that's fine
+            }
+            
+            // Clear any pending reconnect timeout for this user
             this.clearReconnectTimeout(userId);
         }
         
@@ -3972,8 +4015,13 @@ class SocketHandler {
             profile
         });
         this.socketToUser.set(socket.id, userId);
+        
+        // Register in game manager (handles reconnection if player already exists)
         this.gameManager.registerPlayer(socket.id, profile.username, userId);
+        
+        // Notify friends that user came online
         this.notifyFriendsStatus(userId, true);
+        
         gameLogger.gameEvent('SYSTEM', `[SOCKET] USER_AUTHENTICATED`, { userId: profile.userId, username: profile.username });
     }
     
