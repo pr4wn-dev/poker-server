@@ -9,7 +9,8 @@ const AdventureManager = require('../adventure/AdventureManager');
 const TournamentManager = require('../game/TournamentManager');
 const SimulationManager = require('../testing/SimulationManager');
 const gameLogger = require('../utils/GameLogger');
-const UnityLogHandler = require('../../monitoring/unity-log-handler');
+// UnityLogHandler was in monitoring/ (removed). Stub it to prevent crashes.
+const UnityLogHandler = class { constructor() {} handleUnityLog() {} };
 
 class SocketHandler {
     constructor(io, gameManager) {
@@ -3753,41 +3754,47 @@ class SocketHandler {
             // ============ Disconnect ============
             
             socket.on('disconnect', async () => {
-                const user = this.getAuthenticatedUser(socket);
-                gameLogger.gameEvent('SYSTEM', `[SOCKET] CLIENT_DISCONNECTED`, { socketId: socket.id, userId: user?.userId || 'unknown' });
+                const userId = this.socketToUser.get(socket.id);
+                gameLogger.gameEvent('SYSTEM', `[SOCKET] CLIENT_DISCONNECTED`, { socketId: socket.id, userId: userId || 'unknown' });
                 
-                if (user) {
-                    const player = this.gameManager.players.get(user.userId);
-                    
-                    if (player?.currentTableId) {
-                        const table = this.gameManager.getTable(player.currentTableId);
-                        
-                        // Mark player as disconnected but don't remove yet
-                        // Allow reconnection within timeout period
-                        const seat = table?.seats?.find(s => s?.playerId === user.userId);
-                        if (seat) {
-                            seat.isConnected = false;
-                            seat.disconnectedAt = Date.now();
-                        }
-                        
-                        socket.to(`table:${player.currentTableId}`).emit('player_disconnected', {
-                            playerId: user.userId,
-                            canReconnect: true,
-                            timeoutSeconds: 60
-                        });
-                        
-                        // Set timeout to remove player if they don't reconnect
-                        this.setReconnectTimeout(user.userId, player.currentTableId, 60000);
-                    } else {
-                        // Not at a table, just remove
-                        this.gameManager.removePlayer(user.userId, socket.id);
+                if (!userId) {
+                    // Already cleaned up (user re-logged on new socket)
+                    return;
+                }
+                
+                // RACE GUARD: If user already re-authenticated on a DIFFERENT socket,
+                // this is a stale disconnect - do NOT touch the new session
+                const currentAuth = this.authenticatedUsers.get(userId);
+                if (currentAuth && currentAuth.socketId !== socket.id) {
+                    gameLogger.gameEvent('SYSTEM', `[SOCKET] STALE_DISCONNECT_IGNORED`, { userId, staleSocketId: socket.id, currentSocketId: currentAuth.socketId });
+                    this.socketToUser.delete(socket.id);
+                    this.gameManager.socketToPlayer.delete(socket.id);
+                    return;
+                }
+                
+                const player = this.gameManager.players.get(userId);
+                
+                if (player?.currentTableId) {
+                    const table = this.gameManager.getTable(player.currentTableId);
+                    const seat = table?.seats?.find(s => s?.playerId === userId);
+                    if (seat) {
+                        seat.isConnected = false;
+                        seat.disconnectedAt = Date.now();
                     }
                     
-                    this.deauthenticateSocket(socket);
+                    socket.to(`table:${player.currentTableId}`).emit('player_disconnected', {
+                        playerId: userId,
+                        canReconnect: true,
+                        timeoutSeconds: 60
+                    });
                     
-                    // Notify friends that user went offline
-                    this.notifyFriendsStatus(user.userId, false);
+                    this.setReconnectTimeout(userId, player.currentTableId, 60000);
+                } else {
+                    this.gameManager.removePlayer(userId, socket.id);
                 }
+                
+                this.deauthenticateSocket(socket);
+                this.notifyFriendsStatus(userId, false);
             });
             
             // ============ Reconnection ============
@@ -3942,27 +3949,45 @@ class SocketHandler {
     // ============ Authentication Helpers ============
     
     authenticateSocket(socket, userId, profile) {
+        // CRITICAL: Check if this user was already authenticated on a DIFFERENT socket
+        const existingAuth = this.authenticatedUsers.get(userId);
+        if (existingAuth && existingAuth.socketId !== socket.id) {
+            const oldSocketId = existingAuth.socketId;
+            gameLogger.gameEvent('SYSTEM', `[SOCKET] STALE_SESSION_CLEANUP`, { userId, oldSocketId, newSocketId: socket.id });
+            this.socketToUser.delete(oldSocketId);
+            this.gameManager.socketToPlayer.delete(oldSocketId);
+            try {
+                const oldSocket = this.io.sockets.sockets.get(oldSocketId);
+                if (oldSocket) {
+                    oldSocket.disconnect(true);
+                    gameLogger.gameEvent('SYSTEM', `[SOCKET] FORCE_DISCONNECTED_OLD`, { oldSocketId });
+                }
+            } catch (e) { /* Old socket may already be gone */ }
+            this.clearReconnectTimeout(userId);
+        }
+        
         this.authenticatedUsers.set(userId, {
             userId: userId,
             socketId: socket.id,
             profile
         });
         this.socketToUser.set(socket.id, userId);
-        
-        // Register in game manager
         this.gameManager.registerPlayer(socket.id, profile.username, userId);
-        
-        // Notify friends that user came online
         this.notifyFriendsStatus(userId, true);
-        
         gameLogger.gameEvent('SYSTEM', `[SOCKET] USER_AUTHENTICATED`, { userId: profile.userId, username: profile.username });
     }
     
     deauthenticateSocket(socket) {
         const userId = this.socketToUser.get(socket.id);
         if (userId) {
-            this.authenticatedUsers.delete(userId);
+            // Only remove auth if this socket is still the current one for this user
+            // (prevents a race where new login clears the old socket's deauth)
+            const currentAuth = this.authenticatedUsers.get(userId);
+            if (currentAuth && currentAuth.socketId === socket.id) {
+                this.authenticatedUsers.delete(userId);
+            }
             this.socketToUser.delete(socket.id);
+            this.gameManager.socketToPlayer.delete(socket.id);
         }
     }
     
