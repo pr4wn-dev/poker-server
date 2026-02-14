@@ -128,9 +128,21 @@ Full 7-card Texas Hold'em hand evaluation. Tracks every hand you play with:
 
 ---
 
-## I — Items (24 Templates)
+## I — Items (44 Templates)
 
-Items have rarity tiers (Common → Legendary) and a **Power Score**. Categories:
+Items have rarity tiers (Common → Legendary) and a **Power Score**. Two categories:
+
+### Combat Items (20) — at risk in fights, give combat bonuses
+
+| Category | Count | Stat | Examples |
+|----------|-------|------|---------|
+| **Weapons** | 8 | +ATK | Pocket Knife, Rusty Revolver, Sawed-Off, Tommy Gun, Gold Desert Eagle, RPG, Tactical Nuke |
+| **Armor** | 6 | +DEF | Leather Jacket, Kevlar Vest, Riot Shield, Military Armor, Titanium Plate, Juggernaut Suit |
+| **Gear** | 6 | +SPD | Running Shoes, Smoke Bomb, Flash Grenade, Motorcycle Keys, Nitro Boost, Getaway Helicopter |
+
+Combat items drop from **adventure bosses** (higher areas = rarer drops), **tournament prizes**, and **combat wins**. They are gambleable and at risk in fights. The **Tactical Nuke** (Legendary, +16 ATK) is the rarest item in the game.
+
+### Cosmetic Items (24) — safe, zero combat bonus
 
 | Category | Count | Examples |
 |----------|-------|---------|
@@ -142,7 +154,18 @@ Items have rarity tiers (Common → Legendary) and a **Power Score**. Categories
 | XP Boosts | 4 | Small (100 XP) → Mega (10,000 XP) |
 | Table/Chip Cosmetics | 4 | Velvet Table, Golden Table, Casino Chips, Platinum Chips |
 
-Items are at stake in **Item Ante** poker and in **Combat** (post-game PvP). Equipped items also give combat bonuses (ATK/DEF/SPD).
+Cosmetic items are NEVER at risk in fights and give zero combat bonus. They're used in **Item Ante** poker mode and for visual customization.
+
+### Equipment Slots (6)
+
+| Slot | Type | Combat Effect |
+|------|------|--------------|
+| 1 | **Weapon** | +ATK |
+| 2 | **Armor** | +DEF |
+| 3 | **Gear** | +SPD |
+| 4 | Card Back | Cosmetic only |
+| 5 | Table Skin | Cosmetic only |
+| 6 | Avatar | Cosmetic only |
 
 ---
 
@@ -283,7 +306,7 @@ Same stakes, same resolution, same rules. Outside challenges always give the tar
 ### Combat Resolution (auto, no mini-game)
 ```
 Combat Score = Character Stats (ATK + DEF + SPD)
-             + Item Bonuses (all 6 equip slots)
+             + Combat Item Bonuses (Weapon ATK + Armor DEF + Gear SPD)
              + Crew Backup (+2 per online crewmate, max +10)
              + Notoriety Bonus (max +5)
              + Random Roll (±20%)
@@ -444,7 +467,7 @@ Auto-unlock system with progress tracking. Milestone-based (hands played, chips 
 | All 16+ scenes | ✅ Built |
 | Adventure mode | ✅ Done (needs art) |
 | Characters (10) | ✅ Done (needs art + audio) |
-| Items (24) + Item Ante | ✅ Done (needs art) |
+| Items (44: 20 combat + 24 cosmetic) + Item Ante | ✅ Done (needs art + combat items in code) |
 | Tournaments | ✅ Done |
 | Crews | ✅ Done |
 | Statistics + Titles | ✅ Done |
@@ -452,7 +475,7 @@ Auto-unlock system with progress tracking. Milestone-based (hands played, chips 
 | Friends + Social | ✅ Done |
 | Leaderboard | ✅ Done |
 | Per-scene music + SFX | ✅ Done |
-| **Combat system** | 📋 Designed, not coded (~12-14 hrs) |
+| **Combat system** | 📋 Designed (20 combat items + 10 char stats + full spec), not coded (~12-14 hrs) |
 | **Art assets** | 🎨 All placeholder — need AI generation |
 | **Audio assets** | 🔊 Character voice lines + royal flush SFX missing |
 | **Monetization** | 💰 Not started (ads, IAP, premium) |

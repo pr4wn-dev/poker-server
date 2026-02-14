@@ -179,8 +179,8 @@ Go through each phase in order. For each item:
 | # | Feature | Status | Notes |
 |---|---------|--------|-------|
 | 11.1 | CombatManager.js (server) | **PENDING** | Mark, challenge, mutual detection, auto-match items, resolve, rewards |
-| 11.2 | Character combat stats (ATK/DEF/SPD) | **PENDING** | Add to CharacterSystem.js, rarity-scaled |
-| 11.3 | Item combat bonuses | **PENDING** | Add ATK/DEF/SPD bonuses to item templates |
+| 11.2 | Character combat stats (ATK/DEF/SPD) | **PENDING** | Add to CharacterSystem.js, rarity-scaled (15-30 total per character) |
+| 11.3 | Combat item templates (20 new items) | **PENDING** | 8 weapons (+ATK), 6 armor (+DEF), 6 gear (+SPD) in Item.js — revolvers to nukes |
 | 11.4 | Combat events (socket wiring) | **PENDING** | mark_player, challenge_player, mutual_showdown, combat_result |
 | 11.5 | CombatScene.cs (client) | **PENDING** | Replace RobberyScene — stats, history, recent opponents, challenge-from-friends/leaderboard |
 | 11.6 | Mark UI in TableScene | **PENDING** | "MARK FOR FIGHT" in seat popup, crosshair indicator, post-game delivery queue, mutual showdown |
@@ -261,7 +261,7 @@ Go through each phase in order. For each item:
 | 16.7 | Table felt texture | MEDIUM | Replace green rectangle |
 | 16.8 | Chip sprites (denominations) | MEDIUM | Replace colored circles |
 | 16.9 | Default card back | MEDIUM | For opponent hand display |
-| 16.10 | Item icons (full set) | LOW | ~25 exist, need more for all templates |
+| 16.10 | Item icons (full set: 20 combat + 24 cosmetic) | LOW | ~25 cosmetic exist, 20 combat icons needed (guns, armor, gear) |
 | 16.11 | App logo / splash screen | LOW | For launch |
 | 16.12 | Main menu background | LOW | Currently solid color |
 
@@ -278,8 +278,8 @@ Go through each phase in order. For each item:
 4. Test the complete multiplayer flow end-to-end
 
 ### Round 2: Combat System (Replaces Robbery/Karma)
-5. Build CombatManager.js — mark, challenge, mutual detection, match items, resolve, rewards
-6. Add combat stats to characters + combat bonuses to items
+5. Build CombatManager.js — mark, challenge, mutual detection, match combat items, resolve, rewards
+6. Add combat stats to characters (ATK/DEF/SPD per character) + 20 combat item templates (weapons/armor/gear) to Item.js
 7. Build CombatScene.cs — replace RobberyScene (stats, history, recent opponents, challenge friends/leaderboard)
 8. Add mark UI to TableScene (seat popup "MARK FOR FIGHT", crosshair, post-game delivery, mutual showdown)
 9. Wire combat socket events (client + server) — mark_player, challenge_player, mutual_showdown, combat_result

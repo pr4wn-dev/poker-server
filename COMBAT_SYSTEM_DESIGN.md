@@ -82,27 +82,30 @@ Outside-game challenges work the same as in-game ones (same stakes, same resolut
 
 ## Stakes
 
-### Automatic Item Selection
+### Automatic Combat Item Selection
 When Player A challenges Player B:
 
-1. System picks a **random gambleable item** from Player A's inventory
-2. System finds the **closest Power Score match** from Player B's inventory
+1. System picks a **random combat item** (weapon, armor, or gear) from Player A's inventory
+2. System finds the **closest Power Score match** from Player B's combat items
 3. Both items go into the pot automatically — players don't choose
+
+**Only combat items (weapons, armor, gear) are ever at risk.** Cosmetic items (card backs, table skins, avatars, etc.) are NEVER wagered in fights.
 
 **Item matching rules:**
 - Match within ±30% Power Score of the challenger's item
-- If no match within range, pick the closest available item anyway
+- If no match within range, pick the closest available combat item anyway
 - If Power Score gap exceeds 5×, downgrade to **chips-only fight**
 - **Store-purchased items are NEVER at risk** (legal compliance)
+- **Equipped combat items CAN be wagered** — the system picks from all combat items (equipped or not)
 
 ### Chip Stakes
 - Winner takes **half the loser's current chip balance**
 - This is calculated at fight resolution, not at challenge time
 
-### If No Items
-- If challenger has 0 gambleable items → chips-only fight
-- If target has 0 gambleable items → chips-only fight
-- If both have 0 gambleable items → chips-only fight
+### If No Combat Items
+- If challenger has 0 combat items → chips-only fight
+- If target has 0 combat items → chips-only fight
+- If both have 0 combat items → chips-only fight
 - Chips-only fights are still valid and can be initiated
 
 ---
@@ -150,13 +153,21 @@ No mini-game. Auto-resolved with a dramatic 3-second animation.
 
 ```
 Combat Score = Character Base Stats (ATK + DEF + SPD)
-             + Equipped Item Combat Bonuses (sum of all 6 slots)
+             + Equipped Combat Item Bonuses (Weapon ATK + Armor DEF + Gear SPD)
              + Crew Backup Bonus (+2 per online crew member, max +10)
              + Notoriety Bonus (+1 per 10 notoriety, max +5)
              + Random Roll (base score × random between 0.80 and 1.20)
 ```
 
 **Higher score wins.** The ±20% random roll means upsets happen — a weaker player can still win ~30% of the time.
+
+**Example — Maxed out player:**
+- Mythic character (30 base) + Legendary weapon (+16) + Legendary armor (+14) + Legendary gear (+14) + Full crew (+10) + Max notoriety (+5) = **89 base** → rolled to 71-107
+
+**Example — New player:**
+- Common character (15 base) + no items (+0) + no crew (+0) + no notoriety (+0) = **15 base** → rolled to 12-18
+
+The gap is real but the ±20% roll keeps it interesting. And the new player can always **flee** to avoid total loss.
 
 ### Character Combat Stats
 
@@ -173,19 +184,75 @@ Each of the 10 characters gets base ATK / DEF / SPD. Rarer characters have highe
 
 > Actual per-character stat spreads TBD when we implement. Each character should feel distinct — some are fighters (high ATK), some are tanks (high DEF), some are runners (high SPD, better flee success?).
 
-### Item Combat Bonuses
+### Equipment Slots (6 Total)
 
-Each item template gets a small combat bonus based on its type/category:
+Players have **6 equipment slots** — 3 for combat, 3 for cosmetics:
 
-| Item Category | Bonus Type | Common | Uncommon | Rare | Epic | Legendary |
-|--------------|-----------|--------|----------|------|------|-----------|
-| Weapon | +ATK | +1 | +2 | +3 | +4 | +5 |
-| Armor | +DEF | +1 | +2 | +3 | +4 | +5 |
-| Accessory | +ATK, +SPD | +1 ea | +1 ea | +2, +1 | +2, +2 | +3, +2 |
-| Tool | +SPD | +1 | +2 | +3 | +4 | +5 |
-| Consumable | No bonus | — | — | — | — | — |
+| Slot | Type | Combat Effect |
+|------|------|--------------|
+| 1 | **Weapon** | +ATK |
+| 2 | **Armor** | +DEF |
+| 3 | **Gear** | +SPD |
+| 4 | Card Back | Cosmetic only (zero combat bonus) |
+| 5 | Table Skin | Cosmetic only (zero combat bonus) |
+| 6 | Avatar | Cosmetic only (zero combat bonus) |
 
-A fully-equipped player with 6 Legendary items would get up to +30 combat bonus. A naked player gets +0. **Gear matters.**
+**Cosmetic items (card backs, table skins, avatars, chip styles, trophies, vehicles, XP boosts) give ZERO combat bonus and are NEVER at risk in fights.** Only combat items (weapons, armor, gear) can be wagered and give combat bonuses.
+
+### Combat Item Templates (20)
+
+#### Weapons (8) — Weapon slot, +ATK
+
+| Template ID | Name | Rarity | ATK | Drop Source |
+|-------------|------|--------|-----|------------|
+| `weapon_pocket_knife` | Pocket Knife | Common | +1 | Area 1-2 bosses |
+| `weapon_rusty_revolver` | Rusty Revolver | Common | +2 | Area 1-2 bosses |
+| `weapon_brass_knuckles` | Brass Knuckles | Uncommon | +3 | Area 2-3 bosses |
+| `weapon_sawed_off` | Sawed-Off Shotgun | Uncommon | +4 | Area 3 bosses |
+| `weapon_tommy_gun` | Tommy Gun | Rare | +7 | Area 4 bosses, tournaments |
+| `weapon_gold_deagle` | Gold Desert Eagle | Epic | +10 | Area 5-6 bosses, combat wins |
+| `weapon_rpg` | RPG Launcher | Legendary | +14 | Area 7 boss, rare combat drop |
+| `weapon_tactical_nuke` | Tactical Nuke | Legendary | +16 | Area 8 boss only (1 in 1000) |
+
+> The **Tactical Nuke** is the rarest item in the game — an ultimate flex and a massive combat advantage.
+
+#### Armor (6) — Armor slot, +DEF
+
+| Template ID | Name | Rarity | DEF | Drop Source |
+|-------------|------|--------|-----|------------|
+| `armor_leather_jacket` | Leather Jacket | Common | +2 | Area 1-2 bosses |
+| `armor_kevlar_vest` | Kevlar Vest | Uncommon | +4 | Area 2-3 bosses |
+| `armor_riot_shield` | Riot Shield | Uncommon | +3 | Area 3 bosses |
+| `armor_military` | Military Body Armor | Rare | +7 | Area 4 bosses, tournaments |
+| `armor_titanium` | Titanium Plate Carrier | Epic | +10 | Area 5-6 bosses |
+| `armor_juggernaut` | Juggernaut Suit | Legendary | +14 | Area 7-8 bosses |
+
+#### Gear (6) — Gear slot, +SPD
+
+| Template ID | Name | Rarity | SPD | Drop Source |
+|-------------|------|--------|-----|------------|
+| `gear_running_shoes` | Running Shoes | Common | +2 | Area 1-2 bosses |
+| `gear_smoke_bomb` | Smoke Bomb | Uncommon | +4 | Area 2-3 bosses |
+| `gear_flash_grenade` | Flash Grenade | Rare | +6 | Area 4 bosses |
+| `gear_motorcycle_keys` | Motorcycle Keys | Rare | +7 | Area 4 bosses, tournaments |
+| `gear_nitro_boost` | Nitro Boost | Epic | +10 | Area 5-6 bosses |
+| `gear_getaway_heli` | Getaway Helicopter | Legendary | +14 | Area 7-8 bosses |
+
+### Combat Bonus Math
+
+A fully-equipped player with all 3 Legendary combat items:
+- Weapon: +14 to +16 ATK
+- Armor: +14 DEF
+- Gear: +14 SPD
+- **Total: +42 to +44 combat bonus**
+
+A naked player (no combat items) gets +0. **Gear matters.**
+
+Combat items are:
+- **Gambleable** — always at risk in fights (auto-selected by the system)
+- **Dropped** from adventure bosses (higher areas = rarer items), tournament prizes, and combat wins
+- **Never store-bought** — cannot be purchased with real money (legal compliance)
+- **Tradeable** between players
 
 ### Crew Backup
 
@@ -269,7 +336,7 @@ The old Karma/Heart system tracked "goodness" and made pure-hearted players invi
 |--------|-----------|
 | **Poker** | Creates the tension. Mark someone mid-game while you're fuming. Mutual marks = instant showdown. The game IS the buildup |
 | **Characters** | Each has unique combat stats (ATK/DEF/SPD). Rarer characters = stronger fighters. Adventure character drops now REALLY matter |
-| **Items** | Equipped items give combat bonuses. Items are at stake in fights. Inventory management matters |
+| **Items** | 3 combat slots (weapon/armor/gear) give ATK/DEF/SPD bonuses. Combat items are at stake in fights. 3 cosmetic slots are safe. Inventory management matters |
 | **Crews** | Online crew members = combat backup. Crew XP from fights. Can't fight crewmates. Makes crews essential |
 | **Friends** | Challenge friends anytime from CombatScene or Friends list. Social connections = potential combat targets |
 | **For Keeps** | Still exists separately as voluntary item-ante poker. Combat is the "dark alley after the card game" version |
@@ -366,11 +433,15 @@ ALTER TABLE users ADD COLUMN last_combat_at TIMESTAMP NULL;
 ALTER TABLE users ADD COLUMN bruised_until TIMESTAMP NULL;
 ```
 
-### Columns to Add to Items
-```sql
--- Item templates get combat bonuses
--- These go in the item template definitions, not the DB
--- Each item template: { ..., combatBonus: { atk: 0, def: 0, spd: 0 } }
+### Combat Item Templates (in Item.js, not DB)
+```
+20 new item templates added to Item.TEMPLATES:
+  8 Weapons  (type: 'weapon')  — combatBonus: { atk: 1-16, def: 0, spd: 0 }
+  6 Armor    (type: 'armor')   — combatBonus: { atk: 0, def: 2-14, spd: 0 }
+  6 Gear     (type: 'gear')    — combatBonus: { atk: 0, def: 0, spd: 2-14 }
+
+3 new ITEM_TYPEs: WEAPON, ARMOR, GEAR
+Existing cosmetic items: combatBonus = { atk: 0, def: 0, spd: 0 } (or omitted)
 ```
 
 ### Tables/Columns to Remove
@@ -416,9 +487,9 @@ get_karma, get_karma_history, get_robbery_targets
 
 ## Implementation Order (When We Build It)
 
-1. **Server: CombatManager.js** — Core logic (mark, challenge, mutual detection, match items, resolve, rewards)
+1. **Server: CombatManager.js** — Core logic (mark, challenge, mutual detection, match combat items, resolve, rewards)
 2. **Server: CharacterSystem.js** — Add combat stats to all 10 characters
-3. **Server: Item templates** — Add combat bonuses to item definitions
+3. **Server: Item.js** — Add 20 combat item templates (8 weapons, 6 armor, 6 gear) with combatBonus fields; add WEAPON/ARMOR/GEAR item types
 4. **Server: Database.js** — Add combat_log, recent_opponents tables; remove karma tables
 5. **Server: UserRepository.js** — Notoriety methods, combat log, recent opponents, remove karma methods
 6. **Server: SocketHandler.js** — Replace robbery/karma events with mark/challenge/combat events

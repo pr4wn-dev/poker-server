@@ -71,7 +71,7 @@ Brackets, registration, elimination, side pots. Multiple tournament types with c
 Create crews with roles (Leader/Officer/Member). Crew XP, levels, perks, and leaderboard. Invite players, promote, kick, crew chat.
 
 ### Combat System (Post-Game PvP)
-After a poker game, challenge someone you played with to a fight. System auto-picks matched items from both players (by Power Score) and puts half the loser's chips on the line. Target can fight back or flee. Combat resolves automatically based on character stats + equipped item bonuses + crew backup + random roll. Going offline during a challenge = auto-lose (no dodging). See `COMBAT_SYSTEM_DESIGN.md` for full spec.
+Mark opponents during a poker game. When the game ends, challenges are delivered. Mutual marks = instant fight, no fleeing. System auto-picks matched **combat items** (weapons, armor, gear) from both players and puts half the loser's chips on the line. Target can fight back or flee. Combat resolves automatically based on character stats (ATK/DEF/SPD) + equipped combat item bonuses + crew backup + random roll. Can also challenge from Friends list, Recent Opponents, or Leaderboards. Going offline during a challenge = auto-lose (no dodging). See `COMBAT_SYSTEM_DESIGN.md` for full spec.
 
 ### Notoriety System
 Lifetime combat reputation. Win fights → gain notoriety → earn titles (Civilian → Troublemaker → Outlaw → Gunslinger → Most Wanted). Cosmetic skull icons at table seats + tiny combat bonus. Replaces the old Karma/Heart system.
@@ -208,7 +208,7 @@ poker-server/
 │   ├── security/
 │   │   └── CollusionDetector.js # Anti-cheat (soft play, win trading, chip dumping)
 │   ├── models/
-│   │   ├── Item.js            # Item model, templates, Power Score
+│   │   ├── Item.js            # Item model, 44 templates (20 combat + 24 cosmetic), Power Score
 │   │   ├── User.js            # User model
 │   │   └── HouseRules.js      # Table rule presets
 │   ├── database/
@@ -362,7 +362,7 @@ All UI is built **programmatically** via `SceneBootstrap.cs` — no drag-and-dro
 
 **Art Assets (AI-generated - next priority):**
 - Character sprites (10 playable characters x portrait/seat/idle)
-- Boss art, item icons (24+), UI frames, backgrounds, card backs, game logo
+- Boss art, combat item icons (20), cosmetic item icons (24), UI frames, backgrounds, card backs, game logo
 - Fire/ice particle sprites, crew emblems, rarity glow variants
 
 **Audio Assets (AI-generated):**

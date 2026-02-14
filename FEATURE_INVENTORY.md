@@ -110,9 +110,58 @@ Each character has: sprite set, sound set (win/lose/fold/all-in/taunt), personal
 
 ---
 
-## Items (24 templates) — `src/models/Item.js`
+## Items (44 templates) — `src/models/Item.js`
 
-### Card Backs (4)
+### Equipment Slots (6 total — 3 combat + 3 cosmetic)
+
+| Slot | Type | Combat Effect |
+|------|------|--------------|
+| 1 | **Weapon** | +ATK |
+| 2 | **Armor** | +DEF |
+| 3 | **Gear** | +SPD |
+| 4 | Card Back | Cosmetic only |
+| 5 | Table Skin | Cosmetic only |
+| 6 | Avatar | Cosmetic only |
+
+> Cosmetic items give ZERO combat bonus and are NEVER at risk in fights. Only combat items (weapons, armor, gear) can be wagered.
+
+### Combat Items (20) — NEW
+
+#### Weapons (8) — Weapon slot, +ATK
+| Template ID | Name | Rarity | ATK | Drop Source |
+|-------------|------|--------|-----|------------|
+| `weapon_pocket_knife` | Pocket Knife | Common | +1 | Area 1-2 bosses |
+| `weapon_rusty_revolver` | Rusty Revolver | Common | +2 | Area 1-2 bosses |
+| `weapon_brass_knuckles` | Brass Knuckles | Uncommon | +3 | Area 2-3 bosses |
+| `weapon_sawed_off` | Sawed-Off Shotgun | Uncommon | +4 | Area 3 bosses |
+| `weapon_tommy_gun` | Tommy Gun | Rare | +7 | Area 4 bosses, tournaments |
+| `weapon_gold_deagle` | Gold Desert Eagle | Epic | +10 | Area 5-6 bosses, combat wins |
+| `weapon_rpg` | RPG Launcher | Legendary | +14 | Area 7 boss, rare combat drop |
+| `weapon_tactical_nuke` | Tactical Nuke | Legendary | +16 | Area 8 boss only (1 in 1000) |
+
+#### Armor (6) — Armor slot, +DEF
+| Template ID | Name | Rarity | DEF | Drop Source |
+|-------------|------|--------|-----|------------|
+| `armor_leather_jacket` | Leather Jacket | Common | +2 | Area 1-2 bosses |
+| `armor_kevlar_vest` | Kevlar Vest | Uncommon | +4 | Area 2-3 bosses |
+| `armor_riot_shield` | Riot Shield | Uncommon | +3 | Area 3 bosses |
+| `armor_military` | Military Body Armor | Rare | +7 | Area 4 bosses, tournaments |
+| `armor_titanium` | Titanium Plate Carrier | Epic | +10 | Area 5-6 bosses |
+| `armor_juggernaut` | Juggernaut Suit | Legendary | +14 | Area 7-8 bosses |
+
+#### Gear (6) — Gear slot, +SPD
+| Template ID | Name | Rarity | SPD | Drop Source |
+|-------------|------|--------|-----|------------|
+| `gear_running_shoes` | Running Shoes | Common | +2 | Area 1-2 bosses |
+| `gear_smoke_bomb` | Smoke Bomb | Uncommon | +4 | Area 2-3 bosses |
+| `gear_flash_grenade` | Flash Grenade | Rare | +6 | Area 4 bosses |
+| `gear_motorcycle_keys` | Motorcycle Keys | Rare | +7 | Area 4 bosses, tournaments |
+| `gear_nitro_boost` | Nitro Boost | Epic | +10 | Area 5-6 bosses |
+| `gear_getaway_heli` | Getaway Helicopter | Legendary | +14 | Area 7-8 bosses |
+
+### Cosmetic Items (24) — existing, zero combat bonus
+
+#### Card Backs (4)
 | Template ID | Name | Rarity |
 |-------------|------|--------|
 | `card_back_flame` | Flame Card Back | Uncommon |
@@ -120,7 +169,7 @@ Each character has: sprite set, sound set (win/lose/fold/all-in/taunt), personal
 | `card_back_golden` | Golden Card Back | Legendary |
 | `card_back_hologram` | Holographic Card Back | Legendary |
 
-### Avatars (4)
+#### Avatars (4)
 | Template ID | Name | Rarity |
 |-------------|------|--------|
 | `avatar_wolf` | Lone Wolf | Uncommon |
@@ -128,14 +177,14 @@ Each character has: sprite set, sound set (win/lose/fold/all-in/taunt), personal
 | `avatar_dragon` | Dragon | Epic |
 | `avatar_legend` | The Legend | Legendary |
 
-### Trophies (3)
+#### Trophies (3)
 | Template ID | Name | Rarity |
 |-------------|------|--------|
 | `trophy_first_boss` | Beginner's Trophy | Common |
 | `trophy_underground` | Underground Champion | Rare |
 | `trophy_final` | The House Trophy | Legendary |
 
-### Location Keys (4)
+#### Location Keys (4)
 | Template ID | Name | Rarity | Unlocks |
 |-------------|------|--------|---------|
 | `UNDERGROUND_PASS` | Underground Pass | Epic | The Underground |
@@ -143,14 +192,14 @@ Each character has: sprite set, sound set (win/lose/fold/all-in/taunt), personal
 | `ISLAND_KEY` | Private Island Key | Legendary | Private Island |
 | `MYSTERY_TOKEN` | ??? Token | Legendary | ??? Lounge |
 
-### Vehicles (3)
+#### Vehicles (3)
 | Template ID | Name | Rarity |
 |-------------|------|--------|
 | `VEHICLE_YACHT_SMALL` | Speedboat | Rare |
 | `VEHICLE_YACHT_GOLD` | Golden Mega Yacht | Legendary |
 | `VEHICLE_JET` | Private Jet | Legendary |
 
-### XP Boosts (4)
+#### XP Boosts (4)
 | Template ID | Name | Rarity | XP Amount |
 |-------------|------|--------|-----------|
 | `XP_BOOST_SMALL` | XP Chip (Small) | Common | 100 |
@@ -158,7 +207,7 @@ Each character has: sprite set, sound set (win/lose/fold/all-in/taunt), personal
 | `XP_BOOST_LARGE` | XP Chip (Large) | Rare | 2,000 |
 | `XP_BOOST_MEGA` | XP Jackpot | Epic | 10,000 |
 
-### Table/Chip Cosmetics (4)
+#### Table/Chip Cosmetics (4)
 | Template ID | Name | Rarity |
 |-------------|------|--------|
 | `TABLE_SKIN_VELVET` | Velvet Table | Uncommon |
@@ -348,7 +397,7 @@ Each character has: sprite set, sound set (win/lose/fold/all-in/taunt), personal
 | `src/sockets/SocketHandler.js` | 100+ socket event handlers |
 | `src/database/Database.js` | MySQL connection pool + 20+ table migrations |
 | `src/database/UserRepository.js` | User, inventory, friends, stats persistence |
-| `src/models/Item.js` | Item model, 24 templates, Power Score |
+| `src/models/Item.js` | Item model, 44 templates (20 combat + 24 cosmetic), Power Score |
 
 ---
 
@@ -453,10 +502,14 @@ Each character has: sprite set, sound set (win/lose/fold/all-in/taunt), personal
 
 ### Combat System Redesign (PENDING — see `COMBAT_SYSTEM_DESIGN.md`)
 - Replace RobberyManager with CombatManager (mutual wager, fight/flee/timeout)
+- Add 20 combat item templates (8 weapons, 6 armor, 6 gear) to Item.js
+- Add 3 new item types (WEAPON, ARMOR, GEAR) + combatBonus field
+- Add combat stats (ATK/DEF/SPD) to all 10 characters in CharacterSystem.js
 - In-game "Mark for Fight" button during poker hands
 - Mutual marks → instant fight after game ends
 - Outside-game challenges (Friends list, Recent Opponents, Leaderboard)
-- Combat resolution (character stats + items + crew backup + random roll)
+- Combat resolution (character stats + combat items + crew backup + random roll)
+- 6 equipment slots: 3 combat (weapon/armor/gear) + 3 cosmetic (card back/table skin/avatar)
 - Notoriety system (replaces karma), skull icons, combat bonus tiers
 - Disconnect during fight = auto-lose
 - Combat log, history, stats UI
@@ -465,7 +518,8 @@ Each character has: sprite set, sound set (win/lose/fold/all-in/taunt), personal
 ### Art Assets (AI-generated — next priority)
 - Character sprites (10 characters x portrait/seat/idle)
 - Boss portraits (13 bosses)
-- Item icons (24 items)
+- Combat item icons (20 items — weapons, armor, gear)
+- Cosmetic item icons (24 items — existing)
 - UI frames, backgrounds, card backs, game logo
 - Fire/ice particle sprites, crew emblems, rarity glow variants
 
