@@ -1,3 +1,19 @@
+## [Feb 13, 2026] - Fix: Action Bar Missing After Socket Reconnection
+
+**Severity:** HIGH — Player could not act during their turn after a socket reconnect, leading to auto-fold (turn timeout).
+
+**Root cause:** When the socket disconnected and auto-reconnected mid-game:
+1. The **new socket was NOT joined to the table's Socket.IO room** — `registerPlayer()` updated the socketId but never called `socket.join()`. So `game_state` broadcasts didn't reach the reconnected client.
+2. The **client never called `reconnect_to_table`** after socket reconnection — `GameService` didn't subscribe to `SocketManager.OnConnected`.
+3. The **action panel lock** (`_actionPanelLocked`) could remain set if the player's turn came via fresh state after reconnect.
+
+**Fixes:**
+- **SocketHandler.js (server)**: In `authenticateSocket()`, after re-registering the player, check if they have a `currentTableId`. If so, auto-join the new socket to `table:${tableId}` room, mark seat as connected, emit fresh `game_state`, and notify other players of reconnection.
+- **GameService.cs (client)**: Subscribe to `SocketManager.OnConnected`. On reconnect, if `IsInGame` is true, automatically call `ReconnectToTable(CurrentTableId)` to sync state.
+- **TableScene.cs (client)**: Added `turnJustCameToMe` unlock condition — if `_actionPanelLocked` is true but the turn just shifted to us (fresh state from reconnect), force-unlock so the action bar appears.
+
+---
+
 ## [Feb 13, 2026] - Fix: Session Integrity Fixes
 
 **What**: Post-session integrity check found two bugs introduced during bulk editing.
