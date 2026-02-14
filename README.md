@@ -18,6 +18,7 @@ Built with **Unity** (client) and **Node.js + Socket.IO** (server), using **MySQ
 | [SETUP_NEW_PC.md](SETUP_NEW_PC.md) | Fresh machine setup (Node, MySQL, XAMPP, Unity) |
 | [TESTING.md](TESTING.md) | Testing guide: unit tests, simulation comparison, state snapshots |
 | [CHANGELOG.md](CHANGELOG.md) | All bugs, fixes, and issue history — **search here first!** |
+| [GAME_OVERVIEW_AZ.md](GAME_OVERVIEW_AZ.md) | Complete A-to-Z overview of every game feature |
 | [COMBAT_SYSTEM_DESIGN.md](COMBAT_SYSTEM_DESIGN.md) | Full combat/PvP system design (replaces robbery) |
 | [AGENT_RULES.md](AGENT_RULES.md) | Rules for AI agents working on this project |
 | [UI_BEST_PRACTICES.md](UI_BEST_PRACTICES.md) | UI component best practices: position locking, animations, layout |
