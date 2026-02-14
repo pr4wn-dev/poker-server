@@ -180,7 +180,7 @@ class UserRepository {
      */
     async getFullProfile(userId) {
         const user = await db.queryOne(
-            'SELECT id, username, email, chips, adventure_coins, notoriety, combat_wins, combat_losses, bruised_until, coward_until, created_at, last_login FROM users WHERE id = ?',
+            'SELECT id, username, email, chips, adventure_coins, notoriety, combat_wins, combat_losses, bruised_until, coward_until, active_character, created_at, last_login FROM users WHERE id = ?',
             [userId]
         );
         
@@ -221,6 +221,8 @@ class UserRepository {
             combatLosses: user.combat_losses || 0,
             isBruised: user.bruised_until && new Date(user.bruised_until) > new Date(),
             isCoward: user.coward_until && new Date(user.coward_until) > new Date(),
+            activeCharacter: user.active_character || null,
+            characterSpriteSet: user.active_character ? `char_${user.active_character}` : null,
             createdAt: user.created_at,
             lastLogin: user.last_login,
             stats: stats ? {
