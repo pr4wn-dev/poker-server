@@ -188,7 +188,7 @@ poker-server/
 │   │   ├── TournamentManager.js # Tournament lifecycle
 │   │   ├── CharacterSystem.js # 10 playable characters, drops, sounds
 │   │   ├── FireTracker.js     # NBA Jam fire/cold streak system
-│   │   ├── RobberyManager.js  # PvP item theft, tools, defense, karma
+│   │   ├── RobberyManager.js  # → Being replaced by CombatManager (post-game PvP)
 │   │   └── SpectatorOdds.js   # Monte Carlo win probability
 │   ├── adventure/
 │   │   ├── AdventureManager.js # Adventure mode coordination
@@ -258,7 +258,8 @@ See `src/sockets/Events.js` for complete documentation.
 - `get_titles` / `set_active_title` — Titles
 - `get_characters` / `get_player_characters` / `set_active_character` / `get_character_sounds` — Characters
 - `create_crew` / `get_crew` / `invite_to_crew` / `join_crew` / `leave_crew` / `crew_promote` / `crew_kick` / `get_crew_leaderboard` — Crews
-- `challenge_player` / `respond_to_challenge` / `get_combat_stats` / `get_combat_history` — Combat (replacing robbery/karma events)
+- `challenge_player` / `respond_to_challenge` / `get_combat_stats` / `get_combat_history` — Combat
+- `mark_player` / `get_recent_opponents` / `challenge_friend` / `challenge_leaderboard_player` — Combat challenges (in-game & outside)
 - `get_spectator_odds` / `spectator_bet` / `spectator_reaction` — Spectator
 - `save_hand` / `get_saved_hands` / `get_hand_of_the_day` / `get_hand_replay` — Replays
 - `get_active_events` / `get_daily_reward_status` / `claim_daily_reward` — Events & rewards
@@ -267,7 +268,7 @@ See `src/sockets/Events.js` for complete documentation.
 - `get_player_profile` — Full player card
 
 **Server → Client:**
-- `table_state` — Game state (includes fire/cold, titles, crew tags, karma, character data)
+- `table_state` — Game state (includes fire/cold, titles, crew tags, notoriety, character data)
 - `player_action` / `player_joined` / `player_left` — Player events
 - `hand_result` / `game_over` — Hand/game completion
 - `fire_status_change` — Fire/cold level change broadcast
@@ -298,7 +299,7 @@ All UI is built **programmatically** via `SceneBootstrap.cs` — no drag-and-dro
 | MainMenu | Login/register, quick play, navigation hub |
 | Lobby | Browse/create/join tables |
 | Table | Core poker gameplay, action bar, chat, spectator |
-| Statistics | 40+ stats, fire status, karma tier, hand breakdown |
+| Statistics | 40+ stats, fire status, notoriety tier, hand breakdown |
 | CharacterSelect | Character collection, card-style display, set active |
 | Tournament | Browse/register/unregister tournaments |
 | AdventureMap | World map, area selection, boss battles |
@@ -337,10 +338,10 @@ All UI is built **programmatically** via `SceneBootstrap.cs` — no drag-and-dro
 - CollusionDetector (215): Anti-cheat analysis
 
 **Client:** 16 Unity scenes + 11 UI components totaling ~25,000 lines of C#
-- TableScene (3.5K) + PokerTableView (1.3K): Full poker gameplay with character rendering, karma hearts, fire glow
+- TableScene (3.5K) + PokerTableView (1.3K): Full poker gameplay with character rendering, notoriety indicators, fire glow
 - MainMenuScene (2.4K): Login/register, quick play, event banner, daily rewards popup
 - LobbyScene (1.3K): Browse/create/join tables
-- StatisticsScene (969): 40+ stats in tabs with karma tier display
+- StatisticsScene (969): 40+ stats in tabs with notoriety tier display
 - CrewScene (815), RobberyScene (674 → **being replaced by CombatScene**), InventoryScene (689): Full feature UIs
 - AdventureMapScene (674) + AdventureBattleScene (838): Boss challenge flow
 - HandReplayScene (501), TournamentScene (1048), CharacterSelectScene (488), FriendsScene (576)
@@ -380,7 +381,7 @@ All UI is built **programmatically** via `SceneBootstrap.cs` — no drag-and-dro
 
 **Polish and animations:**
 - Card dealing arc animation (cards appear in place, need fly-from-deck arc)
-- Screen shake, fire/ice particles, robbery reveal, victory celebration
+- Screen shake, fire/ice particles, combat showdown, victory celebration
 - Boss entrance, chip counting, XP popup, title earned
 
 **Platform and release:**

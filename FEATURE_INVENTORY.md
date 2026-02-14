@@ -1,6 +1,6 @@
 # Feature Inventory — Complete Game Reference
 
-**Last updated:** Feb 12, 2026  
+**Last updated:** Feb 13, 2026  
 **Purpose:** Full inventory of every character, boss, item, area, title, and system in the game. Use this to verify nothing was lost between machines.
 
 ---
@@ -231,21 +231,22 @@ Each character has: sprite set, sound set (win/lose/fold/all-in/taunt), personal
 
 ---
 
-## Karma / Heart System — `UserRepository.js` + `RobberyManager.js`
+## Notoriety System (replacing Karma) — See `COMBAT_SYSTEM_DESIGN.md`
 
-| Karma Range | Heart Color | Tier Name | Robbery Visibility |
-|-------------|------------|-----------|-------------------|
-| 95–100 | Pure White | Pure Heart | 0.0 (invisible — cannot be targeted) |
-| 75–94 | Light Gray | Light Gray | Low |
-| 50–74 | Gray | Gray | Moderate |
-| 25–49 | Dark Gray | Dark Gray | High |
-| 1–24 | Charcoal | Charcoal | Very High |
-| 0 | Black | Black Heart | 2.0x (maximum — easy target) |
+| Notoriety Range | Title | Combat Bonus |
+|-----------------|-------|-------------|
+| 0–49 | Civilian | None |
+| 50–149 | Troublemaker | Tiny |
+| 150–299 | Outlaw | Small |
+| 300–499 | Gunslinger | Moderate |
+| 500+ | Most Wanted | Large |
 
-- Karma starts at 100 for every player
-- Robbery attempt: -5 karma (always)
-- Successful robbery: additional -10 karma
-- Daily regeneration: +1/day toward 100
+- Starts at 0 for every player
+- Win a fight → +25 notoriety
+- Lose a fight → −10 notoriety (floor 0)
+- Flee → −5 notoriety
+- Cosmetic skull icon at table seats scales with tier
+- **Old Karma/Heart system is being retired** — see `COMBAT_SYSTEM_DESIGN.md` for full spec
 
 ---
 
@@ -314,7 +315,7 @@ Each character has: sprite set, sound set (win/lose/fold/all-in/taunt), personal
 | `TournamentManager.js` | — | Tournament lifecycle |
 | `CharacterSystem.js` | 17K | 10 characters, drops, sounds, sprites |
 | `FireTracker.js` | 10K | NBA Jam fire/cold streak system |
-| `RobberyManager.js` | 20K | PvP theft, tools, defense, karma |
+| `RobberyManager.js` | 20K | → Being replaced by CombatManager (post-game PvP) |
 | `SpectatorOdds.js` | 7K | Monte Carlo win probability (500 sims) |
 
 ### Adventure (`src/adventure/`)
@@ -351,7 +352,7 @@ Each character has: sprite set, sound set (win/lose/fold/all-in/taunt), personal
 
 ---
 
-## Unity Client Scenes (15) — All Built
+## Unity Client Scenes (16) — All Built
 
 | Scene | Key Features |
 |-------|-------------|
@@ -365,9 +366,10 @@ Each character has: sprite set, sound set (win/lose/fold/all-in/taunt), personal
 | **AdventureBattleScene** | Poker vs AI boss, taunts, reward display |
 | **InventoryScene** | View/equip/unequip/use items with rarity colors |
 | **CrewScene** | Create/manage crew, member list, chat, leaderboard |
-| **RobberyScene** | Target browsing (karma-filtered), tool selection, results |
+| **RobberyScene** | → Being replaced by CombatScene (post-game PvP challenges, fight/flee) |
 | **HandReplayScene** | Saved hands browser, Hand of the Day, replay viewer |
 | **LeaderboardScene** | Top players by chips/wins/level/biggest pot |
+| **FriendsScene** | Friends list, requests, search users, invite to table |
 | **ShopScene** | Cosmetic store (scaffold — needs catalog) |
 | **SettingsScene** | Audio, controls, reset progress with confirmation |
 
@@ -378,9 +380,9 @@ Each character has: sprite set, sound set (win/lose/fold/all-in/taunt), personal
 | Component | Description |
 |-----------|-------------|
 | **PokerTableView** | Table rendering, seat layout, card display, community cards |
-| **PlayerSeat/PlayerSeatView** | Per-seat UI: avatar, name, chips, cards, fire/cold glow, heart, title |
+| **PlayerSeat/PlayerSeatView** | Per-seat UI: avatar, name, chips, cards, fire/cold glow, notoriety skull, title |
 | **CardVisual** | Card rendering with flip animation |
-| **PlayerProfilePopup** | Tap-to-view popup with stats, title, crew, karma |
+| **PlayerProfilePopup** | Tap-to-view popup with stats, title, crew, notoriety |
 | **SpectatorPanel** | Win probability bars, side betting, bet feed |
 | **FriendsPanel** | Friends list, add/accept/decline |
 | **DailyRewardsPopup** | 7-day streak UI |
@@ -404,8 +406,8 @@ Each character has: sprite set, sound set (win/lose/fold/all-in/taunt), personal
 ### Titles: `get_titles`, `set_active_title`
 ### Characters: `get_characters`, `get_player_characters`, `set_active_character`, `get_character_sounds`
 ### Crews: `create_crew`, `get_crew`, `invite_to_crew`, `join_crew`, `leave_crew`, `crew_promote`, `crew_kick`, `get_crew_leaderboard`
-### Robbery: `robbery_attempt`, `robbery_recovery`, `get_recoverable_robberies`
-### Karma: `get_karma`, `get_karma_history`, `get_robbery_targets`
+### Combat: `mark_player`, `challenge_player`, `respond_to_challenge`, `get_combat_stats`, `get_combat_history`, `get_recent_opponents`, `challenge_friend`, `challenge_leaderboard_player`
+### Notoriety: `get_notoriety` (replacing old karma/robbery events)
 ### Spectator: `get_spectator_odds`, `spectator_bet`, `spectator_reaction`
 ### Replays: `save_hand`, `get_saved_hands`, `get_hand_of_the_day`
 ### Social: `get_friends`, `send_friend_request`, `accept_friend_request`, `decline_friend_request`
@@ -419,7 +421,7 @@ Each character has: sprite set, sound set (win/lose/fold/all-in/taunt), personal
 
 ## Database Tables (20+) — `src/database/Database.js`
 
-1. `users` — Account data, chips, XP, active character, karma
+1. `users` — Account data, chips, XP, active character, notoriety
 2. `hand_history` — Full hand data per player (cards, actions, pot, result)
 3. `player_stats` — 40+ aggregated lifetime stats
 4. `player_hand_type_stats` — Per hand type (high card → royal flush)
@@ -435,8 +437,9 @@ Each character has: sprite set, sound set (win/lose/fold/all-in/taunt), personal
 14. `crews` — Crew definitions
 15. `crew_members` — Crew membership + roles
 16. `crew_stats` — Crew-level aggregated stats
-17. `robbery_log` — PvP robbery history
-18. `karma_history` — Karma change log
+17. `combat_log` — PvP combat history (replacing robbery_log)
+18. `notoriety_history` — Notoriety change log (replacing karma_history)
+19. `recent_opponents` — Recent poker opponents for outside-game challenges
 19. `events` — Seasonal/weekly events
 20. `daily_rewards` — Daily reward tracking
 21. `spectator_bets` — Spectator side bets
@@ -448,6 +451,17 @@ Each character has: sprite set, sound set (win/lose/fold/all-in/taunt), personal
 
 ## What's NOT Done Yet (Deferred)
 
+### Combat System Redesign (PENDING — see `COMBAT_SYSTEM_DESIGN.md`)
+- Replace RobberyManager with CombatManager (mutual wager, fight/flee/timeout)
+- In-game "Mark for Fight" button during poker hands
+- Mutual marks → instant fight after game ends
+- Outside-game challenges (Friends list, Recent Opponents, Leaderboard)
+- Combat resolution (character stats + items + crew backup + random roll)
+- Notoriety system (replaces karma), skull icons, combat bonus tiers
+- Disconnect during fight = auto-lose
+- Combat log, history, stats UI
+- CombatScene replacing RobberyScene
+
 ### Art Assets (AI-generated — next priority)
 - Character sprites (10 characters x portrait/seat/idle)
 - Boss portraits (13 bosses)
@@ -457,7 +471,7 @@ Each character has: sprite set, sound set (win/lose/fold/all-in/taunt), personal
 
 ### Audio Assets
 - Character sounds (win/lose/fold/all-in/taunt per character)
-- Per-scene music, SFX (card flip, chip clink, fire whoosh)
+- Royal flush SFX (referenced but no file)
 
 ### Monetization
 - Ad integration (AdMob/Unity Ads)
@@ -465,17 +479,15 @@ Each character has: sprite set, sound set (win/lose/fold/all-in/taunt), personal
 - Shop catalog + purchase flow
 
 ### Minor Code Gaps
-- Leaderboard — scaffold exists, needs server ranking data wired
 - Shop — scaffold exists, needs catalog + purchase flow
 - Tutorial overlay — scaffold exists, needs first-time content
 - Emote panel — scaffold exists, needs emote selection
-- Equipment system — server endpoints exist, client needs equip slots UI
-- Friends system — server exists, client panel needs testing/polish
+- Adventure area rename (old casino names to crime theme)
 
 ### Polish
-- Card flip, screen shake, fire/ice particles, robbery reveal
+- Card dealing arc animation (fly-from-deck)
+- Screen shake, fire/ice particles, combat showdown, victory celebration
 - Boss entrance animation, chip counting, XP popup, title earned
-- Scene transitions
 
 ### Platform/Release
 - Android build optimization
