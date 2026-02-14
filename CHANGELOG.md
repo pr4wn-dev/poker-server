@@ -1,3 +1,15 @@
+## [Feb 13, 2026] - Fix: Session Integrity Fixes
+
+**What**: Post-session integrity check found two bugs introduced during bulk editing.
+
+**Fixes**:
+- **GameService.cs**: Added missing tournament event `-=` unsubscriptions in `OnDestroy`. We had added 5 `+=` subscriptions in `InitializeSocket` (lines 138-142) but forgot the matching cleanup — memory leak / stale handler risk.
+- **FriendsScene.cs**: Fixed `InviteToTable()` → `InvitePlayer()` method name mismatch. `GameService` exposes `InvitePlayer(string oderId, ...)` but FriendsScene was calling `InviteToTable()` which doesn't exist — would cause compile error.
+
+**Root cause**: Bulk file creation without a compile check.
+
+---
+
 ## [Feb 13, 2026] - Feature: Tournament Play Scene (Lobby + Active Mode)
 
 **What**: Enhanced TournamentScene.cs with dual-mode UI (lobby for browsing/registering + active tournament HUD for live play). Added tournament event pipeline through SocketManager → GameService → Scene.
