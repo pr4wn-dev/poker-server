@@ -252,28 +252,35 @@ From the Main Menu, tap "Multiplayer" to go straight to the Lobby and join a gam
 
 ---
 
-## R — Combat System (Post-Game PvP)
+## R — Combat System (PvP Showdowns)
 
 **Replaces the old Robbery & Karma system.** Full spec in `COMBAT_SYSTEM_DESIGN.md`.
 
-After a poker game, you can **challenge** someone you played with to a fight. The system auto-picks matched items from both players (by Power Score) and puts half the loser's chips on the line.
+### Mark During a Game (Primary Path)
+You're at the poker table, someone sucks out on you, you're fuming. Tap their seat → **"MARK FOR FIGHT"**. The mark is **silent** — they don't know. When the game ends, all marks are delivered as challenges.
 
-**Flow:**
+**If both players marked each other → MUTUAL SHOWDOWN.** No flee option. You both wanted this. Fight resolves immediately.
+
 ```
+During Poker Game → Mark opponent (silent)
+    ↓
 Poker Game Ends
     ↓
-Challenge Window Opens (5 minutes)
-    ↓
-Challenger picks a target
-    ↓
-System auto-matches items from both players
-    ↓
-Target sees popup → FIGHT or FLEE (30 sec timer)
+Mutual marks? → 🔥 INSTANT FIGHT (no flee)
+One-way mark? → Target gets popup → FIGHT or FLEE (30 sec)
     ↓
 📴 Disconnect = Auto-LOSE (no dodging)
 ```
 
-**Combat resolution (auto, no mini-game):**
+### Challenge Outside a Game
+You can also pick fights outside of poker:
+- **Friends list** — challenge any friend, anytime
+- **Recent Opponents** — anyone you played with in the last 24 hours
+- **Leaderboard** — call out a top player (bold move)
+
+Same stakes, same resolution, same rules. Outside challenges always give the target fight/flee choice (no mutual marks).
+
+### Combat Resolution (auto, no mini-game)
 ```
 Combat Score = Character Stats (ATK + DEF + SPD)
              + Item Bonuses (all 6 equip slots)
@@ -285,11 +292,11 @@ Combat Score = Character Stats (ATK + DEF + SPD)
 Higher score wins. The ±20% random roll means upsets happen — a weaker player can still win ~30% of the time.
 
 **Rules:**
-- Only challenge players from your last game (5 min window)
-- 1 challenge per player per 24 hours
+- 1 challenge per target per 24 hours
 - Bruised = can't be challenged for 1 hour after losing
 - Minimum 1,000 chips to be challenged (poverty protection)
 - Crew immunity — can't fight your own crewmates
+- Marks cancelled if you leave the table before the game ends
 
 ---
 

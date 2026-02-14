@@ -1,12 +1,14 @@
-# Combat System Design — Post-Game PvP
+# Combat System Design — PvP Showdowns
 
-> Replaces the old Robbery & Karma system with a narratively coherent "Wild West showdown after a heated poker game" PvP system.
+> Replaces the old Robbery & Karma system with a narratively coherent "Wild West showdown" PvP system. Mark someone during a poker game. When the game ends, they get called out.
 
 ---
 
 ## Overview
 
-After a poker game, players can **challenge** someone they played with to a fight. The system auto-picks matched items from both players and puts half the loser's chips on the line. The target can fight back or flee. Combat resolves automatically based on character stats, equipped items, and crew backup.
+During a poker game, you can **mark** someone for a fight. You're stewing at the table, they just sucked out on you, you flag them. When the game ends, the challenge is delivered. If they marked you too — it's an **instant mutual showdown**, no backing out. You can also challenge people outside of games through your friends list, recent opponents, or leaderboards.
+
+Combat resolves automatically based on character stats, equipped items, crew backup, and a random roll. The target can fight back or flee — but going offline = auto-lose.
 
 **Why this exists:** Poker creates tension. Combat lets players act on it. Every other system (characters, items, crews, adventure) becomes more meaningful because it feeds into combat power.
 
@@ -14,19 +16,22 @@ After a poker game, players can **challenge** someone they played with to a figh
 
 ## Core Flow
 
+### Path 1: Mark During a Poker Game (Primary)
+
 ```
+During Poker Game
+    ↓
+Player taps opponent's seat → "MARK FOR FIGHT" button
+    ↓
+Mark is placed silently (target does NOT know yet)
+You can mark multiple players during one game
+    ↓
 Poker Game Ends
     ↓
-Challenge Window Opens (5 minutes)
-    ↓
-Challenger picks a target (anyone they played with)
-    ↓
-System auto-picks a random gambleable item from challenger
-System finds closest Power Score match from target
-    ↓
-Target sees challenge popup:
+All marks are delivered as challenges:
   "[Player] is calling you out!"
-  "At stake: [Your Item] vs [Their Item] + chips"
+    ↓
+System auto-picks matched items from both sides
     ↓
 Target chooses:
   🤜 FIGHT → Combat resolves → Winner takes all
@@ -34,6 +39,44 @@ Target chooses:
   ⏰ TIMEOUT (30 sec) → Auto-FLEE
   📴 DISCONNECT → Auto-LOSE (treated as fight loss)
 ```
+
+### Path 2: Mutual Mark = Instant Showdown
+
+```
+During Poker Game
+    ↓
+Player A marks Player B
+Player B marks Player A (neither knows about the other's mark)
+    ↓
+Poker Game Ends
+    ↓
+🔥 MUTUAL CHALLENGE DETECTED 🔥
+Both players marked each other — NO flee option!
+    ↓
+Combat resolves immediately → Winner takes all
+```
+
+When both players independently marked each other, neither can flee — you both wanted this. The fight triggers instantly after the game ends with a special "MUTUAL SHOWDOWN" animation.
+
+### Path 3: Challenge Outside a Game
+
+```
+From CombatScene / Friends / Leaderboard / Recent Opponents
+    ↓
+Player taps "CHALLENGE" on someone
+    ↓
+Challenge is sent immediately (not queued)
+    ↓
+Target gets popup wherever they are:
+  🤜 FIGHT or 🏃 FLEE (30 sec timer)
+  📴 DISCONNECT → Auto-LOSE
+```
+
+Outside-game challenges work the same as in-game ones (same stakes, same resolution) but with these restrictions:
+- **Friends list** — challenge any friend, anytime
+- **Recent Opponents** — anyone you played poker with in the last 24 hours
+- **Leaderboard** — challenge anyone on any leaderboard (bold move)
+- Same cooldown rules apply (1 per target per 24 hours)
 
 ---
 
@@ -185,10 +228,21 @@ The old Karma/Heart system tracked "goodness" and made pure-hearted players invi
 
 ## Challenge Rules & Limits
 
+### In-Game Marks
+
 | Rule | Detail |
 |------|--------|
-| **Who can you challenge?** | Only players you played poker with in the last 5 minutes |
-| **Challenge window** | 5 minutes after the hand/game ends |
+| **When can you mark?** | Anytime during a poker game (from the player's seat popup) |
+| **Is the mark visible?** | No — marks are silent. Target doesn't know until the game ends |
+| **Multiple marks** | You can mark multiple players in the same game |
+| **Mark delivery** | All marks are delivered as challenges when the poker game ends |
+| **Mutual marks** | If both players marked each other → instant fight, no flee option |
+| **Mark expires** | If you leave the table before the game ends, your marks are cancelled |
+
+### All Challenges (In-Game + Outside)
+
+| Rule | Detail |
+|------|--------|
 | **Response timeout** | 30 seconds to Fight or Flee (then auto-flee) |
 | **Disconnect during challenge** | Auto-LOSE (full fight loss penalties) |
 | **Cooldown per target** | 1 challenge per player per 24 hours |
@@ -196,7 +250,16 @@ The old Karma/Heart system tracked "goodness" and made pure-hearted players invi
 | **Coward tag** | Visible for 1 hour after fleeing (cosmetic only) |
 | **Minimum chips to be challenged** | Must have ≥ 1,000 chips (poverty protection) |
 | **Crew immunity** | Can't challenge members of your own crew |
-| **Multiple challenges** | Can challenge multiple different players from the same game, but one at a time |
+| **Multiple challenges** | Challenges resolve one at a time (queue if multiple from same game) |
+
+### Outside-Game Challenges
+
+| Rule | Detail |
+|------|--------|
+| **Friends** | Challenge any friend, anytime |
+| **Recent Opponents** | Anyone you played with in the last 24 hours (visible in CombatScene) |
+| **Leaderboard** | Challenge anyone on any leaderboard |
+| **Mutual marks don't apply** | Outside challenges always give the target fight/flee choice |
 
 ---
 
@@ -204,28 +267,39 @@ The old Karma/Heart system tracked "goodness" and made pure-hearted players invi
 
 | System | Connection |
 |--------|-----------|
-| **Poker** | Creates the tension. You just lost 50K → you want revenge. Challenge window only opens after a game |
+| **Poker** | Creates the tension. Mark someone mid-game while you're fuming. Mutual marks = instant showdown. The game IS the buildup |
 | **Characters** | Each has unique combat stats (ATK/DEF/SPD). Rarer characters = stronger fighters. Adventure character drops now REALLY matter |
 | **Items** | Equipped items give combat bonuses. Items are at stake in fights. Inventory management matters |
 | **Crews** | Online crew members = combat backup. Crew XP from fights. Can't fight crewmates. Makes crews essential |
+| **Friends** | Challenge friends anytime from CombatScene or Friends list. Social connections = potential combat targets |
 | **For Keeps** | Still exists separately as voluntary item-ante poker. Combat is the "dark alley after the card game" version |
 | **Adventure** | Where you grind items and unlock characters that make you stronger in combat |
 | **Notoriety** | Replaces karma. Shows your combat history. Cosmetic + tiny bonus |
-| **Leaderboard** | Add "Most Dangerous" leaderboard category (by notoriety or combat wins) |
+| **Leaderboard** | Add "Most Dangerous" category. Also a source of outside-game challenges (call out top players) |
 
 ---
 
 ## Client UI Flow
 
-### Challenge Initiation (TableScene)
-After a game ends or when leaving the table, a "CHALLENGE" button appears next to each player you played with. Tapping it initiates the challenge.
+### Marking During a Game (TableScene)
+- Tap an opponent's seat → player profile popup appears (already exists)
+- New button in popup: **🎯 MARK FOR FIGHT** (red, bottom of popup)
+- After marking, a small crosshair icon appears on that seat (only visible to you)
+- You can unmark by tapping the seat again → "UNMARK" button
+- Marks are silent — the target sees nothing during the game
 
-### Challenge Popup (Target)
+### Post-Game Challenge Delivery (TableScene)
+When the game ends:
+1. **Mutual marks first** — if two players marked each other, a dramatic "MUTUAL SHOWDOWN" banner appears. No flee option. Fight resolves immediately with a special animation.
+2. **One-way marks next** — delivered as standard challenges to each target, one at a time. Target sees the challenge popup.
+3. If you marked 3 people, they queue up and resolve sequentially.
+
+### Challenge Popup (Target — all challenge types)
 Full-screen popup showing:
 - Challenger's character portrait + name + notoriety title
 - Auto-selected items from both sides (with Power Score)
 - "Half your chips at stake" warning
-- Two big buttons: 🤜 **FIGHT** and 🏃 **FLEE**
+- Two big buttons: 🤜 **FIGHT** and 🏃 **FLEE** (flee hidden for mutual marks)
 - 30-second countdown timer
 
 ### Combat Animation (Both Players)
@@ -234,12 +308,15 @@ Full-screen popup showing:
 - Quick strike animations based on who has higher ATK/DEF/SPD
 - Winner celebration, loser knocked down
 - Results screen: items transferred, chips transferred, notoriety change
+- Mutual showdowns get a special "double draw" intro animation
 
 ### Combat Scene (CombatScene.cs — replaces RobberyScene.cs)
 - Accessed from Main Menu (bottom nav replaces "ROBBERY" button with "COMBAT")
-- Shows: your combat stats, recent fights, notoriety rank, win/loss record
-- Challenge history log
-- No "browse targets" — you can only challenge from the table
+- **Your Stats** — combat record, notoriety rank, win/loss ratio
+- **Recent Fights** — challenge history log with results
+- **Recent Opponents** — players you've played poker with in the last 24 hours, with CHALLENGE button
+- **Challenge from Friends** — opens friends list with CHALLENGE buttons
+- **Leaderboard Challenges** — link to leaderboard with CHALLENGE option on each player
 
 ---
 
@@ -258,11 +335,26 @@ CREATE TABLE combat_log (
     challenger_combat_score FLOAT,
     target_combat_score FLOAT,
     target_action ENUM('fight', 'flee', 'disconnect', 'timeout') NOT NULL,
+    is_mutual BOOLEAN DEFAULT FALSE,
+    source ENUM('in_game', 'friend', 'recent', 'leaderboard') NOT NULL DEFAULT 'in_game',
     table_id VARCHAR(50),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (challenger_id) REFERENCES users(id),
     FOREIGN KEY (target_id) REFERENCES users(id)
 );
+
+-- Tracks who you've played poker with recently (for outside-game challenges)
+CREATE TABLE recent_opponents (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    opponent_id INT NOT NULL,
+    table_id VARCHAR(50),
+    played_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (opponent_id) REFERENCES users(id),
+    UNIQUE KEY unique_pair_per_day (user_id, opponent_id, played_at)
+);
+-- Rows older than 24 hours are pruned by a scheduled cleanup
 ```
 
 ### Columns to Add
@@ -295,17 +387,23 @@ ALTER TABLE users DROP COLUMN karma;
 ### New Events (replace robbery events)
 ```
 Client → Server:
-  challenge_player     { targetId, tableId }
+  mark_player          { targetId, tableId }           # Silent mark during game
+  unmark_player        { targetId, tableId }           # Remove mark during game
+  challenge_player     { targetId, source: 'friend' | 'recent' | 'leaderboard' }  # Outside-game challenge
   respond_to_challenge { challengeId, action: 'fight' | 'flee' }
   get_combat_stats     {}
   get_combat_history   {}
+  get_recent_opponents {}                              # Players from last 24h
 
 Server → Client:
-  challenge_received   { challengeId, challenger, challengerItem, yourItem, chipStake, timeoutSeconds }
+  mark_confirmed       { targetId }                    # Your mark was registered
+  challenge_received   { challengeId, challenger, challengerItem, yourItem, chipStake, timeoutSeconds, isMutual }
+  mutual_showdown      { challengeId, opponent, challengerItem, opponentItem, chipStake }  # No flee!
   challenge_expired    { challengeId, reason }
   combat_result        { challengeId, winner, loser, itemsTransferred, chipsTransferred, scores }
   combat_fled          { challengeId, fleeingPlayer, chipsPenalty }
   notoriety_update     { userId, notoriety, title }
+  recent_opponents     { opponents: [{ userId, username, notoriety, lastPlayedAt }] }
 ```
 
 ### Events to Remove
@@ -318,20 +416,22 @@ get_karma, get_karma_history, get_robbery_targets
 
 ## Implementation Order (When We Build It)
 
-1. **Server: CombatManager.js** — Core logic (challenge, match items, resolve, rewards)
+1. **Server: CombatManager.js** — Core logic (mark, challenge, mutual detection, match items, resolve, rewards)
 2. **Server: CharacterSystem.js** — Add combat stats to all 10 characters
 3. **Server: Item templates** — Add combat bonuses to item definitions
-4. **Server: Database.js** — Add combat tables, remove karma tables
-5. **Server: UserRepository.js** — Notoriety methods, combat log, remove karma methods
-6. **Server: SocketHandler.js** — Replace robbery/karma events with combat events
-7. **Server: Table.js** — Track "recently played with", strip karma from seat state
-8. **Server: server.js** — Remove karma decay timer
-9. **Client: NetworkModels.cs** — Replace robbery/karma models with combat models
-10. **Client: GameService.cs** — Replace robbery/karma methods with combat methods
+4. **Server: Database.js** — Add combat_log, recent_opponents tables; remove karma tables
+5. **Server: UserRepository.js** — Notoriety methods, combat log, recent opponents, remove karma methods
+6. **Server: SocketHandler.js** — Replace robbery/karma events with mark/challenge/combat events
+7. **Server: Table.js** — Track marks per player per game, populate recent_opponents on game end, strip karma from seat state
+8. **Server: server.js** — Remove karma decay timer, add recent_opponents cleanup cron (prune >24h)
+9. **Client: NetworkModels.cs** — Replace robbery/karma models with combat models (marks, mutual, recent opponents)
+10. **Client: GameService.cs** — Replace robbery/karma methods with mark/challenge/combat methods
 11. **Client: SocketManager.cs** — Replace robbery/karma events with combat events
-12. **Client: CombatScene.cs** — New scene (replaces RobberyScene)
-13. **Client: TableScene.cs** — Add challenge button post-game
+12. **Client: CombatScene.cs** — New scene (replaces RobberyScene) with stats, history, recent opponents, challenge-from-friends, leaderboard link
+13. **Client: TableScene.cs** — Add "MARK FOR FIGHT" button in player seat popup, crosshair indicator, post-game challenge delivery queue, mutual showdown UI
 14. **Client: Strip karma** — Remove from PokerTableView, PlayerProfilePopup, StatisticsScene, MainMenuScene
 15. **Client: Add notoriety** — Display at seats, profiles, leaderboard
+16. **Client: FriendsScene.cs** — Add CHALLENGE button next to each friend
+17. **Client: LeaderboardScene.cs** — Add CHALLENGE button next to each player
 
-**Estimated total: ~12-14 hours across 2-3 sessions**
+**Estimated total: ~14-16 hours across 2-3 sessions**
