@@ -1,3 +1,16 @@
+## [Feb 14, 2026] - Fix: Emoji/Unicode rendering (squares → actual glyphs)
+
+**Problem**: All emoji (🏆🔥💰⚙✓ etc.) showed as squares because TMP's default LiberationSans font doesn't include those characters.
+
+**Fix**: Added Segoe UI Symbol + Segoe UI Emoji as TMP fallback fonts.
+- `Assets/Fonts/SegoeUISymbol.ttf` — covers ⚙✓✕←→⚔☠☣⚡ and other symbols
+- `Assets/Fonts/SegoeUIEmoji.ttf` — covers all emoji (🏆🔥💰🎭😄 etc.)
+- `Assets/Editor/SetupEmojiFallbackFont.cs` — auto-generates TMP SDF font assets and registers them as fallbacks on the default LiberationSans SDF font. Runs automatically via `[InitializeOnLoadMethod]`, or manually via **Tools → Setup Emoji Fallback Fonts**.
+
+**Zero code changes** — all existing emoji in the codebase now render correctly through the fallback chain.
+
+---
+
 ## [Feb 13, 2026] - Round 2 COMPLETE: Full Combat System Implementation
 
 **What**: Replaced the old Robbery/Karma system with the new Combat System (PvP post-game showdowns).
