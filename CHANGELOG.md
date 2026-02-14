@@ -1,3 +1,26 @@
+## [Feb 13, 2026] - CRITICAL: Restore TableScene.cs from Dirty-Tree Sweep
+
+**Severity:** CRITICAL — Multiple features broken, UI sizing wrong, menus invisible.
+
+**What happened:** Commit `c076d54` ("auto-reconnect fix") used `git add -A` which accidentally swept in a large set of uncommitted working-tree changes (368 lines modified). This introduced regressions and deleted features.
+
+**Regressions caused by the sweep:**
+1. **Canvas finding reverted** to buggy `FindObjectOfType<Canvas>()` which grabs the SceneTransition overlay canvas → table/cards rendered at wrong size
+2. **Chip-to-pot animations deleted** — both bet→pot and pot→winner `UIAnimations.ChipMovement` calls removed
+3. **Game Over popup gutted** — lost chip delta display, VerticalLayoutGroup, panel shadow, bounce/pulse animations, styled buttons
+4. **`_initialChips` tracking removed** — game over couldn't show +/- chips
+5. **`SceneTransition.LoadScene` → `SceneManager.LoadScene`** — lost transition animations (2 calls)
+6. **15+ `Theme.Current` refs → hardcoded RGB** — lost theming capability
+7. **ScreenSpaceOverlay on nested canvases** (topBar, menuPanel) — made them root canvases, breaking parent-relative positioning → invisible menus
+
+**Fix:** Reset `TableScene.cs` to `e628a31` (last known good), then surgically re-applied only:
+- Reconnect fix: `turnJustCameToMe` logic for action panel unlock (~3 lines)
+- TopBar/menuPanel: `overrideSorting = true` + `sortingOrder = 500` + `GraphicRaycaster` (NO `ScreenSpaceOverlay` on nested canvases)
+
+**Prevention:** Never use `git add -A` without `git diff --stat` first. Only stage files that were intentionally modified.
+
+---
+
 ## [Feb 13, 2026] - Fix: Action Bar Missing After Socket Reconnection
 
 **Severity:** HIGH — Player could not act during their turn after a socket reconnect, leading to auto-fold (turn timeout).
