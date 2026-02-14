@@ -172,16 +172,24 @@ Go through each phase in order. For each item:
 
 ---
 
-## Phase 11: Robbery & Karma — ALL DONE
+## Phase 11: Combat System (Post-Game PvP) — REDESIGN PENDING
+
+> Replaces old Robbery & Karma system. See `COMBAT_SYSTEM_DESIGN.md` for full spec.
 
 | # | Feature | Status | Notes |
 |---|---------|--------|-------|
-| 11.1 | Karma display + heart tiers | DONE | |
-| 11.2 | Robbery targets list | DONE | |
-| 11.3 | Attempt robbery (tool selection) | DONE | |
-| 11.4 | Recovery system (24h window) | DONE | |
-| 11.5 | Robbery history | DONE | |
-| 11.6 | Navigation to RobberyScene | DONE | Button on main menu bottom nav |
+| 11.1 | CombatManager.js (server) | **PENDING** | Challenge, auto-match items, resolve, rewards |
+| 11.2 | Character combat stats (ATK/DEF/SPD) | **PENDING** | Add to CharacterSystem.js, rarity-scaled |
+| 11.3 | Item combat bonuses | **PENDING** | Add ATK/DEF/SPD bonuses to item templates |
+| 11.4 | Combat events (socket wiring) | **PENDING** | challenge_player, respond_to_challenge, combat_result |
+| 11.5 | CombatScene.cs (client) | **PENDING** | Replace RobberyScene — combat stats, history, notoriety |
+| 11.6 | Challenge UI in TableScene | **PENDING** | Post-game challenge button next to players |
+| 11.7 | Notoriety system (replace karma) | **PENDING** | Lifetime combat rep, cosmetic titles, seat icons |
+| 11.8 | Strip karma from all code | **PENDING** | Remove from Table, seats, profiles, stats, 5+ scenes |
+| 11.9 | Combat database tables | **PENDING** | combat_log, notoriety columns, drop karma tables |
+| 11.10 | Navigation to CombatScene | DONE | Button on main menu bottom nav (reuses Robbery slot) |
+
+**Old system status:** RobberyManager.js (server) and RobberyScene.cs (client) exist and work but will be replaced. Karma system works but will be stripped.
 
 ---
 
@@ -268,33 +276,44 @@ Go through each phase in order. For each item:
 3. ~~Build TournamentScene.cs (reuse table with tournament context)~~ ✅ DONE
 4. Test the complete multiplayer flow end-to-end
 
-### Round 2: Polish Core Experience
-5. ~~Per-scene music, global button click SFX, success/error SFX~~ ✅ DONE
-6. ~~Image loading infrastructure (backgrounds, logo, mode cards)~~ ✅ DONE
-7. ~~Gear icon fix, character card click SFX, mode card click SFX~~ ✅ DONE
-8. ~~FriendsScene.unity file + build settings registration~~ ✅ DONE
-9. Add dealing animation (card arc from deck to seats)
-10. Improve chip-to-pot animation (needs chip sprite art)
-11. Test and fix side pots, all-in scenarios, edge cases
-12. Test reconnection mid-hand thoroughly
+### Round 2: Combat System (Replaces Robbery/Karma)
+5. Build CombatManager.js — challenge, auto-match items, resolve, rewards
+6. Add combat stats to characters + combat bonuses to items
+7. Build CombatScene.cs — replace RobberyScene
+8. Add challenge UI to TableScene (post-game button)
+9. Wire combat socket events (client + server)
+10. Build Notoriety system (replace karma)
+11. Strip karma from all server + client code
+12. Add combat_log + notoriety DB tables, drop karma tables
 
-### Round 3: Art Assets
-13. Generate all character portraits (10 chars x 3 variants)
-14. Generate boss portraits (13)
-15. Generate table felt, chip sprites, card back
-16. Generate area backgrounds (8)
-17. Generate remaining item icons
+### Round 3: Polish Core Experience
+13. ~~Per-scene music, global button click SFX, success/error SFX~~ ✅ DONE
+14. ~~Image loading infrastructure (backgrounds, logo, mode cards)~~ ✅ DONE
+15. ~~Gear icon fix, character card click SFX, mode card click SFX~~ ✅ DONE
+16. ~~FriendsScene.unity file + build settings registration~~ ✅ DONE
+17. Add dealing animation (card arc from deck to seats)
+18. Improve chip-to-pot animation (needs chip sprite art)
+19. Test and fix side pots, all-in scenarios, edge cases
+20. Test reconnection mid-hand thoroughly
 
-### Round 4: Audio Assets
-18. Generate character voice lines
-19. Add royal flush SFX
+### Round 4: Art Assets
+21. Generate all character portraits (10 chars x 3 variants)
+22. Generate boss portraits (13)
+23. Generate table felt, chip sprites, card back
+24. Generate area backgrounds (8)
+25. Generate remaining item icons
 
-### Round 5: Final Testing
-20. Full playthrough: launch → login → character select → lobby → create table → play 10 hands → leave
-21. Full adventure run: map → boss → win → rewards → character drop
-22. Inventory: equip items, switch characters
-23. Social: add friend, invite to table, crew create/chat
-24. Edge cases: disconnect/reconnect, empty table, all bots, maximum players
+### Round 5: Audio Assets
+26. Generate character voice lines
+27. Add royal flush SFX
+
+### Round 6: Final Testing
+28. Full playthrough: launch → login → character select → lobby → create table → play 10 hands → leave
+29. Full adventure run: map → boss → win → rewards → character drop
+30. Inventory: equip items, switch characters
+31. Social: add friend, invite to table, crew create/chat
+32. Combat: play game → challenge → fight/flee → verify item/chip transfer
+33. Edge cases: disconnect/reconnect, empty table, all bots, maximum players, disconnect during combat
 
 ---
 
@@ -312,12 +331,12 @@ Go through each phase in order. For each item:
 | Characters | 4/6 | 0 | 0 | 2 |
 | Statistics | 8/8 | 0 | 0 | 0 |
 | Crews | 6/6 | 0 | 0 | 0 |
-| Robbery | 6/6 | 0 | 0 | 0 |
+| Combat (was Robbery) | 1/10 | 0 | 9 | 0 |
 | Shop | 3/3 | 0 | 0 | 0 |
 | Settings | 5/5 | 0 | 0 | 0 |
 | Tournaments | 5/5 | 0 | 0 | 0 |
 | Social | 6/6 | 0 | 0 | 0 |
 | Art & Audio | 1/12 | 0 | 2 | 9 |
-| **TOTAL** | **101/123** | **2** | **2** | **18** |
+| **TOTAL** | **96/127** | **2** | **11** | **18** |
 
-**The game is ~82% code-complete.** All 16 scenes are built and functional. Core poker, adventure, stats, crews, robbery, shop, settings, inventory, friends, leaderboards, and tournaments are all wired end-to-end. Per-scene music, button click SFX, and success/error audio are wired globally. The remaining work is: 2 animation polish items, 2 missing audio files, and 9 art asset batches.
+**The game is ~76% code-complete.** All 16 scenes are built and functional. Core poker, adventure, stats, crews, shop, settings, inventory, friends, leaderboards, and tournaments are all wired end-to-end. Per-scene music, button click SFX, and success/error audio are wired globally. The remaining code work is: 9 combat system items (redesign from old robbery/karma), 2 animation polish items, 2 missing audio files, and 9 art asset batches.

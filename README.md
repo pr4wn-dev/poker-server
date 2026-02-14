@@ -18,6 +18,7 @@ Built with **Unity** (client) and **Node.js + Socket.IO** (server), using **MySQ
 | [SETUP_NEW_PC.md](SETUP_NEW_PC.md) | Fresh machine setup (Node, MySQL, XAMPP, Unity) |
 | [TESTING.md](TESTING.md) | Testing guide: unit tests, simulation comparison, state snapshots |
 | [CHANGELOG.md](CHANGELOG.md) | All bugs, fixes, and issue history — **search here first!** |
+| [COMBAT_SYSTEM_DESIGN.md](COMBAT_SYSTEM_DESIGN.md) | Full combat/PvP system design (replaces robbery) |
 | [AGENT_RULES.md](AGENT_RULES.md) | Rules for AI agents working on this project |
 | [UI_BEST_PRACTICES.md](UI_BEST_PRACTICES.md) | UI component best practices: position locking, animations, layout |
 | [ART_ASSET_PROMPTS.md](ART_ASSET_PROMPTS.md) | AI image generation prompts for all game art |
@@ -68,19 +69,11 @@ Brackets, registration, elimination, side pots. Multiple tournament types with c
 ### Crew/Gang System
 Create crews with roles (Leader/Officer/Member). Crew XP, levels, perks, and leaderboard. Invite players, promote, kick, crew chat.
 
-### Robbery System (PvP)
-Steal items from other players using 6 tool types. 4 defense items. Cooldowns, chip penalties, karma consequences.
+### Combat System (Post-Game PvP)
+After a poker game, challenge someone you played with to a fight. System auto-picks matched items from both players (by Power Score) and puts half the loser's chips on the line. Target can fight back or flee. Combat resolves automatically based on character stats + equipped item bonuses + crew backup + random roll. Going offline during a challenge = auto-lose (no dodging). See `COMBAT_SYSTEM_DESIGN.md` for full spec.
 
-### Karma/Heart System
-Every player starts with a **Pure White Heart** (karma = 100). Committing crimes darkens it:
-- **Pure Heart** (95-100): Invisible to criminals, can't be robbed
-- **Light Gray** (75-94): Slightly visible
-- **Gray** (50-74): Moderately visible
-- **Dark Gray** (25-49): Easily found
-- **Charcoal** (1-24): Very easily found
-- **Black Heart** (0): Maximum visibility, 2× robbery success rate against you
-
-Players can always change characters, but their heart status persists. Karma regenerates +1/day toward pure.
+### Notoriety System
+Lifetime combat reputation. Win fights → gain notoriety → earn titles (Civilian → Troublemaker → Outlaw → Gunslinger → Most Wanted). Cosmetic skull icons at table seats + tiny combat bonus. Replaces the old Karma/Heart system.
 
 ---
 
@@ -264,8 +257,7 @@ See `src/sockets/Events.js` for complete documentation.
 - `get_titles` / `set_active_title` — Titles
 - `get_characters` / `get_player_characters` / `set_active_character` / `get_character_sounds` — Characters
 - `create_crew` / `get_crew` / `invite_to_crew` / `join_crew` / `leave_crew` / `crew_promote` / `crew_kick` / `get_crew_leaderboard` — Crews
-- `robbery_attempt` / `robbery_recovery` / `get_recoverable_robberies` — Robbery
-- `get_karma` / `get_karma_history` / `get_robbery_targets` — Karma
+- `challenge_player` / `respond_to_challenge` / `get_combat_stats` / `get_combat_history` — Combat (replacing robbery/karma events)
 - `get_spectator_odds` / `spectator_bet` / `spectator_reaction` — Spectator
 - `save_hand` / `get_saved_hands` / `get_hand_of_the_day` / `get_hand_replay` — Replays
 - `get_active_events` / `get_daily_reward_status` / `claim_daily_reward` — Events & rewards
@@ -312,7 +304,7 @@ All UI is built **programmatically** via `SceneBootstrap.cs` — no drag-and-dro
 | AdventureBattle | Poker-vs-AI boss gameplay |
 | Inventory | View/equip/unequip/use items |
 | Crew | Create/manage crew, members, chat, leaderboard |
-| Robbery | PvP robbery, target browsing (karma-filtered), tools |
+| Combat | Post-game PvP challenges, fight/flee, combat stats, notoriety |
 | HandReplay | Replay saved hands step by step |
 | Leaderboard | Top players by chips/wins/level |
 | Shop | Cosmetic store (planned) |
@@ -335,7 +327,7 @@ All UI is built **programmatically** via `SceneBootstrap.cs` — no drag-and-dro
 - TitleEngine (311): 25+ dynamic titles across 7 categories
 - FireTracker (290): NBA Jam-style fire/cold detection
 - CharacterSystem (493): 10 playable characters (Common→Mythic) + 13 bosses = 23 named characters total
-- RobberyManager (498): PvP robbery with karma-based targeting, tools, defense
+- RobberyManager (498): **→ Being replaced by CombatManager** (post-game PvP challenges)
 - CrewManager (413): Crews with roles, perks, chat, XP, leaderboard
 - TournamentManager (435): Brackets, registration, elimination
 - AdventureManager (492): World map, areas, boss battles
@@ -348,7 +340,7 @@ All UI is built **programmatically** via `SceneBootstrap.cs` — no drag-and-dro
 - MainMenuScene (2.4K): Login/register, quick play, event banner, daily rewards popup
 - LobbyScene (1.3K): Browse/create/join tables
 - StatisticsScene (969): 40+ stats in tabs with karma tier display
-- CrewScene (815), RobberyScene (674), InventoryScene (689): Full feature UIs
+- CrewScene (815), RobberyScene (674 → **being replaced by CombatScene**), InventoryScene (689): Full feature UIs
 - AdventureMapScene (674) + AdventureBattleScene (838): Boss challenge flow
 - HandReplayScene (501), TournamentScene (1048), CharacterSelectScene (488), FriendsScene (576)
 - SettingsScene (589): With progress reset confirmation
