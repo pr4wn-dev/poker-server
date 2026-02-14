@@ -1,3 +1,15 @@
+## [Feb 14, 2026] - Fix: Table menu invisible (ScreenSpaceOverlay re-regression)
+
+**Problem**: Table hamburger menu (☰) not showing when clicked. topBar/menuPanel canvases invisible.
+
+**Root Cause**: Commit `578cacb` (or `9071b43`) re-introduced `renderMode = ScreenSpaceOverlay` on the topBar and menuPanel nested canvases, overwriting the fix from commit `51b27a5`. `ScreenSpaceOverlay` on nested canvases detaches them from the parent Canvas coordinate system, breaking their RectTransform positioning and making them invisible.
+
+**Fix**: Removed `renderMode = ScreenSpaceOverlay` from both topBar and menuPanel nested canvases. Using `overrideSorting = true` + `sortingOrder = 500` only (no ScreenSpaceOverlay). Added explicit comments explaining WHY ScreenSpaceOverlay must not be used on nested canvases.
+
+**This is the THIRD time this bug has occurred.** Previous fixes: `51b27a5`, CHANGELOG "Dirty-Tree Sweep" entry.
+
+---
+
 ## [Feb 14, 2026] - Fix: Emoji/Unicode rendering (squares → actual glyphs)
 
 **Problem**: All emoji (🏆🔥💰⚙✓ etc.) showed as squares because TMP's default LiberationSans font doesn't include those characters.
