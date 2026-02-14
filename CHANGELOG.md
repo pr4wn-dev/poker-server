@@ -1,3 +1,22 @@
+## [Feb 13, 2026] - Polish: Scenes 1-3 (Connection, Login, Main Menu) — Audio & Image Infrastructure
+
+**What**: Scene-by-scene audit and polish pass for the first 3 screens the player sees.
+
+**Changes**:
+1. **Global Button Click SFX** — Added `AudioManager.Instance?.PlayButtonClick()` to both `UIFactory.CreateButton()` and `UIFactory.CreateStyledButton()`. Every button in every scene now plays a click sound automatically.
+2. **Login/Register Error & Success SFX** — Login success → `PlaySuccess()`, login fail → `PlayError()`, register success → `PlaySuccess()`, register fail → `PlayError()`, server found → `PlaySuccess()`, no server → `PlayError()`.
+3. **Gear Icon Fix** — Login panel settings button changed from text "GEAR" to Unicode ⚙ character.
+4. **Image Loading Infrastructure** — Background, logo, and mode card images now attempt to load from `Resources/Sprites/`:
+   - `Sprites/Backgrounds/menu_bg` → fills the full-screen background (falls back to solid color + scan lines)
+   - `Sprites/UI/logo` → replaces the "POKER" text title on connection and login screens (falls back to text)
+   - `Sprites/UI/adventure_card` → semi-transparent background image on the Adventure mode card (falls back to none)
+   - `Sprites/UI/multiplayer_card` → same for Multiplayer mode card
+5. **Mode Card Button SFX** — Mode card buttons (Adventure/Multiplayer) now play click SFX since they use manual `AddComponent<Button>()` instead of UIFactory.
+
+**How to add art**: Drop PNG/JPG files into the Resources folders above. Unity auto-imports them. The code will find and use them on next launch.
+
+---
+
 ## [Feb 13, 2026] - CRITICAL: Restore TableScene.cs from Dirty-Tree Sweep
 
 **Severity:** CRITICAL — Multiple features broken, UI sizing wrong, menus invisible.
