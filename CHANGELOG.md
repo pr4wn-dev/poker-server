@@ -1,3 +1,29 @@
+## [Feb 13, 2026] - Polish: ALL 16 Scenes — Audio, SFX & Image Infrastructure
+
+**What**: Full audit and polish pass across every scene in the game.
+
+**Changes**:
+1. **Global Button Click SFX** — Added to `UIFactory.CreateButton()` and `UIFactory.CreateStyledButton()`. Every button in every scene now plays a click sound automatically.
+2. **Scene Music** — Every scene now plays appropriate music on Start():
+   - Menu screens (MainMenu, CharacterSelect, Inventory, Friends, Settings, Shop, Statistics, Leaderboard, Robbery, Crew, HandReplay): `PlayMenuMusic()`
+   - Lobby, Tournaments: `PlayLobbyMusic()`
+   - Adventure (map + scene): `PlayAdventureMusic()`
+   - Boss Battle: `PlayBossMusic()`
+   - Table: `PlayTableMusic()` (already existed)
+3. **Error/Success SFX** — Added to login, register, connection, table join/create, character set-active callbacks.
+4. **Gear Icon Fix** — Login settings button "GEAR" → ⚙ Unicode character.
+5. **Image Loading Infrastructure** — All backgrounds try to load sprites from Resources:
+   - `Sprites/Backgrounds/menu_bg`, `lobby_bg`, `table_bg`, `character_select_bg`
+   - `Sprites/UI/logo` (connection + login screens)
+   - `Sprites/UI/adventure_card`, `multiplayer_card` (main menu mode cards)
+   - Falls back gracefully to solid color panels if sprites not found.
+6. **Character Card Click SFX** — Manual `AddComponent<Button>()` cards now play click SFX.
+7. **Mode Card Click SFX** — Main Menu Adventure/Multiplayer cards now play click SFX.
+
+**How to add art**: Drop PNG/JPG files into `Assets/Resources/Sprites/` folders. Unity auto-imports. Code loads them on next launch.
+
+---
+
 ## [Feb 13, 2026] - Polish: Scenes 1-3 (Connection, Login, Main Menu) — Audio & Image Infrastructure
 
 **What**: Scene-by-scene audit and polish pass for the first 3 screens the player sees.
