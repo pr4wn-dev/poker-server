@@ -1,12 +1,16 @@
-## [Feb 14, 2026] - Fix: Table menu invisible (ScreenSpaceOverlay re-regression)
+## [Feb 14, 2026] - Fix: Table menu invisible (TWO compounding bugs)
 
-**Problem**: Table hamburger menu (☰) not showing when clicked. topBar/menuPanel canvases invisible.
+**Problem**: Table hamburger menu (☰) clickable but visually invisible — bg_table image covers it.
 
-**Root Cause**: Commit `578cacb` (or `9071b43`) re-introduced `renderMode = ScreenSpaceOverlay` on the topBar and menuPanel nested canvases, overwriting the fix from commit `51b27a5`. `ScreenSpaceOverlay` on nested canvases detaches them from the parent Canvas coordinate system, breaking their RectTransform positioning and making them invisible.
+**Root Cause 1 (MAIN)**: `FindObjectOfType<Canvas>()` at line 330 grabbed the **SceneTransition overlay canvas** (sortingOrder 9999, DontDestroyOnLoad) instead of the game canvas. All table UI was built as children of this 9999-sorting canvas. The menuPanel's `overrideSorting = true, sortingOrder = 500` actually rendered it BELOW the background (at 9999). Clicks worked because the background had `raycastTarget = false`.
 
-**Fix**: Removed `renderMode = ScreenSpaceOverlay` from both topBar and menuPanel nested canvases. Using `overrideSorting = true` + `sortingOrder = 500` only (no ScreenSpaceOverlay). Added explicit comments explaining WHY ScreenSpaceOverlay must not be used on nested canvases.
+**Root Cause 2**: `ScreenSpaceOverlay` was re-introduced on nested canvases (topBar, menuPanel, blindTimer, MyChipsPanel) after being explicitly removed in commit `51b27a5`.
 
-**This is the THIRD time this bug has occurred.** Previous fixes: `51b27a5`, CHANGELOG "Dirty-Tree Sweep" entry.
+**Fix**:
+1. Replaced `FindObjectOfType<Canvas>()` with filtered `FindObjectsOfType<Canvas>()` loop that excludes canvases with `sortingOrder >= 100` or without `GraphicRaycaster` (matches pattern used by LobbyScene, InventoryScene, etc.)
+2. Removed `ScreenSpaceOverlay` from all 4 nested canvases (topBar, menuPanel, blindTimer, MyChipsPanel)
+
+**This is the THIRD occurrence of these bugs.** Original fix: `51b27a5`, documented in CHANGELOG "Dirty-Tree Sweep" entry. Both were re-introduced by later commits.
 
 ---
 
