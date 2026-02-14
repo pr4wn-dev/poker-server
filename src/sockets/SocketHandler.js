@@ -4053,6 +4053,45 @@ class SocketHandler {
         // Register in game manager (handles reconnection if player already exists)
         this.gameManager.registerPlayer(socket.id, profile.username, userId);
         
+        // CRITICAL FIX: Auto-rejoin table room if player was in a game
+        // When a socket reconnects, the new socket is NOT in the table's Socket.IO room.
+        // Without this, the player won't receive game_state broadcasts and their action bar won't show.
+        const player = this.gameManager.players.get(userId);
+        if (player && player.currentTableId) {
+            const table = this.gameManager.getTable(player.currentTableId);
+            if (table) {
+                const seat = table.seats.find(s => s?.playerId === userId);
+                if (seat) {
+                    // Rejoin the table room
+                    socket.join(`table:${table.id}`);
+                    
+                    // Clear reconnect timeout and mark seat as connected
+                    this.clearReconnectTimeout(userId);
+                    seat.isConnected = true;
+                    seat.disconnectedAt = null;
+                    
+                    // Send fresh game state to the reconnected player
+                    const state = table.getState(userId);
+                    socket.emit('game_state', state);
+                    
+                    // Notify other players
+                    socket.to(`table:${table.id}`).emit('player_reconnected', {
+                        playerId: userId,
+                        username: profile.username
+                    });
+                    
+                    gameLogger.gameEvent('SYSTEM', `[SOCKET] AUTO_REJOIN_TABLE`, { 
+                        userId, 
+                        username: profile.username, 
+                        tableId: table.id, 
+                        tableName: table.name,
+                        currentPlayer: table.currentPlayerIndex >= 0 ? table.seats[table.currentPlayerIndex]?.name : 'none',
+                        phase: table.phase
+                    });
+                }
+            }
+        }
+        
         // Notify friends that user came online
         this.notifyFriendsStatus(userId, true);
         
