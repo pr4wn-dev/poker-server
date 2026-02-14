@@ -296,7 +296,7 @@ See `env.example` for all options:
 
 ---
 
-## 🖥️ Unity Client (15 Scenes)
+## 🖥️ Unity Client (16 Scenes)
 
 All UI is built **programmatically** via `SceneBootstrap.cs` — no drag-and-drop. Each `.unity` scene file is minimal (camera + event system + bootstrap script). `GameTheme.cs` controls all styling.
 
@@ -316,6 +316,7 @@ All UI is built **programmatically** via `SceneBootstrap.cs` — no drag-and-dro
 | HandReplay | Replay saved hands step by step |
 | Leaderboard | Top players by chips/wins/level |
 | Shop | Cosmetic store (planned) |
+| Friends | Friends list, requests, search users, invite to table |
 | Settings | Audio, controls, reset progress |
 
 ---
@@ -342,14 +343,14 @@ All UI is built **programmatically** via `SceneBootstrap.cs` — no drag-and-dro
 - EventManager (175): Seasonal/weekly events with multipliers
 - CollusionDetector (215): Anti-cheat analysis
 
-**Client:** 15 Unity scenes + 11 UI components totaling ~25,000 lines of C#
+**Client:** 16 Unity scenes + 11 UI components totaling ~25,000 lines of C#
 - TableScene (3.5K) + PokerTableView (1.3K): Full poker gameplay with character rendering, karma hearts, fire glow
 - MainMenuScene (2.4K): Login/register, quick play, event banner, daily rewards popup
 - LobbyScene (1.3K): Browse/create/join tables
 - StatisticsScene (969): 40+ stats in tabs with karma tier display
 - CrewScene (815), RobberyScene (674), InventoryScene (689): Full feature UIs
 - AdventureMapScene (674) + AdventureBattleScene (838): Boss challenge flow
-- HandReplayScene (501), TournamentScene (515), CharacterSelectScene (488)
+- HandReplayScene (501), TournamentScene (1048), CharacterSelectScene (488), FriendsScene (576)
 - SettingsScene (589): With progress reset confirmation
 - PlayerProfilePopup (414): Tap-to-view at table seats
 - FriendsPanel (428), DailyRewardsPopup (342), AchievementsPanel (289), SpectatorPanel (340)
@@ -372,22 +373,22 @@ All UI is built **programmatically** via `SceneBootstrap.cs` — no drag-and-dro
 
 **Audio Assets (AI-generated):**
 - Character sounds (win/lose/fold/all-in/taunt per character) - CharacterSoundManager already wired
-- Per-scene music, SFX (card flip, chip clink, fire whoosh, etc.)
+- Royal flush SFX (referenced but no file)
 
 **Monetization (not started):**
 - Ad integration (AdMob/Unity Ads - interstitial, rewarded video, banners)
 - Chip purchasing (IAP), premium membership, shop catalog + purchase flow
 
 **Minor code gaps:**
-- Leaderboard scene - scaffold exists, needs server ranking data wired
 - Shop scene - scaffold exists, needs catalog + purchase flow
 - Tutorial overlay - scaffold exists, needs first-time player content
 - Emote panel - scaffold exists, needs emote selection + display at table
 - Adventure area rename (old casino names to crime theme names)
 
 **Polish and animations:**
-- Card flip, screen shake, fire/ice particles, robbery reveal, victory celebration
-- Boss entrance, chip counting, XP popup, title earned, scene transitions
+- Card dealing arc animation (cards appear in place, need fly-from-deck arc)
+- Screen shake, fire/ice particles, robbery reveal, victory celebration
+- Boss entrance, chip counting, XP popup, title earned
 
 **Platform and release:**
 - Android build optimization (texture compression, 60fps profiling)

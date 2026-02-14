@@ -1,7 +1,7 @@
 # GAME COMPLETION PLAN — Scene-by-Scene Walkthrough
 
 > Master checklist for completing every player experience from app launch to endgame.  
-> Status as of Feb 12, 2026. Work through top-to-bottom at home.
+> Status as of Feb 13, 2026. Work through top-to-bottom at home.
 
 ---
 
@@ -207,7 +207,7 @@ Go through each phase in order. For each item:
 
 ---
 
-## Phase 14: Tournaments — PARTIAL
+## Phase 14: Tournaments — ALL DONE
 
 | # | Feature | Status | Notes |
 |---|---------|--------|-------|
@@ -269,28 +269,32 @@ Go through each phase in order. For each item:
 4. Test the complete multiplayer flow end-to-end
 
 ### Round 2: Polish Core Experience
-5. Add dealing animation (card arc from deck to seats)
-6. Add chip-to-pot animation
-7. Test and fix side pots, all-in scenarios, edge cases
-8. Test reconnection mid-hand thoroughly
+5. ~~Per-scene music, global button click SFX, success/error SFX~~ ✅ DONE
+6. ~~Image loading infrastructure (backgrounds, logo, mode cards)~~ ✅ DONE
+7. ~~Gear icon fix, character card click SFX, mode card click SFX~~ ✅ DONE
+8. ~~FriendsScene.unity file + build settings registration~~ ✅ DONE
+9. Add dealing animation (card arc from deck to seats)
+10. Improve chip-to-pot animation (needs chip sprite art)
+11. Test and fix side pots, all-in scenarios, edge cases
+12. Test reconnection mid-hand thoroughly
 
 ### Round 3: Art Assets
-9. Generate all character portraits (10 chars x 3 variants)
-10. Generate boss portraits (13)
-11. Generate table felt, chip sprites, card back
-12. Generate area backgrounds (8)
-13. Generate remaining item icons
+13. Generate all character portraits (10 chars x 3 variants)
+14. Generate boss portraits (13)
+15. Generate table felt, chip sprites, card back
+16. Generate area backgrounds (8)
+17. Generate remaining item icons
 
 ### Round 4: Audio Assets
-14. Generate character voice lines
-15. Add royal flush SFX
+18. Generate character voice lines
+19. Add royal flush SFX
 
 ### Round 5: Final Testing
-16. Full playthrough: launch → login → character select → lobby → create table → play 10 hands → leave
-17. Full adventure run: map → boss → win → rewards → character drop
-18. Inventory: equip items, switch characters
-19. Social: add friend, invite to table, crew create/chat
-20. Edge cases: disconnect/reconnect, empty table, all bots, maximum players
+20. Full playthrough: launch → login → character select → lobby → create table → play 10 hands → leave
+21. Full adventure run: map → boss → win → rewards → character drop
+22. Inventory: equip items, switch characters
+23. Social: add friend, invite to table, crew create/chat
+24. Edge cases: disconnect/reconnect, empty table, all bots, maximum players
 
 ---
 
@@ -302,18 +306,18 @@ Go through each phase in order. For each item:
 | Character Select | 6/7 | 0 | 0 | 1 |
 | Main Menu | 10/10 | 0 | 0 | 0 |
 | Lobby | 6/6 | 0 | 0 | 0 |
-| Core Poker | 20/24 | 2 | 0 | 3 |
+| Core Poker | 19/24 | 2 | 0 | 3 |
 | Adventure | 5/7 | 0 | 0 | 2 |
 | Inventory | 5/6 | 0 | 0 | 1 |
-| Characters | 3/6 | 0 | 0 | 2 |
+| Characters | 4/6 | 0 | 0 | 2 |
 | Statistics | 8/8 | 0 | 0 | 0 |
 | Crews | 6/6 | 0 | 0 | 0 |
 | Robbery | 6/6 | 0 | 0 | 0 |
 | Shop | 3/3 | 0 | 0 | 0 |
 | Settings | 5/5 | 0 | 0 | 0 |
-| Tournaments | 4/5 | 0 | 0 | 0 |
+| Tournaments | 5/5 | 0 | 0 | 0 |
 | Social | 6/6 | 0 | 0 | 0 |
-| Art & Audio | 3/12 | 0 | 2 | 9 |
-| **TOTAL** | **101** | **3** | **2** | **18** |
+| Art & Audio | 1/12 | 0 | 2 | 9 |
+| **TOTAL** | **101/123** | **2** | **2** | **18** |
 
-**The game is ~83% complete.** Core poker, adventure, stats, crews, robbery, shop, settings, inventory, friends, leaderboards, and tournaments are all functional. The remaining work is: 2 missing audio files, polish animations, and 9 art asset batches.
+**The game is ~82% code-complete.** All 16 scenes are built and functional. Core poker, adventure, stats, crews, robbery, shop, settings, inventory, friends, leaderboards, and tournaments are all wired end-to-end. Per-scene music, button click SFX, and success/error audio are wired globally. The remaining work is: 2 animation polish items, 2 missing audio files, and 9 art asset batches.
