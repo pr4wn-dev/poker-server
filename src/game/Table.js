@@ -10303,9 +10303,9 @@ class Table {
                     // Active character
                     activeCharacter: seat.activeCharacter || 'shadow_hacker',
                     characterSpriteSet: seat.characterSpriteSet || 'char_shadow_hacker',
-                    // Karma / Heart system
-                    karma: seat.karma ?? 100,
-                    heartColor: seat.heartColor || 'white'
+                    // Notoriety (Combat System — replaces Karma)
+                    notoriety: seat.notoriety || 0,
+                    notorietyTier: seat.notorietyTier || { title: 'Civilian', visual: 'none', notoriety: 0 }
                 };
             })
         };

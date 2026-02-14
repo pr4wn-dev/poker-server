@@ -180,7 +180,7 @@ class UserRepository {
      */
     async getFullProfile(userId) {
         const user = await db.queryOne(
-            'SELECT id, username, email, chips, adventure_coins, karma, created_at, last_login FROM users WHERE id = ?',
+            'SELECT id, username, email, chips, adventure_coins, notoriety, combat_wins, combat_losses, bruised_until, coward_until, created_at, last_login FROM users WHERE id = ?',
             [userId]
         );
         
@@ -205,7 +205,9 @@ class UserRepository {
         const friends = await this.getFriendIds(userId);
         const friendRequests = await this.getFriendRequests(userId);
         
-        const karma = user.karma ?? 100;
+        const CombatManager = require('../game/CombatManager');
+        const notoriety = user.notoriety || 0;
+        const notorietyTier = CombatManager.getNotorietyTier(notoriety);
         
         return {
             id: user.id,
@@ -213,9 +215,12 @@ class UserRepository {
             email: user.email,
             chips: user.chips,
             adventureCoins: user.adventure_coins,
-            karma: karma,
-            heartColor: UserRepository.getHeartColor(karma),
-            heartTier: UserRepository.getHeartTier(karma),
+            notoriety: notoriety,
+            notorietyTier: notorietyTier,
+            combatWins: user.combat_wins || 0,
+            combatLosses: user.combat_losses || 0,
+            isBruised: user.bruised_until && new Date(user.bruised_until) > new Date(),
+            isCoward: user.coward_until && new Date(user.coward_until) > new Date(),
             createdAt: user.created_at,
             lastLogin: user.last_login,
             stats: stats ? {
@@ -243,7 +248,7 @@ class UserRepository {
      */
     async getPublicProfile(userId) {
         const user = await db.queryOne(
-            'SELECT id, username, chips, karma, created_at FROM users WHERE id = ?',
+            'SELECT id, username, chips, notoriety, combat_wins, combat_losses, bruised_until, created_at FROM users WHERE id = ?',
             [userId]
         );
         
@@ -259,15 +264,18 @@ class UserRepository {
             [userId]
         );
         
-        const karma = user.karma ?? 100;
+        const CombatManager = require('../game/CombatManager');
+        const notoriety = user.notoriety || 0;
         
         return {
             id: user.id,
             username: user.username,
             chips: user.chips,
-            karma: karma,
-            heartColor: UserRepository.getHeartColor(karma),
-            heartTier: UserRepository.getHeartTier(karma),
+            notoriety: notoriety,
+            notorietyTier: CombatManager.getNotorietyTier(notoriety),
+            combatWins: user.combat_wins || 0,
+            combatLosses: user.combat_losses || 0,
+            isBruised: user.bruised_until && new Date(user.bruised_until) > new Date(),
             stats: stats || {},
             highestLevel: progress?.highest_level || 1
         };
@@ -303,128 +311,40 @@ class UserRepository {
         );
     }
     
-    // ============ Karma / Heart System ============
-    // Karma scale: 100 = Pure White (never committed crime), 0 = Pitch Black (hardened criminal)
-    // Players at 100 karma cannot be targeted for robbery at all
-    // Players below 100 are visible to criminals; lower karma = easier to find
+    // ============ Notoriety System (replaces old Karma/Heart) ============
+    // Notoriety: 0 = Civilian, 51+ = Most Wanted
+    // Gained by winning combat, lost over time (natural decay)
     
     /**
-     * Get a player's current karma value
+     * Get a player's notoriety value
      */
-    async getKarma(userId) {
-        const row = await db.queryOne('SELECT karma FROM users WHERE id = ?', [userId]);
-        return row?.karma ?? 100;
+    async getNotoriety(userId) {
+        const row = await db.queryOne('SELECT notoriety FROM users WHERE id = ?', [userId]);
+        return row?.notoriety || 0;
     }
     
     /**
-     * Modify karma by a delta amount with logging
-     * @param {string} userId 
-     * @param {number} delta - Negative = lose karma (commit crime), Positive = gain karma (decay back)
-     * @param {string} reason - Short reason code (e.g., 'robbery_attempt', 'robbery_success', 'daily_decay')
-     * @param {string} [details] - Optional longer description
-     * @returns {Object} { karmaBefore, karmaAfter, heartColor }
+     * Get a player's combat stats summary
      */
-    async modifyKarma(userId, delta, reason, details = null) {
-        const gameLogger = require('../utils/GameLogger');
-        
-        const current = await this.getKarma(userId);
-        const newKarma = Math.max(0, Math.min(100, current + delta));
-        
-        if (newKarma !== current) {
-            await db.query('UPDATE users SET karma = ? WHERE id = ?', [newKarma, userId]);
-            
-            await db.query(`
-                INSERT INTO karma_history (user_id, karma_before, karma_after, change_amount, reason, details)
-                VALUES (?, ?, ?, ?, ?, ?)
-            `, [userId, current, newKarma, delta, reason, details]);
-            
-            gameLogger.gameEvent('KARMA', `[KARMA_CHANGE] ${reason}`, {
-                userId, before: current, after: newKarma, delta, reason
-            });
-        }
-        
-        return {
-            karmaBefore: current,
-            karmaAfter: newKarma,
-            heartColor: UserRepository.getHeartColor(newKarma)
-        };
-    }
-    
-    /**
-     * Get heart color name from karma value
-     * @param {number} karma - 0-100
-     * @returns {string} Color name for the heart
-     */
-    static getHeartColor(karma) {
-        if (karma >= 95) return 'white';       // Pure — never committed crime (or nearly)
-        if (karma >= 80) return 'light_gray';  // Dabbled — a petty crime or two
-        if (karma >= 60) return 'gray';        // Criminal — regular offender
-        if (karma >= 40) return 'dark_gray';   // Hardened — serious criminal
-        if (karma >= 20) return 'charcoal';    // Menace — feared by many
-        return 'black';                         // Pitch black — the worst of the worst
-    }
-    
-    /**
-     * Get heart tier info (name + description) for display
-     */
-    static getHeartTier(karma) {
-        if (karma >= 95) return { color: 'white', name: 'Pure Heart', desc: 'Clean conscience. Protected from crime.' };
-        if (karma >= 80) return { color: 'light_gray', name: 'Fading Innocence', desc: 'You\'ve dipped your toes in the dark side.' };
-        if (karma >= 60) return { color: 'gray', name: 'Gray Heart', desc: 'A known criminal. Others can sense it.' };
-        if (karma >= 40) return { color: 'dark_gray', name: 'Dark Heart', desc: 'Hardened criminal. Easy to find.' };
-        if (karma >= 20) return { color: 'charcoal', name: 'Shadow Heart', desc: 'A menace. Everyone knows your name.' };
-        return { color: 'black', name: 'Black Heart', desc: 'Pure evil. A target for everyone.' };
-    }
-    
-    /**
-     * Get robbery visibility multiplier based on victim karma
-     * Lower karma = higher multiplier = easier to find/target
-     * @param {number} karma - Victim's karma (0-100)
-     * @returns {number} 0.0 (invisible at 100 karma) to 2.0 (fully exposed at 0 karma)
-     */
-    static getRobberyVisibility(karma) {
-        if (karma >= 95) return 0.0;  // Pure hearts are INVISIBLE to criminals
-        // Linear scale: 94 karma = 0.06, 50 karma = 1.0, 0 karma = 2.0
-        return Math.min(2.0, (100 - karma) / 50);
-    }
-    
-    /**
-     * Get karma history for a player
-     */
-    async getKarmaHistory(userId, limit = 20) {
-        return await db.query(
-            'SELECT * FROM karma_history WHERE user_id = ? ORDER BY created_at DESC LIMIT ?',
-            [userId, limit]
+    async getCombatStats(userId) {
+        const user = await db.queryOne(
+            'SELECT notoriety, combat_wins, combat_losses, bruised_until, coward_until FROM users WHERE id = ?',
+            [userId]
         );
-    }
-    
-    /**
-     * Apply daily karma decay (slowly regenerates toward neutral)
-     * Called by server cron - moves karma 1 point toward 100 each day
-     */
-    async applyKarmaDecay(userId) {
-        const current = await this.getKarma(userId);
-        if (current >= 100) return; // Already pure
+        if (!user) return null;
         
-        // Decay rate: +1 karma per day (slow redemption)
-        await this.modifyKarma(userId, 1, 'daily_decay', 'Natural karma recovery (+1/day)');
-    }
-    
-    /**
-     * Bulk apply daily karma decay for all players with karma < 100
-     */
-    async applyBulkKarmaDecay() {
-        const gameLogger = require('../utils/GameLogger');
-        const users = await db.query('SELECT id FROM users WHERE karma < 100');
-        let count = 0;
-        for (const user of users) {
-            await this.modifyKarma(user.id, 1, 'daily_decay', 'Natural karma recovery (+1/day)');
-            count++;
-        }
-        if (count > 0) {
-            gameLogger.gameEvent('KARMA', '[BULK_DECAY] Applied', { usersAffected: count });
-        }
-        return count;
+        const CombatManager = require('../game/CombatManager');
+        return {
+            notoriety: user.notoriety || 0,
+            notorietyTier: CombatManager.getNotorietyTier(user.notoriety),
+            combatWins: user.combat_wins || 0,
+            combatLosses: user.combat_losses || 0,
+            winRate: user.combat_wins > 0 
+                ? Math.round((user.combat_wins / (user.combat_wins + user.combat_losses)) * 100) 
+                : 0,
+            isBruised: user.bruised_until && new Date(user.bruised_until) > new Date(),
+            isCoward: user.coward_until && new Date(user.coward_until) > new Date()
+        };
     }
 
     // ============ XP System ============
@@ -617,7 +537,13 @@ class UserRepository {
             obtainedFrom: item.obtained_from,
             isTradeable: item.is_tradeable,
             isGambleable: item.is_gambleable,
-            isEquipped: item.is_equipped || false
+            isEquipped: item.is_equipped || false,
+            equipmentSlot: item.equipment_slot || null,
+            combatBonus: {
+                atk: item.combat_atk || 0,
+                def: item.combat_def || 0,
+                spd: item.combat_spd || 0
+            }
         }));
     }
     
@@ -625,12 +551,15 @@ class UserRepository {
         await db.query(
             `INSERT INTO inventory 
              (id, user_id, template_id, name, description, item_type, rarity, icon, 
-              uses_remaining, max_uses, base_value, obtained_from, is_tradeable, is_gambleable)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              uses_remaining, max_uses, base_value, obtained_from, is_tradeable, is_gambleable,
+              combat_atk, combat_def, combat_spd, equipment_slot)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
                 item.id, userId, item.templateId, item.name, item.description,
                 item.type, item.rarity, item.icon, item.uses, item.maxUses,
-                item.baseValue, item.obtainedFrom, item.isTradeable, item.isGambleable
+                item.baseValue, item.obtainedFrom, item.isTradeable, item.isGambleable,
+                item.combatBonus?.atk || 0, item.combatBonus?.def || 0, item.combatBonus?.spd || 0,
+                item.equipmentSlot || null
             ]
         );
     }
@@ -643,17 +572,30 @@ class UserRepository {
     }
     
     async equipItem(userId, itemId) {
-        // Unequip all items of same type first
+        // Get item details including its equipment slot
         const item = await db.queryOne(
-            'SELECT item_type FROM inventory WHERE id = ? AND user_id = ?',
+            'SELECT item_type, equipment_slot FROM inventory WHERE id = ? AND user_id = ?',
             [itemId, userId]
         );
         
         if (item) {
-            await db.query(
-                'UPDATE inventory SET is_equipped = FALSE WHERE user_id = ? AND item_type = ?',
-                [userId, item.item_type]
-            );
+            // Use equipment_slot for slot-based unequipping (weapon, armor, gear, card_back, table_skin, avatar)
+            // Falls back to item_type for legacy items without equipment_slot
+            const slotKey = item.equipment_slot || item.item_type;
+            
+            if (item.equipment_slot) {
+                // Unequip any item in the same equipment slot
+                await db.query(
+                    'UPDATE inventory SET is_equipped = FALSE WHERE user_id = ? AND equipment_slot = ?',
+                    [userId, item.equipment_slot]
+                );
+            } else {
+                // Legacy: unequip all items of same type
+                await db.query(
+                    'UPDATE inventory SET is_equipped = FALSE WHERE user_id = ? AND item_type = ?',
+                    [userId, item.item_type]
+                );
+            }
             
             await db.query(
                 'UPDATE inventory SET is_equipped = TRUE WHERE id = ?',
@@ -957,14 +899,20 @@ class UserRepository {
         const gameLogger = require('../utils/GameLogger');
         gameLogger.gameEvent('USER', '[RESET_PROGRESS] STARTING', { userId });
 
-        // Reset user core fields (including karma back to pure white)
+        // Reset user core fields (including notoriety back to 0 Civilian)
         await db.query(
-            "UPDATE users SET chips = 20000000, adventure_coins = 0, xp = 0, karma = 100, active_character = 'shadow_hacker' WHERE id = ?",
+            "UPDATE users SET chips = 20000000, adventure_coins = 0, xp = 0, notoriety = 0, combat_wins = 0, combat_losses = 0, bruised_until = NULL, coward_until = NULL, active_character = 'shadow_hacker' WHERE id = ?",
             [userId]
         );
         
-        // Clear karma history
-        await db.query('DELETE FROM karma_history WHERE user_id = ?', [userId]);
+        // Clear notoriety history
+        try { await db.query('DELETE FROM notoriety_history WHERE user_id = ?', [userId]); } catch (e) {}
+        
+        // Clear combat log
+        try { await db.query('DELETE FROM combat_log WHERE challenger_id = ? OR target_id = ?', [userId, userId]); } catch (e) {}
+        
+        // Clear recent opponents
+        try { await db.query('DELETE FROM recent_opponents WHERE user_id = ? OR opponent_id = ?', [userId, userId]); } catch (e) {}
 
         // Reset user_stats
         await db.query(
@@ -1040,7 +988,7 @@ class UserRepository {
         // Clear hand history (player's entries only)
         await db.query('DELETE FROM hand_history WHERE player_id = ?', [userId]);
 
-        // Clear robbery log
+        // Clear robbery log (legacy)
         try {
             await db.query('DELETE FROM robbery_log WHERE robber_id = ? OR victim_id = ?', [userId, userId]);
         } catch (e) { /* table may not exist */ }

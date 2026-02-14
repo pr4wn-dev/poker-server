@@ -405,20 +405,19 @@ async function start() {
             message: 'SERVER STARTED SUCCESSFULLY'
         });
         
-        // Karma daily decay timer — runs once per hour, applies +1 karma to all players below 100
-        // (Effectively: every 24 ticks = 1 karma point per day, but we check hourly for responsiveness)
+        // Combat system: prune old recent_opponents entries (runs once per hour)
         setInterval(async () => {
             try {
-                const UserRepository = require('./database/UserRepository');
-                const userRepo = new UserRepository();
-                const count = await userRepo.applyBulkKarmaDecay();
-                if (count > 0) {
-                    gameLogger.gameEvent('KARMA', '[DAILY_DECAY] Timer fired', { usersDecayed: count });
+                const CombatManager = require('./game/CombatManager');
+                const combatMgr = new CombatManager(io, gameManager);
+                const pruned = await combatMgr.pruneOldOpponents();
+                if (pruned > 0) {
+                    gameLogger.gameEvent('COMBAT', '[PRUNE_TIMER] Cleaned old recent_opponents', { pruned });
                 }
             } catch (e) {
                 // Non-critical — log and continue
             }
-        }, 24 * 60 * 60 * 1000); // Once per day (24 hours)
+        }, 60 * 60 * 1000); // Once per hour
     });
     
     // Handle server listen errors

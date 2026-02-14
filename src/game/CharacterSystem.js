@@ -59,6 +59,7 @@ const CHARACTERS = {
         is_default: true,
         personality: 'mysterious',
         sprite_set: 'char_shadow_hacker',
+        combatStats: { atk: 5, def: 5, spd: 5 }, // Total: 15 (Common)
         sounds: {
             win: ['shadow_win_1', 'shadow_win_2', 'shadow_win_3'],
             lose: ['shadow_lose_1', 'shadow_lose_2'],
@@ -80,6 +81,7 @@ const CHARACTERS = {
         is_default: false,
         personality: 'aggressive',
         sprite_set: 'char_big_tex',
+        combatStats: { atk: 8, def: 5, spd: 5 }, // Total: 18 (Uncommon) — glass cannon cowboy
         sounds: {
             win: ['tex_win_1', 'tex_win_2', 'tex_win_3'],
             lose: ['tex_lose_1', 'tex_lose_2'],
@@ -100,6 +102,7 @@ const CHARACTERS = {
         is_default: false,
         personality: 'smug',
         sprite_set: 'char_whiskers',
+        combatStats: { atk: 5, def: 5, spd: 8 }, // Total: 18 (Uncommon) — fast and slippery
         sounds: {
             win: ['whiskers_win_1', 'whiskers_win_2'],
             lose: ['whiskers_lose_1', 'whiskers_lose_2'],
@@ -121,6 +124,7 @@ const CHARACTERS = {
         is_default: false,
         personality: 'chaotic',
         sprite_set: 'char_lil_stinky',
+        combatStats: { atk: 8, def: 5, spd: 8 }, // Total: 21 (Rare) — chaotic striker
         sounds: {
             win: ['stinky_win_1', 'stinky_win_2', 'stinky_fart_1'],
             lose: ['stinky_cry_1', 'stinky_cry_2', 'stinky_wah_1'],
@@ -141,6 +145,7 @@ const CHARACTERS = {
         is_default: false,
         personality: 'dark_humor',
         sprite_set: 'char_bones',
+        combatStats: { atk: 6, def: 9, spd: 6 }, // Total: 21 (Rare) — tanky skeleton
         sounds: {
             win: ['bones_win_1', 'bones_rattle_1', 'bones_win_2'],
             lose: ['bones_lose_1', 'bones_crack_1'],
@@ -161,6 +166,7 @@ const CHARACTERS = {
         is_default: false,
         personality: 'slow',
         sprite_set: 'char_deadbeat',
+        combatStats: { atk: 7, def: 7, spd: 7 }, // Total: 21 (Rare) — balanced undead
         sounds: {
             win: ['deadbeat_win_1', 'deadbeat_groan_1'],
             lose: ['deadbeat_lose_1', 'deadbeat_moan_1'],
@@ -182,6 +188,7 @@ const CHARACTERS = {
         is_default: false,
         personality: 'glitchy',
         sprite_set: 'char_glitch',
+        combatStats: { atk: 10, def: 6, spd: 8 }, // Total: 24 (Epic) — high damage android
         sounds: {
             win: ['glitch_win_1', 'glitch_beep_1', 'glitch_error_success_1'],
             lose: ['glitch_lose_1', 'glitch_static_1'],
@@ -202,6 +209,7 @@ const CHARACTERS = {
         is_default: false,
         personality: 'passive_aggressive',
         sprite_set: 'char_nana',
+        combatStats: { atk: 6, def: 10, spd: 8 }, // Total: 24 (Epic) — tanky grandma
         sounds: {
             win: ['nana_win_1', 'nana_win_2', 'nana_chuckle_1'],
             lose: ['nana_lose_1', 'nana_sigh_1'],
@@ -223,6 +231,7 @@ const CHARACTERS = {
         is_default: false,
         personality: 'intimidating',
         sprite_set: 'char_the_don',
+        combatStats: { atk: 10, def: 9, spd: 8 }, // Total: 27 (Legendary) — devastating boss
         sounds: {
             win: ['don_win_1', 'don_win_2'],
             lose: ['don_lose_1'],
@@ -244,6 +253,7 @@ const CHARACTERS = {
         is_default: false,
         personality: 'divine',
         sprite_set: 'char_pixel_god',
+        combatStats: { atk: 10, def: 10, spd: 10 }, // Total: 30 (Mythic) — perfect stats
         sounds: {
             win: ['pixelgod_win_1', 'pixelgod_fanfare_1'],
             lose: ['pixelgod_lose_1'],
@@ -459,6 +469,15 @@ class CharacterSystem {
         }
         
         return candidates[Math.floor(Math.random() * candidates.length)].id;
+    }
+
+    /**
+     * Get combat stats for a character
+     * @returns {{ atk: number, def: number, spd: number }}
+     */
+    getCombatStats(characterId) {
+        const def = CHARACTERS[characterId] || CHARACTERS['shadow_hacker'];
+        return def.combatStats || { atk: 5, def: 5, spd: 5 };
     }
 
     /**

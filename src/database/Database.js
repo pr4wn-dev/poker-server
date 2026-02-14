@@ -96,12 +96,32 @@ class Database {
             // Column already exists, ignore
         }
         
-        // Add karma column (Heart System: 100 = pure white, 0 = pitch black)
+        // Add karma column (legacy — being replaced by notoriety)
         try {
             await this.query("ALTER TABLE users ADD COLUMN karma INT DEFAULT 100");
         } catch (e) {
             // Column already exists, ignore
         }
+        
+        // Add notoriety column (Combat System — replaces karma)
+        try {
+            await this.query("ALTER TABLE users ADD COLUMN notoriety FLOAT DEFAULT 0");
+        } catch (e) {}
+        try {
+            await this.query("ALTER TABLE users ADD COLUMN combat_wins INT DEFAULT 0");
+        } catch (e) {}
+        try {
+            await this.query("ALTER TABLE users ADD COLUMN combat_losses INT DEFAULT 0");
+        } catch (e) {}
+        try {
+            await this.query("ALTER TABLE users ADD COLUMN last_combat_at TIMESTAMP NULL");
+        } catch (e) {}
+        try {
+            await this.query("ALTER TABLE users ADD COLUMN bruised_until TIMESTAMP NULL");
+        } catch (e) {}
+        try {
+            await this.query("ALTER TABLE users ADD COLUMN coward_until TIMESTAMP NULL");
+        } catch (e) {}
         
         // Add daily reward columns
         try {
@@ -246,6 +266,19 @@ class Database {
                     }
                 }
             }
+        }
+        
+        // Add combat bonus columns to inventory (for weapons/armor/gear)
+        const combatCols = [
+            { name: 'combat_atk', def: 'INT DEFAULT 0' },
+            { name: 'combat_def', def: 'INT DEFAULT 0' },
+            { name: 'combat_spd', def: 'INT DEFAULT 0' },
+            { name: 'equipment_slot', def: "VARCHAR(20) DEFAULT NULL" }
+        ];
+        for (const col of combatCols) {
+            try {
+                await this.query(`ALTER TABLE inventory ADD COLUMN ${col.name} ${col.def}`);
+            } catch (e) { /* already exists */ }
         }
 
         // Friends table
@@ -603,19 +636,59 @@ class Database {
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         `);
 
-        // Karma history — tracks heart color changes over time
+        // Combat log — tracks all PvP combat encounters
         await this.query(`
-            CREATE TABLE IF NOT EXISTS karma_history (
+            CREATE TABLE IF NOT EXISTS combat_log (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                challenger_id VARCHAR(36) NOT NULL,
+                target_id VARCHAR(36) NOT NULL,
+                winner_id VARCHAR(36),
+                challenger_item_id VARCHAR(50),
+                target_item_id VARCHAR(50),
+                chips_transferred BIGINT DEFAULT 0,
+                challenger_combat_score FLOAT,
+                target_combat_score FLOAT,
+                target_action ENUM('fight', 'flee', 'disconnect', 'timeout') NOT NULL,
+                is_mutual BOOLEAN DEFAULT FALSE,
+                source ENUM('in_game', 'friend', 'recent', 'leaderboard') NOT NULL DEFAULT 'in_game',
+                table_id VARCHAR(50),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (challenger_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (target_id) REFERENCES users(id) ON DELETE CASCADE,
+                INDEX idx_challenger (challenger_id),
+                INDEX idx_target (target_id),
+                INDEX idx_created (created_at)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        `);
+
+        // Recent opponents — tracks who you've played poker with (for outside-game challenges)
+        await this.query(`
+            CREATE TABLE IF NOT EXISTS recent_opponents (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 user_id VARCHAR(36) NOT NULL,
-                karma_before INT NOT NULL,
-                karma_after INT NOT NULL,
-                change_amount INT NOT NULL,
+                opponent_id VARCHAR(36) NOT NULL,
+                table_id VARCHAR(50),
+                played_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (opponent_id) REFERENCES users(id) ON DELETE CASCADE,
+                INDEX idx_user (user_id),
+                INDEX idx_played (played_at)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        `);
+
+        // Notoriety history — tracks combat reputation changes over time
+        await this.query(`
+            CREATE TABLE IF NOT EXISTS notoriety_history (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id VARCHAR(36) NOT NULL,
+                notoriety_before FLOAT NOT NULL,
+                notoriety_after FLOAT NOT NULL,
+                change_amount FLOAT NOT NULL,
                 reason VARCHAR(100) NOT NULL,
                 details TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-                INDEX idx_user_karma (user_id),
+                INDEX idx_user_notoriety (user_id),
                 INDEX idx_created (created_at)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         `);

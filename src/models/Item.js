@@ -63,7 +63,11 @@ const ITEM_TYPE = {
     SPECIAL: 'special',              // Unique items
     LOCATION_KEY: 'location_key',    // Unlocks special map areas
     VEHICLE: 'vehicle',              // Yacht, jet, etc.
-    XP_BOOST: 'xp_boost'             // XP multiplier items
+    XP_BOOST: 'xp_boost',            // XP multiplier items
+    // Combat items (3 equip slots)
+    WEAPON: 'weapon',                // +ATK combat bonus
+    ARMOR: 'armor',                  // +DEF combat bonus
+    GEAR: 'gear'                     // +SPD combat bonus
 };
 
 class Item {
@@ -102,10 +106,33 @@ class Item {
         this.obtainedAt = data.obtainedAt || Date.now();
         this.obtainedFrom = data.obtainedFrom || 'unknown';  // Boss name, event, etc.
         
+        // Combat bonuses (for weapon/armor/gear items)
+        this.combatBonus = data.combatBonus || { atk: 0, def: 0, spd: 0 };
+        
+        // Equipment slot designation (weapon, armor, gear, card_back, table_skin, avatar)
+        this.equipmentSlot = data.equipmentSlot || this._inferEquipmentSlot();
+        
         // Permissions
         this.isTradeable = data.isTradeable !== false;
         // CRITICAL: Store items cannot be gambled (legal compliance)
         this.isGambleable = this.source === ITEM_SOURCE.STORE ? false : (data.isGambleable !== false);
+    }
+    
+    _inferEquipmentSlot() {
+        if (this.type === ITEM_TYPE.WEAPON) return 'weapon';
+        if (this.type === ITEM_TYPE.ARMOR) return 'armor';
+        if (this.type === ITEM_TYPE.GEAR) return 'gear';
+        if (this.type === ITEM_TYPE.CARD_BACK) return 'card_back';
+        if (this.type === ITEM_TYPE.TABLE_SKIN) return 'table_skin';
+        if (this.type === ITEM_TYPE.AVATAR) return 'avatar';
+        return null;
+    }
+    
+    /**
+     * Check if this is a combat item (weapon, armor, or gear)
+     */
+    isCombatItem() {
+        return this.type === ITEM_TYPE.WEAPON || this.type === ITEM_TYPE.ARMOR || this.type === ITEM_TYPE.GEAR;
     }
     
     calculateBaseValue() {
@@ -146,7 +173,10 @@ class Item {
             [ITEM_TYPE.TROPHY]: 0.8,         // Lower - prestige only
             [ITEM_TYPE.EMOTE]: 1.0,
             [ITEM_TYPE.CONSUMABLE]: 1.0,
-            [ITEM_TYPE.SPECIAL]: 1.0
+            [ITEM_TYPE.SPECIAL]: 1.0,
+            [ITEM_TYPE.WEAPON]: 2.5,         // Very high demand - combat power
+            [ITEM_TYPE.ARMOR]: 2.5,          // Very high demand - combat defense
+            [ITEM_TYPE.GEAR]: 2.5            // Very high demand - combat speed
         };
         
         // Legendary items get a demand boost
@@ -202,6 +232,8 @@ class Item {
             demand: this.demand,               // NEW: Demand factor
             obtainedAt: this.obtainedAt,
             obtainedFrom: this.obtainedFrom,
+            combatBonus: this.combatBonus,     // { atk, def, spd }
+            equipmentSlot: this.equipmentSlot, // weapon, armor, gear, card_back, table_skin, avatar
             isTradeable: this.isTradeable,
             isGambleable: this.isGambleable,   // Store items will be false
             color: this.getColor()
@@ -439,6 +471,195 @@ Item.TEMPLATES = {
         type: ITEM_TYPE.AVATAR,
         rarity: RARITY.LEGENDARY,
         icon: 'avatar_legend'
+    },
+    
+    // ============ COMBAT ITEMS — WEAPONS (8) — +ATK ============
+    
+    WEAPON_POCKET_KNIFE: {
+        templateId: 'weapon_pocket_knife',
+        name: 'Pocket Knife',
+        description: 'A small folding knife. Better than nothing.',
+        type: ITEM_TYPE.WEAPON,
+        rarity: RARITY.COMMON,
+        icon: 'weapon_pocket_knife',
+        combatBonus: { atk: 1, def: 0, spd: 0 }
+    },
+    WEAPON_RUSTY_REVOLVER: {
+        templateId: 'weapon_rusty_revolver',
+        name: 'Rusty Revolver',
+        description: 'An old six-shooter. Might jam, might not.',
+        type: ITEM_TYPE.WEAPON,
+        rarity: RARITY.COMMON,
+        icon: 'weapon_rusty_revolver',
+        combatBonus: { atk: 2, def: 0, spd: 0 }
+    },
+    WEAPON_BRASS_KNUCKLES: {
+        templateId: 'weapon_brass_knuckles',
+        name: 'Brass Knuckles',
+        description: 'Heavy brass knuckles for settling disputes the old-fashioned way.',
+        type: ITEM_TYPE.WEAPON,
+        rarity: RARITY.UNCOMMON,
+        icon: 'weapon_brass_knuckles',
+        combatBonus: { atk: 3, def: 0, spd: 0 }
+    },
+    WEAPON_SAWED_OFF: {
+        templateId: 'weapon_sawed_off',
+        name: 'Sawed-Off Shotgun',
+        description: 'Devastating at close range. Hidden under the table.',
+        type: ITEM_TYPE.WEAPON,
+        rarity: RARITY.UNCOMMON,
+        icon: 'weapon_sawed_off',
+        combatBonus: { atk: 4, def: 0, spd: 0 }
+    },
+    WEAPON_TOMMY_GUN: {
+        templateId: 'weapon_tommy_gun',
+        name: 'Tommy Gun',
+        description: 'Classic gangster firepower. Sprays and prays.',
+        type: ITEM_TYPE.WEAPON,
+        rarity: RARITY.RARE,
+        icon: 'weapon_tommy_gun',
+        combatBonus: { atk: 7, def: 0, spd: 0 }
+    },
+    WEAPON_GOLD_DEAGLE: {
+        templateId: 'weapon_gold_deagle',
+        name: 'Gold Desert Eagle',
+        description: 'A golden hand cannon. One shot, one kill. Pure flex.',
+        type: ITEM_TYPE.WEAPON,
+        rarity: RARITY.EPIC,
+        icon: 'weapon_gold_deagle',
+        combatBonus: { atk: 10, def: 0, spd: 0 }
+    },
+    WEAPON_RPG: {
+        templateId: 'weapon_rpg',
+        name: 'RPG Launcher',
+        description: 'When a handgun just won\'t cut it. Overkill is underrated.',
+        type: ITEM_TYPE.WEAPON,
+        rarity: RARITY.LEGENDARY,
+        icon: 'weapon_rpg',
+        combatBonus: { atk: 14, def: 0, spd: 0 }
+    },
+    WEAPON_TACTICAL_NUKE: {
+        templateId: 'weapon_tactical_nuke',
+        name: 'Tactical Nuke',
+        description: 'The rarest weapon in the game. Mutually assured destruction.',
+        type: ITEM_TYPE.WEAPON,
+        rarity: RARITY.LEGENDARY,
+        icon: 'weapon_tactical_nuke',
+        combatBonus: { atk: 16, def: 0, spd: 0 }
+    },
+    
+    // ============ COMBAT ITEMS — ARMOR (6) — +DEF ============
+    
+    ARMOR_LEATHER_JACKET: {
+        templateId: 'armor_leather_jacket',
+        name: 'Leather Jacket',
+        description: 'A tough leather jacket. Style and protection.',
+        type: ITEM_TYPE.ARMOR,
+        rarity: RARITY.COMMON,
+        icon: 'armor_leather_jacket',
+        combatBonus: { atk: 0, def: 2, spd: 0 }
+    },
+    ARMOR_KEVLAR_VEST: {
+        templateId: 'armor_kevlar_vest',
+        name: 'Kevlar Vest',
+        description: 'Standard body armor. Stops most small arms.',
+        type: ITEM_TYPE.ARMOR,
+        rarity: RARITY.UNCOMMON,
+        icon: 'armor_kevlar_vest',
+        combatBonus: { atk: 0, def: 4, spd: 0 }
+    },
+    ARMOR_RIOT_SHIELD: {
+        templateId: 'armor_riot_shield',
+        name: 'Riot Shield',
+        description: 'A heavy ballistic shield. Hard to carry, hard to kill.',
+        type: ITEM_TYPE.ARMOR,
+        rarity: RARITY.UNCOMMON,
+        icon: 'armor_riot_shield',
+        combatBonus: { atk: 0, def: 3, spd: 0 }
+    },
+    ARMOR_MILITARY: {
+        templateId: 'armor_military',
+        name: 'Military Body Armor',
+        description: 'Military-grade plate carrier. Serious protection.',
+        type: ITEM_TYPE.ARMOR,
+        rarity: RARITY.RARE,
+        icon: 'armor_military',
+        combatBonus: { atk: 0, def: 7, spd: 0 }
+    },
+    ARMOR_TITANIUM: {
+        templateId: 'armor_titanium',
+        name: 'Titanium Plate Carrier',
+        description: 'Lightweight titanium plates. Top-tier protection without the bulk.',
+        type: ITEM_TYPE.ARMOR,
+        rarity: RARITY.EPIC,
+        icon: 'armor_titanium',
+        combatBonus: { atk: 0, def: 10, spd: 0 }
+    },
+    ARMOR_JUGGERNAUT: {
+        templateId: 'armor_juggernaut',
+        name: 'Juggernaut Suit',
+        description: 'Full-body bomb disposal armor. Nearly unstoppable.',
+        type: ITEM_TYPE.ARMOR,
+        rarity: RARITY.LEGENDARY,
+        icon: 'armor_juggernaut',
+        combatBonus: { atk: 0, def: 14, spd: 0 }
+    },
+    
+    // ============ COMBAT ITEMS — GEAR (6) — +SPD ============
+    
+    GEAR_RUNNING_SHOES: {
+        templateId: 'gear_running_shoes',
+        name: 'Running Shoes',
+        description: 'Fast feet for fast getaways.',
+        type: ITEM_TYPE.GEAR,
+        rarity: RARITY.COMMON,
+        icon: 'gear_running_shoes',
+        combatBonus: { atk: 0, def: 0, spd: 2 }
+    },
+    GEAR_SMOKE_BOMB: {
+        templateId: 'gear_smoke_bomb',
+        name: 'Smoke Bomb',
+        description: 'Throws off your opponent. Creates confusion.',
+        type: ITEM_TYPE.GEAR,
+        rarity: RARITY.UNCOMMON,
+        icon: 'gear_smoke_bomb',
+        combatBonus: { atk: 0, def: 0, spd: 4 }
+    },
+    GEAR_FLASH_GRENADE: {
+        templateId: 'gear_flash_grenade',
+        name: 'Flash Grenade',
+        description: 'Blinds your opponent temporarily. Strike first.',
+        type: ITEM_TYPE.GEAR,
+        rarity: RARITY.RARE,
+        icon: 'gear_flash_grenade',
+        combatBonus: { atk: 0, def: 0, spd: 6 }
+    },
+    GEAR_MOTORCYCLE_KEYS: {
+        templateId: 'gear_motorcycle_keys',
+        name: 'Motorcycle Keys',
+        description: 'A fast bike waiting outside. Get in, get out, get away.',
+        type: ITEM_TYPE.GEAR,
+        rarity: RARITY.RARE,
+        icon: 'gear_motorcycle_keys',
+        combatBonus: { atk: 0, def: 0, spd: 7 }
+    },
+    GEAR_NITRO_BOOST: {
+        templateId: 'gear_nitro_boost',
+        name: 'Nitro Boost',
+        description: 'Inject pure adrenaline. Everything slows down except you.',
+        type: ITEM_TYPE.GEAR,
+        rarity: RARITY.EPIC,
+        icon: 'gear_nitro_boost',
+        combatBonus: { atk: 0, def: 0, spd: 10 }
+    },
+    GEAR_GETAWAY_HELI: {
+        templateId: 'gear_getaway_heli',
+        name: 'Getaway Helicopter',
+        description: 'A helicopter on standby. The ultimate speed advantage.',
+        type: ITEM_TYPE.GEAR,
+        rarity: RARITY.LEGENDARY,
+        icon: 'gear_getaway_heli',
+        combatBonus: { atk: 0, def: 0, spd: 14 }
     }
 };
 

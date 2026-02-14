@@ -916,28 +916,29 @@ class SocketHandler {
                         // Update player chips in game manager from DB
                         this.gameManager.players.get(user.userId).chips = dbUser.chips;
                         
-                        // Load crew tag, active title, active character, and karma for display at table
+                        // Load crew tag, active title, active character, and notoriety for display at table
                         try {
                             const CrewManager = require('../social/CrewManager');
                             const TitleEngine = require('../stats/TitleEngine');
                             const CharacterSystem = require('../game/CharacterSystem');
-                            const UserRepository = require('../database/UserRepository');
+                            const CombatManager = require('../game/CombatManager');
                             const charSystem = new CharacterSystem(require('../database/Database'));
-                            const userRepo = new UserRepository();
+                            const database = require('../database/Database');
                             const seat = table.seats[result.seatIndex];
                             if (seat) {
-                                const [crewTag, activeTitle, activeChar, karma] = await Promise.all([
+                                const [crewTag, activeTitle, activeChar, notorietyRow] = await Promise.all([
                                     CrewManager.getPlayerCrewTag(user.userId).catch(() => null),
                                     TitleEngine.getActiveTitle(user.userId).catch(() => null),
                                     charSystem.getActiveCharacter(user.userId).catch(() => ({ id: 'shadow_hacker', sprite_set: 'char_shadow_hacker' })),
-                                    userRepo.getKarma(user.userId).catch(() => 100)
+                                    database.queryOne('SELECT notoriety FROM users WHERE id = ?', [user.userId]).catch(() => ({ notoriety: 0 }))
                                 ]);
                                 seat.crewTag = crewTag;
                                 seat.activeTitle = activeTitle?.title_name || null;
                                 seat.activeCharacter = activeChar?.id || 'shadow_hacker';
                                 seat.characterSpriteSet = activeChar?.sprite_set || 'char_shadow_hacker';
-                                seat.karma = karma;
-                                seat.heartColor = UserRepository.getHeartColor(karma);
+                                const notoriety = notorietyRow?.notoriety || 0;
+                                seat.notoriety = notoriety;
+                                seat.notorietyTier = CombatManager.getNotorietyTier(notoriety);
                             }
                         } catch (e) {
                             // Non-critical — don't block join
@@ -2862,7 +2863,8 @@ class SocketHandler {
                     const UserRepository = require('../database/UserRepository');
                     const userRepo = new UserRepository();
                     
-                    const [stats, titles, activeTitle, user, crewMember, karma] = await Promise.all([
+                    const CombatManager = require('../game/CombatManager');
+                    const [stats, titles, activeTitle, user, crewMember, combatUser] = await Promise.all([
                         StatsEngine.getPlayerStats(targetId),
                         TitleEngine.getPlayerTitles(targetId),
                         TitleEngine.getActiveTitle(targetId),
@@ -2873,9 +2875,10 @@ class SocketHandler {
                             JOIN crews c ON cm.crew_id = c.id 
                             WHERE cm.player_id = ?
                         `, [targetId]).catch(() => null),
-                        userRepo.getKarma(targetId).catch(() => 100)
+                        database.queryOne('SELECT notoriety, combat_wins, combat_losses, bruised_until FROM users WHERE id = ?', [targetId]).catch(() => ({ notoriety: 0 }))
                     ]);
 
+                    const notoriety = combatUser?.notoriety || 0;
                     respond({
                         success: true,
                         profile: {
@@ -2888,9 +2891,11 @@ class SocketHandler {
                             crewName: crewMember?.crew_name || null,
                             crewTag: crewMember?.crew_tag || null,
                             crewRole: crewMember?.role || null,
-                            karma: karma,
-                            heartColor: UserRepository.getHeartColor(karma),
-                            heartTier: UserRepository.getHeartTier(karma),
+                            notoriety: notoriety,
+                            notorietyTier: CombatManager.getNotorietyTier(notoriety),
+                            combatWins: combatUser?.combat_wins || 0,
+                            combatLosses: combatUser?.combat_losses || 0,
+                            isBruised: combatUser?.bruised_until && new Date(combatUser.bruised_until) > new Date(),
                             stats: {
                                 handsPlayed: stats.hands_played,
                                 winRate: stats.winRate,
@@ -3095,111 +3100,190 @@ class SocketHandler {
                 }
             });
 
-            // ============ Robbery ============
+            // ============ Combat System ============
 
-            socket.on('robbery_attempt', async (data, callback) => {
-                const respond = this._makeResponder(socket, 'robbery_attempt', callback);
+            // Mark a player during a poker game (silent — target doesn't know)
+            socket.on('mark_player', async (data, callback) => {
+                const respond = this._makeResponder(socket, 'mark_player', callback);
                 try {
-                    const RobberyManager = require('../game/RobberyManager');
+                    const CombatManager = require('../game/CombatManager');
                     const user = this.getAuthenticatedUser(socket);
                     if (!user) return respond({ success: false, error: 'Not authenticated' });
-                    const result = await RobberyManager.attemptRobbery(
-                        user.userId, data?.victimId, data?.toolTemplateId, data?.targetItemId
-                    );
+                    
+                    const tableId = data?.tableId;
+                    const targetId = data?.targetId;
+                    if (!tableId || !targetId) return respond({ success: false, error: 'Missing tableId or targetId' });
+                    
+                    if (!this.combatManager) {
+                        this.combatManager = new CombatManager(this.io, this.gameManager);
+                    }
+                    const result = this.combatManager.markPlayer(tableId, user.userId, targetId);
                     respond(result);
+                } catch (error) {
+                    respond({ success: false, error: error.message });
+                }
+            });
 
-                    // Notify victim if robbery happened
-                    if (result.stolen || result.blocked) {
-                        const victimAuth = this.authenticatedUsers.get(data.victimId);
-                        if (victimAuth) {
-                            this.io.to(victimAuth.socketId).emit('robbery_notification', {
-                                robberId: result.stolen ? user.userId : null,
-                                robberName: result.stolen ? user.username : null,
-                                itemName: result.itemName || null,
-                                itemRarity: result.itemRarity || null,
-                                stolen: result.stolen || false,
-                                blocked: result.blocked || false,
-                                message: result.stolen ? 
-                                    `You were robbed! ${user.username} stole your ${result.itemName}!` :
-                                    'Someone tried to rob you but your bodyguard blocked it!'
+            // Unmark a player during a poker game
+            socket.on('unmark_player', async (data, callback) => {
+                const respond = this._makeResponder(socket, 'unmark_player', callback);
+                try {
+                    const CombatManager = require('../game/CombatManager');
+                    const user = this.getAuthenticatedUser(socket);
+                    if (!user) return respond({ success: false, error: 'Not authenticated' });
+                    
+                    if (!this.combatManager) {
+                        this.combatManager = new CombatManager(this.io, this.gameManager);
+                    }
+                    const result = this.combatManager.unmarkPlayer(data?.tableId, user.userId, data?.targetId);
+                    respond(result);
+                } catch (error) {
+                    respond({ success: false, error: error.message });
+                }
+            });
+
+            // Challenge a player to combat (from friends list, leaderboard, or delivered mark)
+            socket.on('challenge_player', async (data, callback) => {
+                const respond = this._makeResponder(socket, 'challenge_player', callback);
+                try {
+                    const CombatManager = require('../game/CombatManager');
+                    const user = this.getAuthenticatedUser(socket);
+                    if (!user) return respond({ success: false, error: 'Not authenticated' });
+                    
+                    if (!this.combatManager) {
+                        this.combatManager = new CombatManager(this.io, this.gameManager);
+                    }
+                    
+                    const targetId = data?.targetId;
+                    const source = data?.source || 'outside_game'; // 'in_game', 'friend', 'leaderboard', 'recent_opponent'
+                    const isMutual = data?.isMutual || false;
+                    
+                    const result = await this.combatManager.createChallenge(
+                        user.userId, targetId, source, data?.tableId || null, isMutual
+                    );
+                    
+                    if (result.success) {
+                        // Notify the target
+                        const targetAuth = this.authenticatedUsers?.get(targetId);
+                        if (targetAuth) {
+                            this.io.to(targetAuth.socketId).emit('challenge_received', {
+                                challengeId: result.challenge.challengeId,
+                                challengerId: user.userId,
+                                challengerName: user.profile?.username || 'Unknown',
+                                source: source,
+                                isMutual: isMutual,
+                                challengerItem: result.challenge.challengerItem,
+                                targetItem: result.challenge.targetItem,
+                                chipStake: result.challenge.chipStake,
+                                timeoutMs: result.challenge.timeoutMs
                             });
                         }
+                        respond({ success: true, challengeId: result.challenge.challengeId });
+                    } else {
+                        respond(result);
                     }
                 } catch (error) {
                     respond({ success: false, error: error.message });
                 }
             });
 
-            socket.on('robbery_recovery', async (data, callback) => {
-                const respond = this._makeResponder(socket, 'robbery_recovery', callback);
+            // Respond to a combat challenge (fight or flee)
+            socket.on('respond_to_challenge', async (data, callback) => {
+                const respond = this._makeResponder(socket, 'respond_to_challenge', callback);
                 try {
-                    const RobberyManager = require('../game/RobberyManager');
                     const user = this.getAuthenticatedUser(socket);
                     if (!user) return respond({ success: false, error: 'Not authenticated' });
-                    const result = await RobberyManager.recoverItem(user.userId, data?.robberyLogId);
-                    respond(result);
+                    
+                    if (!this.combatManager) return respond({ success: false, error: 'Combat system not ready' });
+                    
+                    const challengeId = data?.challengeId;
+                    const action = data?.action; // 'fight' or 'flee'
+                    if (!challengeId || !action) return respond({ success: false, error: 'Missing challengeId or action' });
+                    
+                    const result = await this.combatManager.respondToChallenge(challengeId, action);
+                    
+                    if (result.success) {
+                        // Notify both players of the outcome
+                        const challenge = this.combatManager.activeChallenges?.get(challengeId);
+                        const challengerId = result.fled ? result.fleeingPlayer : null;
+                        
+                        if (result.fled) {
+                            // Notify challenger that target fled
+                            const challengerAuth = this.authenticatedUsers?.get(result.challengerGain ? data?.challengerId : null);
+                            // Both get the result
+                            respond(result);
+                        } else if (result.winnerId) {
+                            // Combat resolved — notify both
+                            const loserId = result.loserId;
+                            const loserAuth = this.authenticatedUsers?.get(loserId);
+                            if (loserAuth) {
+                                this.io.to(loserAuth.socketId).emit('combat_result', result);
+                            }
+                            const winnerAuth = this.authenticatedUsers?.get(result.winnerId);
+                            if (winnerAuth && result.winnerId !== user.userId) {
+                                this.io.to(winnerAuth.socketId).emit('combat_result', result);
+                            }
+                            respond(result);
+                        } else {
+                            respond(result);
+                        }
+                    } else {
+                        respond(result);
+                    }
                 } catch (error) {
                     respond({ success: false, error: error.message });
                 }
             });
 
-            socket.on('get_recoverable_robberies', async (data, callback) => {
-                const respond = this._makeResponder(socket, 'get_recoverable_robberies', callback);
+            // Get combat stats for current user
+            socket.on('get_combat_stats', async (data, callback) => {
+                const respond = this._makeResponder(socket, 'get_combat_stats', callback);
                 try {
-                    const RobberyManager = require('../game/RobberyManager');
                     const user = this.getAuthenticatedUser(socket);
                     if (!user) return respond({ success: false, error: 'Not authenticated' });
-                    const robberies = await RobberyManager.getRecoverableRobberies(user.userId);
-                    respond({ success: true, robberies });
+                    
+                    if (!this.combatManager) {
+                        const CombatManager = require('../game/CombatManager');
+                        this.combatManager = new CombatManager(this.io, this.gameManager);
+                    }
+                    const stats = await this.combatManager.getCombatStats(data?.playerId || user.userId);
+                    respond({ success: true, ...stats });
                 } catch (error) {
                     respond({ success: false, error: error.message });
                 }
             });
 
-            // ============ Karma / Heart System ============
-
-            socket.on('get_karma', async (data, callback) => {
-                const respond = this._makeResponder(socket, 'get_karma', callback);
+            // Get combat history
+            socket.on('get_combat_history', async (data, callback) => {
+                const respond = this._makeResponder(socket, 'get_combat_history', callback);
                 try {
-                    const UserRepository = require('../database/UserRepository');
                     const user = this.getAuthenticatedUser(socket);
                     if (!user) return respond({ success: false, error: 'Not authenticated' });
                     
-                    const userRepo = new UserRepository();
-                    const karma = await userRepo.getKarma(user.userId);
-                    const heartColor = UserRepository.getHeartColor(karma);
-                    const heartTier = UserRepository.getHeartTier(karma);
-                    
-                    respond({ success: true, karma, heartColor, heartTier });
-                } catch (error) {
-                    respond({ success: false, error: error.message });
-                }
-            });
-
-            socket.on('get_karma_history', async (data, callback) => {
-                const respond = this._makeResponder(socket, 'get_karma_history', callback);
-                try {
-                    const UserRepository = require('../database/UserRepository');
-                    const user = this.getAuthenticatedUser(socket);
-                    if (!user) return respond({ success: false, error: 'Not authenticated' });
-                    
-                    const userRepo = new UserRepository();
-                    const history = await userRepo.getKarmaHistory(user.userId, data?.limit || 20);
+                    if (!this.combatManager) {
+                        const CombatManager = require('../game/CombatManager');
+                        this.combatManager = new CombatManager(this.io, this.gameManager);
+                    }
+                    const history = await this.combatManager.getCombatHistory(user.userId, data?.limit || 20);
                     respond({ success: true, history });
                 } catch (error) {
                     respond({ success: false, error: error.message });
                 }
             });
 
-            socket.on('get_robbery_targets', async (data, callback) => {
-                const respond = this._makeResponder(socket, 'get_robbery_targets', callback);
+            // Get recent opponents (for outside-game challenges)
+            socket.on('get_recent_opponents', async (data, callback) => {
+                const respond = this._makeResponder(socket, 'get_recent_opponents', callback);
                 try {
-                    const RobberyManager = require('../game/RobberyManager');
                     const user = this.getAuthenticatedUser(socket);
                     if (!user) return respond({ success: false, error: 'Not authenticated' });
                     
-                    const targets = await RobberyManager.getRobberyTargets(user.userId, data?.limit || 20);
-                    respond({ success: true, targets });
+                    if (!this.combatManager) {
+                        const CombatManager = require('../game/CombatManager');
+                        this.combatManager = new CombatManager(this.io, this.gameManager);
+                    }
+                    const opponents = await this.combatManager.getRecentOpponents(user.userId);
+                    respond({ success: true, opponents });
                 } catch (error) {
                     respond({ success: false, error: error.message });
                 }
