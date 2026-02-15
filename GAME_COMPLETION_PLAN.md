@@ -60,7 +60,7 @@
 | 3.2 | Owned vs locked display | DONE | Silhouette for locked characters |
 | 3.3 | Detail panel | DONE | Portrait, name, rarity, description, sounds |
 | 3.4 | Set active character | DONE | Server updates DB, client caches |
-| 3.5 | Default character: The Kid | **TODO** | Rename "Shadow Hacker" → "The Kid" |
+| 3.5 | Default character: The Kid | **DONE** | Renamed "Shadow Hacker" → "The Kid" |
 | 3.6 | Update scene title | **TODO** | "Character Roster" → "The Rescued" |
 | 3.7 | Character descriptions | **TODO** | All characters are kidnap victims you rescue |
 | 3.8 | Character portrait sprites | **ART** | Need story-appropriate art (victims, not cyber characters) |
@@ -246,7 +246,7 @@
 | 11.2 | Owned/locked display | DONE | |
 | 11.3 | Switch active character | DONE | |
 | 11.4 | Character sound system | DONE | Code + server wired |
-| 11.5 | Update default character | **TODO** | "Shadow Hacker" → "The Kid" |
+| 11.5 | Update default character | **DONE** | "Shadow Hacker" → "The Kid" |
 | 11.6 | Update character descriptions | **TODO** | All are kidnap victims/rescued souls |
 | 11.7 | Add family member characters | **TODO** | Mother, Father, Sibling(s) - legendary rarity |
 | 11.8 | Character portraits (10 total) | **ART** | Kidnap victims, not cyber characters |

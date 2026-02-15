@@ -904,7 +904,7 @@ class UserRepository {
 
         // Reset user core fields (including heat back to 0 Civilian)
         await db.query(
-            "UPDATE users SET chips = 20000000, adventure_coins = 0, xp = 0, heat = 0, combat_wins = 0, combat_losses = 0, bruised_until = NULL, coward_until = NULL, active_character = 'shadow_hacker' WHERE id = ?",
+            "UPDATE users SET chips = 20000000, adventure_coins = 0, xp = 0, heat = 0, combat_wins = 0, combat_losses = 0, bruised_until = NULL, coward_until = NULL, active_character = 'the_kid' WHERE id = ?",
             [userId]
         );
         

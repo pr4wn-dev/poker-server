@@ -9,7 +9,7 @@
 
 | # | ID | Name | Rarity |
 |---|-----|------|--------|
-| 1 | `shadow_hacker` | Shadow Hacker | Common |
+| 1 | `the_kid` | The Kid | Common |
 | 2 | `big_tex` | Big Tex | Uncommon |
 | 3 | `whiskers` | Whiskers | Uncommon |
 | 4 | `lil_stinky` | Lil' Stinky | Rare |

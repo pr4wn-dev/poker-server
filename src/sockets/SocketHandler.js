@@ -945,13 +945,13 @@ class SocketHandler {
                                 const [crewTag, activeTitle, activeChar, heatRow] = await Promise.all([
                                     CrewManager.getPlayerCrewTag(user.userId).catch(() => null),
                                     TitleEngine.getActiveTitle(user.userId).catch(() => null),
-                                    charSystem.getActiveCharacter(user.userId).catch(() => ({ id: 'shadow_hacker', sprite_set: 'char_shadow_hacker' })),
+                                    charSystem.getActiveCharacter(user.userId).catch(() => ({ id: 'the_kid', sprite_set: 'char_the_kid' })),
                                     database.queryOne('SELECT heat FROM users WHERE id = ?', [user.userId]).catch(() => ({ heat: 0 }))
                                 ]);
                                 seat.crewTag = crewTag;
                                 seat.activeTitle = activeTitle?.title_name || null;
-                                seat.activeCharacter = activeChar?.id || 'shadow_hacker';
-                                seat.characterSpriteSet = activeChar?.sprite_set || 'char_shadow_hacker';
+                                seat.activeCharacter = activeChar?.id || 'the_kid';
+                                seat.characterSpriteSet = activeChar?.sprite_set || 'char_the_kid';
                                 const heat = heatRow?.heat || 0;
                                 seat.heat = heat;
                                 seat.heatTier = CombatManager.getHeatTier(heat);
@@ -3625,7 +3625,7 @@ class SocketHandler {
                     const CharacterSystem = require('../game/CharacterSystem');
                     const charSystem = new CharacterSystem(require('../database/Database'));
 
-                    const charDef = charSystem.getCharacterDef(data?.characterId || 'shadow_hacker');
+                    const charDef = charSystem.getCharacterDef(data?.characterId || 'the_kid');
                     respond({ 
                         success: true, 
                         characterId: charDef.id,

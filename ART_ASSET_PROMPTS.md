@@ -102,7 +102,7 @@ aesthetic, 1920x1080, game background art, slightly blurred for UI overlay
 
 Every character needs a **full-body portrait** (front-facing, transparent background). Each has a unique personality. They appear at table seats, on the character select screen, and in combat encounters.
 
-### Character 1: Shadow Hacker (Common — everyone starts with this)
+### Character 1: The Kid (Common — everyone starts with this)
 ```
 Full-body character portrait, front-facing, transparent background. Young 
 tech-savvy figure in a dark hoodie with the hood partially up, cargo pants, 
@@ -720,7 +720,7 @@ Game item icon: [VEHICLE], dramatic lighting, crime-world luxury aesthetic,
 - [ ] Lobby background
 
 ### Priority 2 — Characters (10)
-- [ ] Shadow Hacker (Common)
+- [ ] The Kid (Common)
 - [ ] Big Tex (Uncommon)
 - [ ] Whiskers (Uncommon)
 - [ ] Lil' Stinky (Rare)

@@ -10301,8 +10301,8 @@ class Table {
                     // Crew tag
                     crewTag: seat.crewTag || null,
                     // Active character
-                    activeCharacter: seat.activeCharacter || 'shadow_hacker',
-                    characterSpriteSet: seat.characterSpriteSet || 'char_shadow_hacker',
+                    activeCharacter: seat.activeCharacter || 'the_kid',
+                    characterSpriteSet: seat.characterSpriteSet || 'char_the_kid',
                     // Heat (Combat System — mafia enforcers)
                     heat: seat.heat || 0,
                     heatTier: seat.heatTier || { title: 'Civilian', visual: 'none', heat: 0 }

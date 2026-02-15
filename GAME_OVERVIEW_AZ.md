@@ -46,7 +46,7 @@ Every player picks a character. Each has a portrait, sound set (win/lose/fold/al
 
 | Character | Rarity |
 |-----------|--------|
-| Shadow Hacker | Common (everyone starts with this) |
+| The Kid | Common (everyone starts with this) |
 | Big Tex | Uncommon |
 | Whiskers | Uncommon |
 | Lil' Stinky | Rare |

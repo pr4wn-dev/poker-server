@@ -2,7 +2,7 @@
  * CharacterSystem.js - Collectible character management
  * 
  * Characters are items (item_type = 'character') stored in inventory.
- * Everyone starts with the default "Shadow Hacker" (not stored as item — it's free).
+ * Everyone starts with the default "The Kid" (not stored as item — it's free).
  * Characters have rarity, unique sound sets, pixel art sprites, and personality.
  */
 
@@ -327,7 +327,7 @@ class CharacterSystem {
         const rows = await this.db.query(
             'SELECT active_character FROM users WHERE id = ?', [playerId]
         );
-        const activeId = rows?.[0]?.active_character || 'shadow_hacker';
+        const activeId = rows?.[0]?.active_character || 'the_kid';
         return this.getCharacterDef(activeId);
     }
 
@@ -345,8 +345,8 @@ class CharacterSystem {
         
         // Always include default
         const owned = [{ 
-            template_id: 'shadow_hacker',
-            name: 'Shadow Hacker',
+            template_id: 'the_kid',
+            name: 'The Kid',
             rarity: 'common',
             obtained_at: null,
             obtained_from: 'default',
@@ -374,12 +374,12 @@ class CharacterSystem {
      */
     async setActiveCharacter(playerId, characterId) {
         // Default is always allowed
-        if (characterId === 'shadow_hacker') {
+        if (characterId === 'the_kid') {
             await this.db.query(
                 'UPDATE users SET active_character = ? WHERE id = ?',
-                ['shadow_hacker', playerId]
+                ['the_kid', playerId]
             );
-            return { success: true, activeCharacter: 'shadow_hacker' };
+            return { success: true, activeCharacter: 'the_kid' };
         }
 
         // Check ownership
@@ -497,7 +497,7 @@ class CharacterSystem {
      * @returns {{ atk: number, def: number, spd: number }}
      */
     getCombatStats(characterId) {
-        const def = CHARACTERS[characterId] || CHARACTERS['shadow_hacker'];
+        const def = CHARACTERS[characterId] || CHARACTERS['the_kid'];
         return def.combatStats || { atk: 5, def: 5, spd: 5 };
     }
 
@@ -505,7 +505,7 @@ class CharacterSystem {
      * Get the sound key for a character event
      */
     getCharacterSound(characterId, eventType) {
-        const def = CHARACTERS[characterId] || CHARACTERS['shadow_hacker'];
+        const def = CHARACTERS[characterId] || CHARACTERS['the_kid'];
         const sounds = def.sounds?.[eventType];
         if (!sounds || sounds.length === 0) return null;
         return sounds[Math.floor(Math.random() * sounds.length)];
