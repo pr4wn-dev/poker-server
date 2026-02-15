@@ -1,3 +1,117 @@
+## [Feb 14, 2026] - MAJOR: Narrative Pivot to Mafia Wars Story
+
+**What changed:** Complete narrative redesign from cyber/hacker theme to dark mafia/kidnapping story.
+
+**Why:** The new story creates emotional investment, justifies all existing systems, and adds narrative weight to gameplay.
+
+**New Story:**
+- A child's family is kidnapped in the middle of the night
+- Kid wanders empty streets, meets a mysterious mafioso who teaches them poker
+- Mafioso gives kid 20 million chips: "Go find them."
+- Kid climbs criminal underworld through poker, searching for the killer
+- Final boss: THE KILLER, who keeps victims in thousands of drawers
+- After defeating killer: search drawers to find your family (emotional endgame loop)
+
+**What stays the same (83% of codebase):**
+- ✅ All poker systems (core engine, tables, lobbies, tournaments)
+- ✅ Adventure mode structure (8 areas, 13 bosses)
+- ✅ Combat system → now mafia enforcers (perfect fit)
+- ✅ Character system → now rescued victims
+- ✅ Item/equipment, inventory, crews, friends, stats, shop
+- ✅ All 16 Unity scenes (just text/color updates)
+
+**What's changing:**
+
+### 1. Narrative Reskin (Text & Theme)
+- **Theme:** Cyber/neon → Mafia/noir (muted grays, browns, blood reds)
+- **Characters:** Cyber hackers → Kidnap victims
+- **Areas:** Cyber zones → Criminal underworld (Empty Streets, Back Alley, Docks, Mafia HQ, Killer's Estate, Drawer Dungeon)
+- **Bosses:** Hacker names → Criminal figures (Scarface Eddie, The Dealer, Don Vittorio, THE KILLER)
+- **Combat:** Generic PvP → Mafia enforcers collecting debts
+- **Starting chips:** 500 → 20,000,000 (mafioso's gift)
+
+### 2. New Features (3 total)
+
+**A. Opening Cinematic:**
+- First-launch cutscene showing the kidnapping
+- 7 static images with text (skippable)
+- Database flag: `has_seen_intro`
+- Flow: Login → Intro → Character Select
+
+**B. Drawer Dungeon:**
+- Special scene after defeating THE KILLER
+- Grid of 100 drawers (clickable)
+- Search for kidnapped family members
+- Most drawers empty, some contain rescued characters
+- Family = legendary rarity drops
+- Endgame loop: Keep defeating killer to search more drawers
+
+**C. Mafia Loan System:**
+- Go broke → mafia offers loan with interest
+- 7-day repayment period
+- Don't pay → mafia enforcer challenges you to combat
+- Win = debt forgiven, Lose = debt doubles + lose items
+- Uses existing CombatManager (perfect integration)
+
+### 3. Art Asset Replacement
+All art replaced with noir/mafia aesthetic:
+- Opening cinematic (7 scenes)
+- Character portraits (10 victims, not hackers)
+- Boss portraits (13 criminals)
+- Area backgrounds (8 noir locations)
+- Drawer dungeon UI
+- Main menu background (dark rainy street)
+- Table/chips/cards (worn, gritty)
+
+**Technical changes required:**
+- `GameTheme.cs`: Color palette update (cyber → noir)
+- `CharacterSystem.js`: Rename/update 10 characters
+- `WorldMap.js`: Rename/update 8 areas
+- `Boss.js`: Rename/update 13 bosses
+- `IntroScene.cs`: NEW (opening cutscene)
+- `DrawerDungeonScene.cs`: NEW (drawer search)
+- `MafiaLoanManager.js`: NEW (loan system)
+- `UserRepository.js`: Default chips = 20M
+- All scene text updates (MainMenu, Adventure, Combat, etc.)
+
+**Why this works:**
+1. **Motivation:** Story gives players a reason to care (find family)
+2. **Systems fit:** All existing features now have narrative context
+   - Poker = climb criminal ladder
+   - Combat = mafia violence (enforcers)
+   - Characters = rescued victims
+   - Bosses = criminal figures blocking your path
+   - Items = underworld gear
+3. **Emotional hook:** Drawer dungeon creates powerful endgame (searching for family)
+4. **Stakes:** Loan system adds real consequences (enforcers come after you)
+5. **Replayability:** Keep fighting killer to search more drawers
+
+**Implementation timeline:**
+- Narrative reskin: 2-3 days
+- Intro cinematic: 1-2 days
+- Drawer dungeon: 2-3 days
+- Loan system: 2-3 days
+- Art generation: 2-5 days (parallel)
+- Testing: 2-3 days
+- **Total:** 2-3 weeks
+
+**Documentation updated:**
+- `GAME_STORY.md` (NEW) — full narrative document
+- `GAME_COMPLETION_PLAN.md` — updated task breakdown
+- `PROJECT_STATUS.md` (Unity) — updated roadmap
+- `CHANGELOG.md` (this file)
+
+**Next steps:**
+1. Update theme colors (GameTheme.cs)
+2. Update character/area/boss names and descriptions
+3. Build opening cinematic
+4. Build drawer dungeon
+5. Build loan system
+6. Generate all art assets
+7. Full testing pass
+
+---
+
 ## [Feb 14, 2026] - Fix: Table menu invisible (TWO compounding bugs)
 
 **Problem**: Table hamburger menu (☰) clickable but visually invisible — bg_table image covers it.
