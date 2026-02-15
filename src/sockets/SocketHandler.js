@@ -8,6 +8,7 @@ const db = require('../database/Database');
 const AdventureManager = require('../adventure/AdventureManager');
 const TournamentManager = require('../game/TournamentManager');
 const SimulationManager = require('../testing/SimulationManager');
+const MafiaLoanManager = require('../game/MafiaLoanManager');
 const gameLogger = require('../utils/GameLogger');
 // UnityLogHandler was in monitoring/ (removed). Stub it to prevent crashes.
 const UnityLogHandler = class { constructor() {} handleUnityLog() {} };
@@ -19,6 +20,7 @@ class SocketHandler {
         this.adventureManager = new AdventureManager(userRepo);
         this.tournamentManager = new TournamentManager(userRepo);
         this.simulationManager = new SimulationManager(gameManager);
+        this.loanManager = new MafiaLoanManager(userRepo, null); // CombatManager initialized later
         // Pass io to SimulationManager so it can notify spectators
         this.simulationManager.setIO(io);
         
@@ -2304,6 +2306,83 @@ class SocketHandler {
                 
                 const result = await this.adventureManager.forfeit(user.userId);
                 respond(result);
+            });
+            
+            socket.on('search_drawer', async (data, callback) => {
+                const user = this.getAuthenticatedUser(socket);
+                if (!user) return callback?.({ success: false, error: 'Not authenticated' });
+                
+                const { drawerIndex } = data || {};
+                if (drawerIndex === undefined) {
+                    return callback?.({ success: false, error: 'Drawer index required' });
+                }
+                
+                const result = await this.adventureManager.searchDrawer(user.userId, drawerIndex);
+                callback?.(result);
+            });
+            
+            // ============ Mafia Loans ============
+            
+            socket.on('get_loan_summary', async (data, callback) => {
+                const user = this.getAuthenticatedUser(socket);
+                if (!user) return callback?.({ success: false, error: 'Not authenticated' });
+                
+                const summary = await this.loanManager.getLoanSummary(user.userId);
+                callback?.({ success: true, ...summary });
+            });
+            
+            socket.on('take_loan', async (data, callback) => {
+                const user = this.getAuthenticatedUser(socket);
+                if (!user) return callback?.({ success: false, error: 'Not authenticated' });
+                
+                const { amount } = data || {};
+                if (!amount) {
+                    return callback?.({ success: false, error: 'Loan amount required' });
+                }
+                
+                const result = await this.loanManager.takeLoan(user.userId, amount);
+                
+                if (result.success) {
+                    // Update user's chip count
+                    const updatedUser = await userRepo.getById(user.userId);
+                    socket.emit('chips_updated', { chips: updatedUser.chips });
+                }
+                
+                callback?.(result);
+            });
+            
+            socket.on('repay_loan', async (data, callback) => {
+                const user = this.getAuthenticatedUser(socket);
+                if (!user) return callback?.({ success: false, error: 'Not authenticated' });
+                
+                const { loanId } = data || {};
+                if (!loanId) {
+                    return callback?.({ success: false, error: 'Loan ID required' });
+                }
+                
+                const result = await this.loanManager.repayLoan(user.userId, loanId);
+                
+                if (result.success) {
+                    // Update user's chip count
+                    const updatedUser = await userRepo.getById(user.userId);
+                    socket.emit('chips_updated', { chips: updatedUser.chips });
+                }
+                
+                callback?.(result);
+            });
+            
+            socket.on('check_enforcer', async (data, callback) => {
+                const user = this.getAuthenticatedUser(socket);
+                if (!user) return callback?.({ success: false, error: 'Not authenticated' });
+                
+                const overdueLoans = await this.loanManager.getOverdueLoans(user.userId);
+                
+                if (overdueLoans.length > 0) {
+                    const enforcerData = await this.loanManager.sendEnforcer(user.userId);
+                    callback?.({ success: true, hasEnforcer: true, ...enforcerData });
+                } else {
+                    callback?.({ success: true, hasEnforcer: false });
+                }
             });
             
             socket.on('use_xp_item', async (data, callback) => {

@@ -746,6 +746,23 @@ class Database {
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         `);
 
+        // Mafia loans
+        await this.query(`
+            CREATE TABLE IF NOT EXISTS mafia_loans (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                user_id VARCHAR(36) NOT NULL,
+                amount_borrowed BIGINT NOT NULL,
+                interest_rate FLOAT DEFAULT 0.2,
+                amount_owed BIGINT NOT NULL,
+                due_date TIMESTAMP NOT NULL,
+                paid BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                paid_at TIMESTAMP NULL,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                INDEX idx_user_unpaid (user_id, paid, due_date)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+        `);
+
         // Saved hands — for replay system
         await this.query(`
             CREATE TABLE IF NOT EXISTS saved_hands (

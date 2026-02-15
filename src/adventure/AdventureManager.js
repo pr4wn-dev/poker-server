@@ -487,6 +487,104 @@ class AdventureManager {
     getActiveSession(userId) {
         return this.activeSessions.has(userId) ? this.getSessionState(userId) : null;
     }
+    /**
+     * Search a drawer in the drawer dungeon
+     * Called after defeating THE KILLER
+     */
+    async searchDrawer(userId, drawerIndex) {
+        const CharacterSystem = require('../game/CharacterSystem');
+        const bossesDefeated = await this.userRepo.getBossesDefeated(userId);
+        
+        // Check if user has defeated THE KILLER (boss_final)
+        const hasDefeatedKiller = bossesDefeated.includes('boss_final');
+        if (!hasDefeatedKiller) {
+            return { success: false, error: 'Must defeat THE KILLER first' };
+        }
+        
+        // Count how many times they've defeated THE KILLER
+        const db = require('../database/Database').getInstance();
+        const defeatCount = await db.queryOne(
+            'SELECT COUNT(*) as count FROM bosses_defeated WHERE user_id = ? AND boss_id = ?',
+            [userId, 'boss_final']
+        );
+        
+        const totalDefeats = defeatCount?.count || 0;
+        
+        // First victory = guaranteed character drop (one specific drawer)
+        // Subsequent victories = random chance
+        let foundCharacter = false;
+        let characterData = null;
+        
+        if (totalDefeats === 1 && drawerIndex === 42) {
+            // First time, drawer 42 has guaranteed character
+            foundCharacter = true;
+        } else if (totalDefeats > 1) {
+            // Random chance: 15% for regular characters, 1% for family
+            const roll = Math.random();
+            if (roll < 0.15) {
+                foundCharacter = true;
+            }
+        }
+        
+        if (foundCharacter) {
+            // Determine which character (weighted by rarity)
+            const allCharacters = CharacterSystem.getAllCharacters();
+            const ownedCharacters = await this.userRepo.getOwnedCharacters(userId);
+            const ownedIds = ownedCharacters.map(c => c.character_id);
+            
+            // Filter out already owned and default character
+            const availableCharacters = allCharacters.filter(c => 
+                !c.is_default && !ownedIds.includes(c.id)
+            );
+            
+            if (availableCharacters.length > 0) {
+                // Weight by rarity (rarer = lower chance)
+                const rarityWeights = {
+                    'common': 50,
+                    'uncommon': 30,
+                    'rare': 15,
+                    'epic': 4,
+                    'legendary': 0.8,
+                    'mythic': 0.2
+                };
+                
+                const weightedPool = [];
+                for (const char of availableCharacters) {
+                    const weight = rarityWeights[char.rarity] || 10;
+                    for (let i = 0; i < weight * 100; i++) {
+                        weightedPool.push(char);
+                    }
+                }
+                
+                const selectedChar = weightedPool[Math.floor(Math.random() * weightedPool.length)];
+                
+                // Award character
+                await this.userRepo.awardCharacter(userId, selectedChar.id);
+                
+                characterData = {
+                    characterId: selectedChar.id,
+                    characterName: selectedChar.name,
+                    rarity: selectedChar.rarity,
+                    description: selectedChar.description
+                };
+                
+                return {
+                    success: true,
+                    foundCharacter: true,
+                    ...characterData
+                };
+            } else {
+                // All characters already owned
+                foundCharacter = false;
+            }
+        }
+        
+        // Empty drawer
+        return {
+            success: true,
+            foundCharacter: false
+        };
+    }
 }
 
 module.exports = AdventureManager;
