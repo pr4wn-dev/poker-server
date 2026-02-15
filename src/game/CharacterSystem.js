@@ -51,219 +51,240 @@ const RARITY_DROP_WEIGHTS = {
  */
 const CHARACTERS = {
     // === DEFAULT (everyone has this, not in inventory) ===
-    'shadow_hacker': {
-        id: 'shadow_hacker',
-        name: 'Shadow Hacker',
-        description: 'A hooded figure shrouded in darkness. Face hidden, identity unknown. The default operative.',
+    'the_kid': {
+        id: 'the_kid',
+        name: 'The Kid',
+        description: 'A child who lost everything in one terrible night. Searching for their family in the criminal underworld.',
         rarity: 'common',
         is_default: true,
-        personality: 'mysterious',
-        sprite_set: 'char_shadow_hacker',
+        personality: 'determined',
+        sprite_set: 'char_the_kid',
         combatStats: { atk: 5, def: 5, spd: 5 }, // Total: 15 (Common)
         sounds: {
-            win: ['shadow_win_1', 'shadow_win_2', 'shadow_win_3'],
-            lose: ['shadow_lose_1', 'shadow_lose_2'],
-            fold: ['shadow_fold_1'],
-            all_in: ['shadow_allin_1', 'shadow_allin_2'],
-            big_pot: ['shadow_bigpot_1'],
-            taunt: ['shadow_taunt_1', 'shadow_taunt_2'],
-            idle: ['shadow_idle_1']
+            win: ['kid_win_1', 'kid_win_2', 'kid_win_3'],
+            lose: ['kid_lose_1', 'kid_lose_2'],
+            fold: ['kid_fold_1'],
+            all_in: ['kid_allin_1', 'kid_allin_2'],
+            big_pot: ['kid_bigpot_1'],
+            taunt: ['kid_taunt_1', 'kid_taunt_2'],
+            idle: ['kid_idle_1']
         },
         unlock_methods: ['default']
     },
 
     // === UNCOMMON ===
-    'big_tex': {
-        id: 'big_tex',
-        name: 'Big Tex',
-        description: 'A Texan with a manly mustache and a bad attitude. Don\'t mess with his chips, partner.',
+    'street_kid': {
+        id: 'street_kid',
+        name: 'Street Kid',
+        description: 'A tough teenager who survived the streets. Rescued from a trafficking ring. Quick and scrappy.',
         rarity: 'uncommon',
         is_default: false,
-        personality: 'aggressive',
-        sprite_set: 'char_big_tex',
-        combatStats: { atk: 8, def: 5, spd: 5 }, // Total: 18 (Uncommon) — glass cannon cowboy
+        personality: 'street_smart',
+        sprite_set: 'char_street_kid',
+        combatStats: { atk: 8, def: 5, spd: 5 }, // Total: 18 (Uncommon) — glass cannon
         sounds: {
-            win: ['tex_win_1', 'tex_win_2', 'tex_win_3'],
-            lose: ['tex_lose_1', 'tex_lose_2'],
-            fold: ['tex_fold_1', 'tex_fold_2'],
-            all_in: ['tex_allin_1'],
-            big_pot: ['tex_bigpot_1'],
-            taunt: ['tex_taunt_1', 'tex_taunt_2', 'tex_taunt_3'],
-            idle: ['tex_idle_1']
+            win: ['street_win_1', 'street_win_2', 'street_win_3'],
+            lose: ['street_lose_1', 'street_lose_2'],
+            fold: ['street_fold_1', 'street_fold_2'],
+            all_in: ['street_allin_1'],
+            big_pot: ['street_bigpot_1'],
+            taunt: ['street_taunt_1', 'street_taunt_2', 'street_taunt_3'],
+            idle: ['street_idle_1']
         },
         unlock_methods: ['drop', 'shop', 'item_ante']
     },
 
-    'whiskers': {
-        id: 'whiskers',
-        name: 'Whiskers',
-        description: 'A smug cat in a poker visor. Meows when winning, hisses when losing. Surprisingly good at bluffs.',
+    'the_nurse': {
+        id: 'the_nurse',
+        name: 'The Nurse',
+        description: 'A medical professional taken from a hospital. Calm under pressure, knows how to survive.',
         rarity: 'uncommon',
         is_default: false,
-        personality: 'smug',
-        sprite_set: 'char_whiskers',
+        personality: 'calm',
+        sprite_set: 'char_the_nurse',
         combatStats: { atk: 5, def: 5, spd: 8 }, // Total: 18 (Uncommon) — fast and slippery
         sounds: {
-            win: ['whiskers_win_1', 'whiskers_win_2'],
-            lose: ['whiskers_lose_1', 'whiskers_lose_2'],
-            fold: ['whiskers_fold_1'],
-            all_in: ['whiskers_allin_1'],
-            big_pot: ['whiskers_bigpot_1'],
-            taunt: ['whiskers_taunt_1', 'whiskers_taunt_2'],
-            idle: ['whiskers_idle_1', 'whiskers_idle_2']
+            win: ['nurse_win_1', 'nurse_win_2'],
+            lose: ['nurse_lose_1', 'nurse_lose_2'],
+            fold: ['nurse_fold_1'],
+            all_in: ['nurse_allin_1'],
+            big_pot: ['nurse_bigpot_1'],
+            taunt: ['nurse_taunt_1', 'nurse_taunt_2'],
+            idle: ['nurse_idle_1', 'nurse_idle_2']
         },
         unlock_methods: ['drop', 'shop', 'item_ante']
     },
 
     // === RARE ===
-    'lil_stinky': {
-        id: 'lil_stinky',
-        name: 'Lil\' Stinky',
-        description: 'A ghetto baby in a diaper. Cries when losing, farts when winning. Surprisingly ruthless.',
+    'the_mechanic': {
+        id: 'the_mechanic',
+        name: 'The Mechanic',
+        description: 'A skilled engineer who was taken for their knowledge. Resourceful and clever under pressure.',
         rarity: 'rare',
         is_default: false,
-        personality: 'chaotic',
-        sprite_set: 'char_lil_stinky',
-        combatStats: { atk: 8, def: 5, spd: 8 }, // Total: 21 (Rare) — chaotic striker
+        personality: 'resourceful',
+        sprite_set: 'char_the_mechanic',
+        combatStats: { atk: 8, def: 5, spd: 8 }, // Total: 21 (Rare) — balanced striker
         sounds: {
-            win: ['stinky_win_1', 'stinky_win_2', 'stinky_fart_1'],
-            lose: ['stinky_cry_1', 'stinky_cry_2', 'stinky_wah_1'],
-            fold: ['stinky_fold_1'],
-            all_in: ['stinky_allin_1', 'stinky_giggle_1'],
-            big_pot: ['stinky_bigpot_1', 'stinky_fart_2'],
-            taunt: ['stinky_taunt_1', 'stinky_raspberry_1'],
-            idle: ['stinky_idle_1', 'stinky_gurgle_1']
+            win: ['mechanic_win_1', 'mechanic_win_2', 'mechanic_win_3'],
+            lose: ['mechanic_lose_1', 'mechanic_lose_2'],
+            fold: ['mechanic_fold_1'],
+            all_in: ['mechanic_allin_1', 'mechanic_allin_2'],
+            big_pot: ['mechanic_bigpot_1', 'mechanic_bigpot_2'],
+            taunt: ['mechanic_taunt_1', 'mechanic_taunt_2'],
+            idle: ['mechanic_idle_1', 'mechanic_idle_2']
         },
         unlock_methods: ['drop', 'item_ante']
     },
 
-    'bones': {
-        id: 'bones',
-        name: 'Bones',
-        description: 'A skeleton in a tailored suit. Rattles when moving, tells death puns. Already dead inside from bad beats.',
+    'the_boxer': {
+        id: 'the_boxer',
+        name: 'The Boxer',
+        description: 'A former prizefighter kidnapped for underground fights. Tough as nails, refuses to stay down.',
         rarity: 'rare',
         is_default: false,
-        personality: 'dark_humor',
-        sprite_set: 'char_bones',
-        combatStats: { atk: 6, def: 9, spd: 6 }, // Total: 21 (Rare) — tanky skeleton
+        personality: 'tough',
+        sprite_set: 'char_the_boxer',
+        combatStats: { atk: 6, def: 9, spd: 6 }, // Total: 21 (Rare) — tanky fighter
         sounds: {
-            win: ['bones_win_1', 'bones_rattle_1', 'bones_win_2'],
-            lose: ['bones_lose_1', 'bones_crack_1'],
-            fold: ['bones_fold_1'],
-            all_in: ['bones_allin_1'],
-            big_pot: ['bones_bigpot_1'],
-            taunt: ['bones_taunt_1', 'bones_taunt_2'],
-            idle: ['bones_idle_1', 'bones_rattle_2']
+            win: ['boxer_win_1', 'boxer_win_2', 'boxer_win_3'],
+            lose: ['boxer_lose_1', 'boxer_lose_2'],
+            fold: ['boxer_fold_1'],
+            all_in: ['boxer_allin_1'],
+            big_pot: ['boxer_bigpot_1'],
+            taunt: ['boxer_taunt_1', 'boxer_taunt_2'],
+            idle: ['boxer_idle_1', 'boxer_idle_2']
         },
         unlock_methods: ['drop', 'item_ante', 'boss']
     },
 
-    'deadbeat': {
-        id: 'deadbeat',
-        name: 'Deadbeat',
-        description: 'A zombie who just wants chips... and braaains. Groans at everything. Surprisingly strategic undead.',
+    'the_teacher': {
+        id: 'the_teacher',
+        name: 'The Teacher',
+        description: 'An educator taken from their classroom. Patient, strategic, always thinking three steps ahead.',
         rarity: 'rare',
         is_default: false,
-        personality: 'slow',
-        sprite_set: 'char_deadbeat',
-        combatStats: { atk: 7, def: 7, spd: 7 }, // Total: 21 (Rare) — balanced undead
+        personality: 'strategic',
+        sprite_set: 'char_the_teacher',
+        combatStats: { atk: 7, def: 7, spd: 7 }, // Total: 21 (Rare) — balanced
         sounds: {
-            win: ['deadbeat_win_1', 'deadbeat_groan_1'],
-            lose: ['deadbeat_lose_1', 'deadbeat_moan_1'],
-            fold: ['deadbeat_fold_1'],
-            all_in: ['deadbeat_allin_1', 'deadbeat_roar_1'],
-            big_pot: ['deadbeat_bigpot_1'],
-            taunt: ['deadbeat_taunt_1', 'deadbeat_brains_1'],
-            idle: ['deadbeat_idle_1', 'deadbeat_shuffle_1']
+            win: ['teacher_win_1', 'teacher_win_2'],
+            lose: ['teacher_lose_1', 'teacher_lose_2'],
+            fold: ['teacher_fold_1'],
+            all_in: ['teacher_allin_1', 'teacher_allin_2'],
+            big_pot: ['teacher_bigpot_1'],
+            taunt: ['teacher_taunt_1', 'teacher_taunt_2'],
+            idle: ['teacher_idle_1', 'teacher_idle_2']
         },
         unlock_methods: ['drop', 'boss']
     },
 
     // === EPIC ===
-    'glitch': {
-        id: 'glitch',
-        name: 'Glitch',
-        description: 'A broken android with corrupted memory. Speaks in error messages and static. Occasionally displays the wrong emotion.',
+    'the_detective': {
+        id: 'the_detective',
+        name: 'The Detective',
+        description: 'A private investigator who got too close to the truth. Sharp, observant, and determined to escape.',
         rarity: 'epic',
         is_default: false,
-        personality: 'glitchy',
-        sprite_set: 'char_glitch',
-        combatStats: { atk: 10, def: 6, spd: 8 }, // Total: 24 (Epic) — high damage android
+        personality: 'observant',
+        sprite_set: 'char_the_detective',
+        combatStats: { atk: 10, def: 6, spd: 8 }, // Total: 24 (Epic) — high damage
         sounds: {
-            win: ['glitch_win_1', 'glitch_beep_1', 'glitch_error_success_1'],
-            lose: ['glitch_lose_1', 'glitch_static_1'],
-            fold: ['glitch_fold_1', 'glitch_shutdown_1'],
-            all_in: ['glitch_allin_1', 'glitch_overclock_1'],
-            big_pot: ['glitch_bigpot_1'],
-            taunt: ['glitch_taunt_1', 'glitch_virus_1'],
-            idle: ['glitch_idle_1', 'glitch_hum_1']
+            win: ['detective_win_1', 'detective_win_2', 'detective_win_3'],
+            lose: ['detective_lose_1', 'detective_lose_2'],
+            fold: ['detective_fold_1', 'detective_fold_2'],
+            all_in: ['detective_allin_1', 'detective_allin_2'],
+            big_pot: ['detective_bigpot_1'],
+            taunt: ['detective_taunt_1', 'detective_taunt_2'],
+            idle: ['detective_idle_1', 'detective_idle_2']
         },
         unlock_methods: ['drop', 'boss', 'tournament']
     },
 
-    'nana': {
-        id: 'nana',
-        name: 'Nana',
-        description: 'Somebody\'s grandma who wandered into the wrong game. Knits between hands. Passive aggressive trash talk.',
+    'the_doctor': {
+        id: 'the_doctor',
+        name: 'The Doctor',
+        description: 'A physician taken for their medical expertise. Calm, precise, and unshakeable under pressure.',
         rarity: 'epic',
         is_default: false,
-        personality: 'passive_aggressive',
-        sprite_set: 'char_nana',
-        combatStats: { atk: 6, def: 10, spd: 8 }, // Total: 24 (Epic) — tanky grandma
+        personality: 'precise',
+        sprite_set: 'char_the_doctor',
+        combatStats: { atk: 6, def: 10, spd: 8 }, // Total: 24 (Epic) — defensive tank
         sounds: {
-            win: ['nana_win_1', 'nana_win_2', 'nana_chuckle_1'],
-            lose: ['nana_lose_1', 'nana_sigh_1'],
-            fold: ['nana_fold_1', 'nana_knit_1'],
-            all_in: ['nana_allin_1'],
-            big_pot: ['nana_bigpot_1'],
-            taunt: ['nana_taunt_1', 'nana_taunt_2', 'nana_cookies_1'],
-            idle: ['nana_idle_1', 'nana_snore_1']
+            win: ['doctor_win_1', 'doctor_win_2', 'doctor_win_3'],
+            lose: ['doctor_lose_1', 'doctor_lose_2'],
+            fold: ['doctor_fold_1'],
+            all_in: ['doctor_allin_1', 'doctor_allin_2'],
+            big_pot: ['doctor_bigpot_1'],
+            taunt: ['doctor_taunt_1', 'doctor_taunt_2'],
+            idle: ['doctor_idle_1', 'doctor_idle_2']
         },
         unlock_methods: ['drop', 'tournament']
     },
 
     // === LEGENDARY ===
-    'the_don': {
-        id: 'the_don',
-        name: 'The Don',
-        description: 'A mafia boss with a cigar and an offer you can\'t refuse. Deep intimidating voice. Runs the table.',
+    'mother': {
+        id: 'mother',
+        name: 'Mother',
+        description: 'Your mother. The one who was taken that terrible night. Finding her means everything.',
         rarity: 'legendary',
         is_default: false,
-        personality: 'intimidating',
-        sprite_set: 'char_the_don',
-        combatStats: { atk: 10, def: 9, spd: 8 }, // Total: 27 (Legendary) — devastating boss
+        personality: 'protective',
+        sprite_set: 'char_mother',
+        combatStats: { atk: 10, def: 9, spd: 8 }, // Total: 27 (Legendary) — powerful
         sounds: {
-            win: ['don_win_1', 'don_win_2'],
-            lose: ['don_lose_1'],
-            fold: ['don_fold_1'],
-            all_in: ['don_allin_1', 'don_offer_1'],
-            big_pot: ['don_bigpot_1'],
-            taunt: ['don_taunt_1', 'don_taunt_2', 'don_threat_1'],
-            idle: ['don_idle_1', 'don_cigar_1']
+            win: ['mother_win_1', 'mother_win_2'],
+            lose: ['mother_lose_1'],
+            fold: ['mother_fold_1'],
+            all_in: ['mother_allin_1', 'mother_allin_2'],
+            big_pot: ['mother_bigpot_1'],
+            taunt: ['mother_taunt_1', 'mother_taunt_2'],
+            idle: ['mother_idle_1', 'mother_idle_2']
         },
-        unlock_methods: ['boss', 'tournament']
+        unlock_methods: ['boss']  // Only from drawer dungeon
+    },
+
+    'father': {
+        id: 'father',
+        name: 'Father',
+        description: 'Your father. Strong, protective, taken from you. You won\'t stop until you find him.',
+        rarity: 'legendary',
+        is_default: false,
+        personality: 'strong',
+        sprite_set: 'char_father',
+        combatStats: { atk: 11, def: 8, spd: 8 }, // Total: 27 (Legendary) — high attack
+        sounds: {
+            win: ['father_win_1', 'father_win_2'],
+            lose: ['father_lose_1'],
+            fold: ['father_fold_1'],
+            all_in: ['father_allin_1', 'father_allin_2'],
+            big_pot: ['father_bigpot_1'],
+            taunt: ['father_taunt_1', 'father_taunt_2'],
+            idle: ['father_idle_1', 'father_idle_2']
+        },
+        unlock_methods: ['boss']  // Only from drawer dungeon
     },
 
     // === MYTHIC ===
-    'pixel_god': {
-        id: 'pixel_god',
-        name: 'Pixel God',
-        description: 'A glowing 8-bit deity. Speaks in chiptune. Bends probability. Only the luckiest will ever see this one.',
+    'sibling': {
+        id: 'sibling',
+        name: 'Sibling',
+        description: 'Your brother/sister. You heard them scream that night. Finding them is your deepest hope.',
         rarity: 'mythic',
         is_default: false,
-        personality: 'divine',
-        sprite_set: 'char_pixel_god',
+        personality: 'brave',
+        sprite_set: 'char_sibling',
         combatStats: { atk: 10, def: 10, spd: 10 }, // Total: 30 (Mythic) — perfect stats
         sounds: {
-            win: ['pixelgod_win_1', 'pixelgod_fanfare_1'],
-            lose: ['pixelgod_lose_1'],
-            fold: ['pixelgod_fold_1'],
-            all_in: ['pixelgod_allin_1', 'pixelgod_thunder_1'],
-            big_pot: ['pixelgod_bigpot_1', 'pixelgod_choir_1'],
-            taunt: ['pixelgod_taunt_1'],
-            idle: ['pixelgod_idle_1', 'pixelgod_hum_1']
+            win: ['sibling_win_1', 'sibling_win_2'],
+            lose: ['sibling_lose_1'],
+            fold: ['sibling_fold_1'],
+            all_in: ['sibling_allin_1', 'sibling_allin_2'],
+            big_pot: ['sibling_bigpot_1', 'sibling_bigpot_2'],
+            taunt: ['sibling_taunt_1'],
+            idle: ['sibling_idle_1', 'sibling_idle_2']
         },
-        unlock_methods: ['boss']
+        unlock_methods: ['boss']  // Rarest drop from drawer dungeon
     }
 };
 
@@ -278,7 +299,7 @@ class CharacterSystem {
      * Get the character definition by template_id
      */
     getCharacterDef(characterId) {
-        return CHARACTERS[characterId] || CHARACTERS['shadow_hacker'];
+        return CHARACTERS[characterId] || CHARACTERS['the_kid'];
     }
 
     /**

@@ -164,10 +164,10 @@ WorldMap.getXPProgress = function(xp) {
 WorldMap.ALL_AREAS = [
     {
         id: 'area_tutorial',
-        name: 'Poker Academy',
+        name: 'The Empty Streets',
         type: AREA_TYPE.STARTER,
-        description: 'Learn the ropes at this beginner-friendly poker school.',
-        icon: 'area_academy',
+        description: 'The rain-soaked streets where you wandered alone that terrible night. Where it all began.',
+        icon: 'area_empty_streets',
         position: { x: 0, y: 0 },
         requirements: [],  // Always accessible
         bosses: ['boss_tutorial'],
@@ -175,10 +175,10 @@ WorldMap.ALL_AREAS = [
     },
     {
         id: 'area_downtown',
-        name: 'Downtown Casino',
-        type: AREA_TYPE.CASINO,
-        description: 'The local casino where hustlers sharpen their skills. Hosts daily tournaments!',
-        icon: 'area_downtown',
+        name: 'The Back Alley',
+        type: AREA_TYPE.UNDERGROUND,
+        description: 'Underground poker dens where criminals gather. Smoky rooms, dangerous men, and your first real wins.',
+        icon: 'area_back_alley',
         position: { x: 1, y: 0 },
         requirements: [
             { type: UNLOCK_TYPE.XP_LEVEL, value: 2 }
@@ -189,10 +189,10 @@ WorldMap.ALL_AREAS = [
     },
     {
         id: 'area_highrise',
-        name: 'The Highrise',
-        type: AREA_TYPE.CITY,
-        description: 'Elite players gather here. High stakes tournaments with item side pots.',
-        icon: 'area_highrise',
+        name: 'Underground Poker Circuit',
+        type: AREA_TYPE.UNDERGROUND,
+        description: 'Illegal gambling rings beneath the city. You\'re making real money now. The stakes get higher. The players get meaner.',
+        icon: 'area_underground_circuit',
         position: { x: 2, y: 0 },
         requirements: [
             { type: UNLOCK_TYPE.XP_LEVEL, value: 5 },
@@ -204,10 +204,10 @@ WorldMap.ALL_AREAS = [
     },
     {
         id: 'area_underground',
-        name: 'The Underground',
-        type: AREA_TYPE.UNDERGROUND,
-        description: 'Illegal high-stakes tournaments. Rare item side pots required!',
-        icon: 'area_underground',
+        name: 'The Docks',
+        type: AREA_TYPE.CITY,
+        description: 'The waterfront where shipments come in — drugs, weapons, and dirty money. Crime bosses control the docks.',
+        icon: 'area_docks',
         position: { x: 1, y: 1 },
         requirements: [
             { type: UNLOCK_TYPE.XP_LEVEL, value: 8 },
@@ -219,10 +219,10 @@ WorldMap.ALL_AREAS = [
     },
     {
         id: 'area_yacht',
-        name: 'The Golden Yacht',
-        type: AREA_TYPE.YACHT,
-        description: 'Exclusive yacht tournaments. Epic item side pots only!',
-        icon: 'area_yacht',
+        name: 'Mafia Headquarters',
+        type: AREA_TYPE.VIP,
+        description: 'The heart of organized crime. You\'re deep in the underworld now. The "family" treats you like one of their own.',
+        icon: 'area_mafia_hq',
         position: { x: 3, y: 1 },
         requirements: [
             { type: UNLOCK_TYPE.ITEM, value: 'YACHT_INVITATION' }
@@ -233,10 +233,10 @@ WorldMap.ALL_AREAS = [
     },
     {
         id: 'area_island',
-        name: 'Private Island',
-        type: AREA_TYPE.ISLAND,
-        description: 'Legendary tournaments for the ultra-elite. Legendary items required!',
-        icon: 'area_island',
+        name: 'The Wastelands',
+        type: AREA_TYPE.UNDERGROUND,
+        description: 'Abandoned industrial district where the worst criminals hide. Getting closer to the killer. The atmosphere darkens.',
+        icon: 'area_wastelands',
         position: { x: 4, y: 2 },
         requirements: [
             { type: UNLOCK_TYPE.ITEM, value: 'ISLAND_KEY' },
@@ -248,10 +248,10 @@ WorldMap.ALL_AREAS = [
     },
     {
         id: 'area_penthouse',
-        name: 'The Penthouse',
+        name: 'The Killer\'s Estate',
         type: AREA_TYPE.PENTHOUSE,
-        description: 'The ultimate tournament. Only the best reach The Grand Finale.',
-        icon: 'area_penthouse',
+        description: 'A mansion on the outskirts of the city. Heavily guarded. Full of twisted secrets. You\'ve finally found him.',
+        icon: 'area_estate',
         position: { x: 5, y: 0 },
         requirements: [
             { type: UNLOCK_TYPE.XP_LEVEL, value: 20 },
@@ -263,10 +263,10 @@ WorldMap.ALL_AREAS = [
     },
     {
         id: 'area_secret_lounge',
-        name: '??? Lounge',
+        name: 'The Drawer Dungeon',
         type: AREA_TYPE.SECRET,
-        description: 'A mysterious location. How did you even find this?',
-        icon: 'area_secret',
+        description: 'The killer\'s basement. A massive vault filled with thousands of drawers. Each one contains a person he\'s kidnapped.',
+        icon: 'area_dungeon',
         position: { x: -1, y: -1 },
         requirements: [
             { type: UNLOCK_TYPE.ITEM, value: 'MYSTERY_TOKEN' }
