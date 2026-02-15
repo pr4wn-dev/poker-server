@@ -223,6 +223,7 @@ class UserRepository {
             isCoward: user.coward_until && new Date(user.coward_until) > new Date(),
             activeCharacter: user.active_character || null,
             characterSpriteSet: user.active_character ? `char_${user.active_character}` : null,
+            hasSeenIntro: user.has_seen_intro || false,
             createdAt: user.created_at,
             lastLogin: user.last_login,
             stats: stats ? {

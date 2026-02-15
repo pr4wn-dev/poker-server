@@ -91,7 +91,14 @@ class Database {
         
         // Add active_character column for collectible character system
         try {
-            await this.query("ALTER TABLE users ADD COLUMN active_character VARCHAR(100) DEFAULT 'shadow_hacker'");
+            await this.query("ALTER TABLE users ADD COLUMN active_character VARCHAR(100) DEFAULT 'the_kid'");
+        } catch (e) {
+            // Column already exists, ignore
+        }
+        
+        // Add has_seen_intro column for opening cinematic
+        try {
+            await this.query("ALTER TABLE users ADD COLUMN has_seen_intro BOOLEAN DEFAULT FALSE");
         } catch (e) {
             // Column already exists, ignore
         }

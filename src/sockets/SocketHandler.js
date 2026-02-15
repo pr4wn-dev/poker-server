@@ -119,6 +119,20 @@ class SocketHandler {
                 this.deauthenticateSocket(socket);
                 callback?.({ success: true });
             });
+            
+            socket.on('mark_intro_seen', async (data, callback) => {
+                const user = this.getAuthenticatedUser(socket);
+                if (!user) return callback?.({ success: false, error: 'Not authenticated' });
+                
+                try {
+                    await db.query('UPDATE users SET has_seen_intro = TRUE WHERE id = ?', [user.userId]);
+                    gameLogger.gameEvent('SOCKET', '[MARK_INTRO_SEEN]', { userId: user.userId });
+                    callback?.({ success: true });
+                } catch (error) {
+                    gameLogger.error('SOCKET', '[MARK_INTRO_SEEN] ERROR', { userId: user.userId, error: error.message });
+                    callback?.({ success: false, error: 'Failed to mark intro as seen' });
+                }
+            });
 
             socket.on('reset_progress', async (data, callback) => {
                 const user = this.getAuthenticatedUser(socket);
