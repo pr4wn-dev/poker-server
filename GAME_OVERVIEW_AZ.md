@@ -184,7 +184,7 @@ From the Lobby, you can:
 When you win a fight:
 - Take both wagered items (yours back + opponent's)
 - Take half the loser's chip balance
-- +1 Notoriety
+- +1 Heat
 - Crew XP (if in a crew)
 
 When you lose a fight:
@@ -206,7 +206,7 @@ When you disconnect during a challenge:
 
 ## L — Leaderboards
 
-Rankings by: chips, wins, level, biggest pot. Will add **"Most Dangerous"** (by notoriety / combat wins) when the combat system is built.
+Rankings by: chips, wins, level, biggest pot. Will add **"Most Dangerous"** (by heat / combat wins) when the combat system is built.
 
 ---
 
@@ -222,11 +222,11 @@ Socket.IO WebSocket communication. Features:
 
 ---
 
-## N — Notoriety (Replacing Karma)
+## N — Heat (Replacing Karma)
 
 Your lifetime combat reputation. Goes up, never down.
 
-| Notoriety | Title | Seat Visual |
+| Heat | Title | Seat Visual |
 |-----------|-------|-------------|
 | 0–5 | Civilian | Nothing |
 | 6–15 | Troublemaker | Small skull |
@@ -234,7 +234,7 @@ Your lifetime combat reputation. Goes up, never down.
 | 31–50 | Gunslinger | Flaming skull |
 | 51+ | Most Wanted | Animated skull + glow |
 
-Earn: +1 per combat win, +0.5 per loss (showed up to fight), +0 for fleeing. Tiny combat bonus (+1 per 10 notoriety, max +5). Displayed at seats, profiles, and leaderboards.
+Earn: +1 per combat win, +0.5 per loss (showed up to fight), +0 for fleeing. Tiny combat bonus (+1 per 10 heat, max +5). Displayed at seats, profiles, and leaderboards.
 
 ---
 
@@ -308,7 +308,7 @@ Same stakes, same resolution, same rules. Outside challenges always give the tar
 Combat Score = Character Stats (ATK + DEF + SPD)
              + Combat Item Bonuses (Weapon ATK + Armor DEF + Gear SPD)
              + Crew Backup (+2 per online crewmate, max +10)
-             + Notoriety Bonus (max +5)
+             + Heat Bonus (max +5)
              + Random Roll (±20%)
 ```
 
@@ -414,7 +414,7 @@ Tap any player's seat at the table to see their full profile popup:
 - Active title
 - Crew name + role
 - Fire/cold status
-- Notoriety rank (replacing karma heart)
+- Heat rank (replacing karma heart)
 - Key stats (VPIP, win rate, hands played)
 
 ---
@@ -434,7 +434,7 @@ Tap any player's seat at the table to see their full profile popup:
 | 9 | **Inventory** | RPG-style equip screen with 6 slots |
 | 10 | **Statistics** | 40+ stats in 8 tabs |
 | 11 | **Leaderboard** | Rankings by chips/wins/level |
-| 12 | **Combat** | Post-game PvP stats, fight history, notoriety (replacing Robbery) |
+| 12 | **Combat** | Post-game PvP stats, fight history, heat (replacing Robbery) |
 | 13 | **Crew** | Gang management, chat, leaderboard |
 | 14 | **Friends** | Friend list, requests, search, invite |
 | 15 | **HandReplay** | Replay saved hands step-by-step |

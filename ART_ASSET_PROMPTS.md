@@ -554,9 +554,9 @@ design complexity, game UI element, transparent background, 256x256.
 - **Legendary:** gold with flame/crown motif
 - **Mythic:** multi-color shifting aura, divine glow
 
-### Notoriety Icons (5 tiers)
+### Heat Icons (5 tiers)
 ```
-Game icon: skull emblem representing [TIER] notoriety level, dark metal 
+Game icon: skull emblem representing [TIER] heat level, dark metal 
 base, [TIER STYLE], crime-world dangerous reputation symbol, 128x128, 
 transparent background.
 ```
@@ -748,7 +748,7 @@ Game item icon: [VEHICLE], dramatic lighting, crime-world luxury aesthetic,
 
 ### Priority 5 — UI Elements
 - [ ] Avatar frames (6 rarities)
-- [ ] Notoriety icons (5 tiers)
+- [ ] Heat icons (5 tiers)
 - [ ] Fire/Cold status icons (8 states)
 - [ ] Item slot frames (6 types)
 - [ ] Currency icon (adventure coins)

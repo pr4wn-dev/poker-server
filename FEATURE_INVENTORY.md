@@ -280,9 +280,9 @@ Each character has: sprite set, sound set (win/lose/fold/all-in/taunt), personal
 
 ---
 
-## Notoriety System (replacing Karma) — See `COMBAT_SYSTEM_DESIGN.md`
+## Heat System (replacing Karma) — See `COMBAT_SYSTEM_DESIGN.md`
 
-| Notoriety Range | Title | Combat Bonus |
+| Heat Range | Title | Combat Bonus |
 |-----------------|-------|-------------|
 | 0–49 | Civilian | None |
 | 50–149 | Troublemaker | Tiny |
@@ -291,9 +291,9 @@ Each character has: sprite set, sound set (win/lose/fold/all-in/taunt), personal
 | 500+ | Most Wanted | Large |
 
 - Starts at 0 for every player
-- Win a fight → +25 notoriety
-- Lose a fight → −10 notoriety (floor 0)
-- Flee → −5 notoriety
+- Win a fight → +25 heat
+- Lose a fight → −10 heat (floor 0)
+- Flee → −5 heat
 - Cosmetic skull icon at table seats scales with tier
 - **Old Karma/Heart system is being retired** — see `COMBAT_SYSTEM_DESIGN.md` for full spec
 
@@ -429,9 +429,9 @@ Each character has: sprite set, sound set (win/lose/fold/all-in/taunt), personal
 | Component | Description |
 |-----------|-------------|
 | **PokerTableView** | Table rendering, seat layout, card display, community cards |
-| **PlayerSeat/PlayerSeatView** | Per-seat UI: avatar, name, chips, cards, fire/cold glow, notoriety skull, title |
+| **PlayerSeat/PlayerSeatView** | Per-seat UI: avatar, name, chips, cards, fire/cold glow, heat skull, title |
 | **CardVisual** | Card rendering with flip animation |
-| **PlayerProfilePopup** | Tap-to-view popup with stats, title, crew, notoriety |
+| **PlayerProfilePopup** | Tap-to-view popup with stats, title, crew, heat |
 | **SpectatorPanel** | Win probability bars, side betting, bet feed |
 | **FriendsPanel** | Friends list, add/accept/decline |
 | **DailyRewardsPopup** | 7-day streak UI |
@@ -456,7 +456,7 @@ Each character has: sprite set, sound set (win/lose/fold/all-in/taunt), personal
 ### Characters: `get_characters`, `get_player_characters`, `set_active_character`, `get_character_sounds`
 ### Crews: `create_crew`, `get_crew`, `invite_to_crew`, `join_crew`, `leave_crew`, `crew_promote`, `crew_kick`, `get_crew_leaderboard`
 ### Combat: `mark_player`, `challenge_player`, `respond_to_challenge`, `get_combat_stats`, `get_combat_history`, `get_recent_opponents`, `challenge_friend`, `challenge_leaderboard_player`
-### Notoriety: `get_notoriety` (replacing old karma/robbery events)
+### Heat: `get_heat` (replacing old karma/robbery events)
 ### Spectator: `get_spectator_odds`, `spectator_bet`, `spectator_reaction`
 ### Replays: `save_hand`, `get_saved_hands`, `get_hand_of_the_day`
 ### Social: `get_friends`, `send_friend_request`, `accept_friend_request`, `decline_friend_request`
@@ -470,7 +470,7 @@ Each character has: sprite set, sound set (win/lose/fold/all-in/taunt), personal
 
 ## Database Tables (20+) — `src/database/Database.js`
 
-1. `users` — Account data, chips, XP, active character, notoriety
+1. `users` — Account data, chips, XP, active character, heat
 2. `hand_history` — Full hand data per player (cards, actions, pot, result)
 3. `player_stats` — 40+ aggregated lifetime stats
 4. `player_hand_type_stats` — Per hand type (high card → royal flush)
@@ -487,7 +487,7 @@ Each character has: sprite set, sound set (win/lose/fold/all-in/taunt), personal
 15. `crew_members` — Crew membership + roles
 16. `crew_stats` — Crew-level aggregated stats
 17. `combat_log` — PvP combat history (replacing robbery_log)
-18. `notoriety_history` — Notoriety change log (replacing karma_history)
+18. `heat_history` — Heat change log (replacing karma_history)
 19. `recent_opponents` — Recent poker opponents for outside-game challenges
 19. `events` — Seasonal/weekly events
 20. `daily_rewards` — Daily reward tracking
@@ -510,7 +510,7 @@ Each character has: sprite set, sound set (win/lose/fold/all-in/taunt), personal
 - Outside-game challenges (Friends list, Recent Opponents, Leaderboard)
 - Combat resolution (character stats + combat items + crew backup + random roll)
 - 6 equipment slots: 3 combat (weapon/armor/gear) + 3 cosmetic (card back/table skin/avatar)
-- Notoriety system (replaces karma), skull icons, combat bonus tiers
+- Heat system (replaces karma), skull icons, combat bonus tiers
 - Disconnect during fight = auto-lose
 - Combat log, history, stats UI
 - CombatScene replacing RobberyScene

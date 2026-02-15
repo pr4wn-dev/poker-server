@@ -271,10 +271,10 @@
 | 12.4 | Combat events (socket wiring) | DONE | All events wired |
 | 12.5 | CombatScene.cs (client) | DONE | Stats, history, challenges |
 | 12.6 | Mark UI in TableScene | DONE | "MARK FOR FIGHT" button |
-| 12.7 | Notoriety system | DONE | Combat reputation system |
-| 12.8 | Combat database tables | DONE | combat_log, recent_opponents, notoriety |
+| 12.7 | Heat system | DONE | Combat reputation system |
+| 12.8 | Combat database tables | DONE | combat_log, recent_opponents, heat |
 | 12.9 | Outside-game challenges | DONE | From friends/leaderboard |
-| 12.10 | Rename "Notoriety" → "Heat" | **TODO** | Fits mafia theme better |
+| 12.10 | Rename "Notoriety" → "Heat" | **DONE** | ✅ All code + docs updated |
 | 12.11 | Update combat UI text | **TODO** | Frame as mafia enforcers, not generic PvP |
 | 12.12 | Mafia enforcer NPC logic | **TODO** | Auto-challenge for unpaid loans |
 

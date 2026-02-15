@@ -146,25 +146,25 @@ All art replaced with noir/mafia aesthetic:
 **What**: Replaced the old Robbery/Karma system with the new Combat System (PvP post-game showdowns).
 
 **Server changes**:
-1. **CombatManager.js** — New module: mark players, create challenges, mutual showdown detection, auto-match items by Power Score, resolve combat (character stats + item bonuses + crew backup + dice roll), apply rewards (chip transfer, item swap, notoriety change), bruised/coward cooldowns.
+1. **CombatManager.js** — New module: mark players, create challenges, mutual showdown detection, auto-match items by Power Score, resolve combat (character stats + item bonuses + crew backup + dice roll), apply rewards (chip transfer, item swap, heat change), bruised/coward cooldowns.
 2. **CharacterSystem.js** — Added `combatStats` (ATK/DEF/SPD) to all 10 characters, rarity-scaled (Common 15 → Mythic 30 total).
 3. **Item.js** — Added 20 combat item templates: 8 weapons (+ATK, Pocket Knife → Nuclear Football), 6 armor (+DEF, Leather Vest → Exosuit), 6 gear (+SPD, Running Shoes → Jetpack). New ITEM_TYPEs: WEAPON, ARMOR, GEAR. Added `equipmentSlot` and `combatBonus` fields.
-4. **UserRepository.js** — Replaced all karma methods with notoriety system (getNotoriety, modifyNotoriety, getNotorietyTier, getCombatStats, getCombatHistory, getRecentOpponents, markPlayer, unmarkPlayer, setBruisedUntil, setCowardUntil). Updated `equipItem` for 6-slot system.
-5. **Database.js** — Added `combat_log`, `recent_opponents` tables; `notoriety`, `combat_wins`, `combat_losses`, `bruised_until` columns to users; `equipment_slot`, `combat_bonus` columns to inventory.
-6. **SocketHandler.js** — Wired 7 new socket events: `mark_player`, `unmark_player`, `challenge_player`, `respond_to_challenge`, `get_combat_stats`, `get_combat_history`, `get_recent_opponents`. Broadcasts: `challenge_received`, `mutual_showdown`, `combat_result`, `combat_fled`, `challenge_expired`, `notoriety_update`, `recent_opponents_update`.
-7. **server.js** — Replaced karma decay timer with notoriety/combat prune timer.
+4. **UserRepository.js** — Replaced all karma methods with heat system (getHeat, modifyHeat, getHeatTier, getCombatStats, getCombatHistory, getRecentOpponents, markPlayer, unmarkPlayer, setBruisedUntil, setCowardUntil). Updated `equipItem` for 6-slot system.
+5. **Database.js** — Added `combat_log`, `recent_opponents` tables; `heat`, `combat_wins`, `combat_losses`, `bruised_until` columns to users; `equipment_slot`, `combat_bonus` columns to inventory.
+6. **SocketHandler.js** — Wired 7 new socket events: `mark_player`, `unmark_player`, `challenge_player`, `respond_to_challenge`, `get_combat_stats`, `get_combat_history`, `get_recent_opponents`. Broadcasts: `challenge_received`, `mutual_showdown`, `combat_result`, `combat_fled`, `challenge_expired`, `heat_update`, `recent_opponents_update`.
+7. **server.js** — Replaced karma decay timer with heat/combat prune timer.
 
 **Client changes**:
-1. **NetworkModels.cs** — Removed all Karma/HeartTier/RobberyTarget models. Added NotorietyTier, CombatStatsResponse, CombatHistoryEntry, ChallengeRequest, CombatResultData, MutualShowdownData, NotorietyUpdateData, ChallengeExpiredData. Fixed LeaderboardEntry `oderId` → `userId` mapping.
+1. **NetworkModels.cs** — Removed all Karma/HeartTier/RobberyTarget models. Added HeatTier, CombatStatsResponse, CombatHistoryEntry, ChallengeRequest, CombatResultData, MutualShowdownData, HeatUpdateData, ChallengeExpiredData. Fixed LeaderboardEntry `oderId` → `userId` mapping.
 2. **SocketManager.cs** — Added 7 new combat event delegates and listeners.
-3. **GameService.cs** — Replaced Karma/Robbery methods with Combat/Notoriety methods (GetCombatStats, GetCombatHistory, MarkPlayer, UnmarkPlayer, ChallengePlayer, RespondToChallenge, GetRecentOpponents). Full event subscription/unsubscription lifecycle.
+3. **GameService.cs** — Replaced Karma/Robbery methods with Combat/Heat methods (GetCombatStats, GetCombatHistory, MarkPlayer, UnmarkPlayer, ChallengePlayer, RespondToChallenge, GetRecentOpponents). Full event subscription/unsubscription lifecycle.
 4. **RobberyScene.cs** — Complete rewrite as CombatScene (class name `RobberyScene` retained for .unity compatibility). 4-tab UI: Stats, History, Challenges, Opponents.
 5. **PlayerProfilePopup.cs** — Added "MARK FOR FIGHT" button for non-self, non-bot players at the table.
 6. **FriendsScene.cs** — Added CHALLENGE button to each friend row.
 7. **LeaderboardScene.cs** — Added CHALLENGE button to each leaderboard entry (except self).
 8. **MainMenuScene.cs** — "ROBBERY" button → "COMBAT".
-9. **PokerTableView.cs** — Replaced karma heart display with notoriety indicator.
-10. **StatisticsScene.cs** — Replaced karma section with notoriety stats.
+9. **PokerTableView.cs** — Replaced karma heart display with heat indicator.
+10. **StatisticsScene.cs** — Replaced karma section with heat stats.
 
 ---
 

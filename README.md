@@ -73,8 +73,8 @@ Create crews with roles (Leader/Officer/Member). Crew XP, levels, perks, and lea
 ### Combat System (Post-Game PvP)
 Mark opponents during a poker game. When the game ends, challenges are delivered. Mutual marks = instant fight, no fleeing. System auto-picks matched **combat items** (weapons, armor, gear) from both players and puts half the loser's chips on the line. Target can fight back or flee. Combat resolves automatically based on character stats (ATK/DEF/SPD) + equipped combat item bonuses + crew backup + random roll. Can also challenge from Friends list, Recent Opponents, or Leaderboards. Going offline during a challenge = auto-lose (no dodging). See `COMBAT_SYSTEM_DESIGN.md` for full spec.
 
-### Notoriety System
-Lifetime combat reputation. Win fights → gain notoriety → earn titles (Civilian → Troublemaker → Outlaw → Gunslinger → Most Wanted). Cosmetic skull icons at table seats + tiny combat bonus. Replaces the old Karma/Heart system.
+### Heat System
+Lifetime combat reputation. Win fights → gain heat → earn titles (Civilian → Troublemaker → Outlaw → Gunslinger → Most Wanted). Cosmetic skull icons at table seats + tiny combat bonus. Replaces the old Karma/Heart system.
 
 ---
 
@@ -268,7 +268,7 @@ See `src/sockets/Events.js` for complete documentation.
 - `get_player_profile` — Full player card
 
 **Server → Client:**
-- `table_state` — Game state (includes fire/cold, titles, crew tags, notoriety, character data)
+- `table_state` — Game state (includes fire/cold, titles, crew tags, heat, character data)
 - `player_action` / `player_joined` / `player_left` — Player events
 - `hand_result` / `game_over` — Hand/game completion
 - `fire_status_change` — Fire/cold level change broadcast
@@ -299,14 +299,14 @@ All UI is built **programmatically** via `SceneBootstrap.cs` — no drag-and-dro
 | MainMenu | Login/register, quick play, navigation hub |
 | Lobby | Browse/create/join tables |
 | Table | Core poker gameplay, action bar, chat, spectator |
-| Statistics | 40+ stats, fire status, notoriety tier, hand breakdown |
+| Statistics | 40+ stats, fire status, heat tier, hand breakdown |
 | CharacterSelect | Character collection, card-style display, set active |
 | Tournament | Browse/register/unregister tournaments |
 | AdventureMap | World map, area selection, boss battles |
 | AdventureBattle | Poker-vs-AI boss gameplay |
 | Inventory | View/equip/unequip/use items |
 | Crew | Create/manage crew, members, chat, leaderboard |
-| Combat | Post-game PvP challenges, fight/flee, combat stats, notoriety |
+| Combat | Post-game PvP challenges, fight/flee, combat stats, heat |
 | HandReplay | Replay saved hands step by step |
 | Leaderboard | Top players by chips/wins/level |
 | Shop | Cosmetic store (planned) |
@@ -338,10 +338,10 @@ All UI is built **programmatically** via `SceneBootstrap.cs` — no drag-and-dro
 - CollusionDetector (215): Anti-cheat analysis
 
 **Client:** 16 Unity scenes + 11 UI components totaling ~25,000 lines of C#
-- TableScene (3.5K) + PokerTableView (1.3K): Full poker gameplay with character rendering, notoriety indicators, fire glow
+- TableScene (3.5K) + PokerTableView (1.3K): Full poker gameplay with character rendering, heat indicators, fire glow
 - MainMenuScene (2.4K): Login/register, quick play, event banner, daily rewards popup
 - LobbyScene (1.3K): Browse/create/join tables
-- StatisticsScene (969): 40+ stats in tabs with notoriety tier display
+- StatisticsScene (969): 40+ stats in tabs with heat tier display
 - CrewScene (815), RobberyScene (674 → **being replaced by CombatScene**), InventoryScene (689): Full feature UIs
 - AdventureMapScene (674) + AdventureBattleScene (838): Boss challenge flow
 - HandReplayScene (501), TournamentScene (1048), CharacterSelectScene (488), FriendsScene (576)

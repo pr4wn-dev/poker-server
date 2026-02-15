@@ -39,7 +39,7 @@ Text and color updates, no new systems:
 - [ ] `Assets/Scripts/UI/Scenes/MainMenuScene.cs` — Update subtitle text
 - [ ] `Assets/Scripts/UI/Scenes/AdventureMapScene.cs` — Update area story text
 - [ ] `Assets/Scripts/UI/Scenes/CharacterSelectScene.cs` — Update title to "The Rescued"
-- [ ] `Assets/Scripts/UI/Scenes/RobberyScene.cs` — Rename "Notoriety" → "Heat"
+- [x] `Assets/Scripts/UI/Scenes/RobberyScene.cs` — Rename "Notoriety" → "Heat" ✅
 
 ### **Phase 2: Opening Cinematic** (1-2 days)
 NEW feature:

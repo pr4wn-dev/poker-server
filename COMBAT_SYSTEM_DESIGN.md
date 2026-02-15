@@ -116,7 +116,7 @@ When Player A challenges Player B:
 Accept the challenge. Combat resolves. Winner takes:
 - Both wagered items (theirs back + opponent's)
 - Half the loser's chip balance
-- +1 Notoriety
+- +1 Heat
 - Crew XP (if in a crew)
 
 Loser:
@@ -155,17 +155,17 @@ No mini-game. Auto-resolved with a dramatic 3-second animation.
 Combat Score = Character Base Stats (ATK + DEF + SPD)
              + Equipped Combat Item Bonuses (Weapon ATK + Armor DEF + Gear SPD)
              + Crew Backup Bonus (+2 per online crew member, max +10)
-             + Notoriety Bonus (+1 per 10 notoriety, max +5)
+             + Heat Bonus (+1 per 10 heat, max +5)
              + Random Roll (base score × random between 0.80 and 1.20)
 ```
 
 **Higher score wins.** The ±20% random roll means upsets happen — a weaker player can still win ~30% of the time.
 
 **Example — Maxed out player:**
-- Mythic character (30 base) + Legendary weapon (+16) + Legendary armor (+14) + Legendary gear (+14) + Full crew (+10) + Max notoriety (+5) = **89 base** → rolled to 71-107
+- Mythic character (30 base) + Legendary weapon (+16) + Legendary armor (+14) + Legendary gear (+14) + Full crew (+10) + Max heat (+5) = **89 base** → rolled to 71-107
 
 **Example — New player:**
-- Common character (15 base) + no items (+0) + no crew (+0) + no notoriety (+0) = **15 base** → rolled to 12-18
+- Common character (15 base) + no items (+0) + no crew (+0) + no heat (+0) = **15 base** → rolled to 12-18
 
 The gap is real but the ±20% roll keeps it interesting. And the new player can always **flee** to avoid total loss.
 
@@ -266,11 +266,11 @@ This makes crews **essential** for serious fighters. A solo player vs a full cre
 
 ---
 
-## Notoriety System (Replaces Karma)
+## Heat System (Replaces Karma)
 
-Notoriety is a **lifetime combat reputation score**. It goes up, never down.
+Heat is a **lifetime combat reputation score**. It goes up, never down.
 
-| Notoriety | Title | Visual at Seat |
+| Heat | Title | Visual at Seat |
 |-----------|-------|---------------|
 | 0–5 | Civilian | Nothing |
 | 6–15 | Troublemaker | Small skull icon |
@@ -284,12 +284,12 @@ Notoriety is a **lifetime combat reputation score**. It goes up, never down.
 - +0 for fleeing
 
 **Mechanical effect:**
-- +1 combat bonus per 10 notoriety (max +5 at 50+ notoriety)
-- Purely cosmetic beyond that — high notoriety does NOT make you more targetable
+- +1 combat bonus per 10 heat (max +5 at 50+ heat)
+- Purely cosmetic beyond that — high heat does NOT make you more targetable
 - Displayed at table seats, player profiles, and leaderboards
 
 **What it replaces:**
-The old Karma/Heart system tracked "goodness" and made pure-hearted players invisible to criminals. That's gone. Notoriety is a **flex stat** — it shows you've been in fights. No one is protected or punished by it.
+The old Karma/Heart system tracked "goodness" and made pure-hearted players invisible to criminals. That's gone. Heat is a **flex stat** — it shows you've been in fights. No one is protected or punished by it.
 
 ---
 
@@ -341,7 +341,7 @@ The old Karma/Heart system tracked "goodness" and made pure-hearted players invi
 | **Friends** | Challenge friends anytime from CombatScene or Friends list. Social connections = potential combat targets |
 | **For Keeps** | Still exists separately as voluntary item-ante poker. Combat is the "dark alley after the card game" version |
 | **Adventure** | Where you grind items and unlock characters that make you stronger in combat |
-| **Notoriety** | Replaces karma. Shows your combat history. Cosmetic + tiny bonus |
+| **Heat** | Replaces karma. Shows your combat history. Cosmetic + tiny bonus |
 | **Leaderboard** | Add "Most Dangerous" category. Also a source of outside-game challenges (call out top players) |
 
 ---
@@ -363,7 +363,7 @@ When the game ends:
 
 ### Challenge Popup (Target — all challenge types)
 Full-screen popup showing:
-- Challenger's character portrait + name + notoriety title
+- Challenger's character portrait + name + heat title
 - Auto-selected items from both sides (with Power Score)
 - "Half your chips at stake" warning
 - Two big buttons: 🤜 **FIGHT** and 🏃 **FLEE** (flee hidden for mutual marks)
@@ -374,12 +374,12 @@ Full-screen popup showing:
 - Both characters face off
 - Quick strike animations based on who has higher ATK/DEF/SPD
 - Winner celebration, loser knocked down
-- Results screen: items transferred, chips transferred, notoriety change
+- Results screen: items transferred, chips transferred, heat change
 - Mutual showdowns get a special "double draw" intro animation
 
 ### Combat Scene (CombatScene.cs — replaces RobberyScene.cs)
 - Accessed from Main Menu (bottom nav replaces "ROBBERY" button with "COMBAT")
-- **Your Stats** — combat record, notoriety rank, win/loss ratio
+- **Your Stats** — combat record, heat rank, win/loss ratio
 - **Recent Fights** — challenge history log with results
 - **Recent Opponents** — players you've played poker with in the last 24 hours, with CHALLENGE button
 - **Challenge from Friends** — opens friends list with CHALLENGE buttons
@@ -426,7 +426,7 @@ CREATE TABLE recent_opponents (
 
 ### Columns to Add
 ```sql
-ALTER TABLE users ADD COLUMN notoriety FLOAT DEFAULT 0;
+ALTER TABLE users ADD COLUMN heat FLOAT DEFAULT 0;
 ALTER TABLE users ADD COLUMN combat_wins INT DEFAULT 0;
 ALTER TABLE users ADD COLUMN combat_losses INT DEFAULT 0;
 ALTER TABLE users ADD COLUMN last_combat_at TIMESTAMP NULL;
@@ -473,8 +473,8 @@ Server → Client:
   challenge_expired    { challengeId, reason }
   combat_result        { challengeId, winner, loser, itemsTransferred, chipsTransferred, scores }
   combat_fled          { challengeId, fleeingPlayer, chipsPenalty }
-  notoriety_update     { userId, notoriety, title }
-  recent_opponents     { opponents: [{ userId, username, notoriety, lastPlayedAt }] }
+  heat_update          { userId, heat, title }
+  recent_opponents     { opponents: [{ userId, username, heat, lastPlayedAt }] }
 ```
 
 ### Events to Remove
@@ -491,7 +491,7 @@ get_karma, get_karma_history, get_robbery_targets
 2. **Server: CharacterSystem.js** — Add combat stats to all 10 characters
 3. **Server: Item.js** — Add 20 combat item templates (8 weapons, 6 armor, 6 gear) with combatBonus fields; add WEAPON/ARMOR/GEAR item types
 4. **Server: Database.js** — Add combat_log, recent_opponents tables; remove karma tables
-5. **Server: UserRepository.js** — Notoriety methods, combat log, recent opponents, remove karma methods
+5. **Server: UserRepository.js** — Heat methods, combat log, recent opponents, remove karma methods
 6. **Server: SocketHandler.js** — Replace robbery/karma events with mark/challenge/combat events
 7. **Server: Table.js** — Track marks per player per game, populate recent_opponents on game end, strip karma from seat state
 8. **Server: server.js** — Remove karma decay timer, add recent_opponents cleanup cron (prune >24h)
@@ -501,7 +501,7 @@ get_karma, get_karma_history, get_robbery_targets
 12. **Client: CombatScene.cs** — New scene (replaces RobberyScene) with stats, history, recent opponents, challenge-from-friends, leaderboard link
 13. **Client: TableScene.cs** — Add "MARK FOR FIGHT" button in player seat popup, crosshair indicator, post-game challenge delivery queue, mutual showdown UI
 14. **Client: Strip karma** — Remove from PokerTableView, PlayerProfilePopup, StatisticsScene, MainMenuScene
-15. **Client: Add notoriety** — Display at seats, profiles, leaderboard
+15. **Client: Add heat** — Display at seats, profiles, leaderboard
 16. **Client: FriendsScene.cs** — Add CHALLENGE button next to each friend
 17. **Client: LeaderboardScene.cs** — Add CHALLENGE button next to each player
 
