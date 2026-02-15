@@ -916,7 +916,7 @@ class SocketHandler {
                         // Update player chips in game manager from DB
                         this.gameManager.players.get(user.userId).chips = dbUser.chips;
                         
-                        // Load crew tag, active title, active character, and notoriety for display at table
+                        // Load crew tag, active title, active character, and heat for display at table
                         try {
                             const CrewManager = require('../social/CrewManager');
                             const TitleEngine = require('../stats/TitleEngine');
@@ -926,19 +926,19 @@ class SocketHandler {
                             const database = require('../database/Database');
                             const seat = table.seats[result.seatIndex];
                             if (seat) {
-                                const [crewTag, activeTitle, activeChar, notorietyRow] = await Promise.all([
+                                const [crewTag, activeTitle, activeChar, heatRow] = await Promise.all([
                                     CrewManager.getPlayerCrewTag(user.userId).catch(() => null),
                                     TitleEngine.getActiveTitle(user.userId).catch(() => null),
                                     charSystem.getActiveCharacter(user.userId).catch(() => ({ id: 'shadow_hacker', sprite_set: 'char_shadow_hacker' })),
-                                    database.queryOne('SELECT notoriety FROM users WHERE id = ?', [user.userId]).catch(() => ({ notoriety: 0 }))
+                                    database.queryOne('SELECT heat FROM users WHERE id = ?', [user.userId]).catch(() => ({ heat: 0 }))
                                 ]);
                                 seat.crewTag = crewTag;
                                 seat.activeTitle = activeTitle?.title_name || null;
                                 seat.activeCharacter = activeChar?.id || 'shadow_hacker';
                                 seat.characterSpriteSet = activeChar?.sprite_set || 'char_shadow_hacker';
-                                const notoriety = notorietyRow?.notoriety || 0;
-                                seat.notoriety = notoriety;
-                                seat.notorietyTier = CombatManager.getNotorietyTier(notoriety);
+                                const heat = heatRow?.heat || 0;
+                                seat.heat = heat;
+                                seat.heatTier = CombatManager.getNotorietyTier(heat);
                             }
                         } catch (e) {
                             // Non-critical — don't block join
@@ -2875,10 +2875,10 @@ class SocketHandler {
                             JOIN crews c ON cm.crew_id = c.id 
                             WHERE cm.player_id = ?
                         `, [targetId]).catch(() => null),
-                        database.queryOne('SELECT notoriety, combat_wins, combat_losses, bruised_until FROM users WHERE id = ?', [targetId]).catch(() => ({ notoriety: 0 }))
+                        database.queryOne('SELECT heat, combat_wins, combat_losses, bruised_until FROM users WHERE id = ?', [targetId]).catch(() => ({ heat: 0 }))
                     ]);
 
-                    const notoriety = combatUser?.notoriety || 0;
+                    const heat = combatUser?.heat || 0;
                     respond({
                         success: true,
                         profile: {
@@ -2891,8 +2891,8 @@ class SocketHandler {
                             crewName: crewMember?.crew_name || null,
                             crewTag: crewMember?.crew_tag || null,
                             crewRole: crewMember?.role || null,
-                            notoriety: notoriety,
-                            notorietyTier: CombatManager.getNotorietyTier(notoriety),
+                            heat: heat,
+                            heatTier: CombatManager.getNotorietyTier(heat),
                             combatWins: combatUser?.combat_wins || 0,
                             combatLosses: combatUser?.combat_losses || 0,
                             isBruised: combatUser?.bruised_until && new Date(combatUser.bruised_until) > new Date(),

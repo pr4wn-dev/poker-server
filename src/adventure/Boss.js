@@ -154,13 +154,13 @@ class Boss {
 
 // All bosses in the game - organized by area
 Boss.ALL_BOSSES = [
-    // ============ POKER ACADEMY (Starter Area) ============
+    // ============ THE EMPTY STREETS (Starter Area) ============
     new Boss({
         id: 'boss_tutorial',
-        name: 'Dealer Dan',
+        name: 'The Stranger',
         areaId: 'area_tutorial',
-        avatar: 'boss_dan',
-        description: 'A friendly dealer who will teach you the ropes.',
+        avatar: 'boss_stranger',
+        description: 'The mysterious mafioso who taught you poker. A practice match to see if you remember his lessons.',
         difficulty: DIFFICULTY.EASY,
         playStyle: PLAY_STYLE.PASSIVE,
         minLevel: 1,
@@ -176,23 +176,23 @@ Boss.ALL_BOSSES = [
         ],
         guaranteedDrops: ['TROPHY_FIRST_BOSS'],
         taunts: [
-            "Let's see what you've got!",
-            "Take your time, rookie.",
-            "Not bad for a beginner!"
+            "Remember what I taught you.",
+            "Don't disappoint me, kid.",
+            "You're learning. Good."
         ],
-        winQuotes: ["Good effort! Try again?"],
-        loseQuotes: ["Beginner's luck, eh?"]
+        winQuotes: ["You still have much to learn."],
+        loseQuotes: ["Not bad, kid. Not bad at all."]
     }),
     
-    // ============ DOWNTOWN CASINO ============
+    // ============ THE BACK ALLEY ============
     new Boss({
         id: 'boss_slick',
-        name: 'Slick Sally',
+        name: 'Scarface Eddie',
         areaId: 'area_downtown',
-        avatar: 'boss_sally',
-        description: 'A smooth-talking hustler from the underground clubs.',
+        avatar: 'boss_eddie',
+        description: 'A small-time thug with a bad temper and worse luck. Runs a poker game in the back alley.',
         difficulty: DIFFICULTY.EASY,
-        playStyle: PLAY_STYLE.TRICKY,
+        playStyle: PLAY_STYLE.AGGRESSIVE,
         minLevel: 2,
         entryFee: 500,
         chips: 7500,
@@ -207,22 +207,22 @@ Boss.ALL_BOSSES = [
             { itemTemplateId: 'XP_BOOST_MEDIUM', weight: 5 }
         ],
         taunts: [
-            "You look like easy money.",
-            "Care to make this interesting?",
-            "I've eaten fish bigger than you."
+            "You got a death wish, kid?",
+            "I'm gonna take everything you got.",
+            "You're in over your head."
         ],
-        winQuotes: ["Thanks for the chips, sweetie."],
-        loseQuotes: ["Hmph. We'll meet again."]
+        winQuotes: ["Get outta my sight."],
+        loseQuotes: ["This ain't over!"]
     }),
     
     new Boss({
         id: 'boss_iron',
-        name: 'Iron Mike',
+        name: 'Louie the Lip',
         areaId: 'area_downtown',
-        avatar: 'boss_mike',
-        description: 'A retired boxer who hits the felt as hard as the ring.',
+        avatar: 'boss_louie',
+        description: 'A fast-talking hustler who thinks he\'s smarter than everyone. Never shuts up.',
         difficulty: DIFFICULTY.MEDIUM,
-        playStyle: PLAY_STYLE.AGGRESSIVE,
+        playStyle: PLAY_STYLE.TRICKY,
         minLevel: 3,
         entryFee: 1000,
         chips: 10000,
@@ -238,23 +238,23 @@ Boss.ALL_BOSSES = [
             { itemTemplateId: 'YACHT_INVITATION', weight: 0.1, minDefeats: 500 }
         ],
         taunts: [
-            "I'm gonna knock you out!",
-            "Float like a butterfly, bet like a boss.",
-            "You're going down!"
+            "You know what your problem is? You talk too much. Wait, that's my thing.",
+            "I could beat you with my eyes closed. Actually, let me try that.",
+            "Kid, you're about as scary as a wet kitten."
         ],
-        winQuotes: ["TKO! Better hit the gym."],
-        loseQuotes: ["Lucky punch, kid."]
+        winQuotes: ["Told ya. Louie always wins."],
+        loseQuotes: ["Alright, alright, you got lucky. This time."]
     }),
     
-    // ============ THE HIGHRISE ============
+    // ============ UNDERGROUND POKER CIRCUIT ============
     new Boss({
         id: 'boss_countess',
-        name: 'The Countess',
+        name: 'The Dealer',
         areaId: 'area_highrise',
-        avatar: 'boss_countess',
-        description: 'An aristocratic player with centuries of experience.',
+        avatar: 'boss_dealer',
+        description: 'Runs the underground poker circuit. Knows everyone\'s secrets. Never shows emotion.',
         difficulty: DIFFICULTY.MEDIUM,
-        playStyle: PLAY_STYLE.TIGHT,
+        playStyle: PLAY_STYLE.BALANCED,
         minLevel: 5,
         entryFee: 2500,
         chips: 12000,
@@ -270,22 +270,22 @@ Boss.ALL_BOSSES = [
             { itemTemplateId: 'YACHT_INVITATION', weight: 0.15, minDefeats: 300 }
         ],
         taunts: [
-            "How quaint.",
-            "You dare challenge me?",
-            "I've been playing since before your grandfather was born."
+            "I've seen every trick in the book.",
+            "You can't bluff me, kid.",
+            "I know what you're holding."
         ],
-        winQuotes: ["Peasants should know their place."],
-        loseQuotes: ["Most... unexpected."]
+        winQuotes: ["House always wins."],
+        loseQuotes: ["Interesting. Very interesting."]
     }),
     
     new Boss({
         id: 'boss_cipher',
-        name: 'The Cipher',
+        name: 'Rosie "The Viper"',
         areaId: 'area_highrise',
-        avatar: 'boss_cipher',
-        description: 'A mysterious masked player. No one knows their true identity.',
+        avatar: 'boss_rosie',
+        description: 'Cold and ruthless. Never shows emotion. Strikes without warning.',
         difficulty: DIFFICULTY.HARD,
-        playStyle: PLAY_STYLE.BALANCED,
+        playStyle: PLAY_STYLE.AGGRESSIVE,
         minLevel: 7,
         entryFee: 5000,
         chips: 15000,
@@ -299,25 +299,25 @@ Boss.ALL_BOSSES = [
             { itemTemplateId: 'XP_BOOST_LARGE', weight: 5 },
             { itemTemplateId: 'UNDERGROUND_PASS', weight: 2 },
             { itemTemplateId: 'YACHT_INVITATION', weight: 0.2, minDefeats: 200 }
-        ],
+        },
         taunts: [
-            "...",
-            "Your tells betray you.",
-            "I see through your strategy."
+            "Sssay goodbye to your chips.",
+            "I strike without warning.",
+            "Your fear is delicious."
         ],
-        winQuotes: ["Predictable."],
-        loseQuotes: ["Interesting..."]
+        winQuotes: ["Another victim."],
+        loseQuotes: ["You got lucky... this time."]
     }),
     
-    // ============ THE UNDERGROUND ============
+    // ============ THE DOCKS ============
     new Boss({
         id: 'boss_shadow',
-        name: 'Shadow',
+        name: 'Captain Dimitri',
         areaId: 'area_underground',
-        avatar: 'boss_shadow',
-        description: 'A legendary underground player who never shows their face.',
+        avatar: 'boss_dimitri',
+        description: 'Controls smuggling operations at the docks. Ex-military. Ruthlessly efficient.',
         difficulty: DIFFICULTY.HARD,
-        playStyle: PLAY_STYLE.TRICKY,
+        playStyle: PLAY_STYLE.TIGHT,
         minLevel: 8,
         entryFee: 10000,
         chips: 25000,
@@ -334,20 +334,20 @@ Boss.ALL_BOSSES = [
         ],
         guaranteedDrops: ['TROPHY_UNDERGROUND'],
         taunts: [
-            "You shouldn't be here.",
-            "The shadows play tricks.",
-            "Can you see in the dark?"
+            "I've killed men for less.",
+            "You're out of your depth.",
+            "This is my territory."
         ],
-        winQuotes: ["Disappear."],
-        loseQuotes: ["You'll pay for this... in time."]
+        winQuotes: ["Throw him in the water."],
+        loseQuotes: ["You have... potential."]
     }),
     
     new Boss({
         id: 'boss_viper',
-        name: 'Viper',
+        name: 'The Butcher',
         areaId: 'area_underground',
-        avatar: 'boss_viper',
-        description: 'Cold-blooded and calculating. Strike fast or be struck.',
+        avatar: 'boss_butcher',
+        description: 'An enforcer for the dockside gangs. Massive, brutal, and surprisingly good at poker.',
         difficulty: DIFFICULTY.EXPERT,
         playStyle: PLAY_STYLE.AGGRESSIVE,
         minLevel: 10,
@@ -365,23 +365,23 @@ Boss.ALL_BOSSES = [
             { itemTemplateId: 'ISLAND_KEY', weight: 0.08, minDefeats: 800 }
         ],
         taunts: [
-            "Ssssay goodbye to your chips.",
-            "I strike without warning.",
-            "Your fear is delicious."
+            "I'm gonna break you.",
+            "You're meat.",
+            "This is gonna hurt."
         ],
-        winQuotes: ["Another victim."],
-        loseQuotes: ["You got lucky... this time."]
+        winQuotes: ["Clean up this mess."],
+        loseQuotes: ["I'll remember your face."]
     }),
     
-    // ============ THE GOLDEN YACHT (Special Area) ============
+    // ============ MAFIA HEADQUARTERS ============
     new Boss({
         id: 'boss_captain',
-        name: 'Captain Goldhand',
+        name: 'The Consigliere',
         areaId: 'area_yacht',
-        avatar: 'boss_captain',
-        description: 'The legendary captain who won his yacht in a poker game.',
+        avatar: 'boss_consigliere',
+        description: 'The Don\'s advisor. Brilliant strategist. Knows every angle.',
         difficulty: DIFFICULTY.HARD,
-        playStyle: PLAY_STYLE.LOOSE,
+        playStyle: PLAY_STYLE.BALANCED,
         minLevel: 10,
         entryFee: 25000,
         chips: 50000,
@@ -396,20 +396,20 @@ Boss.ALL_BOSSES = [
             { itemTemplateId: 'ISLAND_KEY', weight: 0.1, minDefeats: 500 }
         ],
         taunts: [
-            "Welcome aboard!",
-            "I've sailed the seven seas of poker.",
-            "Ready to walk the plank?"
+            "I've already calculated your next three moves.",
+            "You're playing checkers. I'm playing chess.",
+            "Predictable."
         ],
-        winQuotes: ["Man overboard!"],
-        loseQuotes: ["You've earned your sea legs."]
+        winQuotes: ["As expected."],
+        loseQuotes: ["Hmm. I'll need to recalculate."]
     }),
     
     new Boss({
         id: 'boss_heiress',
-        name: 'The Heiress',
+        name: 'Don Vittorio',
         areaId: 'area_yacht',
-        avatar: 'boss_heiress',
-        description: 'Born into billions, plays for the thrill. Ruthlessly skilled.',
+        avatar: 'boss_don',
+        description: 'The mafia boss himself. Your biggest ally in the underworld. But even allies play to win.',
         difficulty: DIFFICULTY.EXPERT,
         playStyle: PLAY_STYLE.BALANCED,
         minLevel: 12,
@@ -427,23 +427,23 @@ Boss.ALL_BOSSES = [
             { itemTemplateId: 'ISLAND_KEY', weight: 0.15, minDefeats: 300 }
         ],
         taunts: [
-            "Daddy bought me this table.",
-            "Do you know who I am?",
-            "This is pocket change to me."
+            "I'm gonna make you an offer you can't refuse.",
+            "You've come far, kid. But not far enough.",
+            "Respect is earned at this table."
         ],
-        winQuotes: ["Buy yourself something nice."],
-        loseQuotes: ["I'll buy a new yacht anyway."]
+        winQuotes: ["You're dismissed."],
+        loseQuotes: ["You've earned my respect."]
     }),
     
-    // ============ PRIVATE ISLAND (Ultra Late Game) ============
+    // ============ THE WASTELANDS ============
     new Boss({
         id: 'boss_mogul',
-        name: 'The Mogul',
+        name: 'Mad Dog Marcus',
         areaId: 'area_island',
-        avatar: 'boss_mogul',
-        description: 'Tech billionaire who built an empire and now seeks new challenges.',
+        avatar: 'boss_marcus',
+        description: 'A psychotic killer who enjoys the pain. Unhinged, unpredictable, and dangerous.',
         difficulty: DIFFICULTY.EXPERT,
-        playStyle: PLAY_STYLE.TIGHT,
+        playStyle: PLAY_STYLE.AGGRESSIVE,
         minLevel: 15,
         entryFee: 100000,
         chips: 150000,
@@ -459,22 +459,22 @@ Boss.ALL_BOSSES = [
             { itemTemplateId: 'MYSTERY_TOKEN', weight: 0.03, minDefeats: 1000 }
         ],
         taunts: [
-            "Time is money, and you're wasting mine.",
-            "I calculated your odds... not good.",
-            "Innovation beats tradition."
+            "I'm gonna enjoy this.",
+            "Scream for me.",
+            "Pain is beautiful."
         ],
-        winQuotes: ["Efficiency."],
-        loseQuotes: ["I'll optimize my strategy."]
+        winQuotes: ["*laughs maniacally*"],
+        loseQuotes: ["I'll see you in your nightmares."]
     }),
     
     new Boss({
         id: 'boss_oracle',
-        name: 'The Oracle',
+        name: 'The Chemist',
         areaId: 'area_island',
-        avatar: 'boss_oracle',
-        description: 'Said to predict every hand. Defeating them opens the path to The House.',
+        avatar: 'boss_chemist',
+        description: 'Deals in poisons and pharmaceuticals. Calm, methodical, and utterly without mercy.',
         difficulty: DIFFICULTY.LEGENDARY,
-        playStyle: PLAY_STYLE.BALANCED,
+        playStyle: PLAY_STYLE.TIGHT,
         minLevel: 18,
         entryFee: 200000,
         chips: 250000,
@@ -489,21 +489,21 @@ Boss.ALL_BOSSES = [
             { itemTemplateId: 'MYSTERY_TOKEN', weight: 0.05, minDefeats: 500 }
         ],
         taunts: [
-            "I foresaw your arrival.",
-            "The cards have already spoken.",
-            "Destiny cannot be bluffed."
+            "Chemistry is precise. So am I.",
+            "One wrong move and it's over.",
+            "I've perfected the formula."
         ],
-        winQuotes: ["As predicted."],
-        loseQuotes: ["The future... has changed."]
+        winQuotes: ["Predictable reaction."],
+        loseQuotes: ["An unexpected variable."]
     }),
     
-    // ============ THE PENTHOUSE (Final Area) ============
+    // ============ THE KILLER'S ESTATE (Final Area) ============
     new Boss({
         id: 'boss_final',
-        name: 'The House',
+        name: 'THE KILLER',
         areaId: 'area_penthouse',
-        avatar: 'boss_house',
-        description: 'The ultimate challenge. The House always wins... or does it?',
+        avatar: 'boss_killer',
+        description: 'The one who took your family. A brilliant, twisted mind who sees people as objects to collect. This ends here.',
         difficulty: DIFFICULTY.LEGENDARY,
         playStyle: PLAY_STYLE.BALANCED,
         minLevel: 20,
@@ -522,21 +522,21 @@ Boss.ALL_BOSSES = [
         ],
         guaranteedDrops: ['TROPHY_FINAL', 'AVATAR_LEGEND'],
         taunts: [
-            "Welcome to my domain.",
-            "The odds are always in my favor.",
-            "No one beats The House."
+            "Another piece for my collection.",
+            "They all screamed. Every single one.",
+            "Your family is... safe. In a manner of speaking."
         ],
-        winQuotes: ["The House always wins."],
-        loseQuotes: ["Impossible... You've done what no one has done before."]
+        winQuotes: ["You'll join them soon enough."],
+        loseQuotes: ["No... my collection... You've ruined everything!"]
     }),
     
-    // ============ SECRET LOUNGE (Hidden Area) ============
+    // ============ THE DRAWER DUNGEON (Hidden Area) ============
     new Boss({
         id: 'boss_mystery',
-        name: '???',
+        name: 'The Collector',
         areaId: 'area_secret_lounge',
-        avatar: 'boss_mystery',
-        description: '???',
+        avatar: 'boss_collector',
+        description: 'The killer\'s right hand. Obsessed with "collecting" people. Guards the drawer dungeon.',
         difficulty: DIFFICULTY.LEGENDARY,
         playStyle: PLAY_STYLE.TRICKY,
         minLevel: 22,
@@ -553,12 +553,12 @@ Boss.ALL_BOSSES = [
             // No mystery token drop - this IS the mystery area
         ],
         taunts: [
-            "...",
-            "You found me.",
-            "Few have made it here."
+            "Such a fine specimen.",
+            "You'll look perfect in drawer 1,847.",
+            "I've been waiting for you."
         ],
-        winQuotes: ["..."],
-        loseQuotes: ["Until next time."]
+        winQuotes: ["No... not my collection..."],
+        loseQuotes: ["Take them. Take them all. I don't care anymore."]
     })
 ];
 

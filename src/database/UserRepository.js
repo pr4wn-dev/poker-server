@@ -180,7 +180,7 @@ class UserRepository {
      */
     async getFullProfile(userId) {
         const user = await db.queryOne(
-            'SELECT id, username, email, chips, adventure_coins, notoriety, combat_wins, combat_losses, bruised_until, coward_until, active_character, created_at, last_login FROM users WHERE id = ?',
+            'SELECT id, username, email, chips, adventure_coins, heat, combat_wins, combat_losses, bruised_until, coward_until, active_character, created_at, last_login FROM users WHERE id = ?',
             [userId]
         );
         
@@ -206,8 +206,8 @@ class UserRepository {
         const friendRequests = await this.getFriendRequests(userId);
         
         const CombatManager = require('../game/CombatManager');
-        const notoriety = user.notoriety || 0;
-        const notorietyTier = CombatManager.getNotorietyTier(notoriety);
+        const heat = user.heat || 0;
+        const heatTier = CombatManager.getNotorietyTier(heat);
         
         return {
             id: user.id,
@@ -215,8 +215,8 @@ class UserRepository {
             email: user.email,
             chips: user.chips,
             adventureCoins: user.adventure_coins,
-            notoriety: notoriety,
-            notorietyTier: notorietyTier,
+            heat: heat,
+            heatTier: heatTier,
             combatWins: user.combat_wins || 0,
             combatLosses: user.combat_losses || 0,
             isBruised: user.bruised_until && new Date(user.bruised_until) > new Date(),
@@ -250,7 +250,7 @@ class UserRepository {
      */
     async getPublicProfile(userId) {
         const user = await db.queryOne(
-            'SELECT id, username, chips, notoriety, combat_wins, combat_losses, bruised_until, created_at FROM users WHERE id = ?',
+            'SELECT id, username, chips, heat, combat_wins, combat_losses, bruised_until, created_at FROM users WHERE id = ?',
             [userId]
         );
         
@@ -267,14 +267,14 @@ class UserRepository {
         );
         
         const CombatManager = require('../game/CombatManager');
-        const notoriety = user.notoriety || 0;
+        const heat = user.heat || 0;
         
         return {
             id: user.id,
             username: user.username,
             chips: user.chips,
-            notoriety: notoriety,
-            notorietyTier: CombatManager.getNotorietyTier(notoriety),
+            heat: heat,
+            heatTier: CombatManager.getNotorietyTier(heat),
             combatWins: user.combat_wins || 0,
             combatLosses: user.combat_losses || 0,
             isBruised: user.bruised_until && new Date(user.bruised_until) > new Date(),
@@ -318,11 +318,11 @@ class UserRepository {
     // Gained by winning combat, lost over time (natural decay)
     
     /**
-     * Get a player's notoriety value
+     * Get a player's heat value
      */
     async getNotoriety(userId) {
-        const row = await db.queryOne('SELECT notoriety FROM users WHERE id = ?', [userId]);
-        return row?.notoriety || 0;
+        const row = await db.queryOne('SELECT heat FROM users WHERE id = ?', [userId]);
+        return row?.heat || 0;
     }
     
     /**
@@ -330,15 +330,15 @@ class UserRepository {
      */
     async getCombatStats(userId) {
         const user = await db.queryOne(
-            'SELECT notoriety, combat_wins, combat_losses, bruised_until, coward_until FROM users WHERE id = ?',
+            'SELECT heat, combat_wins, combat_losses, bruised_until, coward_until FROM users WHERE id = ?',
             [userId]
         );
         if (!user) return null;
         
         const CombatManager = require('../game/CombatManager');
         return {
-            notoriety: user.notoriety || 0,
-            notorietyTier: CombatManager.getNotorietyTier(user.notoriety),
+            heat: user.heat || 0,
+            heatTier: CombatManager.getNotorietyTier(user.heat),
             combatWins: user.combat_wins || 0,
             combatLosses: user.combat_losses || 0,
             winRate: user.combat_wins > 0 
@@ -901,14 +901,14 @@ class UserRepository {
         const gameLogger = require('../utils/GameLogger');
         gameLogger.gameEvent('USER', '[RESET_PROGRESS] STARTING', { userId });
 
-        // Reset user core fields (including notoriety back to 0 Civilian)
+        // Reset user core fields (including heat back to 0 Civilian)
         await db.query(
-            "UPDATE users SET chips = 20000000, adventure_coins = 0, xp = 0, notoriety = 0, combat_wins = 0, combat_losses = 0, bruised_until = NULL, coward_until = NULL, active_character = 'shadow_hacker' WHERE id = ?",
+            "UPDATE users SET chips = 20000000, adventure_coins = 0, xp = 0, heat = 0, combat_wins = 0, combat_losses = 0, bruised_until = NULL, coward_until = NULL, active_character = 'shadow_hacker' WHERE id = ?",
             [userId]
         );
         
-        // Clear notoriety history
-        try { await db.query('DELETE FROM notoriety_history WHERE user_id = ?', [userId]); } catch (e) {}
+        // Clear heat history
+        try { await db.query('DELETE FROM heat_history WHERE user_id = ?', [userId]); } catch (e) {}
         
         // Clear combat log
         try { await db.query('DELETE FROM combat_log WHERE challenger_id = ? OR target_id = ?', [userId, userId]); } catch (e) {}

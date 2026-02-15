@@ -19,7 +19,7 @@ const COWARD_DURATION_MS = 60 * 60 * 1000;      // 1 hour coward tag after fleei
 const COOLDOWN_PER_TARGET_MS = 24 * 60 * 60 * 1000; // 1 challenge per target per 24h
 const MINIMUM_CHIPS_TO_BE_CHALLENGED = 1000;
 
-// Notoriety tiers
+// Heat tiers
 const NOTORIETY_TIERS = [
     { min: 0,  max: 5,   title: 'Civilian',     visual: 'none' },
     { min: 6,  max: 15,  title: 'Troublemaker', visual: 'small_skull' },
@@ -41,43 +41,43 @@ class CombatManager {
     // ============ NOTORIETY ============
 
     /**
-     * Get notoriety tier info for a given notoriety value
+     * Get heat tier info for a given heat value
      */
-    static getNotorietyTier(notoriety) {
-        const n = Math.floor(notoriety || 0);
+    static getHeatTier(heat) {
+        const n = Math.floor(heat || 0);
         for (const tier of NOTORIETY_TIERS) {
             if (n >= tier.min && n <= tier.max) {
-                return { title: tier.title, visual: tier.visual, notoriety: n };
+                return { title: tier.title, visual: tier.visual, heat: n };
             }
         }
-        return { title: 'Most Wanted', visual: 'animated_skull', notoriety: n };
+        return { title: 'Most Wanted', visual: 'animated_skull', heat: n };
     }
 
     /**
-     * Modify a player's notoriety and log it
+     * Modify a player's heat and log it
      */
-    async modifyNotoriety(userId, delta, reason, details = null) {
-        const row = await database.queryOne('SELECT notoriety FROM users WHERE id = ?', [userId]);
-        const current = row?.notoriety || 0;
+    async modifyHeat(userId, delta, reason, details = null) {
+        const row = await database.queryOne('SELECT heat FROM users WHERE id = ?', [userId]);
+        const current = row?.heat || 0;
         const newVal = Math.max(0, current + delta); // Never goes below 0
 
         if (newVal !== current) {
-            await database.query('UPDATE users SET notoriety = ? WHERE id = ?', [newVal, userId]);
+            await database.query('UPDATE users SET heat = ? WHERE id = ?', [newVal, userId]);
             await database.query(
-                `INSERT INTO notoriety_history (user_id, notoriety_before, notoriety_after, change_amount, reason, details)
+                `INSERT INTO heat_history (user_id, heat_before, heat_after, change_amount, reason, details)
                  VALUES (?, ?, ?, ?, ?, ?)`,
                 [userId, current, newVal, delta, reason, details]
             );
         }
 
-        return { before: current, after: newVal, tier: CombatManager.getNotorietyTier(newVal) };
+        return { before: current, after: newVal, tier: CombatManager.getHeatTier(newVal) };
     }
 
     /**
-     * Get notoriety combat bonus (+1 per 10 notoriety, max +5)
+     * Get heat combat bonus (+1 per 10 heat, max +5)
      */
-    static getNotorietyBonus(notoriety) {
-        return Math.min(5, Math.floor((notoriety || 0) / 10));
+    static getHeatBonus(heat) {
+        return Math.min(5, Math.floor((heat || 0) / 10));
     }
 
     // ============ MARKS (During Poker Game) ============
@@ -313,22 +313,22 @@ class CombatManager {
         const challengerCrewBonus = await this._getCrewBackupBonus(challengerId);
         const targetCrewBonus = await this._getCrewBackupBonus(targetId);
 
-        // Get notoriety bonus
-        const challengerNotoriety = await this._getNotoriety(challengerId);
-        const targetNotoriety = await this._getNotoriety(targetId);
-        const challengerNotorietyBonus = CombatManager.getNotorietyBonus(challengerNotoriety);
-        const targetNotorietyBonus = CombatManager.getNotorietyBonus(targetNotoriety);
+        // Get heat bonus
+        const challengerHeat = await this._getHeat(challengerId);
+        const targetHeat = await this._getHeat(targetId);
+        const challengerHeatBonus = CombatManager.getHeatBonus(challengerHeat);
+        const targetHeatBonus = CombatManager.getHeatBonus(targetHeat);
 
         // Calculate combat scores
         const challengerBase = (challengerStats.atk + challengerStats.def + challengerStats.spd)
             + (challengerEquipped.atk + challengerEquipped.def + challengerEquipped.spd)
             + challengerCrewBonus
-            + challengerNotorietyBonus;
+            + challengerHeatBonus;
 
         const targetBase = (targetStats.atk + targetStats.def + targetStats.spd)
             + (targetEquipped.atk + targetEquipped.def + targetEquipped.spd)
             + targetCrewBonus
-            + targetNotorietyBonus;
+            + targetHeatBonus;
 
         // Random roll ±20%
         const challengerRoll = challengerBase * (0.80 + Math.random() * 0.40);
@@ -368,9 +368,9 @@ class CombatManager {
             [loserId]
         );
 
-        // Update notoriety
-        const winnerNotoriety = await this.modifyNotoriety(winnerId, 1, 'combat_win', `Won fight vs ${loserId}`);
-        const loserNotoriety = await this.modifyNotoriety(loserId, 0.5, 'combat_loss', `Lost fight vs ${winnerId}`);
+        // Update heat
+        const winnerHeat = await this.modifyHeat(winnerId, 1, 'combat_win', `Won fight vs ${loserId}`);
+        const loserHeat = await this.modifyHeat(loserId, 0.5, 'combat_loss', `Lost fight vs ${winnerId}`);
 
         // Log combat
         await database.query(
@@ -402,8 +402,8 @@ class CombatManager {
             itemLost: winnerItemId ? (challengerWins ? challengerItem : targetItem) : null,
             isMutual,
             targetAction,
-            winnerNotoriety: winnerNotoriety.tier,
-            loserNotoriety: loserNotoriety.tier
+            winnerHeat: winnerHeat.tier,
+            loserHeat: loserHeat.tier
         };
 
         gameLogger.gameEvent('COMBAT', '[COMBAT_RESOLVED]', {
@@ -445,7 +445,7 @@ class CombatManager {
             [challengerId, targetId, chipsPenalty, challenge.isMutual ? 1 : 0, source, tableId]
         );
 
-        // No notoriety for fleeing (0 gain)
+        // No heat for fleeing (0 gain)
 
         // Clean up
         this.activeChallenges.delete(challengeId);
@@ -604,11 +604,11 @@ class CombatManager {
     }
 
     /**
-     * Get player's notoriety value
+     * Get player's heat value
      */
-    async _getNotoriety(userId) {
-        const row = await database.queryOne('SELECT notoriety FROM users WHERE id = ?', [userId]);
-        return row?.notoriety || 0;
+    async _getHeat(userId) {
+        const row = await database.queryOne('SELECT heat FROM users WHERE id = ?', [userId]);
+        return row?.heat || 0;
     }
 
     // ============ RECENT OPPONENTS ============
@@ -639,7 +639,7 @@ class CombatManager {
      */
     async getRecentOpponents(userId) {
         const opponents = await database.query(
-            `SELECT DISTINCT ro.opponent_id, u.username, u.notoriety, ro.played_at
+            `SELECT DISTINCT ro.opponent_id, u.username, u.heat, ro.played_at
              FROM recent_opponents ro
              JOIN users u ON u.id = ro.opponent_id
              WHERE ro.user_id = ? AND ro.played_at > DATE_SUB(NOW(), INTERVAL 24 HOUR)
@@ -650,8 +650,8 @@ class CombatManager {
         return opponents.map(o => ({
             userId: o.opponent_id,
             username: o.username,
-            notoriety: o.notoriety || 0,
-            notorietyTier: CombatManager.getNotorietyTier(o.notoriety),
+            heat: o.heat || 0,
+            heatTier: CombatManager.getHeatTier(o.heat),
             lastPlayedAt: o.played_at
         }));
     }
@@ -676,14 +676,14 @@ class CombatManager {
      */
     async getCombatStats(userId) {
         const user = await database.queryOne(
-            'SELECT notoriety, combat_wins, combat_losses, bruised_until, coward_until FROM users WHERE id = ?',
+            'SELECT heat, combat_wins, combat_losses, bruised_until, coward_until FROM users WHERE id = ?',
             [userId]
         );
         if (!user) return null;
 
         return {
-            notoriety: user.notoriety || 0,
-            notorietyTier: CombatManager.getNotorietyTier(user.notoriety),
+            heat: user.heat || 0,
+            heatTier: CombatManager.getHeatTier(user.heat),
             combatWins: user.combat_wins || 0,
             combatLosses: user.combat_losses || 0,
             winRate: user.combat_wins > 0 

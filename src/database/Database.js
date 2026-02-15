@@ -96,16 +96,16 @@ class Database {
             // Column already exists, ignore
         }
         
-        // Add karma column (legacy — being replaced by notoriety)
+        // Add karma column (legacy — being replaced by heat)
         try {
             await this.query("ALTER TABLE users ADD COLUMN karma INT DEFAULT 100");
         } catch (e) {
             // Column already exists, ignore
         }
         
-        // Add notoriety column (Combat System — replaces karma)
+        // Add heat column (Combat System — replaces karma)
         try {
-            await this.query("ALTER TABLE users ADD COLUMN notoriety FLOAT DEFAULT 0");
+            await this.query("ALTER TABLE users ADD COLUMN heat FLOAT DEFAULT 0");
         } catch (e) {}
         try {
             await this.query("ALTER TABLE users ADD COLUMN combat_wins INT DEFAULT 0");
@@ -678,17 +678,17 @@ class Database {
 
         // Notoriety history — tracks combat reputation changes over time
         await this.query(`
-            CREATE TABLE IF NOT EXISTS notoriety_history (
+            CREATE TABLE IF NOT EXISTS heat_history (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 user_id VARCHAR(36) NOT NULL,
-                notoriety_before FLOAT NOT NULL,
-                notoriety_after FLOAT NOT NULL,
+                heat_before FLOAT NOT NULL,
+                heat_after FLOAT NOT NULL,
                 change_amount FLOAT NOT NULL,
                 reason VARCHAR(100) NOT NULL,
                 details TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-                INDEX idx_user_notoriety (user_id),
+                INDEX idx_user_heat (user_id),
                 INDEX idx_created (created_at)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         `);

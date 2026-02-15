@@ -10303,9 +10303,9 @@ class Table {
                     // Active character
                     activeCharacter: seat.activeCharacter || 'shadow_hacker',
                     characterSpriteSet: seat.characterSpriteSet || 'char_shadow_hacker',
-                    // Notoriety (Combat System — replaces Karma)
-                    notoriety: seat.notoriety || 0,
-                    notorietyTier: seat.notorietyTier || { title: 'Civilian', visual: 'none', notoriety: 0 }
+                    // Heat (Combat System — mafia enforcers)
+                    heat: seat.heat || 0,
+                    heatTier: seat.heatTier || { title: 'Civilian', visual: 'none', heat: 0 }
                 };
             })
         };
