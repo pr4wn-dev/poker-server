@@ -207,7 +207,7 @@ class UserRepository {
         
         const CombatManager = require('../game/CombatManager');
         const heat = user.heat || 0;
-        const heatTier = CombatManager.getNotorietyTier(heat);
+        const heatTier = CombatManager.getHeatTier(heat);
         
         return {
             id: user.id,
@@ -275,7 +275,7 @@ class UserRepository {
             username: user.username,
             chips: user.chips,
             heat: heat,
-            heatTier: CombatManager.getNotorietyTier(heat),
+            heatTier: CombatManager.getHeatTier(heat),
             combatWins: user.combat_wins || 0,
             combatLosses: user.combat_losses || 0,
             isBruised: user.bruised_until && new Date(user.bruised_until) > new Date(),
@@ -314,14 +314,14 @@ class UserRepository {
         );
     }
     
-    // ============ Notoriety System (replaces old Karma/Heart) ============
-    // Notoriety: 0 = Civilian, 51+ = Most Wanted
+    // ============ Heat System (replaces old Karma/Heart) ============
+    // Heat: 0 = Civilian, 51+ = Most Wanted
     // Gained by winning combat, lost over time (natural decay)
     
     /**
      * Get a player's heat value
      */
-    async getNotoriety(userId) {
+    async getHeat(userId) {
         const row = await db.queryOne('SELECT heat FROM users WHERE id = ?', [userId]);
         return row?.heat || 0;
     }
@@ -339,7 +339,7 @@ class UserRepository {
         const CombatManager = require('../game/CombatManager');
         return {
             heat: user.heat || 0,
-            heatTier: CombatManager.getNotorietyTier(user.heat),
+            heatTier: CombatManager.getHeatTier(user.heat),
             combatWins: user.combat_wins || 0,
             combatLosses: user.combat_losses || 0,
             winRate: user.combat_wins > 0 

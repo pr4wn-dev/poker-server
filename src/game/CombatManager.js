@@ -20,7 +20,7 @@ const COOLDOWN_PER_TARGET_MS = 24 * 60 * 60 * 1000; // 1 challenge per target pe
 const MINIMUM_CHIPS_TO_BE_CHALLENGED = 1000;
 
 // Heat tiers
-const NOTORIETY_TIERS = [
+const HEAT_TIERS = [
     { min: 0,  max: 5,   title: 'Civilian',     visual: 'none' },
     { min: 6,  max: 15,  title: 'Troublemaker', visual: 'small_skull' },
     { min: 16, max: 30,  title: 'Outlaw',       visual: 'skull_crossbones' },
@@ -38,14 +38,14 @@ class CombatManager {
         this.activeChallenges = new Map();
     }
 
-    // ============ NOTORIETY ============
+    // ============ HEAT ============
 
     /**
      * Get heat tier info for a given heat value
      */
     static getHeatTier(heat) {
         const n = Math.floor(heat || 0);
-        for (const tier of NOTORIETY_TIERS) {
+        for (const tier of HEAT_TIERS) {
             if (n >= tier.min && n <= tier.max) {
                 return { title: tier.title, visual: tier.visual, heat: n };
             }

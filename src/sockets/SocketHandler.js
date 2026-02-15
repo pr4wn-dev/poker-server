@@ -20,7 +20,7 @@ class SocketHandler {
         this.adventureManager = new AdventureManager(userRepo);
         this.tournamentManager = new TournamentManager(userRepo);
         this.simulationManager = new SimulationManager(gameManager);
-        this.loanManager = new MafiaLoanManager(userRepo, null); // CombatManager initialized later
+        this.loanManager = new MafiaLoanManager(userRepo, null, db); // CombatManager initialized later
         // Pass io to SimulationManager so it can notify spectators
         this.simulationManager.setIO(io);
         
@@ -954,7 +954,7 @@ class SocketHandler {
                                 seat.characterSpriteSet = activeChar?.sprite_set || 'char_shadow_hacker';
                                 const heat = heatRow?.heat || 0;
                                 seat.heat = heat;
-                                seat.heatTier = CombatManager.getNotorietyTier(heat);
+                                seat.heatTier = CombatManager.getHeatTier(heat);
                             }
                         } catch (e) {
                             // Non-critical — don't block join
@@ -2985,7 +2985,7 @@ class SocketHandler {
                             crewTag: crewMember?.crew_tag || null,
                             crewRole: crewMember?.role || null,
                             heat: heat,
-                            heatTier: CombatManager.getNotorietyTier(heat),
+                            heatTier: CombatManager.getHeatTier(heat),
                             combatWins: combatUser?.combat_wins || 0,
                             combatLosses: combatUser?.combat_losses || 0,
                             isBruised: combatUser?.bruised_until && new Date(combatUser.bruised_until) > new Date(),

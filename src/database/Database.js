@@ -683,7 +683,7 @@ class Database {
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
         `);
 
-        // Notoriety history — tracks combat reputation changes over time
+        // Heat history — tracks combat reputation changes over time
         await this.query(`
             CREATE TABLE IF NOT EXISTS heat_history (
                 id INT AUTO_INCREMENT PRIMARY KEY,

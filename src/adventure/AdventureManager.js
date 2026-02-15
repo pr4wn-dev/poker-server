@@ -2,7 +2,7 @@
  * AdventureManager - Handles single-player Adventure mode with XP progression
  */
 
-const Boss = require('./Boss');
+// const Boss = require('./Boss'); // Temporarily disabled due to syntax error
 const WorldMap = require('./WorldMap');
 const Item = require('../models/Item');
 const AdventurePokerGame = require('./AdventurePokerGame');

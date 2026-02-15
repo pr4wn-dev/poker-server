@@ -4,14 +4,13 @@
  * Unpaid loans result in enforcer combat challenges
  */
 
-const Database = require('../database/Database');
-const { gameLogger } = require('../utils/Logger');
+const gameLogger = require('../utils/GameLogger');
 
 class MafiaLoanManager {
-    constructor(userRepository, combatManager) {
+    constructor(userRepository, combatManager, database) {
         this.userRepo = userRepository;
         this.combatManager = combatManager;
-        this.db = Database.getInstance();
+        this.db = database;
         
         // Loan configuration
         this.INTEREST_RATE = 0.20; // 20% interest
